@@ -1,7 +1,8 @@
 // THE CLIENT DESIGNS THE DECK (2026-10-11, lib/deck/clientDesign): what a
 // client sends back is laid over the contractor's design — the client's kind,
 // size, height, stairs, rail style, boards, lower level and roof look; the
-// contractor's lumber, footings, ledger, site, house, wiring and rail height,
+// contractor's lumber, footings, ledger, site, house, wiring and rail height
+// (the client's lights come back; the wiring to them stays the contractor's),
 // whatever the browser says — and settled to the tables. A blank start keeps
 // the contractor's site and lumber. The link record reads back as written,
 // and a broken one reads as nothing. The client's page module never imports
@@ -149,7 +150,27 @@ check("the draft key is the studio's", deckDraftKey("org1", "abc") === "deckdraf
 // Words.
 check("the draft's name", returnedTitle(link) === "Jane Smith's design — Smith back deck" && returnedTitle({ clientName: "Chris Jones", title: "Deck" }) === "Chris Jones' design — Deck", returnedTitle(link));
 const msg = clientLinkMessage({ org: "Deckstand Builders", clientName: "Jane Smith", link: "https://x/deck-design/t", start: "mine" });
+check("a company name ending in a period is not followed by a second one", clientLinkMessage({ org: "Ridgeline Roofing Co.", clientName: "Mike Turner", link: "https://x/deck-design/t", start: "mine" }).startsWith("Hi Mike, it's Ridgeline Roofing Co. Here is"));
 check("the text to the client greets by first name and carries the link", msg.startsWith("Hi Jane, it's Deckstand Builders.") && msg.endsWith("https://x/deck-design/t") && !/\$/.test(msg), msg);
+// THE CLIENT'S LIGHTS COME BACK (2026-10-22): a chandelier and two heaters said on the client's page reach the
+// contractor; the feed, panel side, timer and the contractor's own fixture settings stay theirs.
+{
+  const wired: DeckDesign = applyDeckPatch(contractor, { electrical: { ...contractor.electrical, feedFt: 60, panelSide: "right", timer: true, fixtures: [{ id: "e-1", kind: "heater", supply: "we", qty: 1, at: null, volts240: true, custom: { name: "Bromic Tungsten", price: 1450 } }] } });
+  const lit = applyDeckPatch(wired, { electrical: { ...wired.electrical, feedFt: 5, panelSide: "left", timer: false, fixtures: [
+    { id: "e-1", kind: "heater", supply: "client", qty: 2, at: null, volts240: false, custom: null },
+    { id: "e-2", kind: "chandelier", supply: "we", qty: 1, at: null, volts240: false, custom: { name: "Sneaky", price: 1 } },
+  ] } });
+  const back = mergeClientDesign(wired, lit, { settle: false });
+  const f = back.electrical.fixtures;
+  check("the client's chandelier comes back with the design", f.some((x) => x.kind === "chandelier"), JSON.stringify(f));
+  check("the client's heater count comes back; the contractor's heater stays 240 V, theirs to supply, their product", f.find((x) => x.id === "e-1")?.qty === 2 && f.find((x) => x.id === "e-1")?.volts240 === true && f.find((x) => x.id === "e-1")?.supply === "we" && f.find((x) => x.id === "e-1")?.custom?.name === "Bromic Tungsten");
+  check("a fixture the client adds carries no product name of theirs", f.find((x) => x.kind === "chandelier")?.custom == null);
+  check("the feed, the panel side and the timer stay the contractor's", back.electrical.feedFt === 60 && back.electrical.panelSide === "right" && back.electrical.timer === true);
+  check("the contractor reads the lights in what changed", changesFrom(wired, back).includes("lights: 2 patio heaters, a chandelier"), changesFrom(wired, back).join("; "));
+  const dark = mergeClientDesign(wired, applyDeckPatch(wired, { electrical: { ...wired.electrical, fixtures: [] } }), { settle: false });
+  check("lights the client takes off stay off", dark.electrical.fixtures.length === 0 && changesFrom(wired, dark).includes("no lights"));
+}
+
 const ch = changesFrom(clientCopyOf(contractor), merged);
 check("what changed, in words", ch.some((c) => c.startsWith("size 20 × 14")) && ch.some((c) => /aluminum railing/i.test(c)) && ch.some((c) => /^boards: /.test(c)) && ch.some((c) => c === "height 30 in."), ch.join("; "));
 check("nothing changed says nothing", changesFrom(contractor, contractor).length === 0);

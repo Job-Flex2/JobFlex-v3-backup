@@ -156,6 +156,8 @@ const deltaE = (a: string, b: string) => {
 };
 const MANUFACTURED = new Set(["composite", "pvc", "mineral"]);
 const WOOD = new Set(["treated", "softwood", "hardwood", "modified"]);
+/** A board's family as said in a sentence. */
+const FAMILY_NOUN: Record<string, string> = { treated: "treated", softwood: "softwood", hardwood: "hardwood", modified: "modified-wood", composite: "capped composite", pvc: "PVC", mineral: "mineral-based", aluminum: "aluminum" };
 
 /** The board closest to a colour: in the line or the family now laid where one is close, else across the boards that come in it. */
 export function boardForColor(current: DeckingProduct, colorId: string): { product: DeckingProduct; switchedFamily: boolean } | null {
@@ -1006,11 +1008,15 @@ function runDecking(d: DeckDesign, s: DeckingSet, env: RunEnv, settle: (x: DeckD
     if (railOn) p.rail = { type: tierRail };
     said.push(s.tier === "good" ? "The Good package: treated boards and a wood rail." : s.tier === "better" ? "The Better package: capped composite, composite rail." : "The Best package: premium composite with an aluminum rail.");
   }
+  // Said after the switch, so the reply opens with what the boards are now.
+  let familyNote: string | null = null;
   if (s.color) {
-    const pick = boardForColor(product ?? now, s.color);
+    const was = product ?? now;
+    const pick = boardForColor(was, s.color);
     if (pick) {
       product = pick.product;
-      if (pick.switchedFamily && !s.product && !s.family) said.push(`Wood doesn't come ${s.color} — that color is a capped board's.`);
+      // Said of the boards it was ("dark gray" on a PVC board used to answer "Wood doesn't come dark gray").
+      if (pick.switchedFamily && !s.product && !s.family) familyNote = WOOD.has(was.family) ? `Wood doesn't come ${s.color} — that color is a capped board's.` : `No ${FAMILY_NOUN[was.family]} board on the list comes in ${s.color}.`;
     }
   }
   if (s.shade) {
@@ -1024,6 +1030,7 @@ function runDecking(d: DeckDesign, s: DeckingSet, env: RunEnv, settle: (x: DeckD
     p.decking = { ...(p.decking ?? {}), product: product.id };
     p.custom = { decking: undefined };
     said.push(product.id === now.id ? `${boardWords(product)}.` : `Switched to ${boardWords(product)}.`);
+    if (familyNote) said.push(familyNote);
     flash.push({ label: "Deck boards" });
   } else if (product && product.id === now.id && !s.tier) said.push(`It's already ${product.label}.`);
   if (s.pattern) {

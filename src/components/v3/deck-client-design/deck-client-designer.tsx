@@ -55,8 +55,9 @@ import { HOUSE_LIMITS, deckShapeForHouse, houseForShape, houseWords, moveJogTo }
 import { buildStructure, type DeckStructure } from "@/lib/deck/structure";
 import { deckScene, sceneBuildLayers } from "@/lib/deck/scene";
 import { kindSample, type DeckSample } from "@/lib/deck/samples";
-import { CLIENT_NOTE_MAX, type ClientStart, type ClientUnsure } from "@/lib/deck/clientDesign";
-import type { DeckEdit, DeckPick } from "@/components/estimator/deck/DeckModel3D";
+import { CLIENT_NOTE_MAX, litWords, type ClientStart, type ClientUnsure } from "@/lib/deck/clientDesign";
+import type { DeckEdit, DeckLook, DeckPick, SceneHighlight } from "@/components/estimator/deck/DeckModel3D";
+import { fieldLight, type FieldFocus } from "@/lib/deck/fieldParts";
 import { nearestStairEdge } from "@/components/v3/deck-estimator-blueprint/deck-plan";
 import { DeckKindPicker } from "@/components/v3/deck-estimator-blueprint/deck-kind-picker";
 import { markDeckClientOpened, saveDeckClientWork, sendDeckClientDesign } from "@/actions/deckClientDesign";
@@ -243,6 +244,9 @@ function pickedLines(d: DeckDesign): string[] {
     else out.push(`${ROOF_KIND_LABEL[r.kind].split(" — ")[0]} roof, ${ROOFINGS.find((x) => x.id === r.roofing)?.name.toLowerCase() ?? "shingles"}${r.ceiling !== "none" ? `, ${CEILINGS.find((c) => c.id === r.ceiling)?.name.toLowerCase()}` : ""}`);
     if (d.structure === "gazebo" && r.walls.fill !== "none") out.push(WALL_FILL_LABEL[r.walls.fill]);
   }
+  // What they lit by talking to it ("add a chandelier and two heaters") goes in the list they send (2026-10-22).
+  const lit = litWords(d);
+  if (lit.length) out.push(`Lights and extras: ${lit.join(", ")}`);
   return out;
 }
 
@@ -343,6 +347,19 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
   const [placing, setPlacing] = React.useState(false);
   const [resetToken, setResetToken] = React.useState(0);
   const [talking, setTalking] = React.useState(false);
+  // What the voice shows (2026-10-22): the evening with the lights on, a side or the top, the part just changed —
+  // "show me at night" said "the lights on" here while the 3D stayed in the day.
+  const [night, setNight] = React.useState(false);
+  const [look, setLook] = React.useState<{ token: number; from: DeckLook } | null>(null);
+  const [focus, setFocus] = React.useState<[number, number, number, number] | null>(null);
+  const [voiceFocus, setVoiceFocus] = React.useState<FieldFocus | null>(null);
+  const voiceLit = React.useMemo<SceneHighlight | null>(() => (voiceFocus ? fieldLight(scene, structure, voiceFocus) : null), [voiceFocus, scene, structure]);
+  // The part just changed is lit for a moment, then shown as it is: "dark gray boards" wants to be seen dark gray.
+  React.useEffect(() => {
+    if (!voiceFocus) return;
+    const t = window.setTimeout(() => setVoiceFocus(null), 2400);
+    return () => window.clearTimeout(t);
+  }, [voiceFocus]);
   const layers = React.useMemo(() => sceneBuildLayers(scene).length, [scene]);
   const [built, setBuilt] = React.useState<number>(Number.POSITIVE_INFINITY);
   const [playing, setPlaying] = React.useState(false);
@@ -523,11 +540,23 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
     env: {},
     apply: (next) => change(next),
     view: (v) => {
-      if (v.reset) setResetToken((t) => t + 1);
+      if (v.night !== undefined) setNight(v.night);
       if (v.build === "play") play();
+      if (v.reset) {
+        setResetToken((t) => t + 1);
+        setFocus(null);
+      }
+      const from = v.look;
+      if (from) setLook((l) => ({ token: (l?.token ?? 0) + 1, from }));
     },
-    light: () => {},
-    fly: () => {},
+    light: (f, flyThere) => {
+      setVoiceFocus(f);
+      if (f && flyThere) {
+        const lit = fieldLight(scene, structure, f);
+        if (lit?.tag) setFocus([lit.tag.x, lit.tag.y, Math.max(0.5, lit.tag.z - 1.4), 9]);
+      }
+    },
+    fly: (p) => setFocus([p[0], p[1], p[2], 11]),
     flash: () => {},
     link: () => null,
     go: () => {},
@@ -569,7 +598,7 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
         <div className={s.layout}>
           <div className={s.viewCol}>
             <div className={s.viewer} data-client-viewer>
-              <DeckModel3D scene={scene} built={built} edit={editing} onEdit={onEdit} placing={placing} onPick={onPick} resetToken={resetToken} viewControls="top-right" className={s.canvas} label={`Your design in 3D: ${scene.facts}`} />
+              <DeckModel3D scene={scene} built={built} edit={editing} onEdit={onEdit} placing={placing} onPick={onPick} resetToken={resetToken} viewControls="top-right" night={night} look={look} focus={focus} highlight={voiceLit} className={s.canvas} label={`Your design in 3D: ${scene.facts}`} />
               {/* Talk to design (2026-10-21, owner): the client says what they want; the studio changes the design and
                   answers in words — no price, no numbers — with a quick next idea. */}
               {talking ? (
@@ -595,7 +624,10 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
               <button type="button" className={cx(s.tool, editing && s.toolOn)} aria-pressed={editing} onClick={() => { setPlacing(false); setEditing((v) => !v); }} data-client-tool="drag">↔ Drag to resize</button>
               {withDeck ? <button type="button" className={cx(s.tool, placing && s.toolOn)} aria-pressed={placing} disabled={design.stairs.length >= STAIR_LIMITS.count} onClick={() => { setEditing(false); setPlacing((v) => !v); }} data-client-tool="stairs">+ Stairs</button> : null}
               <button type="button" className={s.tool} onClick={play} disabled={playing}>▶ Watch it build</button>
-              <button type="button" className={s.tool} onClick={() => setResetToken((t) => t + 1)}>⟲ View</button>
+              <button type="button" className={s.tool} onClick={() => { setResetToken((t) => t + 1); setFocus(null); }}>⟲ View</button>
+              {night || design.electrical.fixtures.length ? (
+                <button type="button" className={cx(s.tool, night && s.toolOn)} aria-pressed={night} onClick={() => setNight((v) => !v)} data-client-tool="night">{night ? "☀ Day" : "☾ Night"}</button>
+              ) : null}
               <button type="button" className={s.tool} onClick={undo} disabled={!canUndo} data-client-tool="undo">↶ Undo</button>
             </div>
             <p className={s.facts}>{what}{withDeck ? ` · ${Math.round(shapeAreaSqFt(design.shape))} sq ft · ${inWords(design.heightIn)} high` : ""}</p>

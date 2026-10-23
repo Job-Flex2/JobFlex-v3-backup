@@ -42,6 +42,11 @@ const spokenBig = spokenReply({ say: big.say, pending: big.pending, changed: tru
 check("…the spoken one is short words", spokenBig.length > 0 && spokenBig.length < 120 && !NUMBERISH.test(spokenBig), spokenBig);
 check("a question with a number keeps its words: \"It's over 30 in. up — add a railing?\" → \"Add a railing?\"", spokenReply({ say: "It's over 30 in. up — add a railing?", pending: null, changed: false }, "contractor") === "Add a railing?");
 check("…after a change, \"Done\" leads it", /^(Done|Got it|There you go)[^?]*\. Add a railing\?$/.test(spokenReply({ say: "It's over 30 in. up — add a railing?", pending: null, changed: true }, "contractor")), spokenReply({ say: "It's over 30 in. up — add a railing?", pending: null, changed: true }, "contractor"));
+// A count of things is said in words, and a second change of the same kind is said too (2026-10-22: "a chandelier and
+// two heaters" said only the chandelier — the heaters' sentence had a "2" in it).
+const both = spokenReply({ say: "Added a chandelier at the peak. Added 2 patio heaters on the headers, 120-volt (1.5 kW). Price $27,240 (up $2,772).", pending: null, changed: true }, "client");
+check("\"a chandelier and two heaters\" says both, the count in words", both === "Added a chandelier at the peak. Added two patio heaters on the headers.", both);
+check("…a measure stays out (\"6 risers of 6.5 in.\")", !/\d|six risers/.test(spokenReply({ say: "A 4 ft-wide stair — 6 risers of 6.5 in., 5 treads.", pending: null, changed: true }, "client")));
 const guard = spokenReply({ say: "20 ft × 14 ft — 280 sq ft. Price $10,752 (up $3,289). It's over 30 in. up, so the code wants a guard. Add a composite railing?", pending: { ask: "Add a railing?" }, changed: true }, "contractor");
 check("a change said as Done, the clause without a number kept, the question asked once", /^(Done|Got it|There you go)\. The code wants a guard\. Add a composite railing\?$/.test(guard), guard);
 const stair = spokenReply({ say: "A 4 ft-wide stair on the left side — 6 risers of 6.5 in., 5 treads, onto a concrete pad. Price $8,153 (up $1,273). Heads up — stair 1 (left): 6 risers: a graspable handrail 34 to 38 in. above the nosings is required, and guards on both open sides. Say \"fix it\" and I'll sort it.", pending: { ask: "Fix it?" }, changed: true }, "contractor");

@@ -323,6 +323,17 @@ console.log("── commands read from what was said");
     ["I like the dark gray", (c) => has(c, "decking")?.set.color === "dark gray"],
     ["the deck isn't attached", (c) => has(c, "placement")?.to === "detached"],
     ["light up the stairs", (c) => has(c, "fixture")?.kind === "step-light"],
+    // LED lights by the rail are lights, not a wood railing (2026-10-22: "LED lights under the rail" set a treated rail).
+    ["LED lights under the rail", (c) => has(c, "fixture")?.kind === "led-strip" && !has(c, "rail")],
+    ["lights under the railing", (c) => has(c, "fixture")?.kind === "led-strip" && !has(c, "rail")],
+    ["rail lights", (c) => has(c, "fixture")?.kind === "led-strip" && !has(c, "rail")],
+    ["add LED lights", (c) => has(c, "fixture")?.kind === "led-strip"],
+    ["LED lights on the stairs", (c) => has(c, "fixture")?.kind === "step-light"],
+    ["LED post cap lights", (c) => has(c, "fixture")?.kind === "post-cap"],
+    // "Show me at night" pulls back to the whole deck, lit; "turn on the lights" keeps the camera where it is.
+    ["show me at night", (c) => has(c, "view")?.night === true && has(c, "view")?.reset === true],
+    ["turn on the lights", (c) => has(c, "view")?.night === true && !has(c, "view")?.reset],
+    ["now spin it around", (c) => has(c, "view")?.look === "spin" && has(c, "view")?.reset === true],
     ["make it an octagon", (c) => c.some((x) => x.do === "roof" && x.set.planShape === "octagon")],
     ["less steep roof", (c) => show(has(c, "roof")?.set.pitch) === show({ by: -2 }), covered],
     ["make the ceiling 10 feet", (c) => show(has(c, "roof")?.set.eaveIn) === show({ to: 120 }), covered],
@@ -515,6 +526,10 @@ console.log("── the runner holds the engine's rails");
   check("joists asked smaller are framed to the tables (the beams come in) — no span left failing", !deckChecks(priceDeck(joists.design).structure).some((c) => c.level === "fail" && /^joist-span/.test(c.id)), joists.said.join(" "));
   const gray = runCommand(base({ decking: { product: "cedar-54" } }), { do: "decking", set: { color: "gray" } });
   check("wood asked for in gray moves to a capped board, said", ["composite", "pvc", "mineral"].includes(priceDeck(gray.design).frame?.decking.family ?? "") && /Wood doesn't come gray/.test(gray.said.join(" ")), gray.said.join(" "));
+  check("…the reply opens with the boards it is now", /^Switched to /.test(gray.said[0] ?? ""), gray.said.join(" "));
+  // A PVC board asked for in a colour only a composite comes in: said of PVC, not of wood (2026-10-22).
+  const pvc = runCommand(base({ decking: { product: "timbertech-azek-vintage" } }), { do: "decking", set: { color: "dark gray" } });
+  check("a PVC board moved for a colour is said of PVC — not \"Wood doesn't come…\"", !/Wood doesn't/.test(pvc.said.join(" ")) && (pvc.design.decking.product === "timbertech-azek-vintage" || /PVC/.test(pvc.said.join(" "))), pvc.said.join(" "));
   const tub = runCommand(d, { do: "spa", on: true });
   check("a hot tub spot lights its field", tub.design.spa.on && tub.light?.label === "Where the tub stands");
   const walls = runCommand(switchStructure(d, "covered-deck"), { do: "roof", set: { walls: "screen" } });
