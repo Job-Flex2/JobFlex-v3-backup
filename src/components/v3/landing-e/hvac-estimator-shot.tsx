@@ -28,9 +28,10 @@ import dashboardStyles from "@/components/v3/dashboard-blueprint/blueprint.modul
 import s from "@/components/v3/hvac-estimator-blueprint/hvac-estimator.module.css";
 import { trackTraffic } from "@/lib/traffic-client";
 import { TRAFFIC_EVENTS } from "@/lib/traffic-contract";
-import { AppFrame, READ_HOLD, TYPE_MS } from "./showcase-kit";
+import { AppFrame, TYPE_MS } from "./showcase-kit";
 import { HvacEstimatorForm } from "./hvac-estimator-demo/hvac-estimator-form";
-import { DEMO_ADDRESS, DEMO_READS } from "./hvac-estimator-demo/demo-actions";
+import { DEMO_READS } from "./hvac-estimator-demo/demo-actions";
+import { DEMO_ADDRESS, T, T2, T3, T4 } from "./hvac-timeline";
 import type { DemoStep, HvacDemoHandle, HvacDemoHooks } from "./hvac-estimator-demo/demo-hooks";
 import { PLATE_INDOOR, PLATE_OUTDOOR, PLATE_PANEL } from "./hvac-estimator-demo/plates";
 
@@ -45,37 +46,8 @@ const DESK_PAGE_W = 1350;
  *  own handheld rules are at 860 and 520; the hero's phone build at 640). */
 const PHONE_MAX = 640;
 
-/* The sequence, ms from the frame's arming. The address types at the
-   landing's pace (showcase-kit TYPE_MS), the lookups answer after the
-   fixtures' own waits (demo-actions), and the design holds long enough to
-   read before the estimate. */
-const T = {
-  house: 1500,
-  typeFrom: 2100,
-  lookup: 2100 + DEMO_ADDRESS.length * TYPE_MS + 600,
-};
-const T2 = {
-  plates: T.lookup + 1100 + 900, // the lookup's wait, then the intake step has opened
-};
-const PLATE_GAP = 1500;
-const T3 = {
-  outdoor: T2.plates + 500,
-  indoor: T2.plates + 500 + PLATE_GAP,
-  panel: T2.plates + 500 + PLATE_GAP * 2,
-  typed: T2.plates + 500 + PLATE_GAP * 3,
-};
-const T4 = {
-  design: T3.typed + 900,
-  heatPump: T3.typed + 900 + 2600,
-  estimate: T3.typed + 900 + 2600 + 2600,
-};
-const DONE = T4.estimate + 1200;
-
-export const HVAC_TIMELINE = {
-  done: DONE,
-  /** The showcase slide's length: the sequence, then the estimate held to read. */
-  slide: DONE + READ_HOLD,
-};
+/* The sequence's marks (T … T4) and the showcase slide's length live in
+   hvac-timeline.ts, so the showcase can read them without loading this shot. */
 
 /** The typed answers the walk would have caught: the ducts in the crawl,
  *  fair, the return and the registers counted, gas at the house. */

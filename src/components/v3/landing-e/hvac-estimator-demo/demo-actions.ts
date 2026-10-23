@@ -16,6 +16,8 @@ import type { CatalogItem } from "@/lib/hvac/types";
 import type { NameplateRead, SiteFacts } from "@/lib/hvac/intake";
 import { calibrationStats, type CalibrationStats } from "@/lib/hvac/calibration";
 import { DEFAULT_RATE_CARD, STARTER_CATALOG, normalizeRateCard, type HvacRateCard } from "@/lib/hvac/ledger";
+// The address lives with the shot's clock (../hvac-timeline), which types it without loading these fixtures.
+import { DEMO_ADDRESS } from "../hvac-timeline";
 
 type Fail = { ok: false; error: string; code?: "PLAN_LIMIT_REACHED"; resource?: string };
 
@@ -23,8 +25,6 @@ const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const EXAMPLE = "This is the example estimator — sign up and this saves to your own shop.";
 
 // ── the house ───────────────────────────────────────────────────────────────
-
-export const DEMO_ADDRESS = "4418 NE 97th St, Kirkland, WA 98033";
 
 const RECORD = "county parcel record";
 export const DEMO_SITE: SiteFacts = {

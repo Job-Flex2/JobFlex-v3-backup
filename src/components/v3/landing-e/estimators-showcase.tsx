@@ -47,14 +47,20 @@ import {
   usePhases,
   useTyped,
 } from "./showcase-kit";
+import dynamic from "next/dynamic";
 import { FENCE_TIMELINE, FenceShot } from "./fence-shot";
-import { HVAC_TIMELINE, HvacEstimatorShot } from "./hvac-estimator-shot";
+import { HVAC_TIMELINE } from "./hvac-timeline";
 import type { ShowcaseSlideKey } from "./landing-variants";
 import { ROOF_TIMELINE, RoofShot } from "./roof-shot";
 import { SmartProposalShot, smartTimeline } from "./smart-proposal-shot";
 import "./showcase-pass.css";
 import { SMART_SCENARIOS, type SmartScenarioKey } from "./smart-scenarios";
 import { REGISTER } from "./routes";
+
+/* The HVAC slide's shot is its own chunk (2026-10-22): only the HVAC landing
+   shows that slide, and the shot carries the whole demo form. Its length is
+   read from hvac-timeline.ts, so sizing the slide loads nothing. */
+const HvacEstimatorShot = dynamic(() => import("./hvac-estimator-shot").then((m) => m.HvacEstimatorShot));
 
 /* ============================================================
    4 · VIDEO — the real clip, the read as notes, the proposal

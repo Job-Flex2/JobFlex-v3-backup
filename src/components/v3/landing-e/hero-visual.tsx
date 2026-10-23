@@ -14,16 +14,22 @@
    estimator's demo film in the shot's place (demo-film.tsx); the shot itself
    stays the showcase's. */
 
+import dynamic from "next/dynamic";
 import { DeckShot } from "./deck-shots";
 import { DemoFilm } from "./demo-film";
 import { FenceShot } from "./fence-shot";
-import { HvacEstimatorShot } from "./hvac-estimator-shot";
 import type { LandingVariant } from "./landing-variants";
 import { RoofShot } from "./roof-shot";
 import { SmartProposalShot } from "./smart-proposal-shot";
 import { SMART_SCENARIOS } from "./smart-scenarios";
 import { useEffect, useState } from "react";
 import { useInView } from "./use-in-view";
+
+/* The HVAC estimator shot is its own chunk (2026-10-22): it carries the whole
+   demo form — lib/hvac, the toast, the dashboard's CSS — and no landing's
+   hero shows it today (HVAC's has its film). Rendered on the server like the
+   rest, so a hero that did show it would still paint it in the first frame. */
+const HvacEstimatorShot = dynamic(() => import("./hvac-estimator-shot").then((m) => m.HvacEstimatorShot));
 
 export function HeroVisual({
   variant,
