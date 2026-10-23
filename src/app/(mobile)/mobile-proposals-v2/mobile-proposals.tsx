@@ -64,7 +64,7 @@ import {
   updateProposalStatus,
   uploadProposalPhoto,
 } from "@/actions/proposals";
-import { notifyPaymentReminder } from "@/actions/notify";
+import { getInvoiceOptions, notifyPaymentReminder, sendInstallmentInvoice } from "@/actions/notify";
 import { markInstallmentPaid } from "@/actions/installments";
 import { loadProposalBook } from "./proposals-actions";
 import {
@@ -80,7 +80,18 @@ import {
   type ProposalRow,
   type TabKey,
 } from "./proposals-data";
-import { chainsOf, chained, paidTier, type PaidTier } from "@/components/v3/proposals-blueprint/proposals-data";
+import {
+  chainsOf,
+  chained,
+  nextStage,
+  paidTier,
+  payState,
+  sendState,
+  stageFacts,
+  statusAfterSend,
+  type Installment,
+  type PaidTier,
+} from "@/components/v3/proposals-blueprint/proposals-data";
 import { familyCounts, kindWord, type ProposalKind, type WorkFamily } from "@/lib/proposalKind";
 import { clientProposalUrl, proposalTextMessage, smsHref } from "@/lib/proposalLink";
 import { ensureCompanyName } from "@/components/company-name/company-name-gate";
@@ -126,6 +137,100 @@ function PaymentSummary({ p }: { p: ProposalRow }) {
       <span style={{ width: percentage + "%" }} />
     </div>
   </div>;
+}
+
+/**
+ * SEND ON THE CARD (owner, 2026-10-23: "Send proposal, or it's been sent") — the desk row's rule
+ * (proposals-data → sendState): a draft gets the green button across the card; one out and waiting says when it
+ * went, with Send again; a signed or declined one keeps the stamp alone.
+ */
+function RowSend({ p, onSend }: { p: ProposalRow; onSend: () => void }) {
+  const s = sendState(p);
+  if (s === "none") return null;
+  if (s === "send") {
+    return (
+      <button className={styles.mSend} type="button" data-row-send="send" onClick={onSend}>
+        <Icon id="i-send" />Send proposal
+      </button>
+    );
+  }
+  return (
+    <div className={styles.mSent} data-row-send={s}>
+      <span className={styles.mSentStamp}><Icon id="i-check" />Sent {p.sentAgo}</span>
+      {s === "resend" ? <button className={styles.mSentAgain} type="button" onClick={onSend}>Send again</button> : null}
+    </div>
+  );
+}
+
+/**
+ * PAYMENTS ON THE CARD (owner, 2026-10-23: "get the payment options visible at the main proposal row"). Each
+ * stage with where it stands; once signed, the next stage's Mark paid, Invoice and Remind — the contract card's
+ * writes, the invoice through the sheet's card / bank / client's-choice step. Before signing, the schedule the
+ * client will pay by.
+ */
+function RowPay({ p, writing, onMarkPaid, onInvoice, onRemind }: {
+  p: ProposalRow;
+  writing: boolean;
+  onMarkPaid: (it: Installment) => void;
+  onInvoice: (it: Installment | null) => void;
+  onRemind: (it: Installment | null) => void;
+}) {
+  const state = payState(p);
+  if (!state) return null;
+  const insts = p.inst ?? [];
+  const next = state === "collect" ? nextStage(p) : null;
+  const pending = next?.status === "PENDING";
+  return (
+    <div className={`${styles.mPay} ${state === "paid" ? styles.mPayPaid : state === "plan" ? styles.mPayPlan : ""}`} data-row-pay={state}>
+      <div className={styles.mPayHead}>
+        <span className={styles.mPayLbl}><Icon id="i-card" />Payments</span>
+        {state === "plan" ? (
+          <span className={styles.mPayNote}>Billed after {p.clientId ? p.client.split(/\s+/)[0] : "the client"} accepts</span>
+        ) : state === "paid" ? (
+          <span className={styles.mPayOk}><Icon id="i-check" />Paid in full</span>
+        ) : (
+          <span className={styles.mPayNote}><b>{money(p.owed)}</b> left</span>
+        )}
+      </div>
+      <ul className={styles.mPayList}>
+        {insts.map((it) => {
+          const paid = it.status === "PAID";
+          const isNext = next?.id === it.id;
+          const tail = paid ? (it.paidOn ? `paid ${it.paidOn}` : "paid") : it.status === "WAIVED" ? "closed" : isNext ? stageFacts(it).join(" · ") : "";
+          const tone = paid ? styles.mStPaid : isNext ? (it.overdue ? `${styles.mStNext} ${styles.mStLate}` : styles.mStNext) : state === "plan" ? styles.mStPlan : "";
+          return (
+            <li key={it.id} className={`${styles.mSt} ${tone}`} data-stage={it.id}>
+              <span className={styles.mStL}>
+                {paid ? <Icon id="i-check" /> : null}
+                {it.label}
+                {state === "plan" && it.pct ? <em>{Math.round(it.amount)}%</em> : null}
+              </span>
+              <span className={styles.mStV}>{money(instDollars(p, it))}</span>
+              {tail ? <span className={styles.mStT}>{tail}</span> : null}
+            </li>
+          );
+        })}
+        {!insts.length && state === "collect" ? (
+          <li className={`${styles.mSt} ${styles.mStNext}`}>
+            <span className={styles.mStL}>Balance</span>
+            <span className={styles.mStV}>{money(p.owed)}</span>
+          </li>
+        ) : null}
+      </ul>
+      {state === "collect" && p.canBill !== false ? (
+        <div className={styles.mPayActs}>
+          {next ? (
+            <button className={`${styles.mPayAct} ${styles.mActPaid}`} type="button" disabled={writing || pending}
+              onClick={() => onMarkPaid(next)}><Icon id="i-check" />Mark paid</button>
+          ) : null}
+          <button className={`${styles.mPayAct} ${styles.mActInv}`} type="button" disabled={writing || pending}
+            onClick={() => onInvoice(next)}><Icon id="i-send" />Invoice</button>
+          <button className={`${styles.mPayAct} ${styles.mActRem}`} type="button" disabled={writing || !p.clientEmail}
+            onClick={() => onRemind(next)}><Icon id="i-bell" />Remind</button>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 const prefersReducedMotion = () =>
@@ -343,6 +448,10 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
   // "Send to client" as a step in the sheet (owner, 2026-10-13): the client's
   // email shown and editable — and a name for a proposal with no client yet.
   const [sendAsk, setSendAsk] = useState<{ email: string; name: string; err: string } | null>(null);
+  // "Send invoice" as a step in the sheet (2026-10-23): the stage, then how the client pays — card, bank or
+  // their choice — as on the desk. The rails a company has are read the first time the step opens.
+  const [invAsk, setInvAsk] = useState<{ instId: string | null; what: string; err: string } | null>(null);
+  const [invOpts, setInvOpts] = useState<{ card: boolean; bank: boolean; cardVia: string[] } | null>(null);
   /** Guards a second write while one is on the wire. */
   const [writing, setWriting] = useState(false);
   /** One-line report for a write that succeeded or refused. */
@@ -693,11 +802,20 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
        is out, and the note strip carries a spinner. The refetch below is
        still the source of truth, and a failure restores the snapshot. */
     const snapshot = data;
+    const plate = todayPlate();
     setData((prev) =>
-      prev.map((row) => ({
-        ...row,
-        inst: row.inst?.map((i) => (i.id === instId ? { ...i, status: "PAID", paidVia: "MANUAL" } : i)),
-      })),
+      prev.map((row) => {
+        const stage = row.inst?.find((i) => i.id === instId);
+        if (!stage) return row;
+        // The money moves with the stage (2026-10-23) — a part payment is not re-read.
+        const amt = instDollars(row, stage);
+        return {
+          ...row,
+          paidAmt: Math.round(((row.paidAmt ?? 0) + amt) * 100) / 100,
+          owed: Math.max(0, Math.round((row.owed - amt) * 100) / 100),
+          inst: row.inst?.map((i) => (i.id === instId ? { ...i, status: "PAID", paidVia: "MANUAL", paidAmt: amt, paidOn: plate } : i)),
+        };
+      }),
     );
     setNote({ tone: "live", text: "Recording payment…" });
     try {
@@ -759,7 +877,8 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
       const r = await sendProposal(p.id, email ? { email, name: to.name.trim() } : undefined);
       patch(p.id, (x) => ({
         ...x,
-        status: "SENT",
+        status: statusAfterSend(x.status),
+        sentAgo: "just now",
         updated: "just now",
         clientEmail: r.to ?? x.clientEmail,
         ...(r.clientId ? { clientId: r.clientId, client: r.client ?? x.client } : {}),
@@ -773,6 +892,45 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
       router.refresh();
     } catch (err) {
       setSendAsk({ ...to, err: actionError(err) });
+    } finally {
+      setWriting(false);
+    }
+  }
+
+  /** The card's Send / Send again: the sheet's send step, straight away. */
+  function openSend(p: ProposalRow) {
+    setSheetId(p.id);
+    setConfirmDel(false);
+    setInvAsk(null);
+    setSendAsk({ email: p.clientEmail ?? "", name: "", err: "" });
+  }
+  /** The card's Invoice: the sheet's invoice step for the next stage (or the balance). */
+  function openInvoice(p: ProposalRow, it: Installment | null) {
+    setSheetId(p.id);
+    setConfirmDel(false);
+    setSendAsk(null);
+    setInvAsk({ instId: it?.id ?? null, what: it ? `${it.label} · ${money(instDollars(p, it))}` : `The balance · ${money(p.owed)}`, err: "" });
+    if (!invOpts) {
+      getInvoiceOptions().then(setInvOpts, () => setInvOpts({ card: false, bank: false, cardVia: [] }));
+    }
+  }
+  async function runInvoice(p: ProposalRow, method: "card" | "bank" | "any") {
+    if (writing || !invAsk) return;
+    const ask = invAsk;
+    setWriting(true);
+    try {
+      const r = await sendInstallmentInvoice(p.id, ask.instId, method);
+      if (!r.ok) {
+        setInvAsk({ ...ask, err: r.error ?? "Couldn't send the invoice." });
+        return;
+      }
+      // sendInvoice stamps the stage (Installment.invoiceSentAt); the card says so at once.
+      patch(p.id, (x) => ({ ...x, inst: x.inst?.map((i) => (i.id === ask.instId ? { ...i, invoiced: "just now", invoiceVia: method } : i)) }));
+      setInvAsk(null);
+      setSheetId(null);
+      setNote({ tone: "ok", text: `Invoice sent — ${r.label}, ${money(r.amount)}.` });
+    } catch (err) {
+      setInvAsk({ ...ask, err: actionError(err) });
     } finally {
       setWriting(false);
     }
@@ -1077,7 +1235,7 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
                         </span>
                       </Link>
                     ) : null}
-                    <div className={`${styles.prow} ${styles.rowIn} ${styles.prowTap}${inChain ? " " + styles.prowChain : ""}${last ? " " + styles.prowChainEnd : ""}`} style={{ animationDelay: `${i * 45}ms` }}
+                    <div className={`${styles.prow} ${styles.rowIn} ${styles.prowTap}${inChain ? " " + styles.prowChain : ""}${last ? " " + styles.prowChainEnd : ""}`} style={{ animationDelay: `${i * 45}ms` }} data-mrow={p.id}
                       role="link" tabIndex={0} aria-label={`Open ${p.title}`}
                       onClick={(e) => openFromTap(e, p.id)} onKeyDown={(e) => { if (e.key === "Enter") router.push(`/dashboard/proposals/${p.id}`); }}>
                       <div>
@@ -1116,6 +1274,11 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
                           {["ACCEPTED", "COMPLETED", "PAID"].includes(p.status) && <small className={styles.paidAmount}>{money(p.paidAmt ?? 0)} paid</small>}
                         </span>
                       </div>
+                      <RowSend p={p} onSend={() => openSend(p)} />
+                      <RowPay p={p} writing={writing}
+                        onMarkPaid={(it) => void runMarkPaid(it.id)}
+                        onInvoice={(it) => openInvoice(p, it)}
+                        onRemind={(it) => void runReminder(p, it?.id ?? "")} />
                     </div>
                     </Fragment>
                   );
@@ -1373,7 +1536,7 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
 
       {/* ============ ROW ACTIONS SHEET ============ */}
       <div className={`${styles.scrim} ${sheetProposal ? styles.on : ""}`}
-        onClick={() => { setSheetId(null); setConfirmDel(false); setSendAsk(null); }} aria-hidden="true" />
+        onClick={() => { setSheetId(null); setConfirmDel(false); setSendAsk(null); setInvAsk(null); }} aria-hidden="true" />
       <div className={`${styles.sheet} ${sheetProposal ? styles.on : ""}`} role="dialog" aria-modal="true"
         aria-label="Proposal actions" aria-hidden={!sheetProposal} {...sheetDrag.sheetProps}>
         <div className={styles.sheetGrab} {...sheetDrag.handleProps} />
@@ -1397,6 +1560,27 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
                 <span className={styles.pmenuItemS}>{sheetProposal.title}</span>
               </span>
             </button>
+          </div>
+        ) : invAsk && sheetProposal ? (
+          <div className={`${styles.sheetBody} ${styles.psend}`} data-invoice-step>
+            <p className={styles.psendNote}>
+              {invAsk.what} — {sheetProposal.clientEmail ? `the invoice goes to ${sheetProposal.clientEmail}` : "a text goes to the client's phone"}. How should they pay?
+            </p>
+            {invAsk.err ? <p className={styles.psendErr} role="alert">{invAsk.err}</p> : null}
+            {([
+              ["card", "i-card", styles.pmiBpSolid, "Card", invOpts?.card ? `Hosted checkout · ${invOpts.cardVia.join(" / ")}` : "No card processor connected — Settings → Payments", !invOpts?.card],
+              ["bank", "i-out", styles.pmiBp, "Bank transfer", invOpts?.bank ? "Your transfer details go in the email" : "Add bank-transfer instructions in Settings → Payments", !invOpts?.bank],
+              ["any", "i-send", styles.pmiOkSolid, "Client's choice", "Card or bank — they pick on the page", !(invOpts?.card || invOpts?.bank)],
+            ] as const).map(([method, icon, tone, title, sub, off]) => (
+              <button key={method} className={styles.pmenuItem} type="button" disabled={writing || !invOpts || off}
+                onClick={() => void runInvoice(sheetProposal, method)}>
+                <span className={`${styles.pmiIc} ${tone}`}><Icon id={icon} /></span>
+                <span>
+                  <span className={styles.pmenuItemT}>{writing ? "Sending…" : title}</span>
+                  <span className={styles.pmenuItemS}>{invOpts ? sub : "Checking your payment settings…"}</span>
+                </span>
+              </button>
+            ))}
           </div>
         ) : sendAsk && sheetProposal ? (
           <form className={`${styles.sheetBody} ${styles.psend}`} data-send-step noValidate
@@ -1454,7 +1638,7 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
           </div>
         )}
         <button className={styles.sheetCancel} type="button"
-          onClick={() => { setSheetId(null); setConfirmDel(false); setSendAsk(null); }}>Cancel</button>
+          onClick={() => { setSheetId(null); setConfirmDel(false); setSendAsk(null); setInvAsk(null); }}>Cancel</button>
       </div>
     </div>
   );

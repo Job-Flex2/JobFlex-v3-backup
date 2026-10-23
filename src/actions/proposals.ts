@@ -566,9 +566,13 @@ export async function sendProposal(id: string, rawTo?: unknown) {
     );
   }
 
+  // A send again never undoes what the client did (2026-10-23): one they have opened stays VIEWED, and a signed
+  // contract keeps its status — the menu's Send to client used to turn an accepted proposal back into SENT.
+  const signed = p.status === "ACCEPTED" || p.status === "COMPLETED" || p.status === "PAID";
+  const keep = signed || p.status === "VIEWED";
   await db.proposal.update({
     where: { id },
-    data: { status: "SENT", sentAt: new Date() },
+    data: keep ? { sentAt: new Date() } : { status: "SENT", sentAt: new Date() },
   });
   await snapshotProposal(id, "sent");
   // A re-send of an already sent proposal is not a second activation.
@@ -584,12 +588,15 @@ export async function sendProposal(id: string, rawTo?: unknown) {
     },
   });
 
-  // Follow-up scheduling stays best-effort — it must never undo a confirmed send.
-  try {
-    const { scheduleFollowUpsFor } = await import("@/lib/followUps/engine");
-    await scheduleFollowUpsFor(id, "SENT");
-  } catch (err) {
-    console.warn("[sendProposal] schedule failed:", err);
+  // Follow-up scheduling stays best-effort — it must never undo a confirmed send. A signed contract sent
+  // again is a copy for the client's records, not an offer to chase.
+  if (!signed) {
+    try {
+      const { scheduleFollowUpsFor } = await import("@/lib/followUps/engine");
+      await scheduleFollowUpsFor(id, "SENT");
+    } catch (err) {
+      console.warn("[sendProposal] schedule failed:", err);
+    }
   }
 
   revalidatePath("/dashboard/proposals");

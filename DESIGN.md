@@ -246,6 +246,17 @@ monthly" is one 12px line (weight 600) under the price.
   cream page; views read "3 views" with when under it; status plates sit on
   the foot's bottom edge; accepted/declined gets its own line; no "1mo ago"
   above the title and no "Completed" stamp on Done cards.
+- Proposals rows, owner pass 2026-10-23 ("Send proposal or it's been sent",
+  "payment options visible at the main proposal row"). Every row carries Send
+  (a solid green plate on a draft) or "✓ Sent 3d ago" (soft green, a button
+  that sends again while the client has not signed; a plain stamp once signed
+  or declined). Under the row, across the table with no rule between them, a
+  white payment line: each stage a flat tag — paid green, the next one framed
+  in ink with its facts (due / overdue in red / invoice sent / reminded),
+  dashed before signing with "Billed after Jane accepts" — and for the next
+  stage Mark paid green, Send invoice blue, Remind amber. Sales reps and
+  estimators see the stages and what is left, never the billing buttons.
+  Phone: the same pieces inside the card, every action 44px.
 - Use existing Lucide icons at consistent sizes; decorative icons are hidden
   from assistive technology, icon-only controls have accessible names.
 - Preserve all existing actions, validation, units, permissions and data
