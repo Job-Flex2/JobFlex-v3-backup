@@ -74,8 +74,27 @@ const MATERIAL_WORDS: ReadonlyArray<[RegExp, ReadMaterial]> = [
 /** The model's JSON, checked field by field; null when there is no usable wall in it. */
 export function parseHouseRead(raw: unknown): HouseRead | null {
   const r = obj(raw);
+  // The wall's sections (2026-10-23) say its steps better than a list of steps does — the model has to say where each
+  // plane is and why: the steps are taken from where one section meets the next, the model's own steps only without.
+  const sections = (Array.isArray(r.sections) ? r.sections : [])
+    .map((x) => {
+      const o = obj(x);
+      const sp = span(x, 0.01);
+      return sp && typeof o.outFt === "number" && Number.isFinite(o.outFt) ? { ...sp, outFt: clamp(o.outFt, -20, 20) } : null;
+    })
+    .filter((x): x is NonNullable<typeof x> => !!x)
+    .sort((a, b) => a.x0 - b.x0);
+  const fromSections =
+    sections.length >= 1
+      ? sections.slice(1).flatMap((sec, i) => {
+          const prev = sections[i];
+          const d = sec.outFt - prev.outFt;
+          if (Math.abs(d) < 0.5) return [];
+          return [{ x: r3((prev.x1 + sec.x0) / 2), dir: d > 0 ? "toward" : "away", depthFt: Math.round(Math.abs(d) * 2) / 2 }];
+        })
+      : null;
   // The wall's own read — with room for more windows than the smart fit kept (a house has more than twelve).
-  const wall = parseWallRead({ ...r, windows: [] });
+  const wall = parseWallRead({ ...r, windows: [], ...(fromSections ? { jogs: fromSections } : {}) });
   if (!wall) return null;
   const windows = (Array.isArray(r.windows) ? r.windows : [])
     .map((w) => {
@@ -152,7 +171,8 @@ COORDINATES: every coordinate is a FRACTION of the whole picture: x from 0 at th
   "base": {"left": {"x","y"}, "right": {"x","y"}},   // the house wall's bottom edge where the WALL meets the ground (or would meet it behind a patio, steps or a deck), at the house's left corner and at its right corner — the whole back face of the house, across every step in it.
   "eave": {"left": {"x","y"}, "right": {"x","y"}} | null,   // the top of that wall above each corner: the underside of the MAIN roof's eave (on a two-storey house, the eave over the upper floor).
   "storeys": 1 | 2 | null,   // storeys of wall between the base and that eave (count the rows of windows).
-  "jogs": [{"x", "y", "dir": "toward" | "away", "depthFt": number}],   // every place the HOUSE WALL itself steps in or out — a bump-out, a bay, an L, a part set back: x where the step is, y on the base; "toward" when the wall to the RIGHT of the step comes toward the camera, "away" when it steps back; depthFt your estimate (a bump-out is usually 2 to 4 ft). The signs: a vertical corner board or a corner of siding, a separate eave or roof edge over one part, a shadow down the wall. [] when the wall is one flat face.
+  "sections": [{"x0", "x1", "outFt": number, "why": string}],   // FIRST work out the wall's sections, left to right from its left corner to its right corner: a section is a stretch of the house's wall whose face is one flat plane. "outFt" is how far that section's face stands IN FRONT of the main wall (the main wall — the widest stretch — is 0; a bump-out or a bay is +2 to +4; a part set back is negative). "why" is the evidence you see for that section's plane: its own corner boards at both its ends, its own eave or roof edge in front of the main eave, a shadow down the wall at its side, its siding meeting the next section at a corner. A porch roof, a patio roof or an awning in front of the wall does NOT make a section: the wall under it and behind it is the main wall unless its OWN face steps. One section when the wall is one flat face.
+  "jogs": [{"x", "y", "dir": "toward" | "away", "depthFt": number}],   // the same steps as places: where one section meets the next (x, y on the base), "toward" when the section to the RIGHT is nearer the camera, "away" when it is farther, depthFt the difference. [] when one section.
   "door": {"x0", "x1", "bottom", "top"} | null,   // the back door onto the yard: its left and right edges, its threshold and the top of its frame. Null when you cannot see one.
   "doors": [{"x0", "x1", "bottom", "top", "kind": "slider" | "hinged" | "french"}],   // EVERY door in the wall, the back door included. [] when none.
   "windows": [{"x0", "x1", "sill", "head"}],   // EVERY window in the wall, both storeys: the outside edges of its frame left and right, its sill (bottom) and its head (top). Windows side by side are one entry PER window — count them. Not the doors.
@@ -354,9 +374,10 @@ export function readFromCrop(read: HouseRead, crop: ReadCrop): HouseRead {
 }
 
 /**
- * The two looks as one read: the wall, its steps, its windows and doors from the close look (each one bigger there);
- * the roof, the cladding and the colours from the whole picture (the roof is cut off in the close one). The close look
- * is not trusted when it lost the wall — fewer than half the first look's windows, or a wall less than half as wide.
+ * The two looks as one read: the wall's corners, its windows and doors from the close look (each one bigger there);
+ * its sections — the steps — the roof, the cladding and the colours from the whole picture (read by the stronger
+ * model, the roof and the wall's ends in view). The close look is not trusted when it lost the wall — fewer than half
+ * the first look's windows, or a wall less than half as wide.
  */
 export function mergeLooks(wide: HouseRead, close: HouseRead | null): HouseRead {
   if (!close) return wide;
@@ -365,7 +386,8 @@ export function mergeLooks(wide: HouseRead, close: HouseRead | null): HouseRead 
   if (closeSpan < wideSpan * 0.5 || close.windows.length < wide.windows.length * 0.5) return wide;
   return {
     ...close,
-    storeys: close.storeys ?? wide.storeys,
+    jogs: wide.jogs,
+    storeys: wide.storeys ?? close.storeys,
     roof: wide.roof.kind ? wide.roof : close.roof,
     material: wide.material ?? close.material,
     colours: { siding: wide.colours.siding ?? close.colours.siding, roof: wide.colours.roof ?? close.colours.roof, trim: wide.colours.trim ?? close.colours.trim },

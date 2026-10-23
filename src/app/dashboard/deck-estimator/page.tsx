@@ -34,6 +34,9 @@ import type { DeckDesign } from "@/lib/deck/design";
 import type { LinkedDeckProposal } from "@/lib/deck/proposalEdit";
 
 export const dynamic = "force-dynamic";
+// The house read off a photo (actions readHousePhoto) asks a reasoning model and then looks again: as the other
+// estimators' pages, five minutes rather than the platform's default for the calls made from here.
+export const maxDuration = 300;
 export const metadata: Metadata = {
   title: "JobFlex · Deck Studio",
   description: "Deck estimator — size the deck, frame it to the code tables, watch it build in 3D, and price the material package.",
