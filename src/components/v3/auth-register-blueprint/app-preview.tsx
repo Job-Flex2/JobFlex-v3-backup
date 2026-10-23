@@ -9,74 +9,125 @@
 // feed that all expect a signed-in shop.
 //
 // The visitor's name appears in it as they type it (app-preview-live.tsx fills the [data-pv-*] slots).
+import { Fragment } from "react";
 import { ProductMark } from "@/components/brand/ProductMark";
 import type { TradeType } from "@/lib/tradeTypes";
 import { previewCalendar, previewMoney, previewPackFor, type PreviewIcon } from "@/lib/signupPreview";
 import css from "./app-preview.module.css";
 
+// The icons: the sidebar's verbatim from the app's own sprite (proposals-blueprint/sprite.tsx — so they are the
+// sidebar's own drawings), the rest drawn in the same line style. Inline rather than through <use>: the register page
+// carries its own sprite, and some ids are the same.
 const ICON: Record<string, string> = {
-  grid: "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z",
-  doc: "M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8zM14 3v5h5M9 13h6M9 17h6",
-  users: "M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M20 20v-1.5a3.5 3.5 0 0 0-2.6-3.4M15.5 4.2a3.5 3.5 0 0 1 0 6.6",
-  target: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8M12 12h.01",
-  folder: "M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z",
-  share: "M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6M6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6M18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6M8.6 13.5l6.8 4M15.4 6.5l-6.8 4",
-  bulb: "M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.4 1 1.1 1 1.8V16h5v-.3c0-.7.4-1.4 1-1.8A6 6 0 0 0 12 3",
-  plan: "M3 3h18v18H3zM3 9h8v12M11 13h10M15 3v6",
-  roof: "M3 11l9-7 9 7M5 9.5V20h14V9.5M10 20v-5h4v5",
-  fence: "M4 21V8l2-3 2 3v13M16 21V8l2-3 2 3v13M10 21V8l2-3 2 3v13M2 11h20M2 16h20",
-  video: "M3 6h12v12H3zM15 10l6-3v10l-6-3",
-  fan: "M12 12m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0M12 10c0-4 2-7 5-7 1.5 0 2 2 1 3.5L14 10M14 12c4 0 7 2 7 5 0 1.5-2 2-3.5 1L14 14M12 14c0 4-2 7-5 7-1.5 0-2-2-1-3.5L10 14M10 12c-4 0-7-2-7-5 0-1.5 2-2 3.5-1L10 10",
-  deck: "M3 10h18M5 10V6h14v4M4 14h16M6 14v7M18 14v7M12 14v7",
-  cal: "M4 6h16v15H4zM4 10h16M8 3v4M16 3v4",
-  case: "M3 8h18v12H3zM8 8V5h8v3M3 13h18",
-  hat: "M4 17h16M6 17v-3a6 6 0 0 1 12 0v3M10 8V5h4v3",
-  search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14M20 20l-4-4",
-  plus: "M12 5v14M5 12h14",
-  bell: "M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4",
-  check: "M5 12.5l4.5 4.5L19 7.5",
-  send: "M21 3L10 14M21 3l-7 18-4-7-7-4z",
-  lead: "M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21M12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5",
-  gear: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 0 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 0 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.3",
-  menu: "M4 7h16M4 12h16M4 17h16",
-  user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0",
-  docPlus: "M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8zM14 3v5h5M12 11v6M9 14h6",
-  chev: "M6 9l6 6 6-6",
+  "i-grid": '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
+  "i-file": '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  "i-users": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  "i-target": '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+  "i-folder": '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  "i-crm": '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4"/><path d="m15.4 6.5-6.8 4"/>',
+  "i-bulb": '<path d="M9 15c-.2-1-.7-1.7-1.4-2.4A4.9 4.9 0 0 1 7.1 9.4a4.9 4.9 0 0 1 9.8 0c0 1.2-.5 2.3-1.5 3.2-.7.7-1.2 1.4-1.4 2.4"/><path d="M9.5 18h5"/><path d="M10.5 21h3"/><path d="M12 1.5V3"/><path d="m5.4 4.2 1.1 1.1"/><path d="m18.6 4.2-1.1 1.1"/><path d="M3 9.5h1.5"/><path d="M19.5 9.5H21"/>',
+  "i-plans": '<rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 10h6"/><path d="M13 10h8"/><path d="M11 3v10"/><path d="M14 21v-6h7"/><path d="M6 15v3"/>',
+  "i-sofa": '<path d="M5 10V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/><path d="M3 11a2 2 0 0 1 2 2v2h14v-2a2 2 0 1 1 4 0v4a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1v-4a2 2 0 0 1 2-2Z"/><path d="M5 18v2"/><path d="M19 18v2"/>',
+  "i-leaf": '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>',
+  "i-roof": '<path d="m2 11 10-8 10 8"/><path d="M5 9v12h14V9"/>',
+  "i-fence": '<path d="M4 21V8l2-3 2 3v13"/><path d="M10 21V8l2-3 2 3v13"/><path d="M16 21V8l2-3 2 3v13"/><path d="M2 12h20"/><path d="M2 17h20"/>',
+  "i-video": '<rect x="2" y="6" width="13" height="12" rx="1.5"/><path d="M15 10.5 21 7v10l-6-3.5"/>',
+  "i-heatpump": '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12V8.5"/><path d="m12 12 3 1.8"/><path d="m12 12-3 1.8"/>',
+  "i-deck": '<path d="M2 10h20"/><path d="M2 13h20"/><path d="M4 13v8"/><path d="M20 13v8"/><path d="M12 13v8"/><path d="M5 10V5h14v5"/>',
+  "i-cal": '<g stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="1"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></g>',
+  "i-jobs": '<g stroke-width="2.5"><rect x="2" y="7" width="20" height="14" rx="1"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M2 13h20"/></g>',
+  "i-hardhat": '<path d="M2 18a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1z"/><path d="M10 10V5a2 2 0 1 1 4 0v5"/><path d="M4 15v-3a8 8 0 0 1 16 0v3"/>',
+  "i-userplus": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/>',
+  "i-building": '<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>',
+  "i-phone": '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.13.96.36 1.9.7 2.8a2 2 0 0 1-.45 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.45c.9.34 1.84.57 2.8.7A2 2 0 0 1 22 16.9z"/>',
+  "i-sms": '<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M9 7h6"/><path d="M9 11h4"/><path d="M12 18h.01"/>',
+  "i-msg": '<g stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></g>',
+  "i-thumb": '<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/>',
+  "i-board": '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>',
+  "i-gift": '<rect x="3" y="8" width="18" height="4"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/>',
+  "i-chart": '<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+  "i-bank": '<path d="M3 22h18"/><path d="M6 18v-7"/><path d="M10 18v-7"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="m12 2 9 5H3z"/>',
+  "i-card": '<rect x="2" y="5" width="20" height="14" rx="1"/><path d="M2 10h20"/>',
+  search: '<path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14M20 20l-4-4"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  send: '<path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/>',
+  lead: '<path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21M12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5"/>',
+  gear: '<path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 0 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 0 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.3"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  user: '<path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8M4 21a8 8 0 0 1 16 0"/>',
+  docPlus: '<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8zM14 3v5h5M12 11v6M9 14h6"/>',
+  chev: '<path d="M6 9l6 6 6-6"/>',
 };
 
 function Ic({ id, className }: { id: string; className?: string }) {
-  return (
-    <svg className={className ?? css.ic} viewBox="0 0 24 24" aria-hidden="true">
-      <path d={ICON[id]} />
-    </svg>
-  );
+  // Constant markup from the table above — never anything a visitor typed.
+  return <svg className={className ?? css.ic} viewBox="0 0 24 24" aria-hidden="true" dangerouslySetInnerHTML={{ __html: ICON[id] ?? "" }} />;
 }
 
-const WORK = [
-  { id: "grid", label: "Overview", on: true },
-  { id: "doc", label: "Proposals" },
-  { id: "users", label: "Clients" },
-  { id: "target", label: "Leads", badge: true },
-  { id: "folder", label: "Projects" },
-  { id: "share", label: "CRM" },
-];
-// The estimators, in the sidebar's own order and colours (blueprint-shell/nav-map).
-const TOOLS = [
-  { id: "bulb", label: "Smart Proposal", tone: "#7c4dff" },
-  { id: "plan", label: "Blueprint estimator", tone: "#1854a0" },
-  { id: "roof", label: "Roof estimator", tone: "#c0392b", fold: true },
-  { id: "fence", label: "Fence estimator", tone: "#2e7d32", fold: true },
-  { id: "video", label: "Video estimator", tone: "#d63384" },
-  { id: "fan", label: "HVAC estimator", tone: "#00838f", fold: true },
-  { id: "deck", label: "Deck Studio", tone: "#d9822b", fold: true },
-];
-const DELIVERY = [
-  { id: "cal", label: "Calendar" },
-  { id: "case", label: "Jobs" },
-  { id: "hat", label: "Workers" },
+/* THE WHOLE SIDEBAR (owner, 2026-10-22: "make sure the sidebar is shown in full"): every section and row of the app's
+   own (blueprint-shell/nav-map NAV_SECTIONS), in the owner's order and words — the tools in their colours
+   (globals.css --tool-*), "Deck" as the sidebar shortens it. Rows share the window's height, so all of it is in view. */
+type Row = { icon: string; label: string; on?: boolean; badge?: boolean; tone?: string; fold?: boolean };
+const NAV: Array<{ label: string; rows: Row[] }> = [
+  {
+    label: "Work",
+    rows: [
+      { icon: "i-grid", label: "Overview", on: true },
+      { icon: "i-file", label: "Proposals" },
+      { icon: "i-users", label: "Clients" },
+      { icon: "i-target", label: "Leads", badge: true },
+      { icon: "i-folder", label: "Projects" },
+      { icon: "i-crm", label: "CRM" },
+    ],
+  },
+  {
+    label: "Estimating tools",
+    rows: [
+      { icon: "i-bulb", label: "Smart Proposal", tone: "#6a4bd1" },
+      { icon: "i-plans", label: "Blueprint estimator", tone: "#2f4a7a" },
+      { icon: "i-sofa", label: "Design Studio", tone: "#66702a", fold: true },
+      { icon: "i-leaf", label: "Lawn estimator", tone: "#2c7a5a" },
+      { icon: "i-roof", label: "Roof estimator", tone: "#1854a0", fold: true },
+      { icon: "i-fence", label: "Fence estimator", tone: "#2c7a5a", fold: true },
+      { icon: "i-video", label: "Video estimator", tone: "#b8406a" },
+      { icon: "i-heatpump", label: "HVAC estimator", tone: "#0d7a8a", fold: true },
+      { icon: "i-deck", label: "Deck", tone: "#a0582a", fold: true },
+    ],
+  },
+  {
+    label: "Delivery",
+    rows: [
+      { icon: "i-cal", label: "Calendar" },
+      { icon: "i-jobs", label: "Jobs" },
+      { icon: "i-hardhat", label: "Workers" },
+      { icon: "i-userplus", label: "Hire" },
+      { icon: "i-building", label: "Company" },
+    ],
+  },
+  {
+    label: "Automation",
+    rows: [
+      { icon: "i-phone", label: "AI desk" },
+      { icon: "i-sms", label: "Texting" },
+      { icon: "i-msg", label: "Messages" },
+      { icon: "i-thumb", label: "Reviews" },
+      { icon: "i-board", label: "Trade board" },
+      { icon: "i-gift", label: "Referrals" },
+      { icon: "i-chart", label: "Reports" },
+    ],
+  },
+  {
+    label: "Money",
+    rows: [
+      { icon: "i-bank", label: "Financials" },
+      { icon: "i-card", label: "Subscription" },
+    ],
+  },
 ];
 
-const ACT_ICON: Record<PreviewIcon, string> = { check: "check", send: "send", lead: "lead", cal: "cal" };
+const ACT_ICON: Record<PreviewIcon, string> = { check: "check", send: "send", lead: "lead", cal: "i-cal" };
 
 /** The trend's polyline in a 560×200 box: x from 44 to 548, y from 12 (the top tick) to 176 (zero). */
 function trendGeometry(values: number[]) {
@@ -107,34 +158,31 @@ export function SignupAppPreview({ trade, name = null, now = new Date() }: { tra
             </span>
           </div>
           <div className={css.nav}>
-            <div className={css.sec}>Work</div>
-            {WORK.map((w) => (
-              <div key={w.label} className={w.on ? `${css.item} ${css.on}` : css.item}>
-                <Ic id={w.id} />
-                {w.label}
-                {w.badge ? <em className={css.badge}>{pack.leads}</em> : null}
-              </div>
-            ))}
-            <div className={css.sec}>Estimating tools</div>
-            {TOOLS.map((t) => (
-              <div key={t.label} className={css.tool} style={{ "--tone": t.tone } as React.CSSProperties}>
-                <span className={css.toolBox}>
-                  <Ic id={t.id} />
-                </span>
-                {t.label}
-                {t.fold ? (
-                  <span className={css.fold}>
-                    <Ic id="chev" />
-                  </span>
-                ) : null}
-              </div>
-            ))}
-            <div className={css.sec}>Delivery</div>
-            {DELIVERY.map((d) => (
-              <div key={d.label} className={css.item}>
-                <Ic id={d.id} />
-                {d.label}
-              </div>
+            {NAV.map((sec) => (
+              <Fragment key={sec.label}>
+                <div className={css.sec}>{sec.label}</div>
+                {sec.rows.map((r) =>
+                  r.tone ? (
+                    <div key={r.label} className={css.tool} style={{ "--tone": r.tone } as React.CSSProperties}>
+                      <span className={css.toolBox}>
+                        <Ic id={r.icon} />
+                      </span>
+                      <span className={css.label}>{r.label}</span>
+                      {r.fold ? (
+                        <span className={css.fold}>
+                          <Ic id="chev" />
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div key={r.label} className={r.on ? `${css.item} ${css.on}` : css.item}>
+                      <Ic id={r.icon} />
+                      <span className={css.label}>{r.label}</span>
+                      {r.badge ? <em className={css.badge}>{pack.leads}</em> : null}
+                    </div>
+                  ),
+                )}
+              </Fragment>
             ))}
           </div>
           <div className={css.user}>
@@ -177,11 +225,11 @@ export function SignupAppPreview({ trade, name = null, now = new Date() }: { tra
               </div>
               <div className={css.actions}>
                 <span className={`${css.btn} ${css.btnBlue}`}>
-                  <Ic id="bulb" />
+                  <Ic id="i-bulb" />
                   Smart Proposal
                 </span>
                 <span className={css.btn}>
-                  <Ic id="doc" />
+                  <Ic id="i-file" />
                   Manual proposal
                 </span>
               </div>

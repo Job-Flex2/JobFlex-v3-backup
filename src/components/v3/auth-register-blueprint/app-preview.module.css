@@ -19,30 +19,38 @@
 /* ── the desk ── */
 .desk { display: grid; grid-template-columns: 236px minmax(0, 1fr); height: 100%; }
 .side { display: flex; flex-direction: column; min-height: 0; background: var(--paper); border-right: 1px solid var(--ink); }
-.brand { display: flex; align-items: center; gap: 11px; height: 54px; flex: 0 0 auto; padding: 0 22px; background: var(--ink); color: #fff; }
+/* The brand and the top bar keep one height, as in the app; both give a little on a short screen. */
+.brand { display: flex; align-items: center; gap: 11px; height: clamp(44px, 6vh, 54px); flex: 0 0 auto; padding: 0 22px; background: var(--ink); color: #fff; }
 .mark { --pmark-h: 20px; }
 .brandName { font-size: 15px; font-weight: 900; line-height: 1; letter-spacing: 0.02em; text-transform: uppercase; }
 .brandName small, .pBrand small { display: block; margin-top: 4px; font-family: var(--mono); font-size: 8.5px; font-weight: 700; letter-spacing: 0.28em; color: var(--sky); }
-.nav { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 12px 12px; }
-.sec { margin: 16px 8px 7px; font-family: var(--mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
-.sec:first-child { margin-top: 6px; }
-.item { display: flex; align-items: center; gap: 12px; height: 35px; padding: 0 10px; border: 2px solid transparent; font-size: 13px; font-weight: 600; color: #1d1d1d; }
+/* THE WHOLE SIDEBAR IN VIEW (owner, 2026-10-22). The app's sidebar scrolls; this picture shows every row at once: the
+   rows share the height there is — up to the app's own row heights on a tall screen, tighter on a laptop — so all five
+   sections, Work to Money, are always on screen. */
+.nav { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden; padding: clamp(2px, 0.8vh, 10px) 12px clamp(4px, 1vh, 12px); }
+.sec { flex: 0 0 auto; margin: clamp(5px, 1.35vh, 16px) 8px clamp(2px, 0.5vh, 7px); font-family: var(--mono); font-size: 9.5px; font-weight: 700; line-height: 1; letter-spacing: 0.16em; text-transform: uppercase; }
+.sec:first-child { margin-top: clamp(2px, 0.6vh, 8px); }
+.item, .tool { display: flex; align-items: center; min-height: 0; color: #1d1d1d; white-space: nowrap; }
+.item { flex: 1 1 0; max-height: 34px; gap: 12px; padding: 0 10px; border: 2px solid transparent; font-size: clamp(11px, 1.45vh, 13px); font-weight: 600; }
+.item .ic { width: clamp(13px, 1.8vh, 16px); height: clamp(13px, 1.8vh, 16px); }
 .on { background: #fff; border-color: var(--ink); box-shadow: 3px 3px 0 var(--ink); }
-.badge { margin-left: auto; padding: 2px 6px; background: var(--blue); color: #fff; font-family: var(--mono); font-size: 10px; font-style: normal; font-weight: 700; }
-.tool { display: flex; align-items: center; gap: 11px; height: 41px; padding: 0 6px 0 8px; font-size: 12.5px; font-weight: 700; }
-.toolBox { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 auto; background: #fff; border: 2px solid var(--ink); box-shadow: -3px 3px 0 var(--tone); }
-.toolBox .ic { width: 14px; height: 14px; }
-.fold { display: grid; place-items: center; width: 22px; height: 22px; margin-left: auto; border: 1.5px solid var(--ink); }
-.fold .ic { width: 12px; height: 12px; }
-.user { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; padding: 12px 16px; border-top: 1px solid var(--ink); }
-.avatar { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 auto; border-radius: 50%; background: var(--blue); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: 0.02em; }
+.label { overflow: hidden; text-overflow: ellipsis; }
+.badge { margin-left: auto; padding: 1px 6px; background: var(--blue); color: #fff; font-family: var(--mono); font-size: 10px; font-style: normal; font-weight: 700; }
+.tool { flex: 1.15 1 0; max-height: 40px; gap: 11px; padding: 0 6px 0 8px; font-size: clamp(11px, 1.4vh, 12.5px); font-weight: 700; }
+/* the tool's tile, as the sidebar draws it: white, an ink frame and the tool's colour as its offset shadow */
+.toolBox { display: grid; place-items: center; width: clamp(13px, 2vh, 28px); height: clamp(13px, 2vh, 28px); flex: 0 0 auto; background: #fff; border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--tone); }
+.toolBox .ic { width: 62%; height: 62%; }
+.fold { display: grid; place-items: center; width: clamp(15px, 2.2vh, 22px); height: clamp(15px, 2.2vh, 22px); flex: 0 0 auto; margin-left: auto; border: 1.5px solid var(--ink); }
+.fold .ic { width: 70%; height: 70%; }
+.user { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; padding: clamp(5px, 1.1vh, 12px) 16px; border-top: 1px solid var(--ink); }
+.avatar { display: grid; place-items: center; width: clamp(26px, 3.6vh, 32px); height: clamp(26px, 3.6vh, 32px); flex: 0 0 auto; border-radius: 50%; background: var(--blue); color: #fff; font-size: 11px; font-weight: 800; letter-spacing: 0.02em; }
 .who { display: flex; flex-direction: column; min-width: 0; }
 .who b { overflow: hidden; font-size: 13px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
 .who small { margin-top: 2px; font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
-.gear { display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 auto; margin-left: auto; border: 1.5px solid var(--ink); }
+.gear { display: grid; place-items: center; width: clamp(26px, 3.4vh, 30px); height: clamp(26px, 3.4vh, 30px); flex: 0 0 auto; margin-left: auto; border: 1.5px solid var(--ink); }
 
 .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.top { display: flex; align-items: center; gap: 12px; height: 54px; flex: 0 0 auto; padding: 0 22px; border-bottom: 1px solid var(--ink); background: var(--paper); }
+.top { display: flex; align-items: center; gap: 12px; height: clamp(44px, 6vh, 54px); flex: 0 0 auto; padding: 0 22px; border-bottom: 1px solid var(--ink); background: var(--paper); }
 .search { display: flex; align-items: center; gap: 10px; width: min(356px, 40%); height: 36px; padding: 0 12px; border: 1.5px solid var(--ink); color: #7a7a7a; font-size: 13.5px; white-space: nowrap; overflow: hidden; }
 .newEst, .btn { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px; border: 2px solid var(--ink); background: #fff; font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
 .newEst { margin-left: auto; background: var(--blue); color: #fff; }
