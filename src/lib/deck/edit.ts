@@ -9,7 +9,7 @@
 
 import { applyDeckPatch, type DeckPatch } from "./checks";
 import { defaultRoofDesign, type DeckDesign, type RoofDesign, type RoofKind, type Structure } from "./design";
-import { deckShapeForHouse, houseForShape } from "./house";
+import { HOUSE_LIMITS, deckShapeForHouse, houseForShape } from "./house";
 import { resizes, roofResizes } from "./settle";
 
 /** The roof shapes each structure offers. A covered deck: shed, gable, hip; a gazebo: its own; a pergola: slats. */
@@ -31,6 +31,10 @@ export function patchDesign(d: DeckDesign, p: DeckPatch, settle: (next: DeckDesi
     if (!same(fit.shape, next.shape)) next = applyDeckPatch(next, { shape: fit.shape });
   } else if (p.shape) {
     const resized = p.shape.widthFt !== d.shape.widthFt || p.shape.depthFt !== d.shape.depthFt;
+    // A house built from its photo is the real wall (2026-10-23): a wider or narrower deck does not stretch it — the
+    // wall past the deck's right end gives up or takes what the deck took.
+    const grew = next.shape.widthFt - d.shape.widthFt;
+    if (resized && grew && d.house.photo) next = applyDeckPatch(next, { house: { rightFt: Math.min(HOUSE_LIMITS.extendFt.max, Math.max(HOUSE_LIMITS.extendFt.min, d.house.rightFt - grew)) } });
     if (resized) {
       const fit = deckShapeForHouse(next.shape, next.house);
       if (!same(fit.shape, next.shape)) next = applyDeckPatch(next, { shape: fit.shape });

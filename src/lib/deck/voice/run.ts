@@ -38,7 +38,7 @@ import {
 } from "../design";
 import { patchDesign, patchRoof, switchStructure } from "../edit";
 import type { FieldFocus } from "../fieldParts";
-import { HOUSE_ROOF_LABEL, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, houseForShape, quickWall, resizeDeckLeft, slideDeck } from "../house";
+import { HOUSE_ROOF_LABEL, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, houseForShape, quickWall, resizeDeckLeft, shiftHouseThings, slideDeck } from "../house";
 import type { DeckPriceOptions } from "../pricing";
 import { DECK_SAMPLES } from "../samples";
 import { autoFixDesign, settleDesign } from "../settle";
@@ -305,7 +305,7 @@ export function runCommand(d0: DeckDesign, cmd: DeckCommand, env: RunEnv = {}): 
       // "All the way across the house": the deck as wide as the wall, its ends at the house's corners.
       if (cmd.from === "house") {
         const full = toInch(clamp(s.widthFt + d.house.leftFt + d.house.rightFt, DECK_LIMITS.widthFt.min, DECK_LIMITS.widthFt.max));
-        const next = patchDesign(d, { shape: { ...s, widthFt: full } as DeckShape, house: { ...d.house, leftFt: 0, rightFt: 0, jogs: d.house.jogs.map((j) => ({ ...j, atFt: j.atFt + d.house.leftFt })) } }, settle);
+        const next = patchDesign(d, { shape: { ...s, widthFt: full } as DeckShape, house: { ...d.house, leftFt: 0, rightFt: 0, jogs: d.house.jogs.map((j) => ({ ...j, atFt: j.atFt + d.house.leftFt })), ...shiftHouseThings(d.house, d.house.leftFt) } }, settle);
         return out(next, [`All the way across the house — ${ftWords(next.shape.widthFt)} along the wall.${s.widthFt + d.house.leftFt + d.house.rightFt > DECK_LIMITS.widthFt.max ? ` (The studio goes up to ${DECK_LIMITS.widthFt.max} ft.)` : ""}`], { flash: [{ label: "Along the house" }], light: { label: "Along the house", step: "step-shape" }, view: { reset: true } });
       }
       let w = amt(s.widthFt, cmd.width);

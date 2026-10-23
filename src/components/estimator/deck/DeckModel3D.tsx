@@ -443,6 +443,61 @@ function grassTexture() {
     }
   });
 }
+/** What a wall built from its photo is clad in (2026-10-23): a pale pattern the wall's own colour tints, one tile a
+ *  known size (brick: two courses, 16 × 5⅓ in.; board and batten: one 16-in. bay; stone: 2 × 2 ft). */
+function brickTexture() {
+  return canvasTexture(64, 32, (g) => {
+    g.fillStyle = "#ffffff";
+    g.fillRect(0, 0, 64, 32);
+    for (let row = 0; row < 2; row++) {
+      const y = row * 16;
+      const off = row ? 16 : 0;
+      for (let x = -off; x < 64; x += 32) {
+        g.fillStyle = `rgba(0,0,0,${0.1 + Math.random() * 0.1})`;
+        g.fillRect(x + 1.5, y + 1.5, 29, 13);
+      }
+    }
+  });
+}
+function stuccoTexture() {
+  return canvasTexture(64, 64, (g) => {
+    g.fillStyle = "#ffffff";
+    g.fillRect(0, 0, 64, 64);
+    for (let i = 0; i < 1400; i++) {
+      g.fillStyle = `rgba(0,0,0,${Math.random() * 0.07})`;
+      g.fillRect(Math.random() * 64, Math.random() * 64, 1 + Math.random(), 1 + Math.random());
+    }
+  });
+}
+function battenTexture() {
+  return canvasTexture(32, 8, (g) => {
+    g.fillStyle = "#ffffff";
+    g.fillRect(0, 0, 32, 8);
+    g.fillStyle = "rgba(0,0,0,0.05)";
+    g.fillRect(26, 0, 6, 8);
+    g.fillStyle = "rgba(0,0,0,0.2)";
+    g.fillRect(31, 0, 1, 8);
+  });
+}
+function stoneTexture() {
+  return canvasTexture(128, 128, (g) => {
+    g.fillStyle = "#ffffff";
+    g.fillRect(0, 0, 128, 128);
+    for (let row = 0; row < 6; row++) {
+      let x = -Math.random() * 20;
+      const y = row * 21.3;
+      while (x < 128) {
+        const w = 18 + Math.random() * 26;
+        g.fillStyle = `rgba(0,0,0,${0.08 + Math.random() * 0.2})`;
+        g.beginPath();
+        g.roundRect(x + 1.5, y + 1.5, w - 3, 18, 5);
+        g.fill();
+        x += w;
+      }
+    }
+  });
+}
+
 function concreteTexture() {
   return canvasTexture(64, 64, (g) => {
     g.fillStyle = "#ffffff";
@@ -851,6 +906,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
     const shingles = shingleTexture();
     const ribs = ribTexture();
     const concrete = concreteTexture();
+    const cladding: Record<string, THREE.CanvasTexture> = { brick: brickTexture(), stucco: stuccoTexture(), "board-batten": battenTexture(), stone: stoneTexture() };
     let dirty = true;
     let requestFrame = () => {};
     const invalidate = () => { dirty = true; requestFrame(); };
@@ -1341,17 +1397,36 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       }
       if (s.house && !bd) {
         const H = s.house;
-        const wallMat = new THREE.MeshStandardMaterial({ color: H.siding ? new THREE.Color(H.siding) : SIDING, roughness: 0.95, map: siding });
+        // The cladding's tile repeats by the wall's size (brick 16 × 5⅓ in., a batten bay 16 in., stone 2 ft): one copy of
+        // the pattern per block, so a narrow bump-out's bricks are the size of the main wall's.
+        const clad = H.material && cladding[H.material] ? cladding[H.material] : null;
+        const TILE: Record<string, [number, number]> = { brick: [1.333, 0.444], stucco: [3, 3], "board-batten": [1.333, 100], stone: [2, 2] };
+        const wallMat = new THREE.MeshStandardMaterial({ color: H.siding ? new THREE.Color(H.siding) : SIDING, roughness: 0.95, map: clad ?? siding });
+        const wallMatFor = (w: number, h: number) => {
+          if (!clad || !H.material) return wallMat;
+          const t = clad.clone();
+          const [tw, th] = TILE[H.material];
+          t.repeat.set(Math.max(1, w / tw), H.material === "board-batten" ? 1 : Math.max(1, h / th));
+          t.needsUpdate = true;
+          const m = wallMat.clone();
+          m.map = t;
+          owned.push(t, m);
+          return m;
+        };
         const baseMat = new THREE.MeshStandardMaterial({ color: FOUNDATION, roughness: 1, map: concrete });
         const roofMat = new THREE.MeshStandardMaterial({ color: H.roofColour ? new THREE.Color(H.roofColour) : ROOF, roughness: 0.95, map: shingles, side: THREE.DoubleSide });
         const glassMat = new THREE.MeshStandardMaterial({ color: GLASS_C, roughness: 0.15, metalness: 0.4 });
         const trimMat = new THREE.MeshStandardMaterial({ color: TRIM_WHITE, roughness: 0.8 });
-        owned.push(wallMat, baseMat, roofMat, glassMat, trimMat);
+        const doorMat = new THREE.MeshStandardMaterial({ color: 0xf1eee6, roughness: 0.7 });
+        // What stands there now: weathered wood, and a patio roof's posts and beam.
+        const oldWoodMat = new THREE.MeshStandardMaterial({ color: 0x9a8a74, roughness: 1, map: grain });
+        const postMat = new THREE.MeshStandardMaterial({ color: 0x6b5a48, roughness: 0.9, map: grain });
+        owned.push(wallMat, baseMat, roofMat, glassMat, trimMat, doorMat, oldWoodMat, postMat);
         const height = H.heightFt;
         const band = Math.min(1.5, Math.max(0.5, s.heightFt - 0.6));
         siding.repeat.set(1, height / 0.5);
         const blocks = H.blocks.map((b) => ({ x0: b[0], y0: b[1], x1: b[2], y1: b[3], h: b[4] ?? height }));
-        mount.dataset.deck3dHouse = `${H.storeys ?? 1}:${H.roof ?? "hip"}:${blocks.length}:${H.windows?.length ?? 0}:${H.siding ?? ""}:${H.roofColour ?? ""}`;
+        mount.dataset.deck3dHouse = `${H.storeys ?? 1}:${H.roof ?? "hip"}:${blocks.length}:${H.windows?.length ?? 0}:${H.siding ?? ""}:${H.roofColour ?? ""}:${H.material ?? "lap"}:${H.doors?.length ?? "-"}:${H.existing?.map((e) => e[0]).join("") ?? ""}`;
         const part = (geo: THREE.BufferGeometry | null, mat: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number, shadow = false) => {
           const m = new THREE.Mesh(geo ?? unitBox, mat);
           if (!geo) m.scale.set(sx, sy, sz);
@@ -1367,7 +1442,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           const d = b.y1 - b.y0;
           const cx = (b.x0 + b.x1) / 2 - ox;
           const cz = (b.y0 + b.y1) / 2 - oz;
-          part(null, wallMat, w, b.h - band, d, cx, band + (b.h - band) / 2, cz, true);
+          part(null, wallMatFor(w, b.h - band), w, b.h - band, d, cx, band + (b.h - band) / 2, cz, true);
           part(null, baseMat, w + 0.02, band, d + 0.02, cx, band / 2, cz);
           // Corner boards at the face's two ends, a frieze under the eave.
           for (const x of [b.x0 + 0.18, b.x1 - 0.18]) part(null, trimMat, 0.36, b.h - band, 0.36, x - ox, band + (b.h - band) / 2, b.y1 - oz + 0.06);
@@ -1404,7 +1479,20 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           if (door) part(null, glassMat, 0.08, 0.5, 0.2, x - ox + 0.35, y + 3, z0 + 0.12);
           else part(null, trimMat, w + 0.7, 0.18, 0.3, x - ox, y - 0.09, z0 + 0.12);
         };
-        if (H.door) {
+        if (H.doors) {
+          // The doors where the photo showed them, on their own thresholds: a sliding door is glass with its meeting
+          // rail; a door is a painted slab with a glass lite in its top half, its knob on the latch side.
+          for (const [dx, face, dw, dh, sill, kind] of H.doors) {
+            if (kind === 1) opening(dx, dw, dh, sill, true, face);
+            else {
+              const z0 = face - oz;
+              part(null, trimMat, dw + 0.5, dh + 0.3, 0.12, dx - ox, sill + (dh + 0.3) / 2, z0 + 0.03);
+              part(null, doorMat, dw - 0.1, dh - 0.05, 0.14, dx - ox, sill + dh / 2, z0 + 0.04);
+              part(null, glassMat, dw * 0.55, dh * 0.38, 0.16, dx - ox, sill + dh * 0.7, z0 + 0.05);
+              part(null, trimMat, 0.08, 0.3, 0.2, dx - ox + dw * 0.36, sill + 3, z0 + 0.12);
+            }
+          }
+        } else if (H.door) {
           const [dx, dw, dh, face = 0] = H.door;
           opening(dx, dw, dh, s.heightFt, true, face);
           if (!H.windows) {
@@ -1417,6 +1505,43 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           }
         }
         for (const [wx, face, ww, wh, sill] of H.windows ?? []) opening(wx, ww, wh, sill, false, face);
+        // WHAT STANDS THERE NOW (2026-10-23, off the photo): an old deck, a patio roof on its posts, a concrete patio —
+        // each gone from the picture once it is marked to tear out.
+        for (const e of H.existing ?? []) {
+          const [kind, x0, x1, face, depth, height, high, ...posts] = e;
+          const w = x1 - x0;
+          const cx = (x0 + x1) / 2 - ox;
+          const zIn = face - oz;
+          const zOut = face + depth - oz;
+          if (kind === 2) {
+            part(null, baseMat, w, Math.max(0.15, height), depth, cx, Math.max(0.15, height) / 2, (zIn + zOut) / 2);
+          } else if (kind === 0) {
+            part(null, oldWoodMat, w, 0.14, depth, cx, height - 0.07, (zIn + zOut) / 2, true);
+            part(null, oldWoodMat, w, 0.8, 0.14, cx, height - 0.55, zOut - 0.07);
+            const n = Math.max(2, Math.ceil(w / 8) + 1);
+            for (let i = 0; i < n; i++) {
+              const px = x0 + 0.25 + ((w - 0.5) * i) / (n - 1) - ox;
+              part(null, oldWoodMat, 0.35, Math.max(0.2, height - 0.2), 0.35, px, Math.max(0.2, height - 0.2) / 2, zOut - 0.4);
+              if (height > 2.5) part(null, oldWoodMat, 0.3, 3, 0.3, px, height + 1.5, zOut - 0.15);
+            }
+            if (height > 2.5) part(null, oldWoodMat, w, 0.15, 0.3, cx, height + 3, zOut - 0.15);
+          } else if (kind === 1) {
+            const geo = trisGeometry([
+              [x0 - ox - cx, high, zIn],
+              [x1 - ox - cx, high, zIn],
+              [x1 - ox - cx, height, zOut],
+              [x0 - ox - cx, high, zIn],
+              [x1 - ox - cx, height, zOut],
+              [x0 - ox - cx, height, zOut],
+            ]);
+            owned.push(geo);
+            part(geo, roofMat, 1, 1, 1, cx, 0, 0, true);
+            part(null, trimMat, w + 0.2, 0.55, 0.16, cx, height - 0.2, zOut + 0.05);
+            part(null, postMat, w, 0.6, 0.4, cx, height - 0.5, zOut - 0.3);
+            const at = posts.length ? posts : [x0 + 0.3, x1 - 0.3];
+            for (const px of at) part(null, postMat, 0.45, height - 0.8, 0.45, px - ox, (height - 0.8) / 2, zOut - 0.3, true);
+          }
+        }
       }
 
       // The fixtures' light at night: a few real lights, the rest glow.
@@ -2574,6 +2699,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
       ribs.dispose();
       grass.dispose();
       concrete.dispose();
+      for (const t of Object.values(cladding)) t.dispose();
       groundGeo.dispose();
       groundMat.dispose();
       for (const g of [trunkGeo, crownGeo, hillGeo]) g.dispose();
