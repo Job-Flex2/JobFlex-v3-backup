@@ -371,7 +371,11 @@ function readView(c: string): Read {
   if (/\b(?:(?:turn )?off (?:the )?xray|xray off|no xray|solid|normal view|put the boards back)\b/.test(c)) set("xray", false);
   else if (/\b(?:xray|see[- ]?through|transparent|see inside|see the (?:frame|framing)|(?:show|see) (?:me )?(?:the )?(?:frame|framing|structure|bones|skeleton|substructure)(?: underneath| under| below)?|under the boards|without (?:the )?boards|hide (?:the )?boards)\b/.test(c)) set("xray", true);
   if (/\b(?:day|daytime|day time|daylight|morning|sunny|noon|turn off the lights|lights off)\b/.test(c) && viewish) set("night", false);
-  else if (/\b(?:night|nighttime|night time|evening|after dark|at dark|dusk|sunset|turn on the lights|lights on|(?:show|see) (?:them |it |the lights )?lit|lit up|in the dark|light (?:it )?up)\b/.test(c)) set("night", true);
+  else if (/\b(?:night|nighttime|night time|evening|after dark|at dark|dusk|sunset|turn on the lights|lights on|(?:show|see) (?:them |it |the lights )?lit|lit up|in the dark|light (?:it )?up)\b/.test(c)) {
+    set("night", true);
+    // "Show me at night": the whole deck in the evening, not the last part the camera flew to (2026-10-22).
+    if (/\b(?:show|see|view|look)\b/.test(c)) set("reset", true);
+  }
   if (/\b(?:hide (?:the )?connections|connections off)\b/.test(c)) set("connections", false);
   else if (/\b(?:connections?|how (?:is it|it's|it is|they're|are they|does it|do they) (?:connected|attached|fastened|held|tied|connect|attach)|connectors|joinery|the details|how (?:it|they) (?:connect|attach))\b/.test(c)) set("connections", true);
   if (/\b(?:(?:stop|pause) (?:the )?(?:build|building|animation)|stop building)\b/.test(c)) set("build", "stop");
@@ -387,6 +391,8 @@ function readView(c: string): Read {
   for (const [re, look] of LOOK_WORDS) {
     if (lookish && re.test(c)) {
       set("look", look);
+      // "Spin it around": the whole deck goes round, not the part the camera last flew to (2026-10-22).
+      if (look === "spin") set("reset", true);
       break;
     }
   }

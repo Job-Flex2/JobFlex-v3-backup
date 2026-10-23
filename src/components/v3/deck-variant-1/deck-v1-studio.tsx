@@ -351,6 +351,8 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
       studio.style.setProperty("--deck-scroll-space", `${Math.max(0, headerRange - appliedScroll)}px`);
     };
     const measure = () => {
+      // A resize or scroll can land after the studio left the page (opening a client's design navigates).
+      if (!studio.isConnected || !studio.parentElement) return;
       if (!desktop.matches) {
         studio.style.removeProperty("--deck-workspace-height");
         studio.style.removeProperty("--deck-scroll-space");

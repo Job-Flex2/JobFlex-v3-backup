@@ -274,7 +274,7 @@ export const FIXTURE_WORDS: ReadonlyArray<[RegExp, FixtureKind]> = [
   [/\b(?:post ?cap lights?|lit (?:post )?caps?|solar (?:post )?caps?|cap lights?|post lights?|lights? on the posts)\b/, "post-cap"],
   [/\b(?:stair lights?|step lights?|riser lights?|lights? (?:on|in|for) the (?:stairs|steps|risers)|stair lighting|light (?:up )?the (?:stairs|steps)|lit (?:stairs|steps))\b/, "step-light"],
   [/\b(?:string lights?|bistro lights?|cafe lights?|party lights?|edison (?:bulbs?|lights?)|fairy lights?|market lights?|festoon lights?)\b/, "string-light"],
-  [/\b(?:led strips?|strip lights?|tape lights?|rope lights?|under[- ]?rail (?:lights?|lighting|leds?)|accent lights?|led lighting|leds)\b/, "led-strip"],
+  [/\b(?:led strips?|strip lights?|tape lights?|rope lights?|under[- ]?rail (?:lights?|lighting|leds?)|accent lights?|led lighting|leds|led lights?|rail(?:ing)? lights?|lights? (?:under|beneath|below|along) the (?:top |cap )?(?:rail(?:ing)?s?|headers?|beams?|benches?))\b/, "led-strip"],
   [/\b(?:sconces?|wall lights?|lanterns?|coach lights?|wall lamps?|porch lights?|door lights?|lights? (?:over|by|above|next to|beside) the (?:door|back door|slider|patio door))\b/, "sconce"],
   [/\b(?:chandeliers?|pendants?|pendant lights?)\b/, "chandelier"],
   [/\b(?:ceiling fans?|fans?)\b/, "fan"],

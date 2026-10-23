@@ -22,7 +22,7 @@
 import type { BoxRow, EmailDoc } from "../email/doc";
 import { deckingProduct, railType } from "./catalog";
 import { applyDeckPatch } from "./checks";
-import { defaultDeckDesign, normalizeDeckDesign, ROOF_KIND_LABEL, structureWords, type DeckDesign, type RoofDesign } from "./design";
+import { defaultDeckDesign, normalizeDeckDesign, ROOF_KIND_LABEL, structureWords, type DeckDesign, type ElectricalDesign, type FixtureKind, type RoofDesign } from "./design";
 import { deckShapeForHouse } from "./house";
 import { settleDesign } from "./settle";
 
@@ -280,9 +280,47 @@ export function blankFor(base: DeckDesign): DeckDesign {
 const ROOF_ENGINEERING = ["load", "post", "rafter", "rafterSpacingIn", "header", "ridge", "roofDeck"] as const satisfies ReadonlyArray<keyof RoofDesign>;
 
 /**
+ * THE CLIENT'S LIGHTS (2026-10-22): since the client can talk to the design ("add a chandelier", "two patio heaters",
+ * "lights on the steps") and see them lit, what they light comes back with the design — it used to be thrown away
+ * here. The wiring stays the contractor's: the feed, the panel side and the timer, and on a fixture the contractor
+ * had already put in, who supplies it, the 240-volt heater and the shop's own product. One the client adds is as
+ * they set it, minus a product name (the shop's to choose).
+ */
+function mergeFixtures(base: ElectricalDesign, c: ElectricalDesign): ElectricalDesign {
+  const had = new Map(base.fixtures.map((f) => [f.id, f]));
+  const fixtures = c.fixtures.map((f) => {
+    const was = had.get(f.id);
+    return was && was.kind === f.kind ? { ...f, supply: was.supply, volts240: was.volts240, custom: was.custom } : { ...f, custom: null };
+  });
+  return { ...base, fixtures };
+}
+
+/** The lights, fans and heaters on a design, counted: ["a chandelier", "2 patio heaters", "an LED strip"]. */
+export function litWords(d: DeckDesign): string[] {
+  const n = new Map<FixtureKind, number>();
+  for (const f of d.electrical.fixtures) n.set(f.kind, (n.get(f.kind) ?? 0) + f.qty);
+  return [...n].map(([k, q]) => (q === 1 || k === "string-light" ? FIXTURE_SAID[k][0] : `${q} ${FIXTURE_SAID[k][1]}`));
+}
+
+/** A fixture as the contractor and the client read it. */
+const FIXTURE_SAID: Record<FixtureKind, [string, string]> = {
+  "led-strip": ["an LED strip", "LED strips"],
+  "post-cap": ["a lit post cap", "lit post caps"],
+  "step-light": ["a step light", "step lights"],
+  "string-light": ["string lights", "string lights"],
+  sconce: ["a sconce", "sconces"],
+  "ceiling-light": ["a ceiling light", "ceiling lights"],
+  chandelier: ["a chandelier", "chandeliers"],
+  fan: ["a ceiling fan", "ceiling fans"],
+  outlet: ["an outlet", "outlets"],
+  heater: ["a patio heater", "patio heaters"],
+  flood: ["a flood light", "flood lights"],
+};
+
+/**
  * The client's design laid over the contractor's: the client's kind, shape,
- * height, stairs, rail style, boards, lower level and roof look; everything
- * else from `base`. Settled to the tables unless `settle: false`.
+ * height, stairs, rail style, boards, lower level, roof look and lights;
+ * everything else from `base`. Settled to the tables unless `settle: false`.
  */
 export function mergeClientDesign(base: DeckDesign, raw: unknown, opts: { settle?: boolean } = {}): DeckDesign {
   const c = normalizeDeckDesign(raw, { state: base.site.state, frostIn: base.frostIn });
@@ -303,7 +341,7 @@ export function mergeClientDesign(base: DeckDesign, raw: unknown, opts: { settle
     // The house is the client's: they stand in front of it with a tape.
     house: c.house,
     photo: base.photo,
-    electrical: base.electrical,
+    electrical: mergeFixtures(base.electrical, c.electrical),
     rail: { ...c.rail, heightIn: base.rail.heightIn, postSpacingFt: base.rail.postSpacingFt, customPerFt: base.rail.customPerFt, type: c.rail.type === "custom" && base.rail.type !== "custom" ? base.rail.type : c.rail.type },
     decking: { ...c.decking, fastening: base.decking.fastening, fascia: base.decking.fascia, wastePct: base.decking.wastePct },
     roof,
@@ -333,7 +371,9 @@ export function returnedTitle(link: Pick<ClientDesignLink, "clientName" | "title
 export function clientLinkMessage(i: { org: string; clientName: string; link: string; start: ClientStart }): string {
   const first = i.clientName.trim().split(/\s+/)[0] || "there";
   const what = i.start === "mine" ? "Here is the deck we talked about — change anything you like" : "Design your deck here — pick a style, the size, stairs, railing and boards";
-  return `Hi ${first}, it's ${i.org || "your contractor"}. ${what}, and press Send when it looks right: ${i.link}`;
+  // "Ridgeline Roofing Co." ends its own sentence — no second full stop.
+  const who = (i.org.trim() || "your contractor").replace(/\.+$/, "");
+  return `Hi ${first}, it's ${who}. ${what}, and press Send when it looks right: ${i.link}`;
 }
 
 /** What changed from the contractor's design, in a client's words, for the contractor's notice. */
@@ -353,6 +393,8 @@ export function changesFrom(base: DeckDesign, next: DeckDesign): string[] {
     out.push(`house wall measured: ${total} ft${next.house.jogs.length ? `, ${next.house.jogs.length} ${next.house.jogs.length === 1 ? "step" : "steps"}` : ", straight"}`);
   }
   if (base.house.storeys !== next.house.storeys) out.push(next.house.storeys === 2 ? "two-storey house" : "one-storey house");
+  // "lights: a chandelier, 2 patio heaters" — what is lit now, when the client changed it.
+  if (litWords(base).join() !== litWords(next).join()) out.push(next.electrical.fixtures.length ? `lights: ${litWords(next).join(", ")}` : "no lights");
   return out;
 }
 

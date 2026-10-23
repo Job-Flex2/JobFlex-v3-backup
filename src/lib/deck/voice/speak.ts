@@ -27,6 +27,12 @@ const NUMBER_WORD = /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleve
 const UNIT_WORD = /\b(?:yards?|feet|foot|ft|inch(?:es)?|sq|square|cubic|bags?|lbs?|pounds?|gallons?|degrees?|percent|tons?)\b/i;
 const measured = (s: string) => DIGIT.test(s) || (NUMBER_WORD.test(s) && UNIT_WORD.test(s));
 
+const COUNT_SAID = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+/** A count of things said in words ("Added 2 patio heaters" → "Added two patio heaters") — a count is not a
+ *  measurement; a number with a unit after it ("2 ft", "6.5 in.", "2x8") stays a number and keeps its sentence out. */
+const countsInWords = (s: string) =>
+  s.replace(/(^|[\s(])([1-9]|1[0-2])(?=\s+(?!(?:ft|feet|foot|in|inch|inches|sq|square|cubic|yards?|lbs?|pounds?|gallons?|degrees?|percent|kw|volts?|amps?|by|x|of an?)\b)[a-z])/gi, (_m, pre: string, n: string) => `${pre}${COUNT_SAID[Number(n)]}`);
+
 /** Sentences, kept whole ("Ready — 3 in 12." stays one; "3 ft 6 in. (42 in.) above the ground." stays one). */
 function sentences(text: string): string[] {
   return text
@@ -46,7 +52,7 @@ function wordsOnly(sentence: string): string | null {
   if (PRICE.test(sentence)) return null;
   // "Heads up — stair 1 (left): 6 risers: a graspable handrail 34 to 38 in. …" — the code check is on the screen.
   if (/^heads up\b/i.test(sentence) && measured(sentence)) return "Heads up — there's a code check to look at.";
-  const s = sentence.replace(/\s*\([^)]*\d[^)]*\)/g, "");
+  const s = countsInWords(sentence.replace(/\s*\([^)]*\d[^)]*\)/g, ""));
   // "Switched to Trex Transcend (reddish brown)." → "…, reddish brown."
   if (!measured(s)) return tidy(s.replace(/\s*\(([^)]*)\)/g, ", $1"));
   const parts = s.split(/\s+[—–-]\s+|;\s+|:\s+|,\s+/).flatMap((raw, i) => {
@@ -82,7 +88,10 @@ export function spokenReply(r: { say: string; pending: { ask: string } | null; c
   const question = [first, ...rest].filter((s): s is string => !!s && isAsk(s)).pop() ?? (r.pending ? wordsOnly(r.pending.ask) : null);
   const screen = audience === "client" ? "Here it is." : "It's on your screen.";
   let out: string[];
-  if (first && !isAsk(first)) out = [first];
+  // "Added a chandelier at the peak. Added two patio heaters." — a second change of the same kind is said too.
+  const lead = (x: string) => x.split(/\s+/)[0].toLowerCase();
+  const also = first && !isAsk(first) ? rest.find((x) => !isAsk(x) && lead(x) === lead(first) && x !== first) : undefined;
+  if (first && !isAsk(first)) out = also ? [first, also] : [first];
   else if (r.changed) {
     const more = rest.find((s) => !isAsk(s));
     out = [ACKS[Math.abs(seed) % ACKS.length], ...(more ? [more] : [])];
