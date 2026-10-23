@@ -386,6 +386,7 @@ export async function buildCalendarSeed(): Promise<CalendarSeed> {
       status: "SCHEDULED",
       workers: ownerWorkerId ? [ownerWorkerId] : [],
       selfOnly: b.ownerId === userId || undefined,
+      orgWide: !b.ownerId || undefined,
     };
   });
 

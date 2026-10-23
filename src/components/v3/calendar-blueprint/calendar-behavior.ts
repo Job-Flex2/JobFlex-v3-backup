@@ -704,7 +704,7 @@ export function initCalendarContent(
       '<span class="evc-t"><svg class="ic"><use href="#' + evIcon(e) + '"/></svg><span class="evc-txt">' + esc(e.title) + "</span></span>" +
       (compact
         ? (e.kind === "appointment" ? '<span class="evc-time">' + viaTag(e) + "</span>" : "")
-        : '<span class="evc-time">' + viaTag(e) + (e.allDay ? "All day" : fmtTime(e.start)) + " · " + esc(workerNames(e).join(", ") || "unassigned") + "</span>") +
+        : '<span class="evc-time">' + viaTag(e) + (e.allDay ? "All day" : fmtTime(e.start)) + " · " + esc(workerNames(e).join(", ") || (e.orgWide ? "everyone" : "unassigned")) + "</span>") +
       "</button>";
   }
 
@@ -1698,7 +1698,9 @@ export function initCalendarContent(
     // "Casey Stone accepted · Dima pending". The office asked for the
     // confirmation state to be readable on the event itself, not only in the
     // inbox ledger. Already-escaped HTML, so it is dropped in raw below.
-    const crewHtml = e.kind === "blocked" && e.selfOnly
+    const crewHtml = e.kind === "blocked" && e.orgWide
+      ? "Everyone — the whole company"
+      : e.kind === "blocked" && e.selfOnly
       ? esc("Just me · " + OWNER.name)
       : e.workers.length
         ? e.workers.map(function (id) {
@@ -2944,7 +2946,8 @@ export function initCalendarContent(
     if (ev.kind === "job") ev.status = cal.form.status || ev.status;
     ev.notes = notes;
     if (!wired || ev.kind !== "appointment") ev.workers = crew;
-    if (ev.kind === "blocked") {
+    // A company-wide block stays everyone's: an edit moves its time, never its owner (actions/blockedTime).
+    if (ev.kind === "blocked" && !ev.orgWide) {
       ev.selfOnly = ev.workers.length === 0;
       if (ev.selfOnly) ev.workers = [OWNER.id];
     }

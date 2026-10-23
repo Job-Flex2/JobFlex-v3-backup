@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireManager, requireOrg, requireRouteAccess } from "@/lib/orgContext";
+import { requireManager, requireOrg, requireRouteAccess, roleMayOpen } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { TRADE_TYPES, parseTradeTypes } from "@/lib/tradeTypes";
 import { geocodeOrgAddress } from "@/lib/leadCenter/eligibility";
@@ -177,10 +177,12 @@ export async function leadProfileGaps(): Promise<{
   paused: boolean;
   reason: string | null;
 }> {
-  const { organizationId } = await requireOrg();
+  const { organizationId, role } = await requireOrg();
   // The nudge points at the Company page; a shop that did not buy it is not
-  // sent there (lib/customPageAccess).
-  if (await isPageLocked(organizationId, "company")) return { needsAddress: false, needsTrades: false, paused: false, reason: null };
+  // sent there (lib/customPageAccess), and neither is a member whose role may
+  // not open it (2026-10-23: a sales rep was told to complete a profile they
+  // could not reach).
+  if (!roleMayOpen(role, "/dashboard/company") || (await isPageLocked(organizationId, "company"))) return { needsAddress: false, needsTrades: false, paused: false, reason: null };
   const org = await db.organization.findUnique({
     where: { id: organizationId },
     select: { lat: true, lng: true, tradeTypesJson: true, leadOffersEnabled: true },

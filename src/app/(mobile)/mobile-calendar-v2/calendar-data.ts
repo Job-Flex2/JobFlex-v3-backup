@@ -72,6 +72,8 @@ export type CalEvent = {
   assignmentStatus?: Record<string, string>;
   /** Blocked time created with no crew picked — the block belongs to the owner. */
   selfOnly?: boolean;
+  /** Blocked time with no owner: it holds the whole company (2026-10-23 — it used to read "Just me"). */
+  orgWide?: boolean;
   /** Spans whole days: it has a date but no clock span, so it has no duration. */
   allDay?: boolean;
   /** "desk" only — hours reserved for the AI desk (lib/deskHours): whose (none = anyone), and whether every week. `rid` is the reservation. */
@@ -402,6 +404,7 @@ export function workerName(id: string): string {
 
 /** "Marcus B. +1" — the whole crew never fits on a 320px row. */
 export function crewLabel(e: CalEvent): string {
+  if (e.kind === "blocked" && e.orgWide) return "Everyone";
   if (e.kind === "blocked" && (e.selfOnly || !e.workers.length)) return "Just me";
   if (!e.workers.length) return "Unassigned";
   const first = workerName(e.workers[0]);
