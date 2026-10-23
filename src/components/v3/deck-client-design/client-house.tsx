@@ -21,7 +21,7 @@ import { DECK_LIMITS, type DeckShape } from "@/lib/deck/design";
 import {
   HOUSE_LIMITS,
   HOUSE_ROOFS,
-  HOUSE_ROOF_LABEL,
+  HOUSE_ROOF_WORDS,
   QUICK_WALLS,
   ROOF_COLOURS,
   SIDINGS,
@@ -139,7 +139,7 @@ export function ClientHouse({ shape, house, shopName, onChange }: { shape: DeckS
       <div className={s.lbl}>Your house</div>
       <div className={s.lookGrid}>
         <Chips small label="Storeys" value={house.storeys} options={[{ value: 1 as const, name: "One storey" }, { value: 2 as const, name: "Two storeys" }]} onChange={(v) => onChange({ house: { ...house, storeys: v } })} />
-        <Chips small label="House roof" value={house.roof} options={HOUSE_ROOFS.map((r) => ({ value: r, name: `${HOUSE_ROOF_LABEL[r]} roof` }))} onChange={(v: HouseRoof) => onChange({ house: { ...house, roof: v } })} />
+        <Chips small label="House roof" value={house.roof} options={HOUSE_ROOFS.map((r) => ({ value: r, name: HOUSE_ROOF_WORDS[r].charAt(0).toUpperCase() + HOUSE_ROOF_WORDS[r].slice(1) }))} onChange={(v: HouseRoof) => onChange({ house: { ...house, roof: v } })} />
       </div>
       <Chips small label="Siding colour" value={isHouseHex(house.siding) ? null : house.siding} options={SIDINGS.map((c) => ({ value: c.id, name: c.label, swatch: c.hex }))} onChange={(v: SidingId) => onChange({ house: { ...house, siding: v } })} />
       <Chips small label="Roof colour" value={isHouseHex(house.roofColour) ? null : house.roofColour} options={ROOF_COLOURS.map((c) => ({ value: c.id, name: c.label, swatch: c.hex }))} onChange={(v: RoofColourId) => onChange({ house: { ...house, roofColour: v } })} />

@@ -3,12 +3,16 @@
 // it to the 3D shaper … if it's a two-story, one-story, if it's a roof shape … even the color of the house … the client
 // will just give the back wall picture where the deck will be, and we just upload it". The contractor can upload it too.
 //
-// The vision model reads the picture once (actions/deckEstimator readHousePhoto) and answers with the wall read the
-// smart fit already knows (lib/deck/photoFit WallRead — the base, the eave, the storeys, the steps, the back door, the
-// windows, a patio) and what a HOUSE needs besides: every door in the wall and its kind, the roof's shape, what the
-// wall is clad in, a guess at the colours, a roof already standing over the back door or a patio, an old deck. The
-// arithmetic that turns it into the 3D house is lib/deck/houseFromPhoto; the colours are measured off the picture's
-// own pixels in the browser, the model's guess only standing in when that fails.
+// The vision model reads the picture (actions/deckEstimator readHousePhoto) and answers with the wall read the smart fit
+// already knows (lib/deck/photoFit WallRead — the base, the eave, the storeys, the steps, the back door, the windows)
+// and what a HOUSE needs besides: every door in the wall and its kind, the roof's shape, what the wall is clad in, a
+// guess at the colours. Only the house's own wall (owner, the same day: "read just a shape of that back wall and don't
+// show existing deck or porch roofs, just shape and windows") — a porch roof, its posts, an old deck, a slab are told
+// to the model as things to look past, never a step or an edge of the wall. Two looks (HOUSE_ZOOM_NOTE): the whole
+// picture to find the wall, then the wall cut out and enlarged so every window reads at its size; both on a faint
+// grid of tenths the studio draws, so the fractions are read off it rather than guessed. The arithmetic that turns it
+// into the 3D house is lib/deck/houseFromPhoto; the colours are measured off the picture's own pixels in the browser,
+// the model's guess only standing in when that fails.
 
 import { parseWallRead, type WallRead } from "./photoFit";
 
@@ -24,10 +28,6 @@ export interface HouseRead extends WallRead {
   material: ReadMaterial | null;
   /** The model's guess at the colours, #rrggbb — the browser's measure of the pixels comes first. */
   colours: { siding: string | null; roof: string | null; trim: string | null };
-  /** A roof already over the back door or a patio (a porch roof, a covered patio's own roof): its ends along the wall, its low edge and its top, and the posts under it. */
-  cover: { x0: number; x1: number; bottom: number; top: number; posts: number[] } | null;
-  /** An old deck against the wall (to tear out): its ends along the wall and its floor's edge (null when hidden). */
-  oldDeck: { x0: number; x1: number; top: number | null } | null;
 }
 
 const MAX_WINDOWS = 30;
@@ -110,13 +110,6 @@ export function parseHouseRead(raw: unknown): HouseRead | null {
   const matWord = typeof r.material === "string" ? r.material : "";
   const material = MATERIAL_WORDS.find(([re]) => re.test(matWord))?.[1] ?? null;
   const c = obj(r.colours ?? r.colors);
-  const cv = obj(r.cover);
-  const coverBox = box(r.cover, 0.04, 0.005, "bottom", "top");
-  const posts = (Array.isArray(cv.posts) ? cv.posts : []).filter((p): p is number => typeof p === "number" && Number.isFinite(p)).map((p) => r3(frac(p, 0))).sort((a, b) => a - b).slice(0, 8);
-  const cover = coverBox ? { ...coverBox, posts: posts.filter((p) => p >= coverBox.x0 - 0.03 && p <= coverBox.x1 + 0.03) } : null;
-  const od = span(r.oldDeck, 0.04);
-  const odTop = obj(r.oldDeck).top;
-  const oldDeck = od ? { ...od, top: typeof odTop === "number" && Number.isFinite(odTop) ? r3(frac(odTop, 0)) : null } : null;
   return {
     ...wall,
     windows: clearOfDoors,
@@ -124,8 +117,6 @@ export function parseHouseRead(raw: unknown): HouseRead | null {
     roof: { kind: roofKind, pitch },
     material,
     colours: { siding: hex(c.siding), roof: hex(c.roof), trim: hex(c.trim) },
-    cover,
-    oldDeck,
   };
 }
 
@@ -145,42 +136,39 @@ export function mapHouseRead(read: HouseRead, wallMap: (r: WallRead) => WallRead
     const tc = pt({ x: cx, y: b.top });
     return { x0: r3(Math.min(bl.x, br.x)), x1: r3(Math.max(bl.x, br.x)), bottom: r3(bc.y), top: r3(Math.min(tc.y, bc.y - 0.001)) };
   };
-  const alongBase = (x: number) => {
-    const t = (x - read.base.left.x) / Math.max(1e-6, read.base.right.x - read.base.left.x);
-    return pt({ x, y: read.base.left.y + (read.base.right.y - read.base.left.y) * clamp(t, 0, 1) }).x;
-  };
   return {
     ...wall,
     doors: read.doors.map((d) => ({ ...boxOf(d), kind: d.kind })),
     roof: read.roof,
     material: read.material,
     colours: read.colours,
-    cover: read.cover ? { ...boxOf(read.cover), posts: read.cover.posts.map((p) => r3(alongBase(p))) } : null,
-    oldDeck: read.oldDeck ? { x0: r3(alongBase(read.oldDeck.x0)), x1: r3(alongBase(read.oldDeck.x1)), top: read.oldDeck.top === null ? null : r3(pt({ x: (read.oldDeck.x0 + read.oldDeck.x1) / 2, y: read.oldDeck.top }).y) } : null,
   };
 }
 
 /** The prompt the house read runs on — the wall's JSON (as the smart fit reads it) and the house's own fields. */
-export const HOUSE_READ_PROMPT = `You read one photo of the back (or side) of a house, taken from the yard, for a deck builder who will rebuild that house as a simple 3D model and design a deck against it. Answer with ONE JSON object and nothing else. Every coordinate is a FRACTION of the whole picture: x from 0 at the left edge to 1 at the right edge, y from 0 at the top edge to 1 at the bottom edge.
+export const HOUSE_READ_PROMPT = `You read one photo of the back (or side) of a house, taken from the yard, for a deck builder who will rebuild that house's wall as a simple 3D model. Read ONLY the house itself — its wall, its windows, its doors, its roof. Answer with ONE JSON object and nothing else.
+COORDINATES: every coordinate is a FRACTION of the whole picture: x from 0 at the left edge to 1 at the right edge, y from 0 at the top edge to 1 at the bottom edge. The picture carries a faint grid with a line every 0.1, labelled along the edges — read each position off that grid (to the nearest 0.005), do not guess.
 {
-  "base": {"left": {"x","y"}, "right": {"x","y"}},   // the two ends of the house wall's bottom edge where the wall meets the ground, the patio or an old deck — the whole back face of the house toward the camera, across every step in it, from its left corner to its right corner.
-  "eave": {"left": {"x","y"}, "right": {"x","y"}} | null,   // the top of that wall above each base end: the underside of the main roof's eave (on a two-storey house, the eave over the upper floor).
-  "storeys": 1 | 2 | null,   // storeys of wall between the base and that eave.
-  "jogs": [{"x", "y", "dir": "toward" | "away", "depthFt": number}],   // every place the wall steps in or out (a bump-out, a bay, an L, a part set back): x along the base, y on the base; "toward" when the part of the wall to the RIGHT of the step comes toward the camera, "away" when it steps back. depthFt your estimate in feet (a bump-out is usually 2 to 4; read it from the side of the bump-out if you see it). Look for corner boards, a separate roof edge over one part, or a shadow line. [] when the wall is one flat face.
-  "door": {"x0", "x1", "bottom", "top"} | null,   // the back door onto the yard (where a deck would meet the house): its left and right edges, its threshold and the top of its frame. It is often under a porch roof or the upper floor. Null when you cannot see one — never invent one.
-  "doors": [{"x0", "x1", "bottom", "top", "kind": "slider" | "hinged" | "french"}],   // EVERY door in that wall, the back door included. [] when none.
-  "windows": [{"x0", "x1", "sill", "head"}],   // EVERY window in that wall, both storeys: left and right edges, the sill (bottom) and the head (top). A group of windows side by side is one entry PER window. Not the doors. [] when none.
-  "patio": {"x0", "x1"} | null,   // a concrete patio or slab at the wall's base: its ends along the wall.
-  "oldDeck": {"x0", "x1", "top"} | null,   // an old deck against the wall (it may be torn out): its ends along the wall and the y of its floor's front edge.
-  "cover": {"x0", "x1", "bottom", "top", "posts": [x, …]} | null,   // a roof that already stands out from this wall over a door or a patio (a porch roof, a covered patio): its left and right ends, its low edge (the beam or gutter), its top where it meets the wall, and the x of each post that holds it up. Null when none.
-  "roof": {"kind": "hip" | "gable-side" | "gable-end" | "shed" | "flat", "pitch": number | null},   // the main roof over this wall: hip (slopes on every side), gable-side (the ridge runs along this wall, the triangle ends are at the sides), gable-end (a triangle of wall faces the camera), shed, flat; pitch in inches of rise per foot when you can judge it (a usual house is 4 to 8).
-  "material": "lap" | "brick" | "stucco" | "board-batten" | "stone" | "shingle",   // what most of this wall is clad in (lap = horizontal siding, vinyl or fiber cement).
-  "colours": {"siding": "#rrggbb", "roof": "#rrggbb", "trim": "#rrggbb"},   // your best guess at the real colours, as if in plain daylight (not the sunset or the shadow).
-  "bars": {"top", "bottom"},   // black bands or a phone's status bar at the top and the bottom of the picture, as fractions of its height; 0 when none.
-  "confidence": 0..1,   // how sure you are of the base line, the steps and the openings.
-  "note": string | null   // one short sentence a deck builder should know (a meter or a dryer vent on the wall, a window well, the ground sloping), else null.
+  "base": {"left": {"x","y"}, "right": {"x","y"}},   // the house wall's bottom edge where the WALL meets the ground (or would meet it behind a patio, steps or a deck), at the house's left corner and at its right corner — the whole back face of the house, across every step in it.
+  "eave": {"left": {"x","y"}, "right": {"x","y"}} | null,   // the top of that wall above each corner: the underside of the MAIN roof's eave (on a two-storey house, the eave over the upper floor).
+  "storeys": 1 | 2 | null,   // storeys of wall between the base and that eave (count the rows of windows).
+  "jogs": [{"x", "y", "dir": "toward" | "away", "depthFt": number}],   // every place the HOUSE WALL itself steps in or out — a bump-out, a bay, an L, a part set back: x where the step is, y on the base; "toward" when the wall to the RIGHT of the step comes toward the camera, "away" when it steps back; depthFt your estimate (a bump-out is usually 2 to 4 ft). The signs: a vertical corner board or a corner of siding, a separate eave or roof edge over one part, a shadow down the wall. [] when the wall is one flat face.
+  "door": {"x0", "x1", "bottom", "top"} | null,   // the back door onto the yard: its left and right edges, its threshold and the top of its frame. Null when you cannot see one.
+  "doors": [{"x0", "x1", "bottom", "top", "kind": "slider" | "hinged" | "french"}],   // EVERY door in the wall, the back door included. [] when none.
+  "windows": [{"x0", "x1", "sill", "head"}],   // EVERY window in the wall, both storeys: the outside edges of its frame left and right, its sill (bottom) and its head (top). Windows side by side are one entry PER window — count them. Not the doors.
+  "patio": {"x0", "x1"} | null,   // a concrete patio or slab at the wall's base: its ends along the wall (only to know where a deck would go).
+  "roof": {"kind": "hip" | "gable-side" | "gable-end" | "shed" | "flat", "pitch": number | null},   // the MAIN roof of the house: hip (slopes on every side), gable-side (the ridge runs along this wall, triangles at the sides), gable-end (a triangle of wall faces the camera), shed, flat; pitch in inches of rise per foot when you can judge it (a usual house is 4 to 8).
+  "material": "lap" | "brick" | "stucco" | "board-batten" | "stone" | "shingle",   // what most of the wall is clad in (lap = horizontal siding, vinyl or fiber cement).
+  "colours": {"siding": "#rrggbb", "roof": "#rrggbb", "trim": "#rrggbb"},   // your best guess at the real colours as in plain daylight (not the sunset, not the shadow).
+  "bars": {"top", "bottom"},   // black bands or a phone's status bar at the top and the bottom, as fractions of the height; 0 when none.
+  "confidence": 0..1,   // how sure you are of the corners, the steps and the windows.
+  "note": string | null   // one short sentence a deck builder should know (a meter or a dryer vent on the wall, the ground sloping), else null.
 }
-Rules: the base is where the WALL meets the ground, not a fence or a roof edge; a standard exterior door is about 80 inches tall and a usual window about 3 to 4 ft wide — use them to judge sizes; give the edges of the glass and its trim, not the shadow; never invent a door, a window or a step you cannot see.`;
+LOOK PAST, NEVER READ AS THE WALL: a porch roof or a covered patio's roof standing out in front of the wall, its posts and beams, an awning, a pergola, an old deck and its railing, stairs, a slab, a fence, a hedge, trees, a neighbour's house, a car. None of them is a step in the wall, an edge of the wall or its eave: a porch roof's low edge is not the eave; its post is not a corner. Read the house wall behind them.
+Rules: a standard exterior door is about 80 inches tall and a usual window about 3 to 4 ft wide — use them to judge sizes; never invent a door, a window or a step you cannot see.`;
+
+/** Said with the second look, on the wall cut out of the picture and enlarged. */
+export const HOUSE_ZOOM_NOTE = "This picture is the house's wall cut out of a wider photo and enlarged: the wall fills most of it. Read it the same way — the fractions are of THIS picture.";
 
 /* ------------------------------------------------------------------ */
 /*  The read fixed by hand on the review (2026-10-23)                   */
@@ -214,8 +202,6 @@ export function blankHouseRead(): HouseRead {
     roof: { kind: null, pitch: null },
     material: null,
     colours: { siding: null, roof: null, trim: null },
-    cover: null,
-    oldDeck: null,
   };
 }
 
@@ -316,3 +302,75 @@ export function addReadJog(read: HouseRead): HouseRead {
 }
 export const removeReadJog = (read: HouseRead, i: number): HouseRead => ({ ...read, jogs: read.jogs.filter((_, k) => k !== i) });
 export const flipReadJog = (read: HouseRead, i: number): HouseRead => ({ ...read, jogs: read.jogs.map((j, k) => (k === i ? { ...j, dir: j.dir === "toward" ? ("away" as const) : ("toward" as const) } : j)) });
+
+/* ------------------------------------------------------------------ */
+/*  The second look: the wall cut out and enlarged (2026-10-23)          */
+/* ------------------------------------------------------------------ */
+
+/** A cut of a picture, as fractions of it. */
+export interface ReadCrop {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Where to cut the wall out for the second look: around its corners, its eave and every window and door the first look
+ * found, with a margin (the roof's edge above the eave kept in), and the cut made a little wider than tall at least so
+ * it enlarges well. Null when the wall already fills most of the picture — a second look would see nothing bigger.
+ */
+export function wallCrop(read: HouseRead): ReadCrop | null {
+  const xs = [read.base.left.x, read.base.right.x, ...read.windows.flatMap((w) => [w.x0, w.x1]), ...read.doors.flatMap((d) => [d.x0, d.x1])];
+  const ys = [read.base.left.y, read.base.right.y, ...(read.eave ? [read.eave.left.y, read.eave.right.y] : []), ...read.windows.map((w) => w.head), ...read.doors.map((d) => d.top)];
+  const span = Math.max(...xs) - Math.min(...xs);
+  const x0 = clamp(Math.min(...xs) - Math.max(0.03, span * 0.05), 0, 1);
+  const x1 = clamp(Math.max(...xs) + Math.max(0.03, span * 0.05), 0, 1);
+  const tall = Math.max(...ys) - Math.min(...ys);
+  const y0 = clamp(Math.min(...ys) - Math.max(0.04, tall * 0.18), 0, 1);
+  const y1 = clamp(Math.max(...ys) + Math.max(0.03, tall * 0.06), 0, 1);
+  if (x1 - x0 <= 0.05 || y1 - y0 <= 0.05) return null;
+  if ((x1 - x0) * (y1 - y0) > 0.72) return null;
+  return { x: r3(x0), y: r3(y0), w: r3(x1 - x0), h: r3(y1 - y0) };
+}
+
+/** A read made on a cut, said in the whole picture's fractions. */
+export function readFromCrop(read: HouseRead, crop: ReadCrop): HouseRead {
+  const X = (x: number) => r3(crop.x + x * crop.w);
+  const Y = (y: number) => r3(crop.y + y * crop.h);
+  const P = (p: { x: number; y: number }) => ({ x: X(p.x), y: Y(p.y) });
+  return {
+    ...read,
+    base: { left: P(read.base.left), right: P(read.base.right) },
+    eave: read.eave ? { left: P(read.eave.left), right: P(read.eave.right) } : null,
+    jogs: read.jogs.map((j) => ({ ...j, x: X(j.x), y: Y(j.y) })),
+    door: read.door ? { x0: X(read.door.x0), x1: X(read.door.x1), bottom: Y(read.door.bottom), top: Y(read.door.top) } : null,
+    doors: read.doors.map((d) => ({ ...d, x0: X(d.x0), x1: X(d.x1), bottom: Y(d.bottom), top: Y(d.top) })),
+    windows: read.windows.map((w) => ({ x0: X(w.x0), x1: X(w.x1), sill: Y(w.sill), head: Y(w.head) })),
+    patio: read.patio ? { x0: X(read.patio.x0), x1: X(read.patio.x1) } : null,
+    scaleLine: read.scaleLine ? { ...read.scaleLine, a: P(read.scaleLine.a), b: P(read.scaleLine.b) } : null,
+    bars: { top: 0, bottom: 0 },
+  };
+}
+
+/**
+ * The two looks as one read: the wall, its steps, its windows and doors from the close look (each one bigger there);
+ * the roof, the cladding and the colours from the whole picture (the roof is cut off in the close one). The close look
+ * is not trusted when it lost the wall — fewer than half the first look's windows, or a wall less than half as wide.
+ */
+export function mergeLooks(wide: HouseRead, close: HouseRead | null): HouseRead {
+  if (!close) return wide;
+  const wideSpan = wide.base.right.x - wide.base.left.x;
+  const closeSpan = close.base.right.x - close.base.left.x;
+  if (closeSpan < wideSpan * 0.5 || close.windows.length < wide.windows.length * 0.5) return wide;
+  return {
+    ...close,
+    storeys: close.storeys ?? wide.storeys,
+    roof: wide.roof.kind ? wide.roof : close.roof,
+    material: wide.material ?? close.material,
+    colours: { siding: wide.colours.siding ?? close.colours.siding, roof: wide.colours.roof ?? close.colours.roof, trim: wide.colours.trim ?? close.colours.trim },
+    patio: close.patio ?? wide.patio,
+    confidence: Math.min(1, Math.max(close.confidence, wide.confidence)),
+    note: close.note ?? wide.note,
+  };
+}

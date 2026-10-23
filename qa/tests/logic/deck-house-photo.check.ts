@@ -1,17 +1,16 @@
 // The house built from its photo (2026-10-23, lib/deck/houseRead + lib/deck/houseFromPhoto + lib/deck/house): the
 // read checked (more than twelve windows, the back door among the doors, a window on a door dropped, the cladding in a
-// model's words, a patio roof's posts, an old deck's floor); the house a two-storey back wall with a full-height
-// bump-out, a covered patio and fourteen windows builds (its width by the storeys, a typed width, a door; its steps; the
-// deck centred on the door, the old deck, the patio roof, the slab); the 3D's openings and what stands there; the read
-// back of a house (and an old one unchanged); the deck slid and widened with the wall kept still; the tear-out of a
-// patio roof and a slab priced and said; the review's hand edits; the colours off the pixels. Pure.
+// model's words, a porch roof or an old deck a model names anyway left out); the house a two-storey back wall with a
+// full-height bump-out and fourteen windows builds — only the house: nothing standing in front of it (its width by the
+// storeys, a typed width, a door; its steps; the deck centred on the door, else the patio); the 3D's openings; the read
+// back of a house (and an old one unchanged); the deck slid and widened with the wall kept still; the review's hand
+// edits; the two looks (the wall cut out, read again, put back and merged); the colours off the pixels. Pure.
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/deck-house-photo.check.ts
-import { parseHouseRead, mapHouseRead, moveHouseMark, addReadWindow, addReadDoor, addReadJog, removeReadWindow, removeReadDoor, removeReadJog, flipReadJog, blankHouseRead, type HouseRead } from "@/lib/deck/houseRead";
+import { HOUSE_READ_PROMPT, mergeLooks, readFromCrop, wallCrop, parseHouseRead, mapHouseRead, moveHouseMark, addReadWindow, addReadDoor, addReadJog, removeReadWindow, removeReadDoor, removeReadJog, flipReadJog, blankHouseRead, type HouseRead } from "@/lib/deck/houseRead";
 import { houseFromPhoto, houseScale, dominantColour, colourZones, paintable } from "@/lib/deck/houseFromPhoto";
-import { defaultHouse, houseScene, normalizeHouse, slideDeck, existingSqFt } from "@/lib/deck/house";
+import { defaultHouse, houseScene, normalizeHouse, slideDeck } from "@/lib/deck/house";
 import { defaultDeckDesign, type DeckShape } from "@/lib/deck/design";
 import { patchDesign } from "@/lib/deck/edit";
-import { priceDeck, deckScope } from "@/lib/deck/pricing";
 import { buildStructure } from "@/lib/deck/structure";
 import { deckScene, parseDeckScene } from "@/lib/deck/scene";
 import { transformRead } from "@/lib/deck/photoFit";
@@ -24,7 +23,8 @@ const check = (name: string, ok: boolean, info = "") => {
 const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= tol;
 
 // A two-storey back wall seen square on (a picture 736 × 840 once its black bands are cut): a 2-ft bump-out in the
-// middle that runs the full two storeys, a patio roof on one post over a slab at the right, fourteen windows, no door.
+// middle that runs the full two storeys, a patio roof on one post over a slab at the right (which a model may name
+// anyway — it is left out), fourteen windows, no door.
 const W = 736;
 const H = 840;
 const fx = (x: number) => Math.round((x / W) * 1000) / 1000;
@@ -60,7 +60,7 @@ check("the read parses", !!read);
 check("all fourteen windows are kept (the smart fit kept twelve)", read.windows.length === 14, String(read.windows.length));
 check("the cladding is read from the model's own words", read.material === "lap", String(read.material));
 check("the colours: a hex kept (lower case), a word dropped", read.colours.siding === "#7d7b76" && read.colours.trim === null);
-check("the patio roof's post outside it is dropped, the one under it kept", !!read.cover && read.cover.posts.length === 1 && near(read.cover.posts[0], fx(611), 0.001), JSON.stringify(read.cover));
+check("a porch roof or an old deck the model names anyway is not in the read — only the house", !("cover" in read) && !("oldDeck" in read));
 check("the roof is a hip, about 5/12", read.roof.kind === "hip" && read.roof.pitch === 5);
 check("nothing without a wall", parseHouseRead({ windows: [] }) === null);
 // The same wall with a 6½-ft sliding door on the right, 2 ft above the ground, instead of the lower windows there.
@@ -68,8 +68,7 @@ const UPPER = RAW.windows.filter((w) => w.sill < fy(800));
 const withDoor = parseHouseRead({ ...RAW, door: { x0: 0.6, x1: 0.77, bottom: 0.585, top: 0.435 }, doors: [], windows: [...UPPER, { x0: 0.61, x1: 0.76, head: 0.45, sill: 0.57 }] })!;
 check("the back door read only as `door` is among the doors, a sliding door by its width", withDoor.doors.length === 1 && withDoor.doors[0].kind === "slider", JSON.stringify(withDoor.doors));
 check("a window drawn over that door is dropped", withDoor.windows.length === UPPER.length, `${withDoor.windows.length} of ${UPPER.length}`);
-const withDeck = parseHouseRead({ ...RAW, oldDeck: { x0: 0.5, x1: 0.85, top: 0.58 } })!;
-check("an old deck keeps its floor's edge", !!withDeck.oldDeck && withDeck.oldDeck.top === 0.58);
+check("the prompt tells the model to look past what stands in front of the wall", /LOOK PAST/.test(HOUSE_READ_PROMPT) && /porch roof/.test(HOUSE_READ_PROMPT) && /grid/.test(HOUSE_READ_PROMPT));
 
 console.log("— the house it builds —");
 const design = defaultDeckDesign({ state: "WA" });
@@ -85,7 +84,7 @@ check("a sunset-orange measure of a grey wall is brought back to grey", sat(dusk
 const only = houseFromPhoto({ read: { ...read, colours: { siding: null, roof: null, trim: null } }, photoW: W, photoH: H, deckWidthFt: Wd, house: design.house, measured: { siding: "#7a756c", roof: null } })!;
 check("without a guess, the measure stands as it is; without either, the preset stays", only.house.siding === "#7a756c" && only.house.roofColour === design.house.roofColour);
 check("the house spans the wall: its reach past the deck's ends + the deck = the wall", near(b.house.leftFt + Wd + b.house.rightFt, b.wallFt, 0.6), `${b.house.leftFt} + ${Wd} + ${b.house.rightFt}`);
-check("the deck is centred under the patio roof (no door), held inside the wall", b.centredOn === "patio roof" && b.house.leftFt >= 0 && b.house.rightFt >= 0);
+check("the deck is centred on the patio (no door), held inside the wall", b.centredOn === "patio" && b.house.leftFt >= 0 && b.house.rightFt >= 0);
 check("two steps: out 2 ft then back 2 ft", b.house.jogs.length === 2 && b.house.jogs[0].dir === "toward" && b.house.jogs[1].dir === "away" && b.house.jogs.every((j) => j.depthFt === 2));
 check("the steps stand where the picture has them (≈ 8.6 and 24.1 ft from the wall's left corner)", near(b.house.jogs[0].atFt + b.deckAtFt, 8.6, 0.6) && near(b.house.jogs[1].atFt + b.deckAtFt, 24.1, 0.6), JSON.stringify(b.house.jogs));
 check("the bump-out has an upper window in it, so it is as tall as the house", b.house.bumpOuts === "full");
@@ -94,12 +93,8 @@ check("fourteen windows on the house, no door", ws.length === 14 && b.house.open
 const upper = ws.filter((o) => o.sillFt > 10);
 check("six windows on the second storey; the four over the patio about 12 ft up", upper.length === 6 && upper.filter((o) => near(o.sillFt, 12.3, 0.5)).length === 4, upper.map((o) => o.sillFt).join(","));
 check("a lower window is about 2.6 × 5.4 ft", ws.some((o) => near(o.widthFt, 2.6, 0.3) && near(o.heightFt, 5.4, 0.4)));
-const cover = b.house.existing!.find((e) => e.kind === "cover");
-const slab = b.house.existing!.find((e) => e.kind === "slab");
-check("the patio roof stands there: its low edge about 9 ft up, its top about 11 ft, one post", !!cover && near(cover.heightFt, 8.9, 0.5) && near(cover.highFt!, 11.3, 0.6) && cover.posts!.length === 1 && !cover.tearOut, JSON.stringify(cover));
-check("so does the slab, at the ground", !!slab && slab.heightFt < 0.5 && !slab.tearOut);
+check("nothing standing in front of the wall is built into the house, nor said", !("existing" in b.house) && !b.facts.some((f) => /patio roof|old deck/i.test(f.label + f.value)));
 check("no door — the deck's height stays as it is", b.heightIn === null && b.checks.some((c) => /No back door/.test(c)));
-check("the patio roof's and the slab's depth are said to be guesses", b.checks.some((c) => /can't be seen from the front/.test(c)));
 
 const typed = houseFromPhoto({ read, photoW: W, photoH: H, deckWidthFt: Wd, house: design.house, wallWidthFt: 44 })!;
 check("a typed wall width sets the scale", typed.scale.by === "width" && near(typed.wallFt, 44, 0.01) && !typed.facts.find((f) => f.id === "wall")!.guess);
@@ -109,8 +104,6 @@ check("with a door: sized by it, the deck centred on it", door.scale.by === "doo
 const dOpen = door.house.openings!.find((o) => o.kind !== "window")!;
 check("the door is a sliding door on the deck — at its middle, or as near as the wall's end lets it", dOpen.kind === "slider" && dOpen.xFt > 0 && dOpen.xFt < Wd && (near(dOpen.xFt, Wd / 2, 0.6) || near(door.deckAtFt + Wd, door.wallFt, 0.6)), `${JSON.stringify(dOpen)} deck at ${door.deckAtFt} of ${door.wallFt}`);
 check("the deck's floor an inch under the door's threshold", door.heightIn !== null && near(door.heightIn, Math.round(dOpen.sillFt * 12) - 1, 1.5), `${door.heightIn} vs ${dOpen.sillFt}`);
-const old = houseFromPhoto({ read: withDeck, photoW: W, photoH: H, deckWidthFt: Wd, house: design.house })!;
-check("with an old deck: centred on it, drawn at its floor, and no slab under it", old.centredOn === "old deck" && old.house.existing!.some((e) => e.kind === "deck" && e.heightFt > 1) && !old.house.existing!.some((e) => e.kind === "slab"));
 check("nothing to size by → no house", houseFromPhoto({ read: { ...read, eave: null, doors: [], door: null }, photoW: W, photoH: H, deckWidthFt: Wd, house: design.house }) === null);
 
 console.log("— the 3D —");
@@ -118,16 +111,16 @@ const built = patchDesign(design, { house: b.house });
 check("the deck is still a plain rectangle on the house line", built.shape.kind === "rect");
 const hs = houseScene(built.shape, built.house, { deckHeightFt: 3, peakFt: 0, mainEdge: null });
 check("fourteen windows drawn where they are, no doors", hs.windows.length === 14 && (hs.doors?.length ?? 0) === 0 && hs.door === null);
-check("three blocks, all as tall as the house", hs.blocks.length === 3 && hs.blocks.every((x) => x[4] === hs.blocks[0][4]));
-check("the patio roof and the slab stand there in the 3D", hs.existing?.length === 2 && hs.existing.some((e) => e[0] === 1 && e.length === 8) && hs.existing.some((e) => e[0] === 2));
+check("the body behind the wall and the bump-out in front of it, all as tall as the house", hs.blocks.length === 4 && hs.blocks.every((x) => x[4] === hs.blocks[0][4]) && hs.blocks.filter((x) => x[1] === 0).length === 1);
+check("one hip over the whole house at the photo's 5/12, the bump-out's own hip against it", hs.roofs?.length === 2 && hs.roofs[0][0] === 0 && hs.roofs[0][6] === 5 && near(hs.roofs[0][3] - hs.roofs[0][1], b.wallFt, 0.6) && hs.roofs[1][0] === 5, JSON.stringify(hs.roofs));
 const low = houseScene(built.shape, { ...built.house, bumpOuts: "low" }, { deckHeightFt: 3, peakFt: 0, mainEdge: null });
 check("a one-storey bump-out drops the upper windows that would stand over its roof", low.windows.length === 12, String(low.windows.length));
 const dScene = houseScene(design.shape, patchDesign(design, { house: door.house }).house, { deckHeightFt: 3, peakFt: 0, mainEdge: null });
 check("a door from the photo is drawn on its own threshold and is the deck's door", dScene.doors?.length === 1 && dScene.door !== null && dScene.doors[0][5] === 1);
 const scene = deckScene(buildStructure(built));
-check("the deck's scene carries the house's windows, cladding look and what stands there", (scene.house?.windows?.length ?? 0) === 14 && scene.house?.existing?.length === 2);
+check("the deck's scene carries the house's windows and its roofs", (scene.house?.windows?.length ?? 0) === 14 && (scene.house?.roofs?.length ?? 0) === 2);
 const back = parseDeckScene(JSON.parse(JSON.stringify(scene)));
-check("…and they come back from a saved scene (the client's page)", back?.house?.existing?.length === 2 && back.house.windows?.length === 14, JSON.stringify(back?.house?.existing));
+check("…and they come back from a saved scene (the client's page)", back?.house?.roofs?.length === 2 && back.house.windows?.length === 14);
 const brick = deckScene(buildStructure(patchDesign(design, { house: { ...door.house, material: "brick" } })));
 check("brick and its doors come back from a saved scene too", parseDeckScene(JSON.parse(JSON.stringify(brick)))?.house?.material === "brick" && parseDeckScene(JSON.parse(JSON.stringify(brick)))?.house?.doors?.length === 1);
 
@@ -137,30 +130,17 @@ check("the photo house reads back as it was", JSON.stringify(n) === JSON.stringi
 const plain = normalizeHouse(defaultHouse(), design.shape);
 check("a house without a photo reads back with none of the new fields", Object.keys(plain).sort().join(",") === "jogs,leftFt,rightFt,roof,roofColour,siding,storeys");
 const junk = normalizeHouse({ ...defaultHouse(), siding: "#12345", roofColour: "#ABCDEF", material: "glass", openings: [{ xFt: "x" }, { kind: "door", xFt: 10, widthFt: 99, heightFt: 7, sillFt: 2 }], existing: [{ kind: "pool", x0Ft: 0, x1Ft: 9 }, { kind: "cover", x0Ft: 2, x1Ft: 3 }] }, design.shape);
-check("junk is dropped or held: a bad hex, a made-up cladding, an opening without a place, a tiny cover", junk.siding === "cream" && junk.roofColour === "#abcdef" && junk.material === undefined && junk.openings!.length === 1 && junk.openings![0].widthFt === 20 && junk.existing === undefined, JSON.stringify(junk));
+check("junk is dropped or held: a bad hex, a made-up cladding, an opening without a place, a tiny cover", junk.siding === "cream" && junk.roofColour === "#abcdef" && junk.material === undefined && junk.openings!.length === 1 && junk.openings![0].widthFt === 20 && !("existing" in junk), JSON.stringify(junk));
 
 console.log("— the deck moved, the wall still —");
 // The deck stands at the wall's right end, so it slides left: the house still, everything on it 2 ft right in the deck's feet.
 const slid = slideDeck({ ...built.house, photo: { url: "data:image/jpeg;base64,AAAA", w: W, h: H, read: null, wallFt: b.wallFt, by: "eave", deckAtFt: b.deckAtFt, at: "" } }, -2);
-check("sliding the deck 2 ft left moves the windows, what stands there and the photo's mark the other way", near(slid.openings![0].xFt, built.house.openings![0].xFt + 2, 0.01) && near(slid.existing![0].x0Ft, built.house.existing![0].x0Ft + 2, 0.01) && (slid.existing![0].posts ?? [])[0] === (built.house.existing![0].posts ?? [])[0] + 2 && slid.photo!.deckAtFt === b.deckAtFt - 2, JSON.stringify(slid.existing![0]));
+check("sliding the deck 2 ft left moves the windows and the photo's mark the other way", near(slid.openings![0].xFt, built.house.openings![0].xFt + 2, 0.01) && slid.photo!.deckAtFt === b.deckAtFt - 2);
 const withPhoto = patchDesign(built, { house: { photo: { url: "data:image/jpeg;base64,AAAA", w: W, h: H, read, wallFt: b.wallFt, by: b.scale.by, deckAtFt: b.deckAtFt, at: "2026-10-23" } } });
 const wider = patchDesign(withPhoto, { shape: { ...withPhoto.shape, widthFt: withPhoto.shape.widthFt - 4 } as DeckShape });
 check("a narrower deck on a photo house leaves the wall as long as it was", near(wider.house.leftFt + wider.shape.widthFt + wider.house.rightFt, withPhoto.house.leftFt + withPhoto.shape.widthFt + withPhoto.house.rightFt, 0.01), `${wider.house.rightFt}`);
 const plainWider = patchDesign(design, { shape: { ...design.shape, widthFt: design.shape.widthFt + 4 } as DeckShape });
 check("a house drawn by rule still grows with the deck (as before)", plainWider.house.rightFt === design.house.rightFt);
-
-console.log("— torn out —");
-const kept = priceDeck(built);
-check("kept: no tear-out lines", !kept.lines.some((l) => l.id.startsWith("demo-")));
-const torn = patchDesign(built, { house: { existing: built.house.existing!.map((e) => ({ ...e, tearOut: true })) } });
-const tp = priceDeck(torn);
-const roofLine = tp.lines.find((l) => l.id === "demo-patio-roof");
-const slabLine = tp.lines.find((l) => l.id === "demo-patio");
-check("torn out: the patio roof's tear-out priced by its footprint", !!roofLine && roofLine.quantity === existingSqFt(torn.house.existing![0]) && roofLine.laborCost > 0, JSON.stringify(roofLine));
-check("…and the slab's break-out", !!slabLine && slabLine.quantity === existingSqFt(torn.house.existing![1]) && slabLine.unitPrice > 0);
-const scope = deckScope(tp).join(" ");
-check("the scope says both", /existing patio roof/.test(scope) && /existing concrete patio/.test(scope));
-check("torn out, they are gone from the 3D", (houseScene(torn.shape, torn.house, { deckHeightFt: 3, peakFt: 0, mainEdge: null }).existing ?? []).length === 0);
 
 console.log("— the review's hand edits —");
 const r0: HouseRead = read;
@@ -179,7 +159,21 @@ check("a window added and removed", addReadWindow(r0, W, H).windows.length === 1
 check("a step added, flipped, removed", addReadJog(r0).jogs.length === 3 && flipReadJog(r0, 0).jogs[0].dir === "away" && removeReadJog(r0, 1).jogs.length === 1);
 check("a blank read builds a one-storey house by its storey", !!houseFromPhoto({ read: blankHouseRead(), photoW: W, photoH: H, deckWidthFt: Wd, house: design.house }));
 const id = mapHouseRead(withDoor, (x) => transformRead(x, [1, 0, 0, 0, 1, 0, 0, 0, 1], W, H, W, H), (p) => p);
-check("carried through a plain warp, the read is the same", id.doors.length === 1 && near(id.doors[0].bottom, withDoor.doors[0].bottom, 0.002) && id.windows.length === withDoor.windows.length && !!id.cover);
+check("carried through a plain warp, the read is the same", id.doors.length === 1 && near(id.doors[0].bottom, withDoor.doors[0].bottom, 0.002) && id.windows.length === withDoor.windows.length);
+
+console.log("— the two looks —");
+const crop = wallCrop(read)!;
+check("the wall is cut out with a margin: its corners, its eave and every window inside the cut, the roof's edge kept", !!crop && crop.x < read.base.left.x && crop.x + crop.w > read.base.right.x && crop.y < read.eave!.left.y - 0.03 && crop.y + crop.h > read.base.left.y, JSON.stringify(crop));
+check("a wall that already fills the picture gets no second look", wallCrop({ ...read, base: { left: { x: 0.01, y: 0.97 }, right: { x: 0.99, y: 0.97 } }, eave: { left: { x: 0.01, y: 0.05 }, right: { x: 0.99, y: 0.05 } } }) === null);
+// The close look said in the cut's own fractions, then put back: the same wall within a hair.
+const inCut = (x: number) => (x - crop.x) / crop.w;
+const inCutY = (y: number) => (y - crop.y) / crop.h;
+const closeRaw = { ...RAW, base: { left: { x: inCut(read.base.left.x), y: inCutY(read.base.left.y) }, right: { x: inCut(read.base.right.x), y: inCutY(read.base.right.y) } }, eave: { left: { x: inCut(read.eave!.left.x), y: inCutY(read.eave!.left.y) }, right: { x: inCut(read.eave!.right.x), y: inCutY(read.eave!.right.y) } }, jogs: read.jogs.map((j) => ({ ...j, x: inCut(j.x), y: inCutY(j.y) })), windows: read.windows.map((w) => ({ x0: inCut(w.x0) + 0.004, x1: inCut(w.x1) + 0.004, head: inCutY(w.head), sill: inCutY(w.sill) })), patio: null, roof: { kind: null, pitch: null }, material: null };
+const close = readFromCrop(parseHouseRead(closeRaw)!, crop);
+check("the close look put back lands on the wall", near(close.base.left.x, read.base.left.x, 0.003) && near(close.base.right.y, read.base.right.y, 0.003) && close.windows.length === 14 && near(close.windows[3].x0, read.windows[3].x0 + 0.004 * crop.w, 0.003));
+const merged = mergeLooks(read, close);
+check("merged: the windows from the close look, the roof, the cladding and the patio from the whole picture", near(merged.windows[3].x0, close.windows[3].x0, 1e-9) && merged.roof.kind === "hip" && merged.material === "lap" && !!merged.patio);
+check("a close look that lost the wall is not trusted", mergeLooks(read, { ...close, windows: close.windows.slice(0, 3) }) === read && mergeLooks(read, null) === read);
 
 console.log("— the colours off the pixels —");
 const px: number[] = [];

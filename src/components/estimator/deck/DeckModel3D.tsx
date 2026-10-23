@@ -364,6 +364,62 @@ function gableRoofGeometry(w: number, d: number, rise: number): { slopes: THREE.
   const R2 = [hw, rise, 0];
   return { slopes: trisGeometry([A, B, R2, A, R2, R1, C, D, R1, C, R1, R2]), ends: trisGeometry([B, C, R2, D, A, R1]) };
 }
+/**
+ * THE HOUSE'S OTHER ROOFS (2026-10-23), each over a w × d footprint centred at the origin, its eave at y = 0, z toward
+ * the yard: a gable whose end faces the yard (the ridge along z), a shed rising to the back, and a bump-out's roof whose
+ * back (z = −d/2) stands against the body — a hip end, a gable end or a shed. `ends` is wall (siding), not roofing.
+ */
+function gableEndGeometry(w: number, d: number, rise: number): { slopes: THREE.BufferGeometry; ends: THREE.BufferGeometry | null } {
+  const hw = w / 2;
+  const hd = d / 2;
+  const A = [-hw, 0, hd];
+  const B = [hw, 0, hd];
+  const C = [hw, 0, -hd];
+  const D = [-hw, 0, -hd];
+  const R1 = [0, rise, hd];
+  const R2 = [0, rise, -hd];
+  return { slopes: trisGeometry([D, A, R1, D, R1, R2, B, C, R2, B, R2, R1]), ends: trisGeometry([A, B, R1, C, D, R2]) };
+}
+function shedGeometry(w: number, d: number, rise: number): { slopes: THREE.BufferGeometry; ends: THREE.BufferGeometry | null } {
+  const hw = w / 2;
+  const hd = d / 2;
+  const A = [-hw, 0, hd];
+  const B = [hw, 0, hd];
+  const C = [hw, rise, -hd];
+  const D = [-hw, rise, -hd];
+  const C0 = [hw, 0, -hd];
+  const D0 = [-hw, 0, -hd];
+  return { slopes: trisGeometry([A, B, C, A, C, D]), ends: trisGeometry([A, D, D0, B, C0, C, D0, D, C, D0, C, C0]) };
+}
+function bumpHipGeometry(w: number, d: number, rise: number): { slopes: THREE.BufferGeometry; ends: THREE.BufferGeometry | null } {
+  const hw = w / 2;
+  const hd = d / 2;
+  const run = Math.min(d, hw);
+  const FL = [-hw, 0, hd];
+  const FR = [hw, 0, hd];
+  const BL = [-hw, 0, -hd];
+  const BR = [hw, 0, -hd];
+  // The hips rise from the front corners at 45° in plan; a bump-out narrower than twice its depth comes to one point.
+  const i = Math.min(hw, run);
+  const top = hd - run;
+  const PL = [-hw + i, rise, Math.max(-hd, top)];
+  const PR = [hw - i, rise, Math.max(-hd, top)];
+  const KL = [-hw + i, rise, -hd];
+  const KR = [hw - i, rise, -hd];
+  return { slopes: trisGeometry([FL, FR, PR, FL, PR, PL, FL, PL, KL, FL, KL, BL, FR, BR, KR, FR, KR, PR, PL, PR, KR, PL, KR, KL]), ends: null };
+}
+function bumpGableGeometry(w: number, d: number, rise: number): { slopes: THREE.BufferGeometry; ends: THREE.BufferGeometry | null } {
+  const hw = w / 2;
+  const hd = d / 2;
+  const FL = [-hw, 0, hd];
+  const FR = [hw, 0, hd];
+  const BL = [-hw, 0, -hd];
+  const BR = [hw, 0, -hd];
+  const R1 = [0, rise, hd];
+  const R2 = [0, rise, -hd];
+  return { slopes: trisGeometry([BL, FL, R1, BL, R1, R2, FR, BR, R2, FR, R2, R1]), ends: trisGeometry([FL, FR, R1]) };
+}
+
 function sidingTexture() {
   return canvasTexture(8, 64, (g) => {
     g.fillStyle = "#ffffff";
@@ -1418,15 +1474,12 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         const glassMat = new THREE.MeshStandardMaterial({ color: GLASS_C, roughness: 0.15, metalness: 0.4 });
         const trimMat = new THREE.MeshStandardMaterial({ color: TRIM_WHITE, roughness: 0.8 });
         const doorMat = new THREE.MeshStandardMaterial({ color: 0xf1eee6, roughness: 0.7 });
-        // What stands there now: weathered wood, and a patio roof's posts and beam.
-        const oldWoodMat = new THREE.MeshStandardMaterial({ color: 0x9a8a74, roughness: 1, map: grain });
-        const postMat = new THREE.MeshStandardMaterial({ color: 0x6b5a48, roughness: 0.9, map: grain });
-        owned.push(wallMat, baseMat, roofMat, glassMat, trimMat, doorMat, oldWoodMat, postMat);
+        owned.push(wallMat, baseMat, roofMat, glassMat, trimMat, doorMat);
         const height = H.heightFt;
         const band = Math.min(1.5, Math.max(0.5, s.heightFt - 0.6));
         siding.repeat.set(1, height / 0.5);
         const blocks = H.blocks.map((b) => ({ x0: b[0], y0: b[1], x1: b[2], y1: b[3], h: b[4] ?? height }));
-        mount.dataset.deck3dHouse = `${H.storeys ?? 1}:${H.roof ?? "hip"}:${blocks.length}:${H.windows?.length ?? 0}:${H.siding ?? ""}:${H.roofColour ?? ""}:${H.material ?? "lap"}:${H.doors?.length ?? "-"}:${H.existing?.map((e) => e[0]).join("") ?? ""}`;
+        mount.dataset.deck3dHouse = `${H.storeys ?? 1}:${H.roof ?? "hip"}:${blocks.length}:${H.windows?.length ?? 0}:${H.siding ?? ""}:${H.roofColour ?? ""}:${H.material ?? "lap"}:${H.doors?.length ?? "-"}:${H.roofs?.map((r) => r[0]).join("") ?? "-"}`;
         const part = (geo: THREE.BufferGeometry | null, mat: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number, shadow = false) => {
           const m = new THREE.Mesh(geo ?? unitBox, mat);
           if (!geo) m.scale.set(sx, sy, sz);
@@ -1444,10 +1497,13 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           const cz = (b.y0 + b.y1) / 2 - oz;
           part(null, wallMatFor(w, b.h - band), w, b.h - band, d, cx, band + (b.h - band) / 2, cz, true);
           part(null, baseMat, w + 0.02, band, d + 0.02, cx, band / 2, cz);
-          // Corner boards at the face's two ends, a frieze under the eave.
-          for (const x of [b.x0 + 0.18, b.x1 - 0.18]) part(null, trimMat, 0.36, b.h - band, 0.36, x - ox, band + (b.h - band) / 2, b.y1 - oz + 0.06);
+          // Corner boards at the face's two ends — where the wall really turns a corner, not where two stretches of the
+          // body's one wall meet — and a frieze under the eave.
+          const seam = (x: number) => blocks.some((o) => o !== b && Math.abs(o.y1 - b.y1) < 0.01 && Math.abs(o.h - b.h) < 0.01 && (Math.abs(o.x1 - x) < 0.01 || Math.abs(o.x0 - x) < 0.01));
+          for (const [x, edge] of [[b.x0 + 0.18, b.x0], [b.x1 - 0.18, b.x1]]) if (!seam(edge)) part(null, trimMat, 0.36, b.h - band, 0.36, x - ox, band + (b.h - band) / 2, b.y1 - oz + 0.06);
           part(null, trimMat, w + 0.3, 0.5, 0.16, cx, b.h - 0.25, b.y1 - oz + 0.1);
-          // The roof: the main kind over the full-height blocks, a hip of its own over a lower bump-out.
+          if (H.roofs) continue;
+          // An older scene: a roof per block — the main kind over the full-height blocks, a hip of its own over a lower bump-out.
           const ovh = 1.2;
           const low = b.h < height - 0.01;
           const kind = low ? "hip" : (H.roof ?? "hip");
@@ -1468,6 +1524,45 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
             part(null, trimMat, 0.16, 0.55, rd, b.x0 - ox - ovh, b.h - 0.05, cz);
             part(null, trimMat, 0.16, 0.55, rd, b.x1 - ox + ovh, b.h - 0.05, cz);
           }
+        }
+        // THE ROOFS (2026-10-23): one over the body, one over each bump-out against it — at the pitch the house has.
+        for (const [kind, x0, y0, x1, y1, eave, pitch] of H.roofs ?? []) {
+          const ovh = 1.2;
+          const bump = kind >= 5;
+          const w = x1 - x0;
+          const d = y1 - y0;
+          const rw = w + 2 * ovh;
+          const rd = d + (bump ? ovh : 2 * ovh);
+          const cx = (x0 + x1) / 2 - ox;
+          const cz = (bump ? y0 + rd / 2 : (y0 + y1) / 2) - oz;
+          const p = pitch / 12;
+          if (kind === 4 || kind === 8) {
+            part(null, roofMat, rw, 0.5, rd, cx, eave + 0.25, cz, true);
+            part(null, trimMat, rw + 0.05, 0.6, 0.16, cx, eave + 0.2, cz + rd / 2);
+            for (const sx of [-1, 1]) part(null, trimMat, 0.16, 0.6, rd, cx + (sx * rw) / 2, eave + 0.2, cz);
+            continue;
+          }
+          const geo =
+            kind === 0 ? hipRoofGeometry(rw, rd, (rd / 2) * p)
+            : kind === 1 ? gableRoofGeometry(rw, rd, (rd / 2) * p)
+            : kind === 2 ? gableEndGeometry(rw, rd, (rw / 2) * p)
+            : kind === 3 ? shedGeometry(rw, rd, rd * p)
+            : kind === 5 ? bumpHipGeometry(rw, rd, Math.min(rd, rw / 2) * p)
+            : kind === 6 ? bumpGableGeometry(rw, rd, (rw / 2) * p)
+            : shedGeometry(rw, rd, rd * p);
+          owned.push(geo.slopes);
+          part(geo.slopes, roofMat, 1, 1, 1, cx, eave, cz, true);
+          if (geo.ends) {
+            owned.push(geo.ends);
+            part(geo.ends, wallMat, 1, 1, 1, cx, eave, cz);
+          }
+          // Fascia along the eaves: along the house where the slopes come down to it; along the sides of a hip, of a
+          // gable to the yard and of a bump-out's gable.
+          const along = kind === 0 || kind === 1 || kind === 3 || kind === 5 || kind === 7;
+          const sides = kind === 0 || kind === 2 || kind === 5 || kind === 6;
+          if (along) part(null, trimMat, rw, 0.55, 0.16, cx, eave - 0.05, cz + rd / 2);
+          if (along && !bump && kind !== 3) part(null, trimMat, rw, 0.55, 0.16, cx, eave - 0.05, cz - rd / 2);
+          if (sides) for (const sx of [-1, 1]) part(null, trimMat, 0.16, 0.55, rd, cx + (sx * rw) / 2, eave - 0.05, cz);
         }
         // The door onto the deck and the windows: trim, glass, mullions.
         const opening = (x: number, w: number, h: number, y: number, door: boolean, face: number) => {
@@ -1505,43 +1600,6 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           }
         }
         for (const [wx, face, ww, wh, sill] of H.windows ?? []) opening(wx, ww, wh, sill, false, face);
-        // WHAT STANDS THERE NOW (2026-10-23, off the photo): an old deck, a patio roof on its posts, a concrete patio —
-        // each gone from the picture once it is marked to tear out.
-        for (const e of H.existing ?? []) {
-          const [kind, x0, x1, face, depth, height, high, ...posts] = e;
-          const w = x1 - x0;
-          const cx = (x0 + x1) / 2 - ox;
-          const zIn = face - oz;
-          const zOut = face + depth - oz;
-          if (kind === 2) {
-            part(null, baseMat, w, Math.max(0.15, height), depth, cx, Math.max(0.15, height) / 2, (zIn + zOut) / 2);
-          } else if (kind === 0) {
-            part(null, oldWoodMat, w, 0.14, depth, cx, height - 0.07, (zIn + zOut) / 2, true);
-            part(null, oldWoodMat, w, 0.8, 0.14, cx, height - 0.55, zOut - 0.07);
-            const n = Math.max(2, Math.ceil(w / 8) + 1);
-            for (let i = 0; i < n; i++) {
-              const px = x0 + 0.25 + ((w - 0.5) * i) / (n - 1) - ox;
-              part(null, oldWoodMat, 0.35, Math.max(0.2, height - 0.2), 0.35, px, Math.max(0.2, height - 0.2) / 2, zOut - 0.4);
-              if (height > 2.5) part(null, oldWoodMat, 0.3, 3, 0.3, px, height + 1.5, zOut - 0.15);
-            }
-            if (height > 2.5) part(null, oldWoodMat, w, 0.15, 0.3, cx, height + 3, zOut - 0.15);
-          } else if (kind === 1) {
-            const geo = trisGeometry([
-              [x0 - ox - cx, high, zIn],
-              [x1 - ox - cx, high, zIn],
-              [x1 - ox - cx, height, zOut],
-              [x0 - ox - cx, high, zIn],
-              [x1 - ox - cx, height, zOut],
-              [x0 - ox - cx, height, zOut],
-            ]);
-            owned.push(geo);
-            part(geo, roofMat, 1, 1, 1, cx, 0, 0, true);
-            part(null, trimMat, w + 0.2, 0.55, 0.16, cx, height - 0.2, zOut + 0.05);
-            part(null, postMat, w, 0.6, 0.4, cx, height - 0.5, zOut - 0.3);
-            const at = posts.length ? posts : [x0 + 0.3, x1 - 0.3];
-            for (const px of at) part(null, postMat, 0.45, height - 0.8, 0.45, px - ox, (height - 0.8) / 2, zOut - 0.3, true);
-          }
-        }
       }
 
       // The fixtures' light at night: a few real lights, the rest glow.
