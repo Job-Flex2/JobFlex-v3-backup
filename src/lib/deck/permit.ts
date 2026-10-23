@@ -521,8 +521,8 @@ export function permitNotes(s: DeckStructure, local: string[] = [], edition: str
     if (d.placement === "attached" && f.ledgers.length) {
       out.push(`Ledger: ${LEDGER_FASTENER_LABEL[d.ledger.fastener]} into the house band, two staggered rows at ${f.ledgers[0].spacingIn} in.; flashed over the top; never to brick veneer, a cantilevered floor or a hollow wall (${RULE.ledger}; ${RULE.ledgerWall}).`);
       const devices = lateralDevices(f);
-      if (devices.length) out.push(`Lateral load connection: ${devices.length} hold-down tension devices of at least ${devices[0].lb.toLocaleString("en-US")} lb, within 24 in. of each end of the deck — see the detail on S1 (${RULE.lateral}).`);
-    } else out.push(`Free-standing: the deck stands on its own posts and beams, braced both ways at the posts — see the detail on S1 (${RULE.selfSupporting}; ${RULE.bracing}).`);
+      if (devices.length) out.push(`Lateral load connection: ${devices.length} hold-down tension devices of at least ${devices[0].lb.toLocaleString("en-US")} lb, within 24 in. of each end of the deck — LD-1 and LD-2 on the framing plan, detail 2/S-501 (${RULE.lateral}).`);
+    } else out.push(`Free-standing: the deck stands on its own posts and beams, braced both ways at the posts — detail 7/S-501 (${RULE.selfSupporting}; ${RULE.bracing}).`);
     out.push(`Joists ${f.joistSize} at ${f.spacingIn} in. on center; a hanger at every joist end on a ledger or a flush beam, a tie at every joist on a dropped beam (${RULE.hangers}; ${RULE.restraint}).`);
     out.push(`Posts ${d.framing.post} in metal post bases and caps; beams bear fully on the posts, never toe-nailed (${RULE.post}; ${RULE.beam}).`);
     out.push(`Decking: ${f.decking.label}, fastened to its maker's instructions; joist spacing ${f.spacingIn} in. (the boards allow ${f.deckingMaxSpacingIn} in.) (${RULE.decking}).`);
@@ -530,8 +530,8 @@ export function permitNotes(s: DeckStructure, local: string[] = [], edition: str
   if (s.rails.on) out.push(`Guards ${s.rails.heightIn} in. high where the walking surface is more than 30 in. above grade; no opening passes a 4-in. sphere; guard posts through-bolted to the rim and blocked; the top rail resists 200 lb (${RULE.guard}; IRC Table R301.5).`);
   if (s.stairs.length) out.push(`Stairs: risers no more than ${code.riserMaxIn} in., treads at least ${code.treadMinIn} in., uniform within ⅜ in.; a graspable handrail 34–38 in. high on any stair of four or more risers; a light at the stairs (${RULE.stairs}; IRC R303.8).`);
   if (s.electrical.on) out.push("Receptacles GFCI-protected and weather-resistant, in-use covers; wiring by a licensed electrician, under its own permit where the jurisdiction requires one (NEC 210.8, 406.9).");
-  if (s.roof && s.roof.kind !== "pergola") out.push(`Roof framing per S${f ? 2 : 1}: ${s.roof.trusses ? "manufactured trusses to the truss maker's stamped drawings" : `${s.roof.rafters.size} rafters at ${s.roof.rafters.spacingIn} in.`}, a hurricane tie at every rafter or truss, uplift-rated post bases (IRC R802.11).`);
-  if (s.roof && s.roof.kind === "pergola") out.push(`Pergola per S${f ? 2 : 1}: open slats, no roof covering; posts braced both ways (${RULE.bracing}).`);
+  if (s.roof && s.roof.kind !== "pergola") out.push(`Roof framing per the roof framing plan, ${f ? "S-103" : "S-101"}: ${s.roof.trusses ? "manufactured trusses to the truss maker's stamped drawings" : `${s.roof.rafters.size} rafters at ${s.roof.rafters.spacingIn} in.`}, a hurricane tie at every rafter or truss, uplift-rated post bases (IRC R802.11).`);
+  if (s.roof && s.roof.kind === "pergola") out.push(`Pergola per its framing plan, ${f ? "S-103" : "S-101"}: open slats, no roof covering; posts braced both ways (${RULE.bracing}).`);
   out.push("Call 811 at least two business days before digging, so the utility lines are marked.");
   for (const l of local) out.push(`Local: ${l}`);
   return out;

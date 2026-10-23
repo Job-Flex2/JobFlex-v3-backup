@@ -2178,7 +2178,7 @@ export function DeckV2Studio({ initialBook, homeState, initialAddress, clientId,
       <div className="v2-acts">
         {permitHref ? (
           <a className="v2-btn v2-btn-sm" href={permitHref} target="_blank" rel="noopener" data-deck-permit>
-            Permit sheet
+            Permit &amp; build set
           </a>
         ) : null}
         {linked && !linked.lock ? (

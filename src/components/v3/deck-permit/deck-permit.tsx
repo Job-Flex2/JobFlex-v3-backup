@@ -1,56 +1,50 @@
 "use client";
-// THE PERMIT SET (2026-10-10; the submittal set 2026-10-20) — what a building
-// office asks for with a deck permit, drawn from the same engine the studio
-// prices with (lib/deck), on 11 × 17 sheets with a title block:
-//   A1  the site plan (to a real scale, from the county's parcel record or
-//       typed) and the project's data: the scope, the code and the county's
-//       design criteria, the general notes, the front elevation;
-//   S1  the floor: framing plan, section, the details (the ledger, the
-//       lateral load connection, the post and footing, the guard, the
-//       bracing), the framing / footing / connector schedules;
-//   S2  the roof, when there is one: its framing plan, the uplift path, the
-//       bracing, its schedule.
+// THE PERMIT SET (2026-10-10; the submittal set 2026-10-20; the full plan set
+// 2026-10-23) — what a building office asks for with a deck permit, drawn from
+// the same engine the studio prices with (lib/deck). Since 2026-10-23 the
+// sheets are the plan set (components/v3/deck-plans: the cover, the notes and
+// the code compliance, the foundation and framing plans to scale, elevations,
+// sections, details, schedules); this page keeps what only it knows — the site
+// plan, kept by the property, and the county read from the address — and draws
+// the site sheet (A-101) and the roof sheet into the set's own frame.
 // Above the sheets, on screen only: the site plan's figures to confirm (kept
 // by the property — actions/deckSitePlan), the county read from the address,
 // and anything a reviewer would send back. Print to PDF from the browser.
 import * as React from "react";
 import { buildStructure, type DeckStructure } from "@/lib/deck/structure";
-import { priceStructure } from "@/lib/deck/pricing";
 import { deckChecks } from "@/lib/deck/checks";
-import { deckScene } from "@/lib/deck/scene";
-import { deckElevation } from "@/lib/deck/elevation";
 import { PLACEMENT_LABEL, structureWords, type DeckDesign } from "@/lib/deck/design";
-import { ftIn, LEDGER_FASTENER_LABEL, RULE } from "@/lib/deck/codeTables";
+import { ftIn, RULE } from "@/lib/deck/codeTables";
 import { RULE_RAFTER } from "@/lib/deck/roofTables";
-import { STAIR_RULES } from "@/lib/deck/stairs";
 import { DeckPlan } from "@/components/v3/deck-estimator-blueprint/deck-plan";
-import { detailDrawings, lateralDevices, permitNotes, permitSheets, roofDetails, sectionDrawing, type DetailDrawing, type PermitSheet } from "@/lib/deck/permit";
+import { permitNotes, roofDetails, type DetailDrawing } from "@/lib/deck/permit";
+import { crewSheetList } from "@/lib/deck/plans/sheets";
 import { DECK_SIDE_LABEL, DECK_SIDES, defaultSitePlan, normalizeSitePlan, siteLayout, siteScale, turnLot, type SitePlan } from "@/lib/deck/sitePlan";
 import { countyCodeFor, designCriteria, RESEARCHED_ON } from "@/lib/deck/countyCodes";
 import { readDeckCounty, readDeckLot, saveDeckSitePlan } from "@/actions/deckSitePlan";
 import { DrawingSvg } from "./deck-sections";
 import { SitePlanSvg } from "./deck-site-plan";
+import { PlanSet, ViewFrame } from "@/components/v3/deck-plans/plan-set";
+import ps from "@/components/v3/deck-plans/plan-set.module.css";
 import s from "./deck-permit.module.css";
 
-const DECK_LAYERS = new Set(["post", "beam", "rim", "fascia", "decking", "ledger", "slab", "stair"]);
-const RAIL_LAYERS = new Set(["rail", "glass", "screen", "wall", "light"]);
 const SHEET_W_PX = 17 * 96;
 
 type Shop = { name: string; address: string | null; phone: string | null; email: string | null };
-type Built = { structure: DeckStructure; pkg: ReturnType<typeof priceStructure>; checks: ReturnType<typeof deckChecks>; elevation: ReturnType<typeof deckElevation> };
+type Built = { structure: DeckStructure; checks: ReturnType<typeof deckChecks> };
 
 export function DeckPermitSheet({ design, address, title, shop, initialPlan = null, editable = true }: { design: DeckDesign | null; address: string | null; title: string; shop: Shop; initialPlan?: SitePlan | null; editable?: boolean }) {
   const built = React.useMemo<Built | null>(() => {
     if (!design) return null;
     const structure = buildStructure(design);
-    return { structure, pkg: priceStructure(structure), checks: deckChecks(structure), elevation: deckElevation(deckScene(structure)) };
+    return { structure, checks: deckChecks(structure) };
   }, [design]);
   if (!design || !built) {
     return (
       <div className={s.sheet}>
         <div className={s.empty}>
           <div className={s.title}>Permit set</div>
-          <p>No deck design was handed to this page. Open it from the Deck estimator&apos;s Permit sheet button, or from a saved draft or proposal.</p>
+          <p>No deck design was handed to this page. Open it from the Deck Studio&apos;s Permit &amp; build set button, or from a saved draft or proposal.</p>
         </div>
       </div>
     );
@@ -67,13 +61,15 @@ const widthNow = () => window.innerWidth;
 const widthServer = () => SHEET_W_PX + 32;
 
 function PermitSet({ design, address, title, shop, initialPlan, editable, built }: { design: DeckDesign; address: string | null; title: string; shop: Shop; initialPlan: SitePlan | null; editable: boolean; built: Built }) {
-  const { structure, checks, elevation } = built;
-  const { frame, roof } = structure;
+  const { structure, checks } = built;
+  const { roof } = structure;
   const fallback = React.useMemo(() => defaultSitePlan(structure, address), [structure, address]);
   const [plan, setPlan] = React.useState<SitePlan>(() => (initialPlan ? normalizeSitePlan(initialPlan, fallback) : fallback));
   const [status, setStatus] = React.useState("");
   const [said, setSaid] = React.useState<string[]>([]);
   const [busy, setBusy] = React.useState(false);
+  // The building department's set (11 × 17) or the crew's (letter) — the same design, drawn for each.
+  const [which, setWhich] = React.useState<"permit" | "crew">("permit");
   const dirty = React.useRef(false);
   const screenW = React.useSyncExternalStore(subscribeWidth, widthNow, widthServer);
   const zoom = Math.min(1, (screenW - 32) / SHEET_W_PX);
@@ -131,15 +127,12 @@ function PermitSet({ design, address, title, shop, initialPlan, editable, built 
   const countyName = plan.county ? `${plan.county.name}${plan.county.state ? `, ${plan.county.state}` : ""}` : null;
   const criteria = designCriteria(structure, county, countyName);
   const layout = siteLayout(plan, structure);
-  const sheets = permitSheets(structure);
   const siteW = layout.bounds.x1 - layout.bounds.x0;
   const siteH = layout.bounds.y1 - layout.bounds.y0;
-  // The site plan's box on A1 is about 6.3 × 9.3 in.; the street band and the graphic scale take ~1.75 in. below
+  // The site plan's frame on A-101 is about 8.6 × 9.4 in.; the street band and the graphic scale take ~1.75 in. below
   // the lot and north ~1.25 in. beside it, whatever the scale (deck-site-plan sizes them in paper inches).
-  const scale = siteScale(siteW, siteH, { w: 6.3 - 1.25, h: 9.3 - 1.75 });
-  const floorDetails = frame ? detailDrawings(structure, "floor") : [];
+  const scale = siteScale(siteW, siteH, { w: 8.6 - 1.25, h: 9.2 - 1.75 });
   const rDetails = roofDetails(structure, county?.windMph ?? null);
-  const section = sectionDrawing(structure);
   const notes = permitNotes(structure, criteria.countyNotes, county?.edition ?? null);
   const fails = checks.filter((c) => c.level === "fail");
   const warns = [...criteria.warnings, ...layout.checks.filter((c) => c.level === "warn").map((c) => c.text)];
@@ -147,7 +140,6 @@ function PermitSet({ design, address, title, shop, initialPlan, editable, built 
   const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   // The title block's project line: the draft's or proposal's own title when it already names the deck, else the deck and the title.
   const named = title && title !== "Deck" ? (title.toLowerCase().includes(what.toLowerCase()) ? title : `${what} — ${title}`) : what;
-  const tb = { sheets, what: named, address, plan, shop, today, county: countyName, code: structure.code.short };
 
   return (
     <div className={`${s.sheet} jf-blueprint`}>
@@ -156,11 +148,17 @@ function PermitSet({ design, address, title, shop, initialPlan, editable, built 
         <div className={s.panel} data-permit-panel>
           <div className={s.panelHead}>
             <div>
-              <div className={s.panelKick}>Permit set · {sheets.length} sheets, 11 × 17</div>
+              <div className={s.panelKick}>{which === "permit" ? "Permit set · for the building department · 11 × 17" : `Construction set · for the crew · ${crewSheetList(structure).length} sheets, letter`}</div>
               <div className={s.panelTitle}>{what}</div>
               <div className={s.panelSub}>{address ?? "No job address — set it in the studio to keep the site plan and read the county."}</div>
             </div>
-            <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={() => window.print()}>Print / save as PDF</button>
+            <div className={s.panelActions}>
+              <span className={ps.seg} role="group" aria-label="Which set">
+                <button type="button" aria-pressed={which === "permit"} onClick={() => setWhich("permit")} data-plan-set-pick="permit">Permit set</button>
+                <button type="button" aria-pressed={which === "crew"} onClick={() => setWhich("crew")} data-plan-set-pick="crew">Construction set</button>
+              </span>
+              <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={() => window.print()}>Print / save as PDF</button>
+            </div>
           </div>
           {fails.length || warns.length ? (
             <div className={s.alerts} data-permit-alerts>
@@ -179,105 +177,112 @@ function PermitSet({ design, address, title, shop, initialPlan, editable, built 
           </div>
         </div>
 
-        <div className={s.sheets} style={{ zoom }}>
-          {/* ── A1 · the site plan and the project's data ─────────────────── */}
-          <section className={s.page} data-permit-page="A1" data-permit-kind="site">
-            <div className={s.a1}>
-              <figure className={s.fig} style={{ gridArea: "site" }}>
-                <figcaption className={s.figCap}>1 · Site plan<span>Scale 1&quot; = {scale}&apos;-0&quot;</span></figcaption>
-                <div className={s.figBody}>
-                  <SitePlanSvg layout={layout} plan={plan} scaleFtPerIn={scale} storeys={design.house.storeys} label={`Site plan of ${address ?? "the lot"}`} />
-                </div>
-                <div className={s.siteSource} data-site-source>
-                  {plan.lot.kind === "parcel" ? `Property lines from the county's parcel map${plan.lot.apn ? ` (parcel ${plan.lot.apn})` : ""} — not a boundary survey; distances to the lines are approximate.` : "Lot as measured by the contractor — not a boundary survey."} New deck on the house&apos;s {DECK_SIDE_LABEL[plan.deckSide].toLowerCase()}{plan.deckSide === "rear" ? " wall" : ""}, located by the contractor. Locate the lines and the utilities before digging.
-                </div>
-              </figure>
-              <div className={s.dataCol} style={{ gridArea: "data" }}>
-                <div className={s.h2}>Project</div>
-                <table className={s.kv}>
-                  <tbody>
-                    <tr><th>Scope</th><td>{scopeWords(structure)}</td></tr>
-                    <tr><th>Property</th><td>{address ?? "—"}{plan.lot.kind === "parcel" && plan.lot.apn ? ` · parcel ${plan.lot.apn}` : ""}</td></tr>
-                    <tr><th>Lot</th><td>{plan.lot.kind === "parcel" ? `${plan.lot.areaSqFt.toLocaleString("en-US")} sq ft, from the county's parcel record` : `${plan.lot.widthFt} ft × ${plan.lot.depthFt} ft (${Math.round(plan.lot.widthFt * plan.lot.depthFt).toLocaleString("en-US")} sq ft), as measured`}</td></tr>
-                    <tr><th>Owner</th><td>{plan.owner || "—"}</td></tr>
-                    <tr><th>Setbacks</th><td>{layout.distances.map((dd) => `${dd.side} ${ftIn(Math.round(dd.ft * 12))}`).join(" · ")}{plan.setbackRearFt != null ? ` — zoning: rear ${plan.setbackRearFt} ft` : ""}{plan.setbackSideFt != null ? `, side ${plan.setbackSideFt} ft` : ""}</td></tr>
-                  </tbody>
-                </table>
-                <div className={s.h2}>Design criteria</div>
-                <table className={s.crit} data-permit-criteria>
-                  <tbody>
-                    {criteria.rows.map((r) => (
-                      <tr key={r.label} className={r.short ? s.critShort : undefined}><th>{r.label}</th><td>{r.value}</td><td className={s.rule}>{r.source}</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <figure className={s.fig} style={{ gridArea: "elev" }}>
-                <figcaption className={s.figCap}>2 · Front elevation, from the yard<span>Not to scale — dimensions govern</span></figcaption>
-                <div className={s.figBody}><Elevation elevation={elevation} design={design} hasFrame={!!frame} /></div>
-              </figure>
-              <div className={s.notesBox} style={{ gridArea: "notes" }}>
-                <div className={s.h2}>General notes</div>
-                <ol className={s.notes} data-permit-notes>
-                  {notes.map((n, i) => (
-                    <li key={i}>{n}</li>
-                  ))}
-                </ol>
-              </div>
-            </div>
-            <TitleBlock {...tb} sheet={sheets[0]} scaleLine={`Site plan 1" = ${scale}'-0"`} />
-          </section>
-
-          {/* ── S1 · the floor, the section, the lateral ─────────────────── */}
-          {frame ? (
-            <section className={s.page} data-permit-page="S1" data-permit-kind="floor">
-              <div className={s.s1}>
-                <figure className={s.fig} style={{ gridArea: "plan" }}>
-                  <figcaption className={s.figCap}>1 · Floor framing plan<span>Not to scale — dimensions govern</span></figcaption>
-                  <div className={s.figBody}><DeckPlan structure={structure} show="floor" marks={lateralDevices(frame).map((d, i) => ({ x: d.x, y: d.y, label: `LD-${i + 1}` }))} /></div>
-                </figure>
-                {section ? (
-                  <figure className={s.fig} style={{ gridArea: "section" }}>
-                    <figcaption className={s.figCap}>2 · Section through the deck<span>Looking along the house</span></figcaption>
-                    <div className={s.figBody}><DrawingSvg drawing={section} label="Section through the deck" /></div>
-                  </figure>
-                ) : null}
-                <div className={s.detailCol} style={{ gridArea: "details" }}>
-                  {floorDetails.map((dt, i) => (
-                    <Detail key={dt.title} n={i + 3} dt={dt} />
-                  ))}
-                </div>
-                <div className={s.schedCol} style={{ gridArea: "sched" }}>
-                  <FloorSchedules structure={structure} />
-                </div>
-              </div>
-              <TitleBlock {...tb} sheet={sheets.find((x) => x.kind === "floor") ?? sheets[1]} scaleLine="As noted" />
-            </section>
-          ) : null}
-
-          {/* ── S2 · the roof ────────────────────────────────────────────── */}
-          {roof ? (
-            <section className={s.page} data-permit-page={sheets.find((x) => x.kind === "roof")?.no} data-permit-kind="roof">
-              <div className={s.s2}>
-                <figure className={s.fig} style={{ gridArea: "plan" }}>
-                  <figcaption className={s.figCap}>1 · {roof.kind === "pergola" ? "Pergola" : "Roof"} framing plan<span>Not to scale — dimensions govern</span></figcaption>
-                  <div className={s.figBody}><DeckPlan structure={structure} show="roof" /></div>
-                </figure>
-                <div className={s.detailCol} style={{ gridArea: "details" }}>
-                  {rDetails.map((dt, i) => (
-                    <Detail key={dt.title} n={i + 2} dt={dt} />
-                  ))}
-                </div>
-                <div className={s.schedCol} style={{ gridArea: "sched" }}>
-                  <RoofSchedule structure={structure} />
-                </div>
-              </div>
-              <TitleBlock {...tb} sheet={sheets.find((x) => x.kind === "roof") ?? sheets[sheets.length - 1]} scaleLine="As noted" />
-            </section>
-          ) : null}
+        <div style={{ zoom }}>
+          <PlanSet
+            structure={structure}
+            checks={checks}
+            set={which}
+            shop={shop}
+            criteria={criteria.rows}
+            notes={notes}
+            project={{ title: named, address, owner: plan.owner, parcel: plan.lot.kind === "parcel" ? plan.lot.apn ?? null : null, county: countyName, licence: plan.licence, date: today, code: structure.code.short }}
+            slots={{
+              site: (_sheet, frameIt) =>
+                frameIt(<SiteSheet layout={layout} plan={plan} scale={scale} structure={structure} address={address} />, ps.foundation),
+              roof: roof
+                ? (_sheet, frameIt) =>
+                    frameIt(
+                      <>
+                        <ViewFrame no={1} sheetNo={_sheet.no} title={roof.kind === "pergola" ? "Pergola framing plan" : "Roof framing plan"} scaleLabel="Not to scale — dimensions govern">
+                          <div className={s.roofPlan}><DeckPlan structure={structure} show="roof" /></div>
+                        </ViewFrame>
+                        <div className={ps.side}>
+                          {rDetails.map((dt, i) => (
+                            <Detail key={dt.title} n={i + 2} dt={dt} />
+                          ))}
+                          <RoofSchedule structure={structure} />
+                        </div>
+                      </>,
+                      ps.foundation,
+                    )
+                : undefined,
+            }}
+          />
         </div>
       </div>
     </div>
+  );
+}
+
+/* ── A-101 · the site plan, in the plan set's frame ───────────────────── */
+function SiteSheet({ layout, plan, scale, structure, address }: { layout: ReturnType<typeof siteLayout>; plan: SitePlan; scale: number; structure: DeckStructure; address: string | null }) {
+  const area = (ring: Array<[number, number]>) => Math.abs(ring.reduce((a, p, i) => a + p[0] * ring[(i + 1) % ring.length][1] - ring[(i + 1) % ring.length][0] * p[1], 0) / 2);
+  const lotSqFt = plan.lot.kind === "parcel" ? plan.lot.areaSqFt : plan.lot.widthFt * plan.lot.depthFt;
+  const houseSqFt = area(layout.house);
+  const deckSqFt = layout.deck.reduce((a, r) => a + area(r), 0);
+  const cover = lotSqFt > 0 ? ((houseSqFt + deckSqFt) / lotSqFt) * 100 : 0;
+  const req = (side: string) => (side === "rear" ? plan.setbackRearFt : side === "left" || side === "right" ? plan.setbackSideFt : null);
+  return (
+    <>
+      <ViewFrame no={1} sheetNo="A-101" title="Site plan" scaleLabel={`1" = ${scale}'-0"`} id="site">
+        <SitePlanSvg layout={layout} plan={plan} scaleFtPerIn={scale} storeys={structure.design.house.storeys} label={`Site plan of ${address ?? "the lot"}`} />
+      </ViewFrame>
+      <div className={ps.side}>
+        <div>
+          <div className={ps.h}>Project</div>
+          <table className={ps.kv}>
+            <tbody>
+              <tr><th>Scope</th><td>{scopeWords(structure)}</td></tr>
+              <tr><th>Property</th><td>{address ?? "—"}{plan.lot.kind === "parcel" && plan.lot.apn ? ` · parcel ${plan.lot.apn}` : ""}</td></tr>
+              <tr><th>Lot</th><td>{plan.lot.kind === "parcel" ? `${plan.lot.areaSqFt.toLocaleString("en-US")} sq ft, from the county's parcel record` : `${plan.lot.widthFt} ft × ${plan.lot.depthFt} ft, as measured`}</td></tr>
+              <tr><th>Owner</th><td>{plan.owner || "—"}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div className={ps.h}>Lot coverage</div>
+          <table className={ps.t} data-plan-coverage>
+            <tbody>
+              <tr><td>Lot</td><td className={ps.n}>{Math.round(lotSqFt).toLocaleString("en-US")} sf</td></tr>
+              <tr><td>House footprint</td><td className={ps.n}>{Math.round(houseSqFt).toLocaleString("en-US")} sf</td></tr>
+              <tr><td>New deck{layout.stairs.length ? " (stairs not counted)" : ""}</td><td className={ps.n}>{Math.round(deckSqFt).toLocaleString("en-US")} sf</td></tr>
+              <tr className={ps.sub}><td>Coverage, house + deck</td><td className={ps.n}>{cover.toFixed(1)}%</td></tr>
+            </tbody>
+          </table>
+          <div className={ps.small} style={{ marginTop: 3 }}>Whether a deck counts toward lot coverage is the zoning code&apos;s call; both figures are given.</div>
+        </div>
+        <div>
+          <div className={ps.h}>Setbacks<span>deck to the property lines</span></div>
+          <table className={ps.t} data-plan-setbacks>
+            <thead>
+              <tr><th>Line</th><th className={ps.n}>Provided</th><th className={ps.n}>Required</th><th className={ps.c}>OK</th></tr>
+            </thead>
+            <tbody>
+              {layout.distances.map((dd) => {
+                const r = req(dd.side);
+                return (
+                  <tr key={dd.side}>
+                    <td className={ps.k}>{dd.side}</td>
+                    <td className={ps.n}>{ftIn(Math.round(dd.ft * 12))}</td>
+                    <td className={ps.n}>{r != null ? `${r} ft` : "per zoning"}</td>
+                    <td className={ps.c}>{r == null ? <span className={ps.mut}>—</span> : dd.ft + 1e-6 >= r ? <span className={ps.ok}>✓</span> : <span className={ps.bad}>NO</span>}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div className={ps.h}>Site notes</div>
+          <ol className={ps.notes}>
+            <li>{plan.lot.kind === "parcel" ? `Property lines from the county's parcel map${plan.lot.apn ? ` (parcel ${plan.lot.apn})` : ""} — not a boundary survey; distances are approximate.` : "Lot as measured by the contractor — not a boundary survey."}</li>
+            <li>New deck on the house&apos;s {DECK_SIDE_LABEL[plan.deckSide].toLowerCase()}{plan.deckSide === "rear" ? " wall" : ""}, located by the contractor; confirm against the site before digging.</li>
+            <li>Locate the property lines and every utility before excavating; call 811 at least two business days ahead.</li>
+            <li>Keep the grade sloping away from the house under the deck; no change to drainage onto a neighbouring lot.</li>
+          </ol>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -294,52 +299,6 @@ function scopeWords(st: DeckStructure): string {
   return `${parts.join(" · ")}.`;
 }
 
-function TitleBlock({ sheet, sheets, what, address, plan, shop, today, county, code, scaleLine }: { sheet: PermitSheet; sheets: PermitSheet[]; what: string; address: string | null; plan: SitePlan; shop: Shop; today: string; county: string | null; code: string; scaleLine: string }) {
-  const idx = Math.max(0, sheets.findIndex((x) => x.no === sheet.no));
-  return (
-    <aside className={s.tb} data-permit-titleblock>
-      <div className={s.tbKick}>Permit drawings</div>
-      <div className={s.tbProject}>{what}</div>
-      <div className={s.tbLine}>{address ?? "Job address"}</div>
-      {county ? <div className={s.tbLine}>{county}</div> : null}
-      {plan.lot.kind === "parcel" && plan.lot.apn ? <div className={s.tbLine}>Parcel {plan.lot.apn}</div> : null}
-      <div className={s.tbGroup}>
-        <div className={s.tbLabel}>Owner</div>
-        <div className={s.tbLine}>{plan.owner || " "}</div>
-      </div>
-      <div className={s.tbGroup}>
-        <div className={s.tbLabel}>Prepared by</div>
-        <div className={s.tbStrong}>{shop.name || "Contractor"}</div>
-        {shop.address ? <div className={s.tbLine}>{shop.address}</div> : null}
-        {shop.phone ? <div className={s.tbLine}>{shop.phone}</div> : null}
-        <div className={s.tbLine}>License {plan.licence || "____________"}</div>
-      </div>
-      <div className={s.tbGroup}>
-        <div className={s.tbLabel}>Sheets</div>
-        {sheets.map((x) => (
-          <div key={x.no} className={x.no === sheet.no ? s.tbIndexOn : s.tbIndex}><b>{x.no}</b> {x.name}</div>
-        ))}
-      </div>
-      <table className={s.tbRev}>
-        <thead><tr><th>Rev</th><th>Date</th><th>Description</th></tr></thead>
-        <tbody>
-          <tr><td>—</td><td>{today}</td><td>Issued for permit</td></tr>
-          <tr><td>&nbsp;</td><td /><td /></tr>
-        </tbody>
-      </table>
-      <div className={s.tbFoot}>
-        <div className={s.tbMeta}><span>Date</span>{today}</div>
-        <div className={s.tbMeta}><span>Scale</span>{scaleLine}</div>
-        <div className={s.tbMeta}><span>Code</span>{code}</div>
-        <div className={s.tbSheetName}>{sheet.name}</div>
-        <div className={s.tbSheetNo}>{sheet.no}</div>
-        <div className={s.tbOf}>sheet {idx + 1} of {sheets.length}</div>
-        <div className={s.tbFine}>Prescriptive design to the IRC deck provisions (R507) and AWC DCA 6 as adopted; the building department&apos;s review governs.</div>
-      </div>
-    </aside>
-  );
-}
-
 function Detail({ n, dt }: { n: number; dt: DetailDrawing }) {
   return (
     <div className={s.detail} data-permit-detail={dt.title}>
@@ -351,118 +310,6 @@ function Detail({ n, dt }: { n: number; dt: DetailDrawing }) {
         ))}
       </ol>
     </div>
-  );
-}
-
-function Elevation({ elevation: E, design, hasFrame }: { elevation: Built["elevation"]; design: DeckDesign; hasFrame: boolean }) {
-  const pad = 2.5;
-  const vb = `${-pad} ${-(E.heightFt + pad)} ${E.widthFt + 2 * pad} ${E.heightFt + 2 * pad}`;
-  const poly = (pts: number[]) => {
-    const out: string[] = [];
-    for (let i = 0; i < pts.length; i += 2) out.push(`${pts[i]},${-pts[i + 1]}`);
-    return out.join(" ");
-  };
-  const fmt = (ft: number) => ftIn(ft * 12);
-  return (
-    <svg className={s.elev} viewBox={vb} preserveAspectRatio="xMidYMid meet" role="img" aria-label={`Front elevation, ${fmt(E.widthFt)} wide, ${fmt(E.heightFt)} high`}>
-      <g className={s.deck}>{E.polys.filter((p) => DECK_LAYERS.has(p.layer)).map((p, i) => <polygon key={`d${i}`} points={poly(p.pts)} />)}</g>
-      <g className={s.roof}>{E.polys.filter((p) => !DECK_LAYERS.has(p.layer) && !RAIL_LAYERS.has(p.layer)).map((p, i) => <polygon key={`r${i}`} points={poly(p.pts)} />)}</g>
-      <g className={s.rail}>{E.polys.filter((p) => RAIL_LAYERS.has(p.layer)).map((p, i) => <polygon key={`l${i}`} points={poly(p.pts)} />)}</g>
-      <line className={s.ground} x1={-pad} y1={0} x2={E.widthFt + pad} y2={0} />
-      <g className={s.dim}>
-        <line x1={0} y1={1.2} x2={E.widthFt} y2={1.2} strokeWidth={0.05} />
-        <text x={E.widthFt / 2} y={2} fontSize={0.6} textAnchor="middle">{fmt(E.widthFt)}</text>
-        <line x1={E.widthFt + 1} y1={0} x2={E.widthFt + 1} y2={-E.heightFt} strokeWidth={0.05} />
-        <text x={E.widthFt + 1.4} y={-E.heightFt / 2} fontSize={0.6} transform={`rotate(90 ${E.widthFt + 1.4} ${-E.heightFt / 2})`} textAnchor="middle">{fmt(E.heightFt)}</text>
-        {hasFrame ? <text x={0} y={-design.heightIn / 12 - 0.3} fontSize={0.5}>{`deck ${ftIn(design.heightIn)}`}</text> : null}
-      </g>
-    </svg>
-  );
-}
-
-/** The floor's schedules: framing, footings by kind, connectors, stairs and guards. */
-function FloorSchedules({ structure }: { structure: DeckStructure }) {
-  const f = structure.frame;
-  if (!f) return null;
-  const d = structure.design;
-  const posts = [...f.posts, ...(structure.lower?.frame.posts ?? [])];
-  const beams = [...f.beams, ...(structure.lower?.frame.beams ?? [])];
-  // Footings by kind: one row per post size, footing and depth.
-  const groups = new Map<string, { n: number; text: string; depth: number; most: number }>();
-  for (const p of posts) {
-    const ft = p.footing;
-    const text = ft.type === "poured" ? `${ft.padIn} in. × ${ft.padThickIn} in. pad, ${ft.pierIn}-in. pier` : "precast pier block";
-    const key = `${p.size}|${text}|${ft.depthIn}`;
-    const g = groups.get(key) ?? { n: 0, text: `${p.size} post · ${text}`, depth: ft.depthIn, most: 0 };
-    g.n += 1;
-    g.most = Math.max(g.most, p.tributarySqFt);
-    groups.set(key, g);
-  }
-  const devices = lateralDevices(f);
-  const hw = f.hardware;
-  const ledgerFasteners = f.ledgers.reduce((a, l) => a + l.fasteners, 0);
-  const connectors: Array<[string, string, number]> = [
-    ["Joist hangers", "every joist end on a ledger or flush beam", hw.hangers],
-    ["Double hangers", "doubled joists", hw.doubleHangers],
-    ["Joist ties", "every joist on a dropped beam", hw.ties],
-    ["Post bases", "every post, 1 in. off the concrete", hw.postBases],
-    ["Post caps", "every post to its beam", hw.postCaps],
-    ["Ledger fasteners", d.placement === "attached" ? LEDGER_FASTENER_LABEL[d.ledger.fastener] : "—", ledgerFasteners],
-    ["Lateral devices", devices.length ? `${devices[0].lb.toLocaleString("en-US")}-lb hold-downs, ${RULE.lateral}` : "—", devices.length],
-    ["Knee braces", "corner posts over 2 ft", hw.braces],
-    ["Rim screws", "three at every joist end", hw.rimScrews],
-  ];
-  return (
-    <>
-      <div className={s.h2}>Framing schedule</div>
-      <table className={s.table}>
-        <thead><tr><th>Member</th><th>Size</th><th className={s.r}>Spacing / span</th><th>Table</th></tr></thead>
-        <tbody>
-          <tr><td>Joists</td><td>{f.joistSize}</td><td className={s.r}>{f.spacingIn}&quot; o.c. · {ftIn(Math.max(...f.zones.flatMap((z) => z.spansIn)))}</td><td className={s.rule}>{RULE.joist}</td></tr>
-          {beams.map((b, i) => (
-            <tr key={`${b.id}${i}`}><td>Beam {b.id}</td><td>{b.spec.size}{b.style === "flush" ? ", flush" : ""}</td><td className={s.r}>posts {ftIn(b.spanIn)} (≤ {ftIn(b.maxSpanIn)})</td><td className={s.rule}>{b.table === "DCA6" ? RULE.solidBeam : RULE.beam}</td></tr>
-          ))}
-          <tr><td>Posts</td><td>{d.framing.post}</td><td className={s.r}>{posts.length} · tallest {ftIn(Math.max(...posts.map((p) => p.heightIn)))}</td><td className={s.rule}>{RULE.post}</td></tr>
-          {f.ledgers.map((l, i) => (
-            <tr key={`l${i}`}><td>Ledger</td><td>{f.sticks.find((st) => st.role === "ledger")?.nominal ?? "2x"}</td><td className={s.r}>{l.fasteners} @ {l.spacingIn}&quot;, 2 rows</td><td className={s.rule}>{l.rule}</td></tr>
-          ))}
-          <tr><td>Rim</td><td>{f.joistSize}{d.framing.doubleRim ? ", doubled" : ""}</td><td className={s.r}>3 screws per joist</td><td className={s.rule}>{RULE.hangers}</td></tr>
-        </tbody>
-      </table>
-      <div className={s.h2}>Footing schedule</div>
-      <table className={s.table}>
-        <thead><tr><th className={s.r}>No.</th><th>Footing</th><th className={s.r}>Depth</th><th className={s.r}>Carries</th></tr></thead>
-        <tbody>
-          {[...groups.values()].map((g, i) => (
-            <tr key={i}><td className={s.r}>{g.n}</td><td>{g.text}</td><td className={s.r}>{g.depth} in.</td><td className={s.r}>≤ {Math.round(g.most)} sq ft</td></tr>
-          ))}
-        </tbody>
-      </table>
-      <div className={s.rule}>{RULE.footing} · {d.soilPsf.toLocaleString("en-US")} psf · frost {d.frostIn} in. ({RULE.frost})</div>
-      <div className={s.h2}>Connector schedule</div>
-      <table className={s.table}>
-        <thead><tr><th>Connector</th><th>Where</th><th className={s.r}>Qty</th></tr></thead>
-        <tbody>
-          {connectors.filter((c) => c[2] > 0).map((c) => (
-            <tr key={c[0]}><td>{c[0]}</td><td>{c[1]}</td><td className={s.r}>{c[2]}</td></tr>
-          ))}
-        </tbody>
-      </table>
-      {structure.stairs.length || structure.rails.on ? (
-        <>
-          <div className={s.h2}>Stairs and guards</div>
-          <table className={s.table}>
-            <tbody>
-              {structure.stairs.map((st, i) => (
-                <tr key={st.design.id}><td>{st.kind === "box" ? "Box steps" : `Stair ${i + 1} (${st.design.side})`}</td><td>{st.kind === "box" ? "2x6 box frames" : `${st.stringers.count} 2x12 stringers @ ${st.stringers.spacingIn}"`}</td><td className={s.r}>{st.risers} × {st.riserIn.toFixed(2)}&quot; · treads {st.runIn + 1}&quot; · {st.widthIn}&quot; wide</td></tr>
-              ))}
-              {structure.rails.on ? <tr><td>Guard</td><td>{structure.rails.label}, {structure.rails.infill}</td><td className={s.r}>{structure.rails.heightIn}&quot; · {Math.round(structure.rails.totalLf)} ft</td></tr> : null}
-            </tbody>
-          </table>
-          <div className={s.rule}>{STAIR_RULES.riser.split(" — ")[0]} · {STAIR_RULES.tread.split(" — ")[0]} · {RULE.guard}</div>
-        </>
-      ) : null}
-    </>
   );
 }
 

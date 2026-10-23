@@ -2713,7 +2713,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
           ) : null}
           {permitHref ? (
             <a className="v1-btn v1-btn-sm" href={permitHref} target="_blank" rel="noopener" onClick={(e) => { if (preview && !viewOnly) { e.preventDefault(); askAddon("Print the lists and the permit sheet with Deck Studio"); } }} data-deck-permit>
-              Permit sheet <ExternalLink size={14} aria-hidden="true" />
+              Permit &amp; build set <ExternalLink size={14} aria-hidden="true" />
             </a>
           ) : null}
           {bomByStep.size ? (
@@ -3035,7 +3035,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
           <DeckPreviewBanner mode="preview" saved={viewOnly} interval={addonInterval} onAdd={() => askAddon(viewOnly ? "Change saved decks with Deck Studio" : "Add Deck Studio to your plan")}>
             {viewOnly ? (
               <>
-                {permitHref ? <a href={permitHref} target="_blank" rel="noopener" data-deck-saved-print="permit">Permit sheet</a> : null}
+                {permitHref ? <a href={permitHref} target="_blank" rel="noopener" data-deck-saved-print="permit">Permit &amp; build set</a> : null}
                 {yardHref ? <a href={yardHref} target="_blank" rel="noopener" data-deck-saved-print="yard">List for the lumber yard</a> : null}
                 {installerHref ? <a href={installerHref} target="_blank" rel="noopener" data-deck-saved-print="installer">For the installer</a> : null}
               </>

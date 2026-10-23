@@ -633,7 +633,12 @@ export function footingFor(design: DeckDesign, x: number, y: number, tributarySq
   }
   const depthIn = footingDepthIn(design);
   const pierIn = PIER_FOR_POST_IN[post];
-  const need = required?.roundIn ?? TUBE_SIZES_IN[TUBE_SIZES_IN.length - 1];
+  // The table, read between its rows as R507.3.1 allows, rounds to the inch — and a round pad that only just meets it
+  // can bear a shade over the soil's figure: 53.3 sq ft of deck at 40 + 10 psf on 1,500-psf soil needs 1.78 sq ft, an
+  // 18-in. pad has 1.77 (found by the plan set's bearing check, 2026-10-23). The pad is the larger of the table's and
+  // the one plain statics ask for, so every footing passes the table and the arithmetic a plan reviewer does.
+  const staticsIn = Math.ceil(Math.sqrt((4 * Math.max(0, tributarySqFt) * (design.loadPsf + 10)) / design.soilPsf / Math.PI) * 12 - 1e-9);
+  const need = required ? Math.max(required.roundIn, staticsIn) : TUBE_SIZES_IN[TUBE_SIZES_IN.length - 1];
   const padThickIn = required?.thickIn ?? 12;
   if (need <= pierIn) {
     // The pier alone is wide enough: one tube from the bottom of the hole to the top.

@@ -3482,7 +3482,7 @@ export function DeckSheet({ initialBook, homeState, initialAddress, clientId, cl
             <div className={s.actLinks}>
               {permitHref ? (
                 <a className={cx(s.btn, s.btnSm)} href={permitHref} target="_blank" rel="noopener" data-deck-permit>
-                  Permit sheet <ArrowUpRight size={14} strokeWidth={2.5} aria-hidden="true" />
+                  Permit &amp; build set <ArrowUpRight size={14} strokeWidth={2.5} aria-hidden="true" />
                 </a>
               ) : null}
               {materialsHref("yard") ? (

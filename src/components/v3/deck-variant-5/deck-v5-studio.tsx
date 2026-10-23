@@ -2910,7 +2910,7 @@ export function DeckV5Studio({ initialBook, homeState, initialAddress, clientId,
       </div>
       <p className="v5-finish-meta">
         <span data-deck-save={saveState}>{saveWords}</span>
-        {permitHref ? <a href={permitHref} target="_blank" rel="noopener" data-deck-permit>Permit sheet ↗</a> : null}
+        {permitHref ? <a href={permitHref} target="_blank" rel="noopener" data-deck-permit>Permit &amp; build set ↗</a> : null}
         {materialsHref("yard") ? <a href={materialsHref("yard")!} target="_blank" rel="noopener" data-deck-materials="yard">Material list ↗</a> : null}
       </p>
     </div>
