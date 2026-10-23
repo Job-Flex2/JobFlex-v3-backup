@@ -26,6 +26,7 @@ import {
   ROOF_COLOURS,
   SIDINGS,
   deckShapeForHouse,
+  isHouseHex,
   quickWall,
   quickWallOf,
   wallFixes,
@@ -140,8 +141,8 @@ export function ClientHouse({ shape, house, shopName, onChange }: { shape: DeckS
         <Chips small label="Storeys" value={house.storeys} options={[{ value: 1 as const, name: "One storey" }, { value: 2 as const, name: "Two storeys" }]} onChange={(v) => onChange({ house: { ...house, storeys: v } })} />
         <Chips small label="House roof" value={house.roof} options={HOUSE_ROOFS.map((r) => ({ value: r, name: `${HOUSE_ROOF_LABEL[r]} roof` }))} onChange={(v: HouseRoof) => onChange({ house: { ...house, roof: v } })} />
       </div>
-      <Chips small label="Siding colour" value={house.siding} options={SIDINGS.map((c) => ({ value: c.id, name: c.label, swatch: c.hex }))} onChange={(v: SidingId) => onChange({ house: { ...house, siding: v } })} />
-      <Chips small label="Roof colour" value={house.roofColour} options={ROOF_COLOURS.map((c) => ({ value: c.id, name: c.label, swatch: c.hex }))} onChange={(v: RoofColourId) => onChange({ house: { ...house, roofColour: v } })} />
+      <Chips small label="Siding colour" value={isHouseHex(house.siding) ? null : house.siding} options={SIDINGS.map((c) => ({ value: c.id, name: c.label, swatch: c.hex }))} onChange={(v: SidingId) => onChange({ house: { ...house, siding: v } })} />
+      <Chips small label="Roof colour" value={isHouseHex(house.roofColour) ? null : house.roofColour} options={ROOF_COLOURS.map((c) => ({ value: c.id, name: c.label, swatch: c.hex }))} onChange={(v: RoofColourId) => onChange({ house: { ...house, roofColour: v } })} />
 
       {/* MEASURE IT EXACTLY — OPTIONAL (2026-10-17 audit: the wall step ran over two phone screens of tape
           measures before the client had sized the deck). The quick shapes and the house's look stay out; the

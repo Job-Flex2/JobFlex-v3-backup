@@ -14,7 +14,17 @@
 // the wall set back, a bump-out in the middle, several — makes the deck follow
 // the wall (shape kind "wall"); only a step the deck cannot follow is said in
 // a note instead of being drawn wrong.
+//
+// BUILT FROM A PHOTO (2026-10-23; owner: "upload the picture of my back wall … get from that picture approximate shape
+// already, and even windows and where the doors is … the color of the house … a window's height, two-story,
+// one-story, the roof shape … it's not supposed to be very accurate, but if you can make it accurate would be nice"):
+// a house may carry its real windows and doors (`openings`, in the deck's feet like the steps), its own colours as
+// #rrggbb beside the presets, what the wall is clad in, bump-outs as tall as the house, what stands against the wall
+// now (`existing` — an old deck, a patio roof, a slab, each torn out with one click), and the photo it was built from
+// (lib/deck/houseFromPhoto) — kept to look back at, never pasted on the wall. Without them the house is drawn by rule,
+// as before.
 import { BACK_LIMITS, DECK_LIMITS, normalizeBack, type DeckShape } from "./design";
+import { normalizeHouseRead, type HouseRead } from "./houseRead";
 
 export type HouseRoof = "hip" | "gable";
 export const HOUSE_ROOFS: readonly HouseRoof[] = ["hip", "gable"];
@@ -35,9 +45,79 @@ export interface HouseDesign {
   leftFt: number;
   rightFt: number;
   jogs: HouseJog[];
-  /** The look (2026-10-11, "the client would say: this is my house"): the siding's colour and the roof's. */
-  siding: SidingId;
-  roofColour: RoofColourId;
+  /** The look (2026-10-11, "the client would say: this is my house"): the siding's colour and the roof's — a preset, or (2026-10-23) the house's own colour off a photo. */
+  siding: SidingId | HouseHex;
+  roofColour: RoofColourId | HouseHex;
+  /** What the wall is clad in (2026-10-23). Absent = lap siding. */
+  material?: HouseMaterial;
+  /** A two-storey house's bump-outs: one storey tall (the rule) or as tall as the house (as a photo shows them). Absent = one storey. */
+  bumpOuts?: "low" | "full";
+  /** The windows and doors where they really are (2026-10-23, built from a photo). Absent or null = drawn by rule: a door on the deck's main back edge, windows every 5 ft. */
+  openings?: HouseOpening[] | null;
+  /** What stands against the wall now (2026-10-23, off a photo): an old deck, a patio roof, a concrete patio — drawn as they
+   *  are until one click tears each out (owner: "an option to clean up what's going away, because we're gonna build new
+   *  one"), which takes it off the 3D and puts its tear-out in the price. */
+  existing?: HouseExisting[];
+  /** The photo the house was built from. */
+  photo?: HousePhoto | null;
+}
+
+/** A colour of the house's own, "#rrggbb". */
+export type HouseHex = `#${string}`;
+export const isHouseHex = (v: unknown): v is HouseHex => typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v);
+
+export type HouseMaterial = "lap" | "brick" | "stucco" | "board-batten" | "stone";
+export const HOUSE_MATERIALS: readonly HouseMaterial[] = ["lap", "brick", "stucco", "board-batten", "stone"];
+export const HOUSE_MATERIAL_LABEL: Record<HouseMaterial, string> = { lap: "Lap siding", brick: "Brick", stucco: "Stucco", "board-batten": "Board and batten", stone: "Stone" };
+
+export type OpeningKind = "window" | "door" | "slider";
+export const OPENING_LABEL: Record<OpeningKind, string> = { window: "Window", door: "Door", slider: "Sliding door" };
+/** A window or a door in the back wall: its middle along the house (the deck's feet from its left end), its size, and its bottom above the ground (a door's threshold), ft. */
+export interface HouseOpening {
+  id: string;
+  kind: OpeningKind;
+  xFt: number;
+  widthFt: number;
+  heightFt: number;
+  sillFt: number;
+}
+export const OPENING_LIMITS = { count: 40, widthFt: { min: 1, max: 20 }, heightFt: { min: 1, max: 12 }, sillFt: { min: 0, max: 30 } } as const;
+
+export type ExistingKind = "deck" | "cover" | "slab";
+export const EXISTING_LABEL: Record<ExistingKind, string> = { deck: "Old deck", cover: "Patio roof", slab: "Concrete patio" };
+export const EXISTING_KINDS: readonly ExistingKind[] = ["deck", "cover", "slab"];
+/**
+ * Something standing against the wall now: its ends along the house (the deck's feet), how far it reaches out from the
+ * wall, its height above the ground (an old deck's floor, a patio roof's low edge, a slab's top), where a patio roof
+ * meets the wall, the posts along its outer edge (along the house, the deck's feet), and whether it is torn out.
+ */
+export interface HouseExisting {
+  id: string;
+  kind: ExistingKind;
+  x0Ft: number;
+  x1Ft: number;
+  depthFt: number;
+  heightFt: number;
+  highFt?: number;
+  posts?: number[];
+  tearOut: boolean;
+}
+export const EXISTING_LIMITS = { count: 6, depthFt: { min: 2, max: 30 }, heightFt: { min: 0, max: 24 }, posts: 8 } as const;
+/** How far past the house's corners something standing there may reach, ft. */
+const EXISTING_REACH_FT = 24;
+/** Its footprint, sq ft — what its tear-out is priced by. */
+export const existingSqFt = (e: HouseExisting) => Math.round(Math.max(0, e.x1Ft - e.x0Ft) * e.depthFt);
+
+/** The photo a house was built from: the stored picture, the read in its own fractions (so the house can be built again without a second look), the wall's width it gave, what set the scale, and where the deck's left end stood along that wall. */
+export interface HousePhoto {
+  url: string;
+  w: number;
+  h: number;
+  read: HouseRead | null;
+  wallFt: number;
+  by: "line" | "door" | "eave" | "width" | "none";
+  deckAtFt: number;
+  at: string;
 }
 
 export type SidingId = "white" | "cream" | "grey" | "blue" | "sage";
@@ -56,8 +136,8 @@ export const ROOF_COLOURS: ReadonlyArray<{ id: RoofColourId; label: string; hex:
   { id: "forest", label: "Forest", hex: "#4a5e4f" },
   { id: "terracotta", label: "Terracotta", hex: "#9a5a44" },
 ];
-export const sidingHex = (id: SidingId) => SIDINGS.find((c) => c.id === id)?.hex ?? SIDINGS[1].hex;
-export const roofHex = (id: RoofColourId) => ROOF_COLOURS.find((c) => c.id === id)?.hex ?? ROOF_COLOURS[0].hex;
+export const sidingHex = (id: SidingId | HouseHex) => (isHouseHex(id) ? id.toLowerCase() : (SIDINGS.find((c) => c.id === id)?.hex ?? SIDINGS[1].hex));
+export const roofHex = (id: RoofColourId | HouseHex) => (isHouseHex(id) ? id.toLowerCase() : (ROOF_COLOURS.find((c) => c.id === id)?.hex ?? ROOF_COLOURS[0].hex));
 
 /** A step shallower than half a foot is no step: it is dropped, which is how a wall dragged level loses its step. */
 export const HOUSE_LIMITS = { extendFt: { min: 0, max: 60 }, depthFt: { min: 0.5, max: 12 }, jogs: 6 } as const;
@@ -101,11 +181,84 @@ export function normalizeHouse(raw: unknown, shape: DeckShape): HouseDesign {
     .slice(0, HOUSE_LIMITS.jogs);
   // Two steps on one spot: the second is dropped.
   const spaced = jogs.filter((j, i) => i === 0 || j.atFt - jogs[i - 1].atFt >= 1);
-  const siding = SIDINGS.some((c) => c.id === r.siding) ? (r.siding as SidingId) : d.siding;
-  const roofColour = ROOF_COLOURS.some((c) => c.id === r.roofColour) ? (r.roofColour as RoofColourId) : d.roofColour;
+  const siding = SIDINGS.some((c) => c.id === r.siding) ? (r.siding as SidingId) : isHouseHex(r.siding) ? (r.siding.toLowerCase() as HouseHex) : d.siding;
+  const roofColour = ROOF_COLOURS.some((c) => c.id === r.roofColour) ? (r.roofColour as RoofColourId) : isHouseHex(r.roofColour) ? (r.roofColour.toLowerCase() as HouseHex) : d.roofColour;
   // The steps are kept exactly as given: the read-back never adds one for a back notch (the studio does that once, when
   // a design opens) and never drops one (a step just removed must stay removed, so the deck can go back to a rectangle).
-  return { storeys, roof, leftFt, rightFt, jogs: spaced, siding, roofColour };
+  const out: HouseDesign = { storeys, roof, leftFt, rightFt, jogs: spaced, siding, roofColour };
+  // What a photo brought (2026-10-23) — only when it is there, so a house without it reads back exactly as before.
+  if (HOUSE_MATERIALS.includes(r.material as HouseMaterial) && r.material !== "lap") out.material = r.material as HouseMaterial;
+  if (r.bumpOuts === "full") out.bumpOuts = "full";
+  if (Array.isArray(r.openings)) out.openings = normalizeOpenings(r.openings, -leftFt, W + rightFt);
+  // What stands there may reach past the house's corners (a patio roof out over the yard), so it is held a little wider.
+  const existing = normalizeExisting(r.existing, -leftFt - EXISTING_REACH_FT, W + rightFt + EXISTING_REACH_FT);
+  if (existing.length) out.existing = existing;
+  const photo = normalizeHousePhoto(r.photo);
+  if (photo) out.photo = photo;
+  return out;
+}
+
+const q4 = (n: number) => Math.round(n * 4) / 4;
+
+/** The windows and doors read back: sizes held to their limits, each inside the wall's reach, left to right. */
+export function normalizeOpenings(raw: unknown[], fromFt: number, toFt: number): HouseOpening[] {
+  const seen = new Set<string>();
+  return raw
+    .map((o, i) => {
+      const v = obj(o);
+      const kind: OpeningKind = v.kind === "door" || v.kind === "slider" ? v.kind : "window";
+      const id = typeof v.id === "string" && v.id && !seen.has(v.id) ? v.id : `o${i + 1}`;
+      seen.add(id);
+      const L = OPENING_LIMITS;
+      return { id, kind, xFt: q4(num(v.xFt, NaN)), widthFt: q4(clamp(num(v.widthFt, 3), L.widthFt.min, L.widthFt.max)), heightFt: q4(clamp(num(v.heightFt, 4), L.heightFt.min, L.heightFt.max)), sillFt: q4(clamp(num(v.sillFt, 3), L.sillFt.min, L.sillFt.max)) };
+    })
+    .filter((o) => Number.isFinite(o.xFt) && o.xFt - o.widthFt / 2 >= fromFt - 0.5 && o.xFt + o.widthFt / 2 <= toFt + 0.5)
+    .sort((a, b) => a.xFt - b.xFt || a.sillFt - b.sillFt)
+    .slice(0, OPENING_LIMITS.count);
+}
+
+function normalizeExisting(raw: unknown, fromFt: number, toFt: number): HouseExisting[] {
+  if (!Array.isArray(raw)) return [];
+  const L = EXISTING_LIMITS;
+  const seen = new Set<string>();
+  const out: HouseExisting[] = [];
+  raw.forEach((x, i) => {
+    const v = obj(x);
+    const kind = EXISTING_KINDS.includes(v.kind as ExistingKind) ? (v.kind as ExistingKind) : null;
+    if (!kind) return;
+    const x0 = q4(clamp(Math.min(num(v.x0Ft, NaN), num(v.x1Ft, NaN)), fromFt, toFt));
+    const x1 = q4(clamp(Math.max(num(v.x0Ft, NaN), num(v.x1Ft, NaN)), fromFt, toFt));
+    if (!Number.isFinite(x0) || !Number.isFinite(x1) || x1 - x0 < 2) return;
+    const id = typeof v.id === "string" && v.id && !seen.has(v.id) ? v.id : `e${i + 1}`;
+    seen.add(id);
+    const dflt = kind === "deck" ? 2 : kind === "cover" ? 8 : 0.33;
+    const heightFt = q4(clamp(num(v.heightFt, dflt), kind === "cover" ? 6 : L.heightFt.min, L.heightFt.max));
+    const e: HouseExisting = { id, kind, x0Ft: x0, x1Ft: x1, depthFt: q4(clamp(num(v.depthFt, 10), L.depthFt.min, L.depthFt.max)), heightFt, tearOut: v.tearOut === true };
+    if (kind === "cover") e.highFt = q4(clamp(Math.max(num(v.highFt, heightFt + 1.5), heightFt + 0.5), 6, L.heightFt.max + 2));
+    if (kind !== "slab") e.posts = (Array.isArray(v.posts) ? v.posts : []).filter((p): p is number => typeof p === "number" && Number.isFinite(p) && p >= x0 - 0.5 && p <= x1 + 0.5).map(q4).sort((a, b) => a - b).slice(0, L.posts);
+    out.push(e);
+  });
+  return out.slice(0, L.count);
+}
+
+function normalizeHousePhoto(raw: unknown): HousePhoto | null {
+  const v = obj(raw);
+  if (typeof v.url !== "string" || !v.url || v.url.length > 400_000) return null;
+  const w = num(v.w, 0);
+  const h = num(v.h, 0);
+  if (!(w > 0 && h > 0)) return null;
+  const by = v.by === "line" || v.by === "door" || v.by === "eave" || v.by === "width" ? v.by : "none";
+  return { url: v.url, w: Math.round(w), h: Math.round(h), read: normalizeHouseRead(v.read), wallFt: r2(clamp(num(v.wallFt, 0), 0, 400)), by, deckAtFt: r2(clamp(num(v.deckAtFt, 0), -400, 400)), at: typeof v.at === "string" ? v.at.slice(0, 40) : "" };
+}
+
+/** The windows, the doors and what stands against the wall moved along the house by `d` ft in the deck's feet (the deck slid with the house still). */
+export function shiftHouseThings(house: HouseDesign, d: number): Pick<HouseDesign, "openings" | "existing" | "photo"> {
+  const out: Pick<HouseDesign, "openings" | "existing" | "photo"> = {};
+  if (house.openings) out.openings = house.openings.map((o) => ({ ...o, xFt: q4(o.xFt + d) }));
+  else if (house.openings === null) out.openings = null;
+  if (house.existing) out.existing = house.existing.map((e) => ({ ...e, x0Ft: q4(e.x0Ft + d), x1Ft: q4(e.x1Ft + d), ...(e.posts ? { posts: e.posts.map((p) => q4(p + d)) } : {}) }));
+  if (house.photo) out.photo = { ...house.photo, deckAtFt: r2(house.photo.deckAtFt - d) };
+  return out;
 }
 
 /** One part of the back wall between two steps, in the deck's feet; `depthFt` is how far it stands toward the yard against the house line (the part under the deck's main back edge). */
@@ -302,13 +455,23 @@ export interface HouseScene {
   /** The siding's and the roof's colours, hex. */
   siding: string;
   roofColour: string;
+  /** The doors where they really are (a house built from a photo): [centre x, the face's y, width, height, threshold above the ground, 0 a door | 1 a sliding door], ft. Absent: `door` is the one. */
+  doors?: number[][];
+  /** What the wall is clad in. */
+  material?: HouseMaterial;
+  /** What stands against the wall and is not torn out: [0 an old deck | 1 a patio roof | 2 a slab, x0, x1, the face's y, depth out, height, where a patio roof meets the wall, …posts' x], ft. */
+  existing?: number[][];
 }
+
+const EXISTING_CODE: Record<ExistingKind, number> = { deck: 0, cover: 1, slab: 2 };
 
 /**
  * The house as blocks and openings: one block per part of the back wall,
  * the body behind it; a two-storey house keeps its bump-outs one storey
- * tall; the door on the part under the deck's main back edge, windows along
- * every face per storey, clear of the door.
+ * tall (unless they were seen as tall as the house); the door on the part
+ * under the deck's main back edge, windows along every face per storey,
+ * clear of the door — or, for a house built from a photo, the windows and
+ * doors where they are, each on the part of the wall it stands in.
  */
 export function houseScene(shape: DeckShape, house: HouseDesign, ctx: { deckHeightFt: number; peakFt: number; mainEdge: { x0: number; x1: number } | null }): HouseScene {
   const parts = impliedParts(wallParts(house, shape), shape, house);
@@ -316,9 +479,17 @@ export function houseScene(shape: DeckShape, house: HouseDesign, ctx: { deckHeig
   const mainH = r2(Math.max(storeyTop(house.storeys), ctx.deckHeightFt + 9, ctx.peakFt + 2.5));
   const lowH = r2(Math.max(storeyTop(1), ctx.deckHeightFt + 9));
   const blocks = parts.map((p) => {
-    const low = house.storeys === 2 && p.depthFt > 0.5;
+    const low = house.storeys === 2 && p.depthFt > 0.5 && house.bumpOuts !== "full";
     return [p.x0, r2(p.depthFt - HOUSE_BODY_FT), p.x1, p.depthFt, low ? lowH : mainH];
   });
+  const look = { storeys: house.storeys, roof: house.roof, siding: sidingHex(house.siding), roofColour: roofHex(house.roofColour), ...(house.material && house.material !== "lap" ? { material: house.material } : {}) };
+  const existing = existingScene(house, parts);
+  if (house.openings) {
+    const placed = placeOpenings(house.openings, parts, blocks);
+    const ref = ctx.mainEdge ? (ctx.mainEdge.x0 + ctx.mainEdge.x1) / 2 : referenceX(shape);
+    const main = placed.doors.slice().sort((a, b) => Math.abs(a[0] - ref) - Math.abs(b[0] - ref))[0];
+    return { blocks, heightFt: mainH, door: main ? [main[0], main[2], main[3], main[1]] : null, windows: placed.windows, doors: placed.doors, ...look, ...(existing.length ? { existing } : {}) };
+  }
   // The door: on the house line, centred on the deck's main back edge.
   const underRef = referencePart(parts, shape);
   const edge = ctx.mainEdge ?? { x0: Math.max(0, underRef.x0), x1: Math.min(shape.widthFt, underRef.x1) };
@@ -350,7 +521,47 @@ export function houseScene(shape: DeckShape, house: HouseDesign, ctx: { deckHeig
       }
     }
   });
-  return { blocks, heightFt: mainH, door, storeys: house.storeys, roof: house.roof, windows: windows.slice(0, 60), siding: sidingHex(house.siding), roofColour: roofHex(house.roofColour) };
+  return { blocks, heightFt: mainH, door, windows: windows.slice(0, 60), ...look, ...(existing.length ? { existing } : {}) };
+}
+
+/** The wall part an opening stands in: the one its middle is over. */
+const partAt = (parts: WallPart[], x: number) => parts.findIndex((p) => x >= p.x0 - 1e-6 && x <= p.x1 + 1e-6);
+
+/**
+ * Real windows and doors on the wall: each on the part its middle stands in, narrowed to stay a hand's width inside
+ * that part, dropped when it would stand above that part's wall (an upper-storey window over a one-storey bump-out)
+ * or when nothing of it is left.
+ */
+function placeOpenings(openings: HouseOpening[], parts: WallPart[], blocks: number[][]): { windows: number[][]; doors: number[][] } {
+  const windows: number[][] = [];
+  const doors: number[][] = [];
+  for (const o of openings) {
+    const i = partAt(parts, o.xFt);
+    if (i < 0) continue;
+    const p = parts[i];
+    const x0 = Math.max(o.xFt - o.widthFt / 2, p.x0 + 0.25);
+    const x1 = Math.min(o.xFt + o.widthFt / 2, p.x1 - 0.25);
+    if (x1 - x0 < 0.75) continue;
+    const top = blocks[i][4] - 0.6;
+    const h = Math.min(o.heightFt, top - o.sillFt);
+    if (h < 0.75) continue;
+    const row = [r2((x0 + x1) / 2), p.depthFt, r2(x1 - x0), r2(h), r2(o.sillFt)];
+    if (o.kind === "window") windows.push(row);
+    else doors.push([...row, o.kind === "slider" ? 1 : 0]);
+  }
+  return { windows: windows.slice(0, 60), doors: doors.slice(0, 8) };
+}
+
+/** What stands against the wall and is not torn out, on the face of the part its middle is in. */
+function existingScene(house: HouseDesign, parts: WallPart[]): number[][] {
+  const out: number[][] = [];
+  for (const e of house.existing ?? []) {
+    if (e.tearOut) continue;
+    const i = partAt(parts, (e.x0Ft + e.x1Ft) / 2);
+    const face = i >= 0 ? parts[i].depthFt : 0;
+    out.push([EXISTING_CODE[e.kind], e.x0Ft, e.x1Ft, face, e.depthFt, e.heightFt, e.highFt ?? e.heightFt, ...(e.posts ?? [])]);
+  }
+  return out;
 }
 
 /* ── A field of the House step, shown in the 3D ─────────────────────── */
@@ -652,7 +863,7 @@ export function slideDeck(house: HouseDesign, deltaFt: number): HouseDesign {
   const hi = Math.min(HOUSE_LIMITS.extendFt.max - house.leftFt, house.rightFt);
   const d = half(clamp(deltaFt, lo, hi));
   if (d === 0) return house;
-  return { ...house, leftFt: half(house.leftFt + d), rightFt: half(house.rightFt - d), jogs: house.jogs.map((j) => ({ ...j, atFt: half(j.atFt - d) })) };
+  return { ...house, leftFt: half(house.leftFt + d), rightFt: half(house.rightFt - d), jogs: house.jogs.map((j) => ({ ...j, atFt: half(j.atFt - d) })), ...shiftHouseThings(house, -d) };
 }
 
 /**
@@ -665,7 +876,7 @@ export function resizeDeckLeft(house: HouseDesign, shape: DeckShape, newWidthFt:
   const d = W - w2; // the left end moves right by this much
   if (d === 0) return { house, shape };
   const leftFt = clamp(half(house.leftFt + d), HOUSE_LIMITS.extendFt.min, HOUSE_LIMITS.extendFt.max);
-  const moved = { ...house, leftFt, jogs: house.jogs.map((j) => ({ ...j, atFt: half(j.atFt - d) })) };
+  const moved = { ...house, leftFt, jogs: house.jogs.map((j) => ({ ...j, atFt: half(j.atFt - d) })), ...shiftHouseThings(house, -d) };
   return { house: moved, shape: { ...shape, widthFt: w2 } };
 }
 

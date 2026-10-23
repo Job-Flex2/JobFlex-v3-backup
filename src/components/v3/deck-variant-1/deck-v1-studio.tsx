@@ -93,7 +93,7 @@ import { DECK_RATES, DECK_RATE_GROUP_LABEL, deckRate, sanitizeDeckRateBook, type
 import { convertDeckEstimateToProposal, updateDeckProposal, deleteDeckDraft, listDeckDrafts, loadDeckDraft, readDeckSite, saveDeckDraft, saveDeckRateBook, type DeckDraftRow, type ReturnedClientDesign } from "@/actions/deckEstimator";
 import { deckClientInbox } from "@/actions/deckClientDesign";
 import { jobLine, type ClientLinkRow } from "@/lib/deck/clientDesign";
-import { HOUSE_LIMITS, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, levelUnderDeck, wallDeckWords, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseRoof, wallHighlight, type WallFocus } from "@/lib/deck/house";
+import { HOUSE_LIMITS, HOUSE_MATERIALS, HOUSE_MATERIAL_LABEL, HOUSE_ROOF_LABEL, HOUSE_ROOFS, QUICK_WALLS, QUICK_WALL_LABEL, ROOF_COLOURS, SIDINGS, isHouseHex, levelUnderDeck, wallDeckWords, houseForShape, houseNotes, houseWords, nextJogId, quickWall, quickWallOf, stepWords, wallWords, type HouseDesign, type HouseJog, type HouseMaterial, type HouseRoof, wallHighlight, type WallFocus } from "@/lib/deck/house";
 import { DECK_LOCK_WORDS, PROPOSAL_STATUS_WORDS, type LinkedDeckProposal } from "@/lib/deck/proposalEdit";
 import type { DeckSample } from "@/lib/deck/samples";
 import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
@@ -111,6 +111,7 @@ import { DeckV1Send } from "./deck-v1-send";
 import { DeckAddonDialog, DeckPreviewBanner } from "@/components/v3/deck-addon/deck-addon";
 import type { AddonInterval } from "@/lib/deckAddon";
 import { PHOTO_ENABLED, PhotoFileInput, PhotoSection, PhotoTools, PhotoViewBox, PhotoWhere, useDeckPhoto, type V1View } from "./deck-v1-photo";
+import { ExistingList, HousePhotoCard, HousePhotoReview, useHousePhoto } from "./deck-v1-house-photo";
 import "./deck-variant-1.css";
 // The Talk button and the panel's styles load with the studio (the panel itself loads when first opened).
 import "@/components/v3/deck-voice/deck-voice.css";
@@ -560,6 +561,8 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   const [view, setView] = React.useState<V1View>("3d");
   /* ── the photo of the house (dormant: PHOTO_ENABLED is false, as in the old studio) ── */
   const ph = useDeckPhoto({ design, patch, scene, view, setView });
+  /* ── the house built from its photo (2026-10-23): the wall, its windows and doors, what stands there now ── */
+  const hp = useHousePhoto({ design, patch, clientId, onBuilt: () => setView("3d") });
   const openWallLarge = () => {
     setView("wall");
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches) viewerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1641,6 +1644,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
 
   const houseBlock = () => scene.house ? (
     <>
+      <HousePhotoCard hp={hp} design={design} />
       <Field label="The back wall and the deck, seen from above — drag anything" wide lights={null}>
         <div className="v1-wall-small" onPointerDownCapture={quiet} data-deck-wall-quiet>
           <HouseWallPlan shape={design.shape} house={design.house} onChange={(n2) => patch({ ...(n2.shape ? { shape: n2.shape } : {}), ...(n2.house ? { house: n2.house } : {}) })} onOpenLarge={openWallLarge} />
@@ -1649,6 +1653,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
       <p className={houseNotes(design.shape, design.house).length ? "v1-call v1-call-bad" : "v1-hint"} data-deck-wall-words>
         {wallWords(design.shape, design.house)}
       </p>
+      <ExistingList hp={hp} design={design} />
       <More title="The house and its wall" now={houseWords(design.house)} id="house-more">
         <div className="v1-grid2">
           <Field label="Storeys">
@@ -1660,6 +1665,12 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
         </div>
         <Field label="Siding" wide>
           <div className="v1-chips" role="group" aria-label="Siding">
+            {isHouseHex(design.house.siding) ? (
+              <button type="button" className="v1-chip is-on" aria-pressed="true" data-deck-house-siding="photo">
+                <span className="v1-swatch" style={{ background: design.house.siding }} aria-hidden />
+                From the photo
+              </button>
+            ) : null}
             {SIDINGS.map((c) => (
               <button key={c.id} type="button" className={cx("v1-chip", design.house.siding === c.id && "is-on")} aria-pressed={design.house.siding === c.id} onClick={() => setHouse({ siding: c.id })} data-deck-house-siding={c.id}>
                 <span className="v1-swatch" style={{ background: c.hex }} aria-hidden />
@@ -1670,6 +1681,12 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
         </Field>
         <Field label="Roof colour" wide>
           <div className="v1-chips" role="group" aria-label="Roof colour">
+            {isHouseHex(design.house.roofColour) ? (
+              <button type="button" className="v1-chip is-on" aria-pressed="true" data-deck-house-roof-colour="photo">
+                <span className="v1-swatch" style={{ background: design.house.roofColour }} aria-hidden />
+                From the photo
+              </button>
+            ) : null}
             {ROOF_COLOURS.map((c) => (
               <button key={c.id} type="button" className={cx("v1-chip", design.house.roofColour === c.id && "is-on")} aria-pressed={design.house.roofColour === c.id} onClick={() => setHouse({ roofColour: c.id })} data-deck-house-roof-colour={c.id}>
                 <span className="v1-swatch" style={{ background: c.hex }} aria-hidden />
@@ -1678,6 +1695,30 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
             ))}
           </div>
         </Field>
+        <div className="v1-grid2">
+          <Field label="The wall is clad in">
+            <select className="v1-sel" value={design.house.material ?? "lap"} onChange={(e) => setHouse({ material: e.target.value as HouseMaterial })} data-deck-house-material>
+              {HOUSE_MATERIALS.map((m) => (
+                <option key={m} value={m}>
+                  {HOUSE_MATERIAL_LABEL[m]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {design.house.storeys === 2 && design.house.jogs.length ? (
+            <Field label="Bump-outs">
+              <Seg label="Bump-outs" value={design.house.bumpOuts ?? "low"} onChange={(v: "low" | "full") => setHouse({ bumpOuts: v })} options={[{ value: "low", label: "One storey" }, { value: "full", label: "Full height" }]} />
+            </Field>
+          ) : null}
+        </div>
+        {design.house.openings ? (
+          <div className="v1-row-acts" data-deck-house-openings>
+            <span className="v1-meta">The windows and doors stand where the photo showed them.</span>
+            <button type="button" className="v1-btn v1-btn-sm v1-btn-quiet" onClick={() => setHouse({ openings: null })}>
+              Draw them by rule instead
+            </button>
+          </div>
+        ) : null}
         <Field label="The wall's shape" wide>
           <div className="v1-chips" role="group" aria-label="The wall's shape">
             {QUICK_WALLS.map((k) => (
@@ -3319,6 +3360,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
         </aside>
       </div>
       <DeckAddonDialog open={addonAsk !== null} why={addonAsk} onClose={() => setAddonAsk(null)} />
+      <HousePhotoReview hp={hp} design={design} />
     </div>
   );
 }

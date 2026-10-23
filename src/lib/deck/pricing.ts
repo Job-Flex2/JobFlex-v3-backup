@@ -38,6 +38,7 @@ import { RULE_RAFTER } from "./roofTables";
 import { TERMITE_LABEL } from "./site";
 import { railWords } from "./rails";
 import { electricalWords } from "./electrical";
+import { existingSqFt } from "./house";
 import type { MarketSnapshot } from "../fence/market";
 
 export { buildStructure };
@@ -402,6 +403,15 @@ export function priceStructure(s: DeckStructure, opts: DeckPriceOptions = {}): D
     const w = work("labor.demo", design.extras.demoSqFt);
     line({ id: "deck-demo", name: "Tear out and haul away the old deck", quantity: design.extras.demoSqFt, unit: "sqft", material: 0, labor: w.amount, exampleMaterial: 0, exampleLabor: w.example });
   }
+  // A patio roof and a slab the photo showed, marked to tear out (lib/deck/house `existing`; an old deck's tear-out is
+  // the line above, set when it is marked).
+  for (const e of design.house.existing ?? []) {
+    if (!e.tearOut || e.kind === "deck") continue;
+    const sq = existingSqFt(e);
+    if (sq <= 0) continue;
+    const w = work(e.kind === "cover" ? "labor.demoRoof" : "labor.demoSlab", sq);
+    line({ id: `demo-${e.id}`, name: e.kind === "cover" ? "Tear out and haul away the old patio roof" : "Break out and haul away the concrete patio", quantity: sq, unit: "sqft", material: 0, labor: w.amount, exampleMaterial: 0, exampleLabor: w.example });
+  }
 
   const subtotal = round2(lines.reduce((a, l) => a + l.quantity * l.unitPrice, 0));
   const materialSubtotal = round2(lines.reduce((a, l) => a + l.quantity * l.materialCost, 0));
@@ -470,6 +480,9 @@ export function deckScope(pkg: DeckPackage, where?: string | null): string[] {
   }
   if (design.extras.underDeckDrain) out.push("An under-deck drainage system keeps the space below the deck dry.");
   if (design.extras.demoSqFt > 0) out.push(`Tear-out and haul-away of the existing deck, ${design.extras.demoSqFt} sq ft.`);
+  for (const e of design.house.existing ?? []) {
+    if (e.tearOut && e.kind !== "deck" && existingSqFt(e) > 0) out.push(e.kind === "cover" ? `Tear-out and haul-away of the existing patio roof and its posts, ${existingSqFt(e)} sq ft.` : `Break-out and haul-away of the existing concrete patio, ${existingSqFt(e)} sq ft.`);
+  }
   out.push("Layout squared and checked before digging; site cleaned when the work is done.");
   // The code the deck is sized and checked to — the job's state's own edition (lib/deck/stateCodes); the inspector reads it here.
   out.push(`Built to the ${s.code.name}${s.code.since ? ` (in force since ${s.code.since})` : ""}; the building office's edition and amendments govern.`);
