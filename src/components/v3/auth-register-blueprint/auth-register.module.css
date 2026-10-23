@@ -1886,3 +1886,55 @@
 .bp :global(.pw-autonote b) { color: var(--ink); }
 /* A phone: the 18px gutters the head and the error keep, so the line does not run edge to edge over the rail. */
 @media (max-width: 768px) { .bp :global(#stepPlan > .pw-autonote) { margin-left: 18px; margin-right: 18px; } }
+
+/* ── SIGN-UP INSIDE THE APP (owner, 2026-10-22, lib/signupView) ─────────────────────────────────────────────────
+   The page draws a picture of the app behind the form (app-preview.tsx, fixed, inert). The paper and the photo give
+   way to it; the form column becomes a card in the middle — on a phone a sheet rising over the phone app, its header
+   and greeting still in view; the plan step a wide card. Everything else about the steps is untouched: only the
+   frame changes. Every rule carries [data-appview], so it outranks the page's own at any width, in any order. */
+.bp[data-appview] { position: relative; z-index: 1; background: transparent; }
+.bp[data-appview] :global(.auth) { display: flex; align-items: center; justify-content: center; height: 100dvh; min-height: 0; padding: 24px; overflow: hidden; }
+.bp[data-appview] :global(.auth-side) { display: none; }
+.bp[data-appview] :global(.auth-form) {
+  flex: 0 1 auto; width: min(480px, 100%); max-width: 480px; max-height: calc(100dvh - 48px); margin: 0;
+  padding: 26px 32px 24px; justify-content: flex-start; overflow: hidden auto; overscroll-behavior: contain;
+  background: var(--paper); border: 2px solid var(--ink); box-shadow: 10px 10px 0 var(--ink);
+  animation: jfInAppCard 0.42s var(--ease-out) 0.2s both;
+}
+/* The app behind already says JobFlex; the card keeps its steps and its words. */
+.bp[data-appview] :global(.auth-form .brand) { display: none; }
+.bp[data-appview] :global(.auth-body) :global(.step:not(.is-hidden)) { margin: 0; }
+.bp[data-appview] :global(.auth-h1) { font-size: clamp(26px, 3.4vh, 34px); }
+@keyframes jfInAppCard { from { opacity: 0; transform: translateY(18px) scale(0.985); } to { opacity: 1; transform: none; } }
+
+/* the plan step: a wide card over the app, scrolling inside itself */
+.bp[data-appview] :global(.plan-sheet) { display: flex; align-items: center; justify-content: center; padding: 24px; background: transparent; }
+.bp[data-appview] :global(.plan-sheet-in) {
+  width: 100%; height: auto; min-height: 0; max-height: calc(100dvh - 48px); overflow: hidden auto;
+  background: var(--paper); border: 2px solid var(--ink); box-shadow: 10px 10px 0 var(--ink);
+}
+
+@media (max-width: 768px) {
+  .bp[data-appview] :global(.auth) { align-items: flex-end; padding: 0; }
+  .bp[data-appview] :global(.auth-form) {
+    width: 100%; max-width: none; max-height: calc(100dvh - 138px);
+    padding: 12px 20px calc(22px + env(safe-area-inset-bottom, 0px));
+    border-width: 2px 0 0; box-shadow: none;
+    animation: jfInAppSheet 0.48s var(--ease-out) 0.18s both;
+  }
+  /* the sheet's handle */
+  .bp[data-appview] :global(.auth-form)::before { content: ""; display: block; flex: 0 0 auto; width: 44px; height: 4px; margin: 0 auto 14px; border-radius: 2px; background: var(--hair-soft); }
+  .bp[data-appview] :global(.auth-h1) { font-size: 28px; }
+  .bp[data-appview] :global(.plan-sheet) { align-items: flex-end; padding: 0; }
+  .bp[data-appview] :global(.plan-sheet-in) { max-height: calc(100dvh - 64px); border-width: 2px 0 0; box-shadow: none; }
+}
+/* A short phone (an SE): the steps' row goes and the sheet rises to just under the app's header and greeting, so
+   Google and the button are in the first screen. */
+@media (max-width: 768px) and (max-height: 740px) {
+  .bp[data-appview] :global(.auth-form) { max-height: calc(100dvh - 92px); }
+  .bp[data-appview] :global(.auth-form) :global(.stepper) { display: none; }
+}
+@keyframes jfInAppSheet { from { transform: translateY(100%); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .bp[data-appview] :global(.auth-form) { animation: none; }
+}

@@ -28,6 +28,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { trialRequiresCardEnv } from "@/lib/trialPolicy";
 import type { SignupPlanMode } from "@/lib/signupAutoPlan";
+import { isSignupViewMode, type SignupViewMode } from "@/lib/signupView";
 import { cardlessCeilingReached, cardlessStartsInLastDay, cardlessTrialsPerDay } from "@/lib/trialDailyCap";
 
 export const TRIAL_POLICY_KEY = "trialPolicy";
@@ -228,4 +229,36 @@ export async function setSignupPlan(mode: SignupPlanMode, by: string | null): Pr
   await db.syncState.upsert({ where: { key: SIGNUP_PLAN_KEY }, create: { key: SIGNUP_PLAN_KEY, cursor }, update: { cursor } });
   planCache = null;
   return readSignupPlan({ fresh: true });
+}
+
+/* ── THE SIGN-UP SCREEN (owner, 2026-10-22, lib/signupView): the sign-up page as built, the same form in the middle
+   of a preview of the app, or half and half for the A/B tab. SyncState `signupView` = { mode, by, at }; no row =
+   the page. Cached ten seconds per instance like the others. ───────────────────────────────────────────────── */
+export const SIGNUP_VIEW_KEY = "signupView";
+export interface SignupViewSetting { mode: SignupViewMode; source: "admin" | "default"; by: string | null; at: string | null }
+let viewCache: { at: number; value: SignupViewSetting } | null = null;
+
+/** The screen rule in force. Never throws: a hiccup reads as the page, uncached. */
+export async function readSignupView({ fresh = false }: { fresh?: boolean } = {}): Promise<SignupViewSetting> {
+  const now = Date.now();
+  if (!fresh && viewCache && now - viewCache.at < STEPS_CACHE_MS) return viewCache.value;
+  let value: SignupViewSetting = { mode: "page", source: "default", by: null, at: null };
+  try {
+    const row = await db.syncState.findUnique({ where: { key: SIGNUP_VIEW_KEY }, select: { cursor: true } });
+    if (row?.cursor) {
+      const r = JSON.parse(row.cursor) as Record<string, unknown>;
+      if (isSignupViewMode(r.mode)) value = { mode: r.mode, source: "admin", by: typeof r.by === "string" ? r.by : null, at: typeof r.at === "string" ? r.at : null };
+    }
+  } catch (err) {
+    console.warn("[signup-view] read failed, using the sign-up page:", err);
+    return value;
+  }
+  viewCache = { at: now, value };
+  return value;
+}
+export async function setSignupView(mode: SignupViewMode, by: string | null): Promise<SignupViewSetting> {
+  const cursor = JSON.stringify({ mode, by, at: new Date().toISOString() });
+  await db.syncState.upsert({ where: { key: SIGNUP_VIEW_KEY }, create: { key: SIGNUP_VIEW_KEY, cursor }, update: { cursor } });
+  viewCache = null;
+  return readSignupView({ fresh: true });
 }

@@ -192,9 +192,15 @@ export function RegisterContent({
   otpRestore = null,
   autoPlan = null,
   prefill = null,
+  appView = false,
 }: {
   /* Step 1's name and email, back after the server refused a step 1 sent without JavaScript (?e1=). */
   prefill?: { name: string; email: string } | null;
+  /* THE SIGN-UP SCREEN "inside the app" (owner, 2026-10-22, lib/signupView): the page's paper and photo give way to
+     a picture of the app (app-preview.tsx, drawn by the page behind this) and the column becomes a card in the middle
+     of it — a sheet on a phone. `data-appview` on the root; the rules are at the end of auth-register.module.css.
+     (Not `inApp` — that is the Instagram/Facebook browser, below.) */
+  appView?: boolean;
   /* STRAIGHT TO PROFESSIONAL (owner, 2026-10-15, lib/signupAutoPlan): the plan
      the server picked when the admin rule is "auto" — the short sign-up, then
      the card page for it (handed off by the server, ./checkout). Null: the plan
@@ -1637,7 +1643,7 @@ export function RegisterContent({
   );
 
   return (
-    <div className={styles.bp} ref={rootRef}>
+    <div className={styles.bp} ref={rootRef} data-appview={appView ? "" : undefined}>
       <RegisterSprite />
 
       {/* TWO LAYERS, ONE MOTION. The account/company/done column and its art
