@@ -37,6 +37,15 @@ export type Installment = {
   paidAmt: number | null;
   /** STRIPE | SQUARE | MANUAL for a PAID stage. */
   paidVia: string | null;
+  /** When it was paid, as a plate ("OCT 08"), or null. */
+  paidOn?: string | null;
+  /** Past its due date and still open. */
+  overdue?: boolean;
+  /** When this stage's invoice last went out ("2d ago") and on which rail — card | bank | any — or null. */
+  invoiced?: string | null;
+  invoiceVia?: string | null;
+  /** When the automatic reminders last wrote to the client about this stage, or null. */
+  reminded?: string | null;
 };
 
 /** What a stage is worth right now: what landed if it is paid, else the
@@ -99,6 +108,9 @@ export type ProposalRow = {
   co?: { count: number; drafts: number; pending: number; approvedTotal: number; pendingTotal: number };
   /** Automatic payment reminders for this proposal: true / false, or null = the company's mode. */
   remindersOn?: boolean | null;
+  /** The reader may bill — Mark paid, Send invoice and Remind are office actions, refused to a sales rep or an
+   *  estimator — so the row offers them only when this is true. */
+  canBill?: boolean;
   inst?: Installment[];
   materials: MaterialLine[];
   /** Proposal.beforePhotos / afterPhotos, already parsed. */
@@ -151,6 +163,53 @@ export function paidTier(p: Pick<ProposalRow, "total" | "owed" | "paidAmt" | "co
   const firstStage = insts.length >= 2 ? instDollars(p, insts[0]) : contract * 0.3;
   // A cent of slack: a deposit settled to the cent is covered.
   return paid + 0.005 >= firstStage ? "part" : "low";
+}
+
+/* ── SEND AND PAY ON THE ROW (owner, 2026-10-23: "add a button in the main row — Send proposal, or it's been
+   sent — and get the payment options visible at the main proposal row") ──────────────────────────────────
+   Shared by the desk table and the handheld cards so the two never disagree about what a row offers. */
+
+/** A sent proposal still waiting on the client can go again; a signed or declined one only says when it went.
+ *  "send" — never sent and still open; "resend" — out and waiting; "sent" — settled, the stamp alone; "none" —
+ *  settled without ever being sent (signed at the table): nothing to say. */
+export type SendState = "send" | "resend" | "sent" | "none";
+export function sendState(p: Pick<ProposalRow, "status" | "sentAgo">): SendState {
+  if (p.status === "DRAFT") return "send";
+  if (p.status === "SENT" || p.status === "VIEWED" || p.status === "EXPIRED") return p.sentAgo ? "resend" : "send";
+  return p.sentAgo ? "sent" : "none";
+}
+
+/** What a send leaves the status at — the rule sendProposal writes: a draft, an expired or a declined proposal
+ *  goes out again as SENT; one the client has opened stays VIEWED; a signed contract keeps its status. */
+export function statusAfterSend(status: string): string {
+  return status === "VIEWED" || status === "ACCEPTED" || status === "COMPLETED" || status === "PAID" ? status : "SENT";
+}
+
+/** "plan" — the schedule the client will pay by, before they accept; "collect" — signed and money still owed;
+ *  "paid" — nothing owed; null — no line (declined, archived, or no schedule before acceptance). */
+export type PayState = "plan" | "collect" | "paid" | null;
+export function payState(p: Pick<ProposalRow, "status" | "total" | "owed" | "contract" | "inst">): PayState {
+  const signed = p.status === "ACCEPTED" || p.status === "COMPLETED" || p.status === "PAID";
+  if (signed) return (p.contract ?? p.total) > 0 && p.owed <= 0 ? "paid" : "collect";
+  if (p.status === "DRAFT" || p.status === "SENT" || p.status === "VIEWED" || p.status === "EXPIRED") return p.inst?.length ? "plan" : null;
+  return null;
+}
+
+/** The stage the next payment is for: the first one still open. */
+export function nextStage(p: Pick<ProposalRow, "inst">): Installment | null {
+  return (p.inst ?? []).find((i) => i.status === "UNPAID" || i.status === "PENDING") ?? null;
+}
+
+/** The facts under the next stage: when it is due, whether the invoice went, when the client was last
+ *  reminded — what a contractor checks before chasing the money. */
+export function stageFacts(it: Installment): string[] {
+  const out: string[] = [];
+  if (it.status === "PENDING") out.push("payment in progress");
+  else if (it.overdue && it.due) out.push("overdue since " + it.due);
+  else if (it.due) out.push("due " + it.due);
+  if (it.invoiced) out.push("invoice sent " + it.invoiced + (it.invoiceVia === "card" ? " · card" : it.invoiceVia === "bank" ? " · bank" : ""));
+  if (it.reminded) out.push("reminded " + it.reminded);
+  return out;
 }
 
 /** Deep-enough clone so a mount's runtime edits never leak into the next one. */

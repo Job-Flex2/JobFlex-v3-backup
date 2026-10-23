@@ -1974,3 +1974,72 @@
 @media (max-width: 1100px) {
   .bp :global(.content .pjob .pjob-foot), .bp :global(.content .pjob .pjob-foot .pjob-foot-l) { flex-wrap: wrap; }
 }
+
+/* ── SEND AND PAY ON THE ROW (owner, 2026-10-23: "Send proposal or it's been sent", "get the payment options
+   visible at the main proposal row") ────────────────────────────────────────────────────────────────────
+   Send is the row's green plate (the menu's Send to client); a sent proposal says when, in green on a soft
+   fill — a button while it waits on the client, a plain stamp once it is settled. The payment line sits under
+   the row, across the table, without a rule between them: each stage a flat tag (paid green, the next one
+   framed in ink, late in red, the rest quiet; before signing a dashed schedule), then what is due and the next
+   stage's three actions — Mark paid green, Send invoice blue, Remind amber, as on the contract card. */
+.bp :global(.content .pact--send) { background: var(--success); border-color: var(--success); color: #fff; }
+.bp :global(.content .pact--send:hover) { background: var(--success-dark); }
+.bp :global(.content .pact--sent) { border-color: var(--success); background: var(--success-soft); color: var(--success-dark); cursor: pointer; }
+.bp :global(.content .pact--sent small) { font: 600 10.5px/1 var(--font-mono); letter-spacing: 0; text-transform: none; }
+.bp :global(.content .pact--sent.is-static) { border-color: transparent; background: transparent; cursor: default; padding-inline: 2px; }
+.bp :global(.content .pact--sent.is-static:hover) { transform: none; box-shadow: none; background: transparent; }
+.bp :global(.content .pact:focus-visible) { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+@media (max-width: 1180px) {
+  .bp :global(.content .pact--send span), .bp :global(.content .pact--sent span) { display: inline; }
+  .bp :global(.content .pact--sent small) { display: none; }
+}
+
+.bp :global(.content .ptable tbody tr.prow.has-pay td) { border-bottom: none; padding-bottom: 6px; }
+.bp :global(.content .ptable tbody tr.prow-pay td) { padding-top: 0; padding-bottom: 14px; }
+.bp :global(.content .ptable tbody tr.prow:hover + tr.prow-pay),
+.bp :global(.content .ptable tbody tr.prow:has(+ tr.prow-pay:hover)) { background: var(--paper-deep); }
+.bp :global(.content .prow-pay) { cursor: pointer; }
+.bp :global(.content .prow-pay.is-busy) { opacity: 0.6; pointer-events: none; }
+.bp :global(.content .prow-pay--chain td) { position: relative; padding-left: 38px; }
+.bp :global(.content .prow-pay--chain:not(.prow-pay--chain-end) td::before) { content: ""; position: absolute; left: 22px; top: 0; bottom: 0; width: 2px; background: var(--blueprint); opacity: 0.35; }
+.bp :global(.content .prow-pay--chain:not(.prow-pay--chain-end) td) { border-bottom-style: dashed; }
+
+.bp :global(.content .ppl) { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 8px 10px 8px 12px; border: 1.5px solid var(--chart-major); border-radius: var(--radius); background: #fff; }
+.bp :global(.content .ppl-lbl) { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.bp :global(.content .ppl-lbl .ic) { width: 14px; height: 14px; }
+.bp :global(.content .ppl-stages) { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.bp :global(.content .ppl-st) { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 9px; border: 1.5px solid var(--muted-faint); border-radius: var(--radius); font-size: 12.5px; line-height: 1.3; color: var(--muted); white-space: nowrap; }
+.bp :global(.content .ppl-st b) { font-weight: 600; color: var(--ink-soft); }
+.bp :global(.content .ppl-st span) { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+.bp :global(.content .ppl-st em) { font-style: normal; font-size: 11.5px; color: var(--muted); }
+.bp :global(.content .ppl-st i) { font-style: normal; font-size: 11.5px; }
+.bp :global(.content .ppl-st .ic) { width: 13px; height: 13px; align-self: center; }
+.bp :global(.content .ppl-st--plan) { border-style: dashed; }
+.bp :global(.content .ppl-st--paid) { border-color: var(--success); background: var(--success-soft); color: var(--success-dark); }
+.bp :global(.content .ppl-st--paid b), .bp :global(.content .ppl-st--paid span) { color: var(--success-dark); }
+.bp :global(.content .ppl-st--next) { border-color: var(--ink); color: var(--ink); }
+.bp :global(.content .ppl-st--next b), .bp :global(.content .ppl-st--next span) { color: var(--ink); }
+.bp :global(.content .ppl-st--next.is-late) { border-color: var(--danger); }
+.bp :global(.content .ppl-st--closed) { text-decoration: line-through; }
+.bp :global(.content .ppl-note) { margin-left: auto; font-size: 12.5px; color: var(--muted); }
+.bp :global(.content .ppl-note--ok) { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--success-dark); }
+.bp :global(.content .ppl-note--ok .ic) { width: 14px; height: 14px; }
+.bp :global(.content .ppl-acts) { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.bp :global(.content .ppl-note b) { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--warning-dark); }
+.bp :global(.content .ppl-st--next i) { color: var(--ink-soft); }
+.bp :global(.content .ppl-st--next.is-late i) { color: var(--danger); font-weight: 700; }
+.bp :global(.content .ppl-act) {
+  display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px;
+  border: 1.5px solid; border-radius: var(--radius); font: 700 12px/1 var(--font); cursor: pointer;
+  transition: background 0.12s;
+}
+.bp :global(.content .ppl-act .ic) { width: 13px; height: 13px; }
+.bp :global(.content .ppl-act--paid) { color: var(--success-dark); border-color: var(--success); background: var(--success-soft); }
+.bp :global(.content .ppl-act--paid:hover:not(:disabled)) { background: color-mix(in srgb, var(--success) 16%, #fff); }
+.bp :global(.content .ppl-act--inv) { color: var(--blueprint); border-color: var(--blueprint); background: rgba(24, 84, 160, 0.07); }
+.bp :global(.content .ppl-act--inv:hover:not(:disabled)) { background: rgba(24, 84, 160, 0.15); }
+.bp :global(.content .ppl-act--rem) { color: var(--warning-dark); border-color: var(--warning); background: var(--warning-soft); }
+.bp :global(.content .ppl-act--rem:hover:not(:disabled)) { background: color-mix(in srgb, var(--warning) 22%, #fff); }
+.bp :global(.content .ppl-act:disabled) { opacity: 0.45; cursor: not-allowed; }
+.bp :global(.content .ppl-act:focus-visible) { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+.bp :global(.content .ppl-act.is-flashed) { color: #fff; background: var(--success); border-color: var(--success); }

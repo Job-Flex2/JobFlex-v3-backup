@@ -64,7 +64,7 @@ function mapsUrl(c: {
  * turn those into their own redirects.
  */
 export async function readProposalBook(): Promise<ProposalRow[]> {
-  const { organizationId, proposalScope, user } = await requireProposalStaff();
+  const { organizationId, proposalScope, user, ownProposalsOnly } = await requireProposalStaff();
   // WHAT HAPPENED LATELY (2026-10-13, owner: "make something blooming on the proposal when it is accepted,
   // and when the client's design comes back"): the newest acceptance or decline of the last two weeks, stamped,
   // and the client's design link — the row blooms once per stamp in a browser (proposals-behavior).
@@ -176,6 +176,13 @@ export async function readProposalBook(): Promise<ProposalRow[]> {
       status: i.status,
       paidAmt: i.paidAmount,
       paidVia: i.payment?.provider ?? null,
+      // What the row's payment line says about a stage (2026-10-23): when it was paid, whether it is late, when
+      // its invoice went and on which rail, when the automatic reminders last wrote.
+      paidOn: plateDate(i.paidAt) ?? null,
+      overdue: !!i.dueDate && i.dueDate.getTime() < Date.now() && (i.status === "UNPAID" || i.status === "PENDING"),
+      invoiced: i.invoiceSentAt ? agoLabel(i.invoiceSentAt) : null,
+      invoiceVia: i.invoiceMethod ?? null,
+      reminded: i.remindedAt ? agoLabel(i.remindedAt) : null,
     }));
     const addr = {
       address: p.client?.address,
@@ -214,6 +221,8 @@ export async function readProposalBook(): Promise<ProposalRow[]> {
         pendingTotal: Math.round(p.changeOrders.filter((c) => c.status === "SENT").reduce((a, c) => a + (c.total ?? c.amount), 0) * 100) / 100,
       },
       remindersOn: p.remindersOn ?? null,
+      // Billing is the office's (requireManager): a sales rep or an estimator sees the stages, not the buttons.
+      canBill: !ownProposalsOnly,
       // The donor prints a single given name in the Owner column.
       owner: p.owner?.name?.trim().split(/\s+/)[0] || "—",
       // The reader's own proposal: the list names an owner only when it is

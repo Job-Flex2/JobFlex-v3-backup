@@ -73,6 +73,11 @@ import {
   chainsOf,
   chained,
   paidTier,
+  nextStage,
+  payState,
+  sendState,
+  stageFacts,
+  statusAfterSend,
   type Chain,
 } from "./proposals-data";
 
@@ -596,6 +601,104 @@ export function initProposalsContent(
     );
   }
 
+  /**
+   * SEND ON THE ROW (owner, 2026-10-23: "Send proposal, or it's been sent"). A draft carries a green Send; a
+   * proposal out and waiting says when it went, and a click sends it again; a signed or declined one keeps the
+   * stamp alone (proposals-data → sendState). The dialog is the menu's Send to client.
+   */
+  function sendCellHtml(p: ProposalRow): string {
+    const s = sendState(p);
+    if (s === "none") return "";
+    if (s === "send") {
+      return (
+        '<button class="pact pact--send" type="button" data-act="send" title="' +
+        esc(p.clientEmail ? "Send to " + p.clientEmail : "Send to the client — add their email as you send") +
+        '"><svg class="ic"><use href="#i-send"/></svg><span>Send</span></button>'
+      );
+    }
+    const inner = '<svg class="ic"><use href="#i-check"/></svg><span>Sent</span> <small>' + esc(p.sentAgo ?? "") + "</small>";
+    return s === "resend"
+      ? '<button class="pact pact--sent" type="button" data-act="send" title="' + esc("Sent " + p.sentAgo + " — send it again") + '">' + inner + "</button>"
+      : '<span class="pact pact--sent is-static" title="' + esc("Sent " + p.sentAgo) + '">' + inner + "</span>";
+  }
+
+  /**
+   * PAYMENTS ON THE ROW (owner, 2026-10-23: "get the payment options visible at the main proposal row"). A line
+   * under the proposal, across the table: every stage with where it stands, and for the stage that is next —
+   * once the client has signed — Mark paid, Send invoice (card, bank or the client's choice) and Remind, the
+   * same writes as the contract card. Before signing it is the schedule the client will pay by. Nothing for a
+   * declined or archived proposal.
+   */
+  function payRowHtml(p: ProposalRow, chain: string): string {
+    const state = payState(p);
+    if (!state) return "";
+    const insts = p.inst ?? [];
+    const next = state === "collect" ? nextStage(p) : null;
+    const stages = insts
+      .map((it) => {
+        const amount = fmtMoney(instDollars(p, it));
+        const share = it.pct && state === "plan" ? '<em>' + Math.round(it.amount) + "%</em>" : "";
+        let tone = "later";
+        let tail = "";
+        if (it.status === "PAID") {
+          tone = "paid";
+          tail = it.paidOn ? "paid " + it.paidOn : "paid";
+        } else if (it.status === "WAIVED") {
+          tone = "closed";
+          tail = "closed";
+        } else if (state === "plan") {
+          tone = "plan";
+        } else if (next && it.id === next.id) {
+          // The stage being chased carries its own facts: due or late, invoiced, reminded.
+          tone = it.overdue ? "next is-late" : "next";
+          tail = stageFacts(it).join(" · ");
+        }
+        return (
+          '<li class="ppl-st ppl-st--' + tone + '" data-stage="' + esc(it.id) + '">' +
+          (it.status === "PAID" ? '<svg class="ic"><use href="#i-check"/></svg>' : "") +
+          "<b>" + esc(it.label) + "</b>" + share + "<span>" + amount + "</span>" +
+          (tail ? "<i>" + esc(tail) + "</i>" : "") +
+          "</li>"
+        );
+      })
+      .join("") ||
+      // Signed with no schedule: the balance is the one thing to collect.
+      (state === "collect" ? '<li class="ppl-st ppl-st--next"><b>Balance</b><span>' + fmtMoney(p.owed) + "</span></li>" : "");
+    let side = "";
+    if (state === "plan") {
+      side = '<span class="ppl-note">' + esc((p.clientId ? "Billed after " + p.client.split(/\s+/)[0] + " accepts" : "Billed after the client accepts")) + "</span>";
+    } else if (state === "paid") {
+      side = '<span class="ppl-note ppl-note--ok"><svg class="ic"><use href="#i-check"/></svg>Paid in full · ' + fmtMoney(p.paidAmt ?? p.contract ?? p.total) + "</span>";
+    } else {
+      // Billing is the office's: a sales rep or an estimator reads what is left instead of the buttons.
+      side = p.canBill === false ? '<span class="ppl-note"><b>' + fmtMoney(p.owed) + "</b> left to collect</span>" : payActsHtml(p, next);
+    }
+    return (
+      '<tr class="prow-pay ppl--' + state + chain.replace(/prow--/g, "prow-pay--") + '" data-id="' + esc(p.id) + '"' +
+      (chain && p.projectId ? ' data-grp="' + esc(p.projectId) + '"' : "") +
+      '><td colspan="7"><div class="ppl">' +
+      '<span class="ppl-lbl"><svg class="ic"><use href="#i-card"/></svg>Payments</span>' +
+      (stages ? '<ol class="ppl-stages">' + stages + "</ol>" : "") +
+      side +
+      "</div></td></tr>"
+    );
+  }
+  /** The next stage's three actions, or the whole balance's when the job has no schedule. */
+  function payActsHtml(p: ProposalRow, next: Installment | null): string {
+    const inst = next ? ' data-inst="' + esc(next.id) + '"' : "";
+    const what = next ? next.label + " · " + fmtMoney(instDollars(p, next)) : "the balance · " + fmtMoney(p.owed);
+    const busy = next?.status === "PENDING";
+    return (
+      '<span class="ppl-acts">' +
+      (next
+        ? '<button class="ppl-act ppl-act--paid" type="button" data-act="markpaid"' + inst + (busy ? " disabled" : "") + ' title="' + esc("Record " + what + " as paid by hand") + '"><svg class="ic"><use href="#i-check"/></svg>Mark paid</button>'
+        : '<button class="ppl-act ppl-act--paid" type="button" data-act="paidfull" title="' + esc("Record " + what + " as paid by hand") + '"><svg class="ic"><use href="#i-check"/></svg>Mark paid</button>') +
+      '<button class="ppl-act ppl-act--inv" type="button" data-act="invoice"' + inst + (busy ? " disabled" : "") + ' title="' + esc("Invoice " + what + " — card, bank or the client's choice") + '"><svg class="ic"><use href="#i-send"/></svg>' + (next?.invoiced ? "Invoice again" : "Send invoice") + "</button>" +
+      '<button class="ppl-act ppl-act--rem" type="button" data-act="remind"' + inst + (p.clientEmail ? "" : " disabled") + ' title="' + esc(p.clientEmail ? "Email " + p.clientEmail + " a reminder for " + what : "No email on the client record") + '"><svg class="ic"><use href="#i-bell"/></svg>Remind</button>' +
+      "</span>"
+    );
+  }
+
   /** The rows the ALL table is currently showing, with the page clamped. */
   function allSlice() {
     const rows = chained(filteredAll());
@@ -605,9 +708,11 @@ export function initProposalsContent(
   }
   function allRowHtml(p: ProposalRow, chain = "") {
     const st = statusPlate(p.status);
+    const pay = payRowHtml(p, chain);
     return (
       '<tr class="prow' +
       chain +
+      (pay ? " has-pay" : "") +
       '" data-id="' +
       esc(p.id) +
       '"' +
@@ -662,6 +767,7 @@ export function initProposalsContent(
       // options; add Client view on the line"): Open and Client view sit on the row as plain links; the dots keep
       // only what is rarer — share, bill, the rest.
       '<td class="num td-acts"><div class="pacts">' +
+      sendCellHtml(p) +
       '<a class="pact pact--open" href="' + proposalHref(p.id) + '" title="Open the proposal"><svg class="ic"><use href="#i-pen"/></svg><span>Open</span></a>' +
       '<a class="pact pact--view" href="/portal/q/' + encodeURIComponent(p.publicId) + '" target="_blank" rel="noopener noreferrer" title="Client view — the page the client gets, in a new tab"><svg class="ic"><use href="#i-eye"/></svg><span>Client view</span></a>' +
       '<button class="pt-open" type="button" data-menu="' +
@@ -670,7 +776,8 @@ export function initProposalsContent(
       esc(p.title) +
       '" title="Share, bill, more"><svg class="ic"><use href="#i-dots"/></svg></button>' +
       "</div></td>" +
-      "</tr>"
+      "</tr>" +
+      pay
     );
   }
   /** A stamp blooms ONCE in this browser (2026-10-13): the render that shows it records it a moment later, so
@@ -756,7 +863,7 @@ export function initProposalsContent(
     body.innerHTML = html;
     syncAllChrome();
     if (stagger && panelVisible("all")) {
-      staggerIn(Array.from(body.querySelectorAll<HTMLElement>(".prow")));
+      staggerIn(Array.from(body.querySelectorAll<HTMLElement>(".prow, .prow-pay")));
     }
   }
   function accSlice() {
@@ -1070,18 +1177,19 @@ export function initProposalsContent(
     if (acted !== "done") renderDone();
   }
 
-  /** Patch a single ALL row in place — the cells that a write can change. */
+  /** A row's payment line, the <tr> under it, or null. */
+  function payRowOf(tr: HTMLElement): HTMLElement | null {
+    const next = tr.nextElementSibling as HTMLElement | null;
+    return next && next.classList.contains("prow-pay") ? next : null;
+  }
+  /** Patch a single ALL row in place: the row and its payment line are rebuilt from the record, since a write
+   *  can change the plate, the money, the Send cell and every stage (2026-10-23). Unchained rows only — a
+   *  chained one redraws the table with its project's header. */
   function patchAllRow(tr: HTMLElement, p: ProposalRow) {
-    const st = statusPlate(p.status);
-    const plate = tr.querySelector<HTMLElement>(".pstatus");
-    if (plate) {
-      plate.className = "pstatus" + (st.cls ? " " + st.cls : "");
-      plate.textContent = st.label;
-    }
-    const money = tr.querySelector<HTMLElement>(".pt-money");
-    if (money) money.textContent = fmtMoney(p.total);
-    const monos = tr.querySelectorAll<HTMLElement>(".pt-mono");
-    if (monos[0]) monos[0].textContent = p.updated;
+    const t = document.createElement("tbody");
+    t.innerHTML = allRowHtml(p);
+    payRowOf(tr)?.remove();
+    tr.replaceWith(...Array.from(t.children));
   }
 
   /**
@@ -1134,6 +1242,7 @@ export function initProposalsContent(
       return;
     }
     if (tr && !onPage) {
+      payRowOf(tr)?.remove();
       leaveRow(
         tr,
         () => {
@@ -1221,7 +1330,7 @@ export function initProposalsContent(
    * keep their own behavior; ⌘ / Ctrl-click opens a new tab like the link.
    */
   function openFromRow(e: MouseEvent, target: HTMLElement): boolean {
-    const host = target.closest<HTMLElement>(".prow, .pjob-head, .psheet-head");
+    const host = target.closest<HTMLElement>(".prow, .prow-pay, .pjob-head, .psheet-head");
     if (!host) return false;
     if (target.closest("a, button, input, select, textarea, label, [data-act], [data-menu]")) return false;
     if ((window.getSelection()?.toString() ?? "").length > 0) return false;
@@ -1522,7 +1631,7 @@ export function initProposalsContent(
       pstate.revealed[pstate.tab] = true;
       const stack =
         pstate.tab === "accepted" ? $("#propStack") : pstate.tab === "completed" ? $("#doneStack") : $("#propTableBody");
-      if (stack) staggerIn(Array.from(stack.querySelectorAll<HTMLElement>(".prow, .pjob, .psheet")));
+      if (stack) staggerIn(Array.from(stack.querySelectorAll<HTMLElement>(".prow, .prow-pay, .pjob, .psheet")));
     }
   });
   // Through `on` (2026-10-20): a raw listener outlived a re-mount (StrictMode's second mount in development),
@@ -1670,6 +1779,10 @@ export function initProposalsContent(
       const kind = act.dataset.act;
       const card = act.closest<HTMLElement>("[data-id]");
       const p = byId(card?.dataset.id ?? null);
+      if (kind === "send" && p) {
+        if (!pstate.writing) promptSend(p);
+        return;
+      }
       if (kind === "materials" && p) {
         openMaterials(p);
         return;
@@ -1865,6 +1978,15 @@ export function initProposalsContent(
         return;
       }
       closeDlg("invMdl");
+      // The stage says it went (Installment.invoiceSentAt, stamped by sendInvoice) on the row and the card.
+      const p = byId(invCtx.proposalId);
+      const stage = p?.inst?.find((i) => i.id === invCtx?.installmentId);
+      if (stage) {
+        stage.invoiced = "just now";
+        stage.invoiceVia = method;
+        renderAll();
+        renderAccepted();
+      }
       showAlert(
         "Invoice sent",
         `${fmtCents(r.amount)} — ${r.label}. Email ${r.email}, text ${r.sms}. The client pays from the link${method === "bank" ? " or by bank transfer using the details in the email" : ""}.`,
@@ -1881,7 +2003,7 @@ export function initProposalsContent(
   function promptSend(p: ProposalRow) {
     sendId = p.id;
     const title = $("#sendTitle");
-    if (title) title.textContent = `Send "${p.title}"`;
+    if (title) title.textContent = p.sentAgo ? `Send "${p.title}" again` : `Send "${p.title}"`;
     // THE BOX TAKES AN ADDRESS (owner, 2026-10-13: "the email is set and it
     // doesn't appear — make it work to send"). It used to be locked, because
     // the send read only the client record; sendProposal now writes what is
@@ -1968,7 +2090,8 @@ export function initProposalsContent(
     setSaving($("#sendOk"), true, email ? "Sending…" : "Saving…", "");
     try {
       const r = await sendProposal(p.id, email ? { email, name } : undefined);
-      p.status = "SENT";
+      p.status = statusAfterSend(p.status);
+      p.sentAgo = "just now";
       p.updated = "just now";
       if (r.clientId) {
         p.clientId = r.clientId;
@@ -2176,13 +2299,24 @@ export function initProposalsContent(
        row (and moves the card to Completed when that payment settles the
        schedule), and a failure puts the stage back exactly as it was. */
     const stage = p.inst?.find((i) => i.id === instId);
-    const prev = stage ? { status: stage.status, paidVia: stage.paidVia } : null;
+    const prev = stage ? { status: stage.status, paidVia: stage.paidVia, paidAmt: stage.paidAmt, paidOn: stage.paidOn, rowPaid: p.paidAmt, rowOwed: p.owed } : null;
     if (stage) {
+      // The money moves with the stage (2026-10-23): a part payment is not re-read, so the row's "paid" and
+      // what is left follow here, from the same figure the write records.
+      const amt = instDollars(p, stage);
       stage.status = "PAID";
       stage.paidVia = "MANUAL";
+      stage.paidAmt = amt;
+      stage.paidOn = todayPlate();
+      p.paidAmt = Math.round(((p.paidAmt ?? 0) + amt) * 100) / 100;
+      p.owed = Math.max(0, Math.round((p.owed - amt) * 100) / 100);
     }
     renderAccepted();
+    // The row's payment line shows it on the same frame too (2026-10-23), dimmed while the write is out.
+    renderAll();
     findRow($("#propStack"), p.id)?.classList.add("is-busy");
+    const tr = findRow($("#propTableBody"), p.id);
+    if (tr) payRowOf(tr)?.classList.add("is-busy");
     try {
       const res = await markInstallmentPaid({ installmentId: instId, method });
       // RE-READ ONLY WHEN THE ANSWER CAN DIFFER. Refetching the whole book
@@ -2201,8 +2335,13 @@ export function initProposalsContent(
       if (stage && prev) {
         stage.status = prev.status;
         stage.paidVia = prev.paidVia;
+        stage.paidAmt = prev.paidAmt;
+        stage.paidOn = prev.paidOn;
+        p.paidAmt = prev.rowPaid;
+        p.owed = prev.rowOwed;
       }
       renderAccepted();
+      renderAll();
       showAlert("Couldn't record payment", actionError(err));
     } finally {
       pstate.writing = false;

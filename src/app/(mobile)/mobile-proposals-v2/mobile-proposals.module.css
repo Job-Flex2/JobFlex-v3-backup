@@ -1296,3 +1296,88 @@
 
 /* A long title gets a third line before it is cut (owner, 2026-10-20). */
 .prowTitle { -webkit-line-clamp: 3; }
+
+/* ── SEND AND PAY ON THE CARD (owner, 2026-10-23) ─────────────────────────────────────────────────────────
+   The desk row's two additions, in the card's language: Send is a full-width green plate (44px); a sent
+   proposal says when, with Send again while it waits on the client. Payments are a white strip under the
+   foot — every stage one line (label, amount, what happened), the next one framed in ink, late in red, paid
+   green, the schedule dashed before signing — then the next stage's actions, Mark paid green, Invoice blue,
+   Remind amber, each 44px. */
+.mSend {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; margin-top: 12px;
+  border: 1.5px solid var(--success); border-radius: var(--radius);
+  background: var(--success); color: #fff;
+  font-size: 13px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.mSend svg { width: 16px; height: 16px; }
+.mSend:active { background: var(--success-dark, #2c6335); }
+.mSent {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 10px;
+}
+.mSentStamp { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--success-dark, #2c6335); }
+.mSentStamp svg { width: 15px; height: 15px; }
+.mSentAgain {
+  margin-left: auto;
+  min-height: 44px; padding: 0 14px;
+  border: 1.5px solid var(--success); border-radius: var(--radius);
+  background: var(--success-soft); color: var(--success-dark, #2c6335);
+  font-size: 12.5px; font-weight: 800;
+}
+.mSentAgain:active { background: var(--success); color: #fff; }
+
+.mPay {
+  grid-column: 1 / -1;
+  margin-top: 12px; padding: 10px 12px 12px;
+  border: 1.5px solid var(--hair); border-radius: var(--radius);
+  background: #fff;
+}
+.mPayHead { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.mPayLbl { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.mPayLbl svg { width: 14px; height: 14px; }
+.mPayNote { margin-left: auto; font-size: 12.5px; color: var(--muted); text-align: right; }
+.mPayNote b { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--warning-dark, #8a6113); }
+.mPayOk { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 800; color: var(--success-dark, #2c6335); }
+.mPayOk svg { width: 14px; height: 14px; }
+.mPayList { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.mSt {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 10px;
+  padding: 7px 9px;
+  border: 1.5px solid var(--hair); border-radius: var(--radius);
+  font-size: 13px; color: var(--ink-soft);
+}
+.mStL { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-weight: 600; }
+.mStL svg { width: 14px; height: 14px; flex: none; }
+.mStL em { font-style: normal; font-size: 11.5px; color: var(--muted); }
+.mStV { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ink); }
+.mStT { grid-column: 1 / -1; margin-top: 2px; font-size: 11.5px; color: var(--muted); }
+.mStPlan { border-style: dashed; border-color: var(--muted-faint); }
+.mStPaid { border-color: var(--success); background: var(--success-soft); color: var(--success-dark, #2c6335); }
+.mStPaid .mStV, .mStPaid .mStT { color: var(--success-dark, #2c6335); }
+.mStNext { border-color: var(--ink); color: var(--ink); }
+.mStNext .mStT { color: var(--ink-soft); }
+.mStLate { border-color: var(--danger); }
+.mStLate .mStT { color: var(--danger); font-weight: 700; }
+.mPayPaid .mSt { padding-block: 5px; }
+/* Before signing the schedule is a quiet row of tags, not a list — a draft card stays short. */
+.mPayPlan .mPayList { display: flex; flex-wrap: wrap; gap: 6px; }
+.mPayPlan .mSt { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 8px; font-size: 12.5px; }
+.mPayActs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 8px; }
+.mPayAct {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  min-height: 44px; padding: 0 4px;
+  border: 1.5px solid; border-radius: var(--radius);
+  font-size: 12.5px; font-weight: 800; white-space: nowrap;
+}
+.mPayAct svg { width: 14px; height: 14px; flex: none; }
+.mPayAct:disabled { opacity: 0.45; }
+.mActPaid { border-color: var(--success); background: var(--success-soft); color: var(--success-dark, #2c6335); }
+.mActInv { border-color: var(--blueprint); background: rgba(24, 84, 160, 0.07); color: var(--blueprint); }
+.mActRem { border-color: var(--warning); background: var(--warning-soft); color: var(--warning-dark, #8a6113); }
+.mActPaid:active:not(:disabled) { background: var(--success); color: #fff; }
+.mActInv:active:not(:disabled) { background: var(--blueprint); color: #fff; }
+.mActRem:active:not(:disabled) { background: var(--warning); color: #fff; }
+.mSend:focus-visible, .mSentAgain:focus-visible, .mPayAct:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 2px; }
