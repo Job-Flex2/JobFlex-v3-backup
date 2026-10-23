@@ -16,6 +16,8 @@ import { perAdSignupCents, type AdSpendToday } from "@/lib/adSpendTodayShared";
 import { LivePlatforms } from "./live-platforms";
 import { Ago, setClockPeriod } from "./ticker";
 import { sameReport } from "./live-diff";
+import { liveChimes, type ChimeMemory } from "@/lib/live-chimes";
+import { armSound, playChime, readSoundOn, serverSoundOn, subscribeSoundOn, writeSoundOn } from "./live-sound";
 
 /* The map is the heaviest part of the page (the world's shapes, a pin per
    visitor) and the last thing the eye reaches: it loads after the rest, in
@@ -103,6 +105,9 @@ export function LivePanel({ initial, timezone, fullHistory = false, ledger = nul
   const setMapView = writeMapView;
   /** Live mode: 15-second refresh. On unless this browser turned it off. */
   const [liveMode, setLiveMode] = useState(true);
+  /** Sound (owner, 2026-10-23): a chime when a visitor reaches the checkout, a "ka-ching" on a sign-up. Remembered
+   *  per browser; while it is on the poll goes on in a background tab, so the sound reaches a tab nobody is looking at. */
+  const soundOn = useSyncExternalStore(subscribeSoundOn, readSoundOn, serverSoundOn);
   /** The visitor opened on the map — from a pin, or from a row of the list. */
   const [selected, setSelected] = useState<string | null>(null);
   /** A platform card pressed: the map and the list keep only its people. */
@@ -160,18 +165,47 @@ export function LivePanel({ initial, timezone, fullHistory = false, ledger = nul
     try { window.localStorage.setItem(LIVE_MODE_KEY, on ? "on" : "off"); } catch { /* not worth a word to the user */ }
     if (on) void load(includeDev, true);
   };
-  // Poll while the tab is in front; a tab brought back refreshes at once.
+  // Poll while the tab is in front — or, with the sound on, behind; a tab brought back refreshes at once.
   // The "n s ago" figures tick on their own, ten seconds at a time.
   useEffect(() => {
     const every = liveMode ? LIVE_POLL_MS : POLL_MS;
-    const poll = window.setInterval(() => { if (document.visibilityState === "visible") void load(includeDev, liveMode); }, every);
+    const poll = window.setInterval(() => { if (document.visibilityState === "visible" || soundOn) void load(includeDev, liveMode); }, every);
     // In live mode the "n s ago" figures keep up with the poll; the shared
     // clock (./ticker) moves only those labels, and stops in a hidden tab.
     setClockPeriod(liveMode ? 1_000 : 10_000);
     const onVisible = () => { if (document.visibilityState === "visible") void load(includeDev, liveMode); };
     document.addEventListener("visibilitychange", onVisible);
     return () => { window.clearInterval(poll); document.removeEventListener("visibilitychange", onVisible); };
-  }, [includeDev, liveMode, load]);
+  }, [includeDev, liveMode, load, soundOn]);
+
+  // What each poll brings that is new — someone at the checkout, a sign-up (lib/live-chimes). Remembered whether
+  // the sound is on or not, so switching it on never plays for people already on the page.
+  const chimeMemory = useRef<ChimeMemory | null>(null);
+  /** When this page opened: what happened before it never sounds, even when a cached first report missed it. */
+  const openedAt = useRef(0);
+  useEffect(() => {
+    if (report.status !== "ok") return;
+    if (!openedAt.current) openedAt.current = Date.now();
+    const { memory, chimes } = liveChimes(chimeMemory.current, report, openedAt.current);
+    chimeMemory.current = memory;
+    if (!soundOn || !chimes.length) return;
+    const signup = chimes.some((c) => c.kind === "signup");
+    const card = chimes.some((c) => c.kind === "card");
+    if (signup) playChime("signup");
+    if (card) window.setTimeout(() => playChime("card"), signup ? 900 : 0);
+  }, [report, soundOn]);
+  // A browser plays nothing until the page is touched: after a reload with the sound on, the first tap or key arms it.
+  useEffect(() => {
+    if (!soundOn) return;
+    armSound();
+    window.addEventListener("pointerdown", armSound);
+    window.addEventListener("keydown", armSound);
+    return () => { window.removeEventListener("pointerdown", armSound); window.removeEventListener("keydown", armSound); };
+  }, [soundOn]);
+  const toggleSound = (on: boolean) => {
+    writeSoundOn(on);
+    if (on) { armSound(); playChime("signup"); }
+  };
 
   // A longer span: its own query, cached on the server for minutes; asked when
   // the span is chosen and every two minutes while it stays chosen and in front.
@@ -236,9 +270,10 @@ export function LivePanel({ initial, timezone, fullHistory = false, ledger = nul
   const live = report.status === "ok";
   return <section className={s.live} aria-label="Live now" data-state={report.status} aria-busy={pending}>
     <div className={s.liveHead}>
-      <div className={s.liveTitle}><span className={s.livePulse} data-on={live && c.onSite > 0}/><h2>Live now</h2><span className={s.micro}>Last {report.activeMinutes} minutes on the site · seen within {report.windowMinutes} · {liveMode ? `live — every ${LIVE_POLL_MS / 1000} s` : `every ${POLL_MS / 1000} s`} while this tab is open · updated <Ago iso={report.fetchedAt}/></span></div>
+      <div className={s.liveTitle}><span className={s.livePulse} data-on={live && c.onSite > 0}/><h2>Live now</h2><span className={s.micro}>Last {report.activeMinutes} minutes on the site · seen within {report.windowMinutes} · {liveMode ? `live — every ${LIVE_POLL_MS / 1000} s` : `every ${POLL_MS / 1000} s`} {soundOn ? "— sound on, also in the background" : "while this tab is open"} · updated <Ago iso={report.fetchedAt}/></span></div>
       <div className={s.liveTools}>
         <label className={s.liveToggle} data-live={liveMode} title={`Refresh every ${LIVE_POLL_MS / 1000} seconds instead of ${POLL_MS / 1000}`}><input type="checkbox" checked={liveMode} onChange={(e) => toggleLiveMode(e.target.checked)}/>Live · {LIVE_POLL_MS / 1000} s</label>
+        <label className={s.liveToggle} data-live={soundOn} data-sound-toggle title="A chime when someone reaches the checkout (entering a card), a ka-ching when someone signs up — and it keeps checking while this tab is in the background"><input type="checkbox" checked={soundOn} onChange={(e) => toggleSound(e.target.checked)}/>Sound</label>
         <label className={s.liveToggle}><input type="checkbox" checked={adsOnly} onChange={(e) => setAdsOnly(e.target.checked)}/>From ads only</label>
         <label className={s.liveToggle}><input type="checkbox" checked={includeDev} onChange={(e) => { setIncludeDev(e.target.checked); void load(e.target.checked, liveMode); }}/>Include localhost</label>
         <button type="button" className={s.iconButton} aria-label="Refresh live view" onClick={() => void load(includeDev, liveMode)} disabled={pending}><RefreshCw size={16} className={pending ? s.spin : ""}/></button>
