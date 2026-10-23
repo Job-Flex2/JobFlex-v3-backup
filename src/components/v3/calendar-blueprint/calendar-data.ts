@@ -40,6 +40,8 @@ export type CalEvent = {
   notes?: string;
   /** Blocked time created with no crew picked — the block belongs to the owner. */
   selfOnly?: boolean;
+  /** Blocked time with no owner: it holds the whole company (2026-10-23 — it used to read "Just me"). */
+  orgWide?: boolean;
   /** Spans whole days: rendered in the week's all-day band, never in the time grid. */
   allDay?: boolean;
   /** "desk" only — hours reserved for the AI desk (lib/deskHours): whose (none = anyone), and whether every week. `rid` is the reservation. */

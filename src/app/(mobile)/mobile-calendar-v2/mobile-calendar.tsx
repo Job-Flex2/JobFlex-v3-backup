@@ -319,7 +319,9 @@ function metaRowsFor(e: CalEvent): [string, string][] {
   if (e.addr) rows.push(["Address", e.addr]);
   rows.push([
     "Crew",
-    e.kind === "blocked" && e.selfOnly
+    e.kind === "blocked" && e.orgWide
+      ? "Everyone — the whole company"
+      : e.kind === "blocked" && e.selfOnly
       ? `Just me · ${OWNER.name}`
       : // Each person's answer rides their name on a job event (2026-08-22):
         // "Casey Stone · accepted, Dima · pending".
