@@ -38,6 +38,7 @@ import {
   type HouseRead,
 } from "@/lib/deck/houseRead";
 import { colourZones, dominantColour, ftIn, houseFromPhoto, type PhotoHouse } from "@/lib/deck/houseFromPhoto";
+import { snapRead, type Gray } from "@/lib/deck/photoSnap";
 import { applyHomography, autoRectify, transformRead } from "@/lib/deck/photoFit";
 import { deckClientPhotoData, deckClientPhotos, deckPhotoHref, readHousePhoto, uploadDeckPhoto, type ClientPhoto } from "@/actions/deckEstimator";
 import { cropPhoto, shrinkPhoto, straightenPhoto, trimLetterbox } from "@/components/v3/deck-estimator-blueprint/deck-photo";
@@ -57,6 +58,8 @@ export interface HouseReview {
   straightened: number | null;
   /** The picture could not be read: the lines are a start to drag onto the wall. */
   byHand: string | null;
+  /** How it was read: the looks taken, the model, the lines the picture's own edges moved. */
+  how?: { looks: number; model: string; snapped: number; split: number } | null;
 }
 
 export interface HousePhotoState {
@@ -183,6 +186,28 @@ async function forTheModel(src: { file: File; w: number; h: number }, minW: numb
   }
 }
 
+/** The picture in grey, at most 1000 px across, for lining the read up with its edges (lib/deck/photoSnap). */
+async function grayOf(file: Blob): Promise<Gray | null> {
+  const { img, release } = await loadImg(file);
+  try {
+    const k = Math.min(1, 1000 / Math.max(1, img.naturalWidth));
+    const w = Math.max(16, Math.round(img.naturalWidth * k));
+    const h = Math.max(16, Math.round(img.naturalHeight * k));
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    if (!g) return null;
+    g.drawImage(img, 0, 0, w, h);
+    const px = g.getImageData(0, 0, w, h).data;
+    const data = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) data[i] = (0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2]) / 255;
+    return { w, h, data };
+  } finally {
+    release();
+  }
+}
+
 /** The form for one look: the gridded picture, and which look it is. */
 async function lookForm(src: { file: File; w: number; h: number }, look: "wide" | "close"): Promise<FormData> {
   const form = new FormData();
@@ -245,6 +270,8 @@ export function useHousePhoto({ design, patch, clientId, onBuilt }: { design: De
       let read: HouseRead = blankHouseRead();
       let straightened: number | null = null;
       let byHand: string | null = null;
+      let looks = 1;
+      let how: HouseReview["how"] = null;
       if (res.ok) {
         read = res.read;
         // An angled shot is straightened first (lib/deck/photoFit autoRectify), so a foot is a foot across the wall.
@@ -272,8 +299,21 @@ export function useHousePhoto({ design, patch, clientId, onBuilt }: { design: De
           const cut = await cropPhoto(image.file, crop, image.w, image.h);
           const at = { x: Math.round(crop.x * image.w) / image.w, y: Math.round(crop.y * image.h) / image.h, w: cut.w / image.w, h: cut.h / image.h };
           const close = await readHousePhoto(await lookForm(cut, "close")).catch(() => null);
-          if (close?.ok) read = mergeLooks(read, readFromCrop(close.read, at));
+          if (close?.ok) {
+            const merged = mergeLooks(read, readFromCrop(close.read, at));
+            if (merged !== read) looks = 2;
+            read = merged;
+          }
         }
+        // THEN THE PICTURE'S OWN EDGES (lib/deck/photoSnap): every box, corner and line moved onto the frame or the
+        // corner it stands for — the model says roughly where, the pixels say exactly.
+        setBusy("Lining it up with the photo…");
+        const gray = await grayOf(image.file).catch(() => null);
+        if (gray) {
+          const snapped = snapRead(read, gray);
+          read = snapped.read;
+          how = { looks, model: res.model, snapped: snapped.moved, split: snapped.split };
+        } else how = { looks, model: res.model, snapped: 0, split: 0 };
       } else
         byHand = res.configured
           ? `${res.error} Drag the lines onto the wall, then add the windows and the door.`
@@ -302,6 +342,7 @@ export function useHousePhoto({ design, patch, clientId, onBuilt }: { design: De
         veneer: true,
         straightened,
         byHand,
+        how,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "The picture could not be read.");
@@ -616,7 +657,7 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
             <div>
               <h3 className="v1-h3">Here&rsquo;s what I see</h3>
               <span className="v1-meta">
-                {r.byHand ? "Marked by hand" : `Read off the photo${r.straightened ? ` · straightened (the shot was ${r.straightened}% off square)` : ""}`} — drag any line that&rsquo;s off; tap a
+                {r.byHand ? "Marked by hand" : `Read off the photo${r.how ? ` in ${r.how.looks === 2 ? "two looks" : "one look"}${r.how.snapped ? ", lined up with its edges" : ""} (${r.how.model})` : ""}${r.straightened ? ` · straightened (the shot was ${r.straightened}% off square)` : ""}`} — drag any line that&rsquo;s off; tap a
                 window, a door or a step to remove it.
               </span>
             </div>

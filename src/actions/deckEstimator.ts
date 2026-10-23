@@ -29,7 +29,7 @@ import { applyMemberDiscount } from "@/lib/servicePlanBook";
 import { recordInventoryLink } from "@/lib/inventoryPick";
 import { logServerError } from "@/lib/server-events";
 import { runVisionJson } from "@/lib/sdk/openaiVision";
-import { friendlyAIError, isOpenAIEnabled } from "@/lib/sdk/openai";
+import { friendlyAIError, getVisionModel, isOpenAIEnabled } from "@/lib/sdk/openai";
 import { parseWallRead, WALL_READ_PROMPT, type WallRead } from "@/lib/deck/photoFit";
 import { HOUSE_READ_PROMPT, HOUSE_ZOOM_NOTE, parseHouseRead, type HouseRead } from "@/lib/deck/houseRead";
 import { orgMayReadFolder } from "@/lib/home/files";
@@ -152,7 +152,7 @@ export async function readDeckPhoto(form: FormData): Promise<DeckPhotoRead> {
   }
 }
 
-export type HousePhotoRead = { ok: true; read: HouseRead } | { ok: false; error: string; configured: boolean };
+export type HousePhotoRead = { ok: true; read: HouseRead; /** Which model answered. */ model: string } | { ok: false; error: string; configured: boolean };
 
 /**
  * THE HOUSE READ OFF ITS PHOTO (2026-10-23): the vision model looks at the picture of the back wall once and says the
@@ -172,11 +172,28 @@ export async function readHousePhoto(form: FormData): Promise<HousePhotoRead> {
   try {
     const dataUrl = `data:${file.type};base64,${Buffer.from(await file.arrayBuffer()).toString("base64")}`;
     // Two looks (2026-10-23): the whole picture, then the wall cut out and enlarged — the same JSON, told which it is.
+    // The whole picture's look — the wall's sections, the step a porch roof is NOT — goes to a reasoning model first
+    // (OPENAI_HOUSE_MODEL, else gpt-5), the estimators' vision model standing in when the key's project lacks it.
     const close = form.get("look") === "close";
-    const raw = await runVisionJson<unknown>({ systemPrompt: close ? `${HOUSE_READ_PROMPT}\n${HOUSE_ZOOM_NOTE}` : HOUSE_READ_PROMPT, userPrompt: close ? "Read the house's wall in this close picture and answer with the JSON." : "Read this photo of the house and answer with the JSON.", imageUrl: dataUrl, detail: "high" });
+    const ask = (model?: string) => runVisionJson<unknown>({ model, systemPrompt: close ? `${HOUSE_READ_PROMPT}\n${HOUSE_ZOOM_NOTE}` : HOUSE_READ_PROMPT, userPrompt: close ? "Read the house's wall in this close picture and answer with the JSON." : "Read this photo of the house and answer with the JSON.", imageUrl: dataUrl, detail: "high" });
+    let raw: unknown = null;
+    let model = getVisionModel();
+    const strong = close ? null : process.env.OPENAI_HOUSE_MODEL?.trim() || "gpt-5";
+    if (strong) {
+      try {
+        raw = await ask(strong);
+        model = strong;
+      } catch (err) {
+        logServerError("deck-house-read-model", err, { kind: "action", organizationId: g.organizationId });
+      }
+    }
+    if (!parseHouseRead(raw)) {
+      raw = await ask();
+      model = getVisionModel();
+    }
     const read = parseHouseRead(raw);
     if (!read) return { ok: false, error: "The house's wall could not be found in that picture — take it square on from the yard, the whole wall in it.", configured: true };
-    return { ok: true, read };
+    return { ok: true, read, model };
   } catch (err) {
     logServerError("deck-house-read", err, { kind: "action", organizationId: g.organizationId });
     return { ok: false, error: friendlyAIError(err, "deck-house-read"), configured: true };
