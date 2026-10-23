@@ -57,6 +57,8 @@ import { AutoPlanWelcome } from "@/components/dashboard/AutoPlanWelcome";
 import { autoPlanWelcomeView, type AutoPlanWelcomeView } from "@/lib/autoPlanWelcome";
 import { metaStartTrialEvent, type MetaStartTrialEvent } from "@/lib/metaStartTrial";
 import { MetaStartTrial } from "@/components/dashboard/MetaStartTrial";
+import { metaCompleteRegistrationEvent, type MetaCompleteRegistrationEvent } from "@/lib/metaCompleteRegistration";
+import { MetaPixelOnce } from "@/components/dashboard/MetaPixelOnce";
 import { TrafficContext } from "@/components/providers/traffic-context";
 import { TrialWatchMount } from "@/components/v3/trial-watch/trial-watch-mount";
 import { trialView, type TrialView } from "@/lib/cardlessTrial";
@@ -135,6 +137,8 @@ export default async function DashboardBlueprintLayout({
   let autoWelcome: AutoPlanWelcomeView | null = null;
   // Meta's StartTrial, due on the live site in the first hour of a Stripe trial (lib/metaStartTrial).
   let startTrial: MetaStartTrialEvent | null = null;
+  // Meta's CompleteRegistration, due on the live site in the first hour of a company (lib/metaCompleteRegistration).
+  let registered: MetaCompleteRegistrationEvent | null = null;
   try {
     const ctx = await requireOrg();
     role = ctx.role;
@@ -149,9 +153,11 @@ export default async function DashboardBlueprintLayout({
     if (ctx.role === "OWNER") {
       const org = await db.organization.findUnique({
         where: { id: ctx.organizationId },
-        select: { address: true, tradeTypesJson: true, name: true },
+        select: { id: true, address: true, tradeTypesJson: true, name: true, createdAt: true, isInternal: true },
       });
       needsSetup = Boolean(org && needsCompanySetup(org));
+      // Registered = the company step done; a Google sign-up still on its placeholder company is not yet.
+      if (org && !needsSetup) registered = metaCompleteRegistrationEvent(org);
       autoWelcome = await autoPlanWelcomeView(ctx.organizationId);
     }
     user = { name, role: humanRole(ctx.role) };
@@ -256,6 +262,7 @@ export default async function DashboardBlueprintLayout({
     <>
       {/* Outside the shell: on a phone the mapped handheld pages replace `children`, and this must mount on both. */}
       {startTrial ? <MetaStartTrial event={startTrial} /> : null}
+      {registered ? <MetaPixelOnce name="CompleteRegistration" organizationId={registered.organizationId} /> : null}
       <ResponsiveDashboardShell
         sidebarFolded={sidebarFolded}
         user={user}
