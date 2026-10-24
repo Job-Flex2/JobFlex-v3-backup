@@ -6,7 +6,15 @@
 // act for the company it belongs to, and only while it lasts.
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-export type CallToken = { callSid: string; organizationId: string; from: string; exp: number };
+export type CallToken = {
+  callSid: string;
+  organizationId: string;
+  from: string;
+  exp: number;
+  /** "outreach" (2026-10-23): JobFlex's own call to a contractor (lib/outreach) — `ref` is the contractor's record. Absent: a company's desk answering its own line. */
+  kind?: "outreach";
+  ref?: string;
+};
 
 const secret = () => process.env.VOICE_SERVER_SECRET || "";
 

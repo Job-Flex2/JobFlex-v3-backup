@@ -5,7 +5,10 @@
 // returns the same format (audio/pcmu), so audio passes straight through, no transcoding.
 // The model speaks first (the greeting), listens with server-side turn detection, and
 // calls tools: open_times, book_visit, take_message, transfer_call, end_call. Each tool
-// is one POST to the app with the call's token. When the call ends — the caller hangs up,
+// is one POST to the app with the call's token. A brief may bring its own tools instead
+// (2026-10-23: JobFlex's own outreach calls to contractors — lib/outreach in the app):
+// the session offers those, and any of them but transfer_call / end_call goes to the
+// app's /api/desk/tool as { token, name, args }. When the call ends — the caller hangs up,
 // the desk says goodbye, a transfer, the time cap — the transcript and outcome go to the
 // app (call-end), and the app's TwiML takes it from there (hang up, dial, voicemail).
 //
@@ -389,14 +392,27 @@ export class Call {
           this.pendingClose = "ended";
           output = { ending: true, say: "Say goodbye briefly." };
           break;
-        default:
-          output = { error: `unknown tool ${name}` };
+        default: {
+          // A tool the brief brought (an outreach call's): the app runs it.
+          if (!this.briefTools().some((t) => t.name === name)) {
+            output = { error: `unknown tool ${name}` };
+            break;
+          }
+          const r = await this.app.post("/api/desk/tool", { token: this.token, name, args });
+          if (r.ok !== false && r.outcome === "done" && this.outcome === "voicemail") this.outcome = "done";
+          output = r.ok === false ? { error: r.error } : (r.output ?? { done: true });
+        }
       }
     } catch (e) {
       output = { error: `JobFlex could not do that right now: ${e.message}` };
     }
     this.aiSend({ type: "conversation.item.create", item: { type: "function_call_output", call_id: callId, output: JSON.stringify(output) } });
     this.aiSend({ type: "response.create" });
+  }
+
+  /** The tools this call's brief brought, if any (else the desk's own, TOOLS). */
+  briefTools() {
+    return Array.isArray(this.brief?.tools) ? this.brief.tools : [];
   }
 
   twilioSend(obj) {
@@ -447,6 +463,12 @@ export function turnDetection() {
   return { type: "server_vad", threshold: TURN.threshold, prefix_padding_ms: TURN.prefixMs, silence_duration_ms: TURN.silenceMs, create_response: false, interrupt_response: false };
 }
 
+/** The tools a session offers: the brief's own when it brings them (each a function with a name), else the desk's. */
+export function toolsFor(brief) {
+  const own = Array.isArray(brief?.tools) ? brief.tools.filter((t) => t && t.type === "function" && typeof t.name === "string") : [];
+  return own.length ? own : TOOLS;
+}
+
 /** The realtime session for a brief — GA shape, or the beta shape when REALTIME_API=beta. */
 export function sessionUpdate(brief, api = "ga") {
   const voice = brief.voice || "marin";
@@ -462,7 +484,7 @@ export function sessionUpdate(brief, api = "ga") {
         input_audio_transcription: { model: "gpt-4o-mini-transcribe" },
         ...(TURN.noiseReduction ? { input_audio_noise_reduction: { type: TURN.noiseReduction } } : {}),
         turn_detection: turnDetection(),
-        tools: TOOLS,
+        tools: toolsFor(brief),
         tool_choice: "auto",
       },
     };
@@ -482,7 +504,7 @@ export function sessionUpdate(brief, api = "ga") {
         },
         output: { format: { type: "audio/pcmu" }, voice },
       },
-      tools: TOOLS,
+      tools: toolsFor(brief),
       tool_choice: "auto",
     },
   };

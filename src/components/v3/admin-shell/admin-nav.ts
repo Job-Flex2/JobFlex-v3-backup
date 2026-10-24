@@ -68,6 +68,7 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
     label: "Operate",
     items: [
       { label: "Lead Center", icon: "i-target", href: "/admin/lead-center" },
+      { label: "Outreach calls", icon: "i-phone", href: "/admin/outreach" },
       { label: "Support", icon: "i-msg", href: "/admin/support" },
       // Added 2026-10-21: every letter the platform sent, failed or skipped (lib/emailLog).
       { label: "Sent mail", icon: "i-send", href: "/admin/mail/log" },

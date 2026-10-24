@@ -1,0 +1,52 @@
+/* ============================================================
+   ADMIN · OUTREACH — BLUEPRINT
+   /admin/outreach
+   Page vocabulary only; the furniture is admin-influencers/admin-ui.module.css.
+   Two classes on every selector (the shell's resets).
+   ============================================================ */
+
+:global(.jf-blueprint .content) .root { display: flex; flex-direction: column; gap: 22px; }
+
+:global(.jf-blueprint .content) .warn { border-left: 5px solid var(--warning, #b88420); }
+:global(.jf-blueprint .content) .missing { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; line-height: 1.5; color: var(--ink); }
+:global(.jf-blueprint .content) .how { margin: 4px 0 0; padding-left: 20px; display: grid; gap: 8px; font-size: 14px; line-height: 1.55; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .how b { color: var(--ink); font-weight: 800; }
+
+:global(.jf-blueprint .content) .field { display: grid; gap: 6px; margin-top: 12px; }
+:global(.jf-blueprint .content) .lbl { font-size: 12px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); }
+:global(.jf-blueprint .content) .in {
+  width: 100%; min-height: 42px; padding: 9px 11px; box-sizing: border-box;
+  border: 1.5px solid var(--hair-strong, rgba(10, 10, 10, 0.28)); border-radius: var(--radius); background: #fff;
+  font: 14px/1.4 inherit; color: var(--ink);
+}
+:global(.jf-blueprint .content) .in:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 1px; border-color: var(--blueprint); }
+:global(.jf-blueprint .content) .list { min-height: 140px; resize: vertical; font-family: var(--font-mono, ui-monospace, monospace); font-size: 13px; }
+:global(.jf-blueprint .content) .acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+:global(.jf-blueprint .content) .said { margin: 12px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink); }
+
+:global(.jf-blueprint .content) .test { margin-top: 18px; padding-top: 14px; border-top: 1.5px solid var(--hair); }
+:global(.jf-blueprint .content) .testH { font-size: 12px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); margin-bottom: 8px; }
+:global(.jf-blueprint .content) .testRow { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 0.8fr) auto; gap: 8px; align-items: center; }
+
+/* business · phone · line · next · last call */
+:global(.jf-blueprint .content) .cols { grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 0.9fr) 150px minmax(0, 1.2fr); }
+:global(.jf-blueprint .content) .cell { font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The drawer */
+:global(.jf-blueprint .content .pmdl) .sheet { display: grid; gap: 14px; }
+:global(.jf-blueprint .content .pmdl) .why { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink-soft); }
+:global(.jf-blueprint .content .pmdl) .why b { color: var(--ink); font-weight: 800; }
+:global(.jf-blueprint .content .pmdl) .subH { font-size: 12px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); }
+:global(.jf-blueprint .content .pmdl) .consent { padding: 12px; border: 1.5px solid var(--hair); border-radius: var(--radius); background: #fff; display: grid; gap: 6px; }
+:global(.jf-blueprint .content .pmdl) .consent p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink-soft); }
+:global(.jf-blueprint .content .pmdl) .call { padding: 12px; border: 1.5px solid var(--hair); border-radius: var(--radius); background: #fff; display: grid; gap: 8px; }
+:global(.jf-blueprint .content .pmdl) .callHead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; font-size: 14px; }
+:global(.jf-blueprint .content .pmdl) .callErr { margin: 0; font-size: 13px; color: var(--danger, #a83232); }
+:global(.jf-blueprint .content .pmdl) .transcript { margin: 0; max-height: 280px; overflow: auto; white-space: pre-wrap; font: 12.5px/1.55 var(--font-mono, ui-monospace, monospace); color: var(--ink); }
+
+@media (max-width: 860px) {
+  :global(.jf-blueprint .content) .testRow { grid-template-columns: 1fr; }
+  :global(.jf-blueprint .content) .testRow :global(.btn),
+  :global(.jf-blueprint .content) .acts :global(.btn) { width: 100%; justify-content: center; min-height: 44px; }
+  :global(.jf-blueprint .content) .cell { white-space: normal; }
+}

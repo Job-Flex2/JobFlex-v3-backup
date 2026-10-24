@@ -4,8 +4,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket as WS, WebSocketServer } from "ws";
-import { Call, frameLevel, sessionUpdate, TOOLS, TURN } from "../call.mjs";
-import { fakeApp, fakeRealtime, SPEECH, twilioClient } from "./fakes.mjs";
+import { Call, frameLevel, sessionUpdate, toolsFor, TOOLS, TURN } from "../call.mjs";
+import { fakeApp, fakeRealtime, OUTREACH_TOOLS, SPEECH, twilioClient } from "./fakes.mjs";
 
 function serve({ app, realtime, api = "ga" }) {
   const wss = new WebSocketServer({ port: 0 });
@@ -94,6 +94,32 @@ test("a message taken counts as done, and lands in the app", async () => {
     app.close();
     realtime.close();
   }
+});
+
+test("an outreach call brings its own tools: the session offers them, one goes to the app's /api/desk/tool, end_call still ends it", async () => {
+  const app = fakeApp();
+  const realtime = fakeRealtime({ scenario: "outreach" });
+  const srv = serve({ app, realtime });
+  try {
+    const got = await twilioClient({ url: srv.url, token: "tok-outreach", WS });
+    assert.ok(got.closed, "the call ended after the goodbye");
+    assert.deepEqual(realtime.seen.sessions[0].tools.map((t) => t.name), OUTREACH_TOOLS.map((t) => t.name), "the brief's tools, not the desk's");
+    const tool = app.log.find((x) => x.path === "/api/desk/tool");
+    assert.ok(tool, JSON.stringify(app.log.map((x) => x.path)));
+    assert.deepEqual(tool.body, { token: "tok-outreach", name: "email_trial_link", args: { email: "sam@example.com" } });
+    const end = app.log.find((x) => x.path === "/api/desk/call-end").body;
+    assert.equal(end.outcome, "done");
+    assert.ok(!app.log.some((x) => x.path === "/api/desk/book" || x.path === "/api/desk/open-times"));
+  } finally {
+    srv.close();
+    app.close();
+    realtime.close();
+  }
+});
+
+test("a brief's own tools must be named functions; a brief without any gets the desk's", () => {
+  assert.deepEqual(toolsFor({}).map((t) => t.name), TOOLS.map((t) => t.name));
+  assert.deepEqual(toolsFor({ tools: [{ type: "function", name: "x" }, { name: "no-type" }] }).map((t) => t.name), ["x"]);
 });
 
 test("a refused token: the stream closes before the desk speaks and the app's TwiML takes over", async () => {
