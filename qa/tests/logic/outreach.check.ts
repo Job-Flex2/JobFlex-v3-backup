@@ -7,7 +7,7 @@
 // and its subject passes the spam words; the call token's kind. Pure.
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/outreach.check.ts
 process.env.VOICE_SERVER_SECRET = process.env.VOICE_SERVER_SECRET || "qa-secret";
-import { ALL_ZONES, MAX_CALLS, OUTREACH_CONSENT_TEXT, callableNow, funnel, parseProspectList, routeFor, stateCode, tradeKey, withinCallingHours, type Prospect } from "@/lib/outreach/rules";
+import { ALL_ZONES, MAX_CALLS, OUTREACH_CONSENT_TEXT, callableNow, funnel, parseProspectList, routeFor, stateCode, tradeKey, twilioWords, withinCallingHours, type Prospect } from "@/lib/outreach/rules";
 import { outreachGreeting, outreachInstructions, outreachTools, outreachVoicemail, tradeWords } from "@/lib/outreach/script";
 import { outreachLetter } from "@/lib/outreach/letter";
 import { spammySubject } from "@/lib/adminMail/compose";
@@ -69,6 +69,12 @@ check("…not while a call is going", !callableNow({ ...ll, calls: [call({ statu
 const justAsked = P({ line: line("mobile"), consent: { text: OUTREACH_CONSENT_TEXT, at: "2026-10-26T15:55:00.000Z", ip: "1.2.3.4", ua: null, page: "call-me" } });
 check("who just asked is called at once, even before 9 their time", callableNow(justAsked, new Date("2026-10-26T15:56:00Z")).ok && !withinCallingHours("WA", new Date("2026-10-26T15:56:00Z")));
 check("…their earlier list calls don't count against the ask", callableNow({ ...justAsked, calls: [call({ at: "2026-10-20T17:00:00.000Z", outcome: "not-interested" }), call({ at: "2026-10-21T17:00:00.000Z" })] }, new Date("2026-10-26T15:56:00Z")).ok);
+
+const refused = call({ sid: null, status: "failed", outcome: "failed", at: "2026-10-26T15:55:30.000Z", error: "Twilio: Account not authorized to call" });
+check("a call Twilio refused to place (it never rang) neither counts nor makes them wait", callableNow({ ...justAsked, calls: [refused] }, new Date("2026-10-26T15:56:00Z")).ok && callableNow({ ...ll, calls: [refused, refused] }, mon10).ok);
+check("…a call that was placed and then failed still counts", !callableNow({ ...ll, calls: [call({ sid: "CA2", status: "failed", outcome: "failed", at: "2026-10-26T16:30:00.000Z" })] }, mon10).ok);
+
+check("Twilio's geo-permission refusal is said as the setting to turn on", /Geo permissions → tick United States & Canada/.test(twilioWords("Twilio: Account not authorized to call +14257726587. Perhaps you need to enable some international permissions: https://www.twilio.com/console/voice/calls/geo-permissions/low-risk")) && twilioWords("Twilio: busy") === "Twilio: busy");
 
 console.log("— the script —");
 const facts = { plans: [{ name: "Starter", price: "$45" }, { name: "Professional", price: "$95" }, { name: "Advanced", price: "$199" }], trialDays: 7, canTransfer: false, site: "jobflex.app" };

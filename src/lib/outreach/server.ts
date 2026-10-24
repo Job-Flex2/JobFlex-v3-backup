@@ -25,6 +25,7 @@ import {
   routeFor,
   stateCode,
   tradeKey,
+  twilioWords,
   type CallStatus,
   type LineType,
   type Outcome,
@@ -216,7 +217,7 @@ export async function callProspect(id: string, base: string): Promise<{ ok: true
     await updateProspect(id, (x) => withLastCall(x, { sid }));
     return { ok: true, sid };
   } catch (err) {
-    const error = err instanceof Error ? err.message : "The call could not be placed.";
+    const error = twilioWords(err instanceof Error ? err.message : "The call could not be placed.");
     await updateProspect(id, (x) => withLastCall(x, { status: "failed", outcome: "failed", error }));
     return { ok: false, error };
   }
@@ -478,7 +479,8 @@ export async function requestCallMe(
   await writeProspect(p);
   const r = await callProspect(p.id, base);
   if (r.ok) return { ok: true, calling: true, note: "Calling you now — pick up in about half a minute." };
-  return { ok: true, calling: false, note: `We have your request; the call didn't go out just now (${r.error}). We'll call you shortly.` };
+  // Nothing calls again by itself: say so. The admin's test call shows Twilio's reason; a contractor gets plain words.
+  return { ok: true, calling: false, note: input.ua?.startsWith("admin test") ? `The call didn't go out: ${r.error}` : "We have your request, but the call couldn't go out just now — please try again in a few minutes." };
 }
 
 /** A test call to the admin's own phone: the admin's own consent, the script as a contractor hears it. */

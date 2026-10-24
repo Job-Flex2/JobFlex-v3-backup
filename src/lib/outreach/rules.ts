@@ -115,6 +115,13 @@ export function routeFor(p: Pick<Prospect, "phone" | "email" | "line" | "consent
   return mail(`${LINE_WORDS[p.line.type].replace(/^./, (c) => c.toUpperCase())} — the AI calls it only if they ask`);
 }
 
+/** Twilio's refusal in words the admin can act on. */
+export function twilioWords(message: string): string {
+  if (/not authorized to call|geo-?permissions|\b21215\b/i.test(message)) return "Twilio isn't allowed to call this country from JobFlex's account yet. In the Twilio Console: Voice → Settings → Geo permissions → tick United States & Canada → Save. Then try again.";
+  if (/unverified|trial account/i.test(message)) return "JobFlex's Twilio account is a trial account: it can only call numbers verified in the Twilio Console. Upgrade the account, or verify this number there.";
+  return message;
+}
+
 /* ── Calling hours ─────────────────────────────────────────────────────── */
 
 export const CALL_HOURS = { from: 9, to: 20 } as const;
@@ -161,8 +168,9 @@ export function callableNow(p: Prospect, now: Date): { ok: true } | { ok: false;
   const r = routeFor(p);
   if (r.kind !== "ai-call") return { ok: false, why: r.why };
   if (p.calls.some((c) => c.status === "calling")) return { ok: false, why: "A call is going now" };
-  // Who asked for a call is counted from their ask: the calls before it were a list's.
-  const calls = p.consent ? p.calls.filter((c) => c.at >= p.consent!.at) : p.calls;
+  // Who asked for a call is counted from their ask: the calls before it were a list's. A call Twilio refused to place
+  // (no call id: the account's settings, a bad number) never rang anyone — it is not counted, and nothing waits on it.
+  const calls = (p.consent ? p.calls.filter((c) => c.at >= p.consent!.at) : p.calls).filter((c) => !(c.status === "failed" && !c.sid));
   const final = calls.find((c) => c.outcome && FINAL.has(c.outcome));
   if (final) return { ok: false, why: `Already called — ${OUTCOME_WORDS[final.outcome!].toLowerCase()}` };
   if (calls.length >= MAX_CALLS) return { ok: false, why: `Called ${MAX_CALLS} times already` };
