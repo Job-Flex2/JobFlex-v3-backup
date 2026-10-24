@@ -14,7 +14,7 @@
 // into the 3D house is lib/deck/houseFromPhoto; the colours are measured off the picture's own pixels in the browser,
 // the model's guess only standing in when that fails.
 
-import { parseWallRead, type WallRead } from "./photoFit";
+import { JOG_DEFAULT_FT, parseWallRead, type WallRead } from "./photoFit";
 
 export type ReadDoorKind = "slider" | "hinged" | "french";
 export type ReadRoofKind = "hip" | "gable-side" | "gable-end" | "shed" | "flat";
@@ -171,7 +171,7 @@ COORDINATES: every coordinate is a FRACTION of the whole picture: x from 0 at th
   "base": {"left": {"x","y"}, "right": {"x","y"}},   // the house wall's bottom edge where the WALL meets the ground (or would meet it behind a patio, steps or a deck), at the house's left corner and at its right corner — the whole back face of the house, across every step in it.
   "eave": {"left": {"x","y"}, "right": {"x","y"}} | null,   // the top of that wall above each corner: the underside of the MAIN roof's eave (on a two-storey house, the eave over the upper floor).
   "storeys": 1 | 2 | null,   // storeys of wall between the base and that eave (count the rows of windows).
-  "sections": [{"x0", "x1", "outFt": number, "why": string}],   // FIRST work out the wall's sections, left to right from its left corner to its right corner: a section is a stretch of the house's wall whose face is one flat plane. "outFt" is how far that section's face stands IN FRONT of the main wall (the main wall — the widest stretch — is 0; a bump-out or a bay is +2 to +4; a part set back is negative). "why" is the evidence you see for that section's plane: its own corner boards at both its ends, its own eave or roof edge in front of the main eave, a shadow down the wall at its side, its siding meeting the next section at a corner. A porch roof, a patio roof or an awning in front of the wall does NOT make a section: the wall under it and behind it is the main wall unless its OWN face steps. One section when the wall is one flat face.
+  "sections": [{"x0", "x1", "outFt": number, "why": string}],   // FIRST work out the wall's sections, left to right from its left corner to its right corner: a section is a stretch of the house's wall whose face is one flat plane. "outFt" is how far that section's face stands IN FRONT of the main wall (the main wall — the widest stretch — is 0; a bump-out or a bay is +2 to +4; a part set back is negative). "why" is the evidence you see for that section's plane: its own corner boards at both its ends, its own eave or roof edge in front of the main eave, a shadow down the wall at its side, its siding meeting the next section at a corner. A porch roof, a patio roof or an awning in front of the wall does NOT make a section: the wall under it and behind it is the main wall unless its OWN face steps. A lower roof over only the GROUND storey of part of a two-storey wall, with that part's upper-storey windows above it, is a porch roof or a lean-to — that stretch is NOT a bump-out unless its upper storey stands forward too (its own corner boards up both storeys, its own hip or gable in the main roof). One section when the wall is one flat face.
   "jogs": [{"x", "y", "dir": "toward" | "away", "depthFt": number}],   // the same steps as places: where one section meets the next (x, y on the base), "toward" when the section to the RIGHT is nearer the camera, "away" when it is farther, depthFt the difference. [] when one section.
   "door": {"x0", "x1", "bottom", "top"} | null,   // the back door onto the yard: its left and right edges, its threshold and the top of its frame. Null when you cannot see one.
   "doors": [{"x0", "x1", "bottom", "top", "kind": "slider" | "hinged" | "french"}],   // EVERY door in the wall, the back door included. [] when none.
@@ -317,9 +317,69 @@ export function removeReadDoor(read: HouseRead, i: number): HouseRead {
 /** A step put in the wall at its middle, the part to its right 2 ft nearer. */
 export function addReadJog(read: HouseRead): HouseRead {
   if (read.jogs.length >= 4) return read;
-  const x = r3((read.base.left.x + read.base.right.x) / 2);
-  return { ...read, jogs: [...read.jogs, { x, y: r3(baseAt(read, x)), dir: "toward" as const, depthFt: 2 }].sort((a, b) => a.x - b.x) };
+  // In the middle of the widest part of the wall — a second step splits a part, never lands on the first. It divides the
+  // part and changes nothing yet (depth 0): the contractor drags it to the corner, then taps the part that comes out.
+  const parts = readSections(read);
+  const at = parts.reduce((a, b) => (b.x1 - b.x0 > a.x1 - a.x0 + 1e-9 ? b : a), parts[0] ?? { x0: read.base.left.x, x1: read.base.right.x, outFt: 0 });
+  const x = r3((at.x0 + at.x1) / 2);
+  return { ...read, jogs: [...read.jogs, { x, y: r3(baseAt(read, x)), dir: "toward" as const, depthFt: 0 }].sort((a, b) => a.x - b.x) };
 }
+/* ── The wall as its parts (2026-10-23 evening — owner: "it should make the shape of the back wall … make it simple
+   to convert that 3D shaper into the wall shape from the picture") ── */
+
+/** A stretch of the wall between its corners and its steps, and how far its face stands out of the main wall (the
+ *  widest stretch, 0): + comes out toward the yard, − is set back. */
+export type ReadSection = { x0: number; x1: number; outFt: number };
+
+/** The wall's parts, left to right, from its corners and its steps. */
+export function readSections(read: HouseRead): ReadSection[] {
+  const left = Math.min(read.base.left.x, read.base.right.x);
+  const right = Math.max(read.base.left.x, read.base.right.x);
+  const jogs = read.jogs.filter((j) => j.x > left && j.x < right).sort((a, b) => a.x - b.x);
+  const xs = [left, ...jogs.map((j) => j.x), right];
+  let out = 0;
+  const raw: ReadSection[] = [];
+  for (let i = 0; i + 1 < xs.length; i++) {
+    raw.push({ x0: xs[i], x1: xs[i + 1], outFt: out });
+    const j = jogs[i];
+    if (j) out += (j.dir === "toward" ? 1 : -1) * (j.depthFt ?? JOG_DEFAULT_FT);
+  }
+  // The main wall is the widest stretch (the one nearer 0 on a tie): the rest are counted from it.
+  const main = raw[mainSection(raw)]?.outFt ?? 0;
+  return raw.map((x) => ({ ...x, outFt: Math.round((x.outFt - main) * 2) / 2 }));
+}
+
+/** Which part is the main wall — the widest (the one nearer the house line on a tie). The others are set out or back
+ *  from it; it is the reference, so it is not itself set out or back. */
+export function mainSection(sections: ReadSection[]): number {
+  let best = 0;
+  for (let i = 1; i < sections.length; i++) {
+    const w = sections[i].x1 - sections[i].x0;
+    const bw = sections[best].x1 - sections[best].x0;
+    if (w > bw + 1e-9 || (Math.abs(w - bw) < 1e-9 && Math.abs(sections[i].outFt) < Math.abs(sections[best].outFt))) best = i;
+  }
+  return best;
+}
+
+/** One part of the wall set out (+) or back (−) of the main wall — the steps on either side follow. A step left with no
+ *  difference stays as a divider (depth 0, built as nothing) — so a part set level and set out again keeps its corners. */
+export function setSectionOut(read: HouseRead, i: number, outFt: number): HouseRead {
+  const secs = readSections(read);
+  if (!secs[i]) return read;
+  const outs = secs.map((x) => x.outFt);
+  outs[i] = Math.round(clamp(outFt, -8, 8) * 2) / 2;
+  const left = Math.min(read.base.left.x, read.base.right.x);
+  const right = Math.max(read.base.left.x, read.base.right.x);
+  const jogs = read.jogs
+    .filter((j) => j.x > left && j.x < right)
+    .sort((a, b) => a.x - b.x)
+    .map((j, k) => {
+      const d = outs[k + 1] - outs[k];
+      return { ...j, dir: d < 0 ? ("away" as const) : ("toward" as const), depthFt: Math.abs(d) < 0.25 ? 0 : Math.round(Math.abs(d) * 2) / 2 };
+    });
+  return { ...read, jogs };
+}
+
 export const removeReadJog = (read: HouseRead, i: number): HouseRead => ({ ...read, jogs: read.jogs.filter((_, k) => k !== i) });
 export const flipReadJog = (read: HouseRead, i: number): HouseRead => ({ ...read, jogs: read.jogs.map((j, k) => (k === i ? { ...j, dir: j.dir === "toward" ? ("away" as const) : ("toward" as const) } : j)) });
 

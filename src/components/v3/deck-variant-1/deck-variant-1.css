@@ -801,6 +801,7 @@
 .jf-deck-v1 .v1-hp-l-base { stroke: #fff; stroke-width: 4; }
 .jf-deck-v1 .v1-hp-l-eave, .jf-deck-v1 .v1-hp-l-side { stroke: #fff; stroke-width: 2.5; stroke-dasharray: 7 5; }
 .jf-deck-v1 .v1-hp-l-jog { stroke: #fff; stroke-width: 3; stroke-dasharray: 4 4; }
+.jf-deck-v1 .v1-hp-l-jog.is-flat { stroke-width: 1.5; stroke-opacity: 0.7; }
 .jf-deck-v1 .v1-hp-l-win { stroke: var(--accent); stroke-width: 2.5; fill: rgba(24, 84, 160, 0.18) !important; }
 .jf-deck-v1 .v1-hp-l-door { stroke: #fff; stroke-width: 3; fill: rgba(10, 10, 10, 0.28) !important; }
 .jf-deck-v1 .v1-hp-pic svg .is-sel { stroke: #fff; stroke-width: 4; fill: rgba(255, 255, 255, 0.32) !important; }
@@ -813,6 +814,26 @@
 .jf-deck-v1 .v1-hp-handle.is-sel { background: #fff; box-shadow: 0 0 0 3px var(--accent); }
 .jf-deck-v1 .v1-hp-handle:active { cursor: grabbing; }
 .jf-deck-v1 .v1-hp-tools { justify-content: center; }
+/* The wall's parts (2026-10-23 evening): tinted on the photo, a chip under each, the wall seen from above. */
+.jf-deck-v1 .v1-hp-pic svg .v1-hp-l-sec { stroke: none; }
+.jf-deck-v1 .v1-hp-pic svg .v1-hp-l-sec.is-out { fill: rgba(24, 84, 160, 0.2) !important; }
+.jf-deck-v1 .v1-hp-pic svg .v1-hp-l-sec.is-back { fill: rgba(10, 10, 10, 0.26) !important; }
+.jf-deck-v1 .v1-hp-pic svg .v1-hp-l-sec.is-sel { stroke: #fff; stroke-width: 3; stroke-dasharray: 2 4; }
+.jf-deck-v1 .v1-hp-sec { position: absolute; transform: translate(-50%, 0); padding: 3px 9px; border: 2px solid var(--ink); border-radius: 999px; background: #fff; color: var(--ink); font-size: 12px; font-weight: 800; white-space: nowrap; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); cursor: pointer; }
+.jf-deck-v1 .v1-hp-sec.is-out { background: var(--accent); border-color: var(--accent); color: #fff; }
+.jf-deck-v1 .v1-hp-sec.is-back { background: var(--ink); color: #fff; }
+.jf-deck-v1 .v1-hp-sec.is-sel { box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--accent); }
+.jf-deck-v1 .v1-hp-sec-tools { align-items: center; gap: 10px; padding: 8px 10px; border: 1.5px solid var(--ink); border-radius: var(--r-sm); background: var(--paper-deep); }
+.jf-deck-v1 .v1-hp-sec-depth { display: inline-flex; align-items: center; gap: 8px; }
+.jf-deck-v1 .v1-hp-sec-note { font-size: 13px; line-height: 1.4; color: var(--ink-soft); }
+.jf-deck-v1 .v1-hp-sec-depth b { min-width: 44px; text-align: center; font-size: 15px; }
+.jf-deck-v1 .v1-hp-top { margin: 0; }
+.jf-deck-v1 .v1-hp-top svg { display: block; width: 100%; height: 74px; }
+.jf-deck-v1 .v1-hp-top-house { fill: rgba(10, 10, 10, 0.08); stroke: none; }
+.jf-deck-v1 .v1-hp-top-wall { fill: none; stroke: var(--ink); stroke-width: 4; stroke-linejoin: round; }
+.jf-deck-v1 .v1-hp-top-hit { fill: transparent; cursor: pointer; }
+.jf-deck-v1 .v1-hp-top-hit.is-sel { fill: rgba(24, 84, 160, 0.14); }
+.jf-deck-v1 .v1-hp-top figcaption { margin-top: 2px; text-align: center; font-size: 11.5px; color: var(--ink-soft); }
 .jf-deck-v1 .v1-hp-side { display: grid; gap: 12px; align-content: start; min-width: 0; }
 .jf-deck-v1 .v1-hp-facts { display: grid; gap: 0; border-top: 1.5px solid var(--ink); }
 .jf-deck-v1 .v1-hp-facts li { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--ink-line); align-items: baseline; }
