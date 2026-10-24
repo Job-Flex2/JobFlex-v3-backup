@@ -9,15 +9,17 @@ import { PostHogCapture } from "@/components/providers/posthog-capture";
 import { CookieBanner } from "@/components/consent/cookie-banner";
 
 /* Bundle the official variable fonts so local and production builds never
-   depend on a Google Fonts request. Keep the complete weight ranges and
-   character sets; licenses and sources live alongside the font files.
-   Served as WOFF2 (2026-10-16): the same fonts losslessly recompressed —
-   every glyph, axis and character kept — 351 KB + 72 KB on the wire instead
-   of 448 KB + 92 KB of TTF. Both are preloaded on every page, so on a phone
-   they shared the line with the sign-up form's script. The .ttf originals
-   stay beside them (README). */
+   depend on a Google Fonts request. Every weight and axis is kept; licenses
+   and sources live alongside the font files.
+   LATIN ONLY (owner, 2026-10-23): Google's latin + latin-ext ranges plus the
+   symbols the source draws (arrows, ≤ ≥ ≈, ✓ ★, ▲ ▼ ▶, fractions — see the
+   fonts README), every OpenType feature kept. 213 KB + 48 KB on the wire,
+   was 351 KB + 72 KB; both are preloaded on every page and shared the phone's
+   line with the sign-up form's script. The interface is English: Cyrillic,
+   Greek and anything else fall to the system font. The .ttf originals stay
+   beside them (README). */
 const inter = localFont({
-  src: "./fonts/Inter-variable.woff2",
+  src: "./fonts/Inter-variable-latin.woff2",
   weight: "100 900",
   style: "normal",
   variable: "--font-inter",
@@ -25,7 +27,7 @@ const inter = localFont({
 });
 
 const jbMono = localFont({
-  src: "./fonts/JetBrainsMono-variable.woff2",
+  src: "./fonts/JetBrainsMono-variable-latin.woff2",
   weight: "100 800",
   style: "normal",
   adjustFontFallback: false,

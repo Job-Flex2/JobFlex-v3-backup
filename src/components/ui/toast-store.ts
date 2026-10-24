@@ -2,9 +2,10 @@
 import { create } from "zustand";
 
 /* The toast store and the `toast` helpers, apart from the host that draws
-   them (Toast.tsx). The host is the only thing that needs framer-motion; the
-   105 call sites that only push a toast import this file (through Toast.tsx's
-   re-export) and pull no animation library. The root layout mounts the host
+   them (Toast.tsx). The host is the only thing that needs framer-motion. Push
+   a toast by importing THIS file: Toast.tsx's re-export still brings the host,
+   framer-motion and tailwind-merge into the importer's bundle (~42 KB gzip on
+   the sign-up page, 2026-10-23). The root layout mounts the host
    lazily — toast-host-lazy.tsx — so pages that never toast never load it. */
 
 export type ToastKind = "success" | "error" | "info";

@@ -12,8 +12,11 @@ generation independent of Google's availability during builds.
 Both use the SIL Open Font License 1.1. Their original license notices are
 included in this directory. Root layout retains the existing CSS variables.
 
-The app loads the `.woff2` files (2026-10-16): each is the `.ttf` beside it
-recompressed with fontTools (`flavor = "woff2"`), lossless — same glyph count,
-axes and character map. Regenerate after replacing a `.ttf`:
-`python -c "from fontTools.ttLib import TTFont; f=TTFont('X.ttf'); f.flavor='woff2'; f.save('X.woff2')"`
-(needs `fonttools` and `brotli`).
+The app loads `Inter-variable-latin.woff2` and `JetBrainsMono-variable-latin.woff2`
+(2026-10-23, owner: latin only): the `.ttf` beside each, cut to Google Fonts'
+latin + latin-ext ranges plus the symbols the source uses that the font draws
+(arrows, ≤ ≥ ≈, ✓ ★, ▲ ▼ ▶, fractions), every axis and OpenType feature kept,
+saved as WOFF2 — 213 KB + 48 KB, was 351 KB + 72 KB for the whole fonts.
+Cyrillic and Greek fall to the system font. Regenerate after replacing a
+`.ttf`, or when the interface starts using a new symbol:
+`python scripts/font-subset.py` (needs `fonttools` and `brotli`).

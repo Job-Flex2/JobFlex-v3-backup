@@ -9,7 +9,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { cancelScheduledSwitch, type PlanChangePreviewResult } from "@/actions/billing";
 import { useUpdateCard } from "@/components/v3/payment-ribbon/payment-ribbon";
-import { toast } from "@/components/ui/Toast";
+import { toast } from "@/components/ui/toast-store";
 import "./plan-change-notes.css";
 
 type Preview = Extract<PlanChangePreviewResult, { ok: true }>;

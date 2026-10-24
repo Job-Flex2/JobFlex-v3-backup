@@ -23,7 +23,7 @@
 
 import * as React from "react";
 import { BlueprintSheet } from "@/components/ui/BlueprintSheet";
-import { toast } from "@/components/ui/Toast";
+import { toast } from "@/components/ui/toast-store";
 import { getInvoiceOptions, sendInstallmentInvoice } from "@/actions/notify";
 
 export interface InvoiceTarget {

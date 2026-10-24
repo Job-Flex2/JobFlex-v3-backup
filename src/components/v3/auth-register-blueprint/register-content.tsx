@@ -41,8 +41,9 @@ import { claimPageLoad, hiddenBefore } from "@/lib/pageClock";
 import { reasonOfMessage } from "@/lib/signup-watch-shared";
 import { TRAFFIC_EVENTS } from "@/lib/traffic-contract";
 import { createPortal } from "react-dom";
-import { attachPlacesSuggest } from "@/components/v3/blueprint-shell/places-suggest";
-import { toast } from "@/components/ui/Toast";
+// The store, not Toast.tsx: its re-export still carried the host's framer-motion and tailwind-merge into the
+// sign-up's first JavaScript (~42 KB gzip, 2026-10-23). The root layout's lazy host draws the toast.
+import { toast } from "@/components/ui/toast-store";
 import { checkEmailAvailable, completeCompanySetup } from "@/actions/auth";
 import type { GooglePrefill, SetupPrefill } from "@/app/(auth)/auth/register/register-responsive";
 import { TRADE_TYPES, type TradeType } from "@/lib/tradeTypes";
@@ -64,8 +65,6 @@ import { rememberOtpDraft, rememberSignupMode, type SignupMode } from "@/lib/sig
 import { forgetOtpDraft, otpPendingState } from "@/actions/signupOtp";
 import { SPOTLIGHT, SPOTLIGHT_MISSING, SPOTLIGHT_TAG, spotlightLine, spotlightRow, withSpotlightFirst, type SpotlightTool } from "@/lib/planSpotlight";
 import type { OtpRestore } from "@/lib/signupOtp";
-import { rememberFbclidForGoogle, writeLandingCookies } from "@/components/v3/landing-e/landing-variant-effects";
-import { resolveLandingVariant } from "@/components/v3/landing-e/landing-variants";
 import {
   applySignupPromo,
   googleSignupIdentity,
@@ -137,6 +136,15 @@ function checkoutHref(token: string, reason: HandOffReason, pick?: { slug: strin
     q.set("interval", pick.term);
   }
   return `/auth/register/checkout?${q.toString()}`;
+}
+
+/* THE LANDING'S COOKIE WRITERS, for the Google button only — they and the landing's variant table behind them
+   (~50 KB raw) left step 1's first JavaScript on 2026-10-23. Fetched once the form is live, so a press finds them
+   loaded; a fetch that fails still lets the press go on to Google. */
+let landingMemory: Promise<[typeof import("@/components/v3/landing-e/landing-variant-effects"), typeof import("@/components/v3/landing-e/landing-variants")]> | null = null;
+function loadLandingMemory() {
+  landingMemory ??= Promise.all([import("@/components/v3/landing-e/landing-variant-effects"), import("@/components/v3/landing-e/landing-variants")]);
+  return landingMemory;
 }
 
 // 1 account · 2 company · 3 THE PLAN (the paywall) · 4 done.
@@ -684,6 +692,10 @@ export function RegisterContent({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as the form becomes live
   }, []);
+  // The Google button's cookie writers, fetched once the form is live (loadLandingMemory).
+  React.useEffect(() => {
+    void loadLandingMemory().catch(() => {});
+  }, []);
 
   const [addr, setAddr] = React.useState("");
   const [phone, setPhone] = React.useState(setup?.companyPhone || setup?.phone || "");
@@ -764,18 +776,28 @@ export function RegisterContent({
      <body>, so it carries its own class and its own styles (auth-register
      .module.css, `.jf-reg-sug`) — the shell's `.bp-sug` sheet is not loaded
      here. Free typing is left alone (`typed` picks are ignored); a chosen
-     suggestion writes the formatted address into the field. */
+     suggestion writes the formatted address into the field. The attach is
+     loaded when step 2 opens, not with step 1's first JavaScript (2026-10-23). */
   React.useEffect(() => {
     if (step !== 2) return;
     const el = addrRef.current;
     if (!el) return;
-    return attachPlacesSuggest(el, {
-      className: "jf-reg-sug",
-      onPick: (p) => {
-        if (p.typed) return;
-        setAddr(p.formatted);
-      },
+    let live = true;
+    let detach: (() => void) | null = null;
+    void import("@/components/v3/blueprint-shell/places-suggest").then(({ attachPlacesSuggest }) => {
+      if (!live) return;
+      detach = attachPlacesSuggest(el, {
+        className: "jf-reg-sug",
+        onPick: (p) => {
+          if (p.typed) return;
+          setAddr(p.formatted);
+        },
+      });
     });
+    return () => {
+      live = false;
+      detach?.();
+    };
   }, [step]);
 
   /* The catalog is read when the plan step opens, not on mount: before the
@@ -1433,16 +1455,20 @@ export function RegisterContent({
     // A new address comes back here with ?gsu= (auth callback); an address
     // that already has an account signs in and lands on the dashboard. The
     // ad's click id rides to that return in a cookie (2026-10-01).
-    rememberFbclidForGoogle(searchParams?.get("fbclid"));
     signupLeavingTo("google");
-    if (otp) {
-      // The return of a new address is built from cookies (lib/googleSignup):
-      // the trade and the campaign this page came in on, and the mode — a
-      // page handed over from an in-app browser has none of the landing's.
-      writeLandingCookies(industry ? resolveLandingVariant(industry) : undefined, utm ?? undefined, spotlight);
-      rememberSignupMode(searchParams?.get("flow") ?? null);
-    }
-    void signIn("google", { callbackUrl: "/auth/register" });
+    void loadLandingMemory()
+      .then(([{ rememberFbclidForGoogle, writeLandingCookies }, { resolveLandingVariant }]) => {
+        rememberFbclidForGoogle(searchParams?.get("fbclid"));
+        // The return of a new address is built from cookies (lib/googleSignup):
+        // the trade and the campaign this page came in on, and the mode — a
+        // page handed over from an in-app browser has none of the landing's.
+        if (otp) writeLandingCookies(industry ? resolveLandingVariant(industry) : undefined, utm ?? undefined, spotlight);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (otp) rememberSignupMode(searchParams?.get("flow") ?? null);
+        void signIn("google", { callbackUrl: "/auth/register" });
+      });
   }
 
   /* THE PASSWORDLESS PATH'S PLAN STEP WITHOUT A CARD: the address is already

@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "@/components/ui/Toast";
+import { toast } from "@/components/ui/toast-store";
 import { setOrgPlan } from "@/actions/billing";
 
 /** Minimal plan shape the checkout flow needs (a subset of PlanDTO). */

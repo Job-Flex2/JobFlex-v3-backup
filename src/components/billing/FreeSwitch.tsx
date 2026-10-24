@@ -55,7 +55,7 @@ import { longDate } from "@/lib/format";
 import { CANCEL_REASONS, OTHER_MAX, OTHER_MIN, checkCancelFeedback, type CancelReason } from "@/lib/cancelFeedback";
 import { EXTENSION_DAYS, NOTE_MAX, REQUEST_SENT_BODY, REQUEST_SENT_TITLE, type ExtensionDays, type TrialExtensionOffer } from "@/lib/trialExtension";
 import { freeTallyTiles, type FreeLoss, type FreeTally } from "@/lib/freePlan";
-import { toast } from "@/components/ui/Toast";
+import { toast } from "@/components/ui/toast-store";
 import { ConfirmPlanChange } from "./ConfirmPlanChange";
 import { useUpdateCard } from "@/components/v3/payment-ribbon/payment-ribbon";
 import "./confirm-plan-change.css";

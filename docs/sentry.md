@@ -11,7 +11,7 @@ to a line of code.
 | --- | --- | --- |
 | Node server | `src/sentry.server.config.ts` | `Sentry.init`, loaded by `src/instrumentation.ts` `register()` |
 | Edge runtime | `src/sentry.edge.config.ts` | the same, for edge code |
-| Browser | `src/instrumentation-client.ts` → `src/lib/sentryClient.ts` | starts the SDK before hydration and passes App Router navigations to Sentry |
+| Browser | `src/instrumentation-client.ts` → `src/lib/sentryClient.ts` | starts the SDK after the page has loaded (idle, or 3 s at most) and passes App Router navigations to Sentry; only the calls named in `src/lib/sentryBrowser.ts` are bundled — no replay, no feedback widget |
 | Server errors | `src/instrumentation.ts` `onRequestError` | `Sentry.captureRequestError`, next to the existing PostHog event |
 | Client errors | `src/app/error.tsx`, `src/app/global-error.tsx` | `captureException` through `captureClientException` |
 | Privacy | `src/lib/sentryScrub.ts` | `beforeSend`, `beforeSendSpan` and `beforeBreadcrumb` for all three runtimes |
