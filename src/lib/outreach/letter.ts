@@ -5,7 +5,7 @@
 // one-click unsubscribe; and what the email law asks of a first commercial email: it says what it is, where it comes
 // from (a postal address) and how to stop.
 
-import { tradeWords } from "./script";
+import { tradePitch, tradeWords } from "./script";
 import type { Prospect } from "./rules";
 
 export interface OutreachLetter {
@@ -26,7 +26,8 @@ export function outreachLetter(input: { p: Pick<Prospect, "name" | "business" | 
   const paras = [
     who ? `Hi ${who},` : "Hi,",
     `I'm ${input.sender}, from JobFlex — we make software for contractors. First, thank you for what you do: people count on ${t.who} for ${t.help}, and that matters.`,
-    `We built an AI desk that answers a contractor's phone in their own company's name, books visits onto their calendar and texts them what came in — so the call that comes in while you're up on a job isn't lost to the next company on the list. JobFlex also writes the estimates and the proposals your customers sign on their phone, and keeps the schedule.`,
+    `We built an AI desk that answers a contractor's phone in their own company's name, books visits onto their calendar and texts them what came in — so the call that comes in while you're up on a job isn't lost to the next company on the list.`,
+    tradePitch(p.trade).email,
     `The quickest way to see it is to hear it: tap the link below and it will call you in about half a minute and answer the way it would for ${biz}.`,
   ];
   const linkLabel = "Have the AI desk call me";

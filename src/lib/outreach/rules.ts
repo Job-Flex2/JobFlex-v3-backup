@@ -15,7 +15,10 @@ import { isUsCanadaNumber, toE164 } from "@/lib/phone";
 
 /** The words beside the box a contractor ticks — kept, as shown, with each consent. */
 export const OUTREACH_CONSENT_TEXT =
-  "I agree that JobFlex may call me at this number — using an AI voice assistant and automated technology — to show me the AI desk and tell me about JobFlex, and may email me. Calls may be recorded. Agreeing isn't a condition of buying anything, and I can say “stop calling” on any call.";
+  "I agree that JobFlex may call and text me at this number — using an AI voice assistant and automated technology — to show me the AI desk and tell me about JobFlex, and may email me. Calls may be recorded. Agreeing isn't a condition of buying anything. Message and data rates may apply; reply STOP to any text, or say “stop calling” on a call, and you won't hear from us again.";
+
+/** Whether a consent, as ticked, covers texts (the words before 2026-10-24 covered calls and email only). */
+export const consentCoversTexts = (c: Pick<Consent, "text"> | null | undefined): boolean => !!c && /call and text me/i.test(c.text);
 
 export type LineType = "landline" | "mobile" | "fixedVoip" | "nonFixedVoip" | "tollFree" | "personal" | "pager" | "voicemail" | "premium" | "sharedCost" | "uan" | "unknown";
 const LINE_TYPES: readonly LineType[] = ["landline", "mobile", "fixedVoip", "nonFixedVoip", "tollFree", "personal", "pager", "voicemail", "premium", "sharedCost", "uan", "unknown"];
@@ -82,12 +85,14 @@ export interface Prospect {
   source: "list" | "call-me";
   line: { type: LineType; carrier: string | null; at: string } | null;
   consent: Consent | null;
-  dnc: { at: string; via: "call" | "admin" | "email" } | null;
+  dnc: { at: string; via: "call" | "admin" | "email" | "sms" } | null;
   calls: OutreachCall[];
   emailedAt: string | null;
   interest: { level: "hot" | "warm" | "cold"; note: string; callBack: string | null; at: string } | null;
   linkSentAt: string | null;
   linkSentTo: string | null;
+  /** The one text after a call they asked for (2026-10-24); absent on older records. */
+  textedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -181,6 +186,41 @@ export function callableNow(p: Prospect, now: Date): { ok: true } | { ok: false;
   const justAsked = !!p.consent && !last && now.getTime() - Date.parse(p.consent.at) < 15 * 60 * 1000;
   if (!justAsked && !withinCallingHours(p.state, now)) return { ok: false, why: "Outside calling hours on their clock (9 am–8 pm, Mon–Sat)" };
   return { ok: true };
+}
+
+/* ── The order: the email first ───────────────────────────────────────── */
+
+/** A landline that has an email gets the email first, and the AI's call this long after it. */
+export const EMAIL_LEAD_MS = 2 * 24 * 60 * 60 * 1000;
+
+/**
+ * May the list's run call this contractor yet (owner, 2026-10-24: "send the email if there is one, and the text and
+ * the call after that")? Who asked for the call: at once. A landline with an email: once the email went out two days
+ * ago — while emails can't go out on this server at all, the call needn't wait for one. "Call now" on the row
+ * doesn't wait for this.
+ */
+export function emailFirst(p: Pick<Prospect, "email" | "emailedAt" | "consent">, now: Date, emailsOn: boolean): { ok: true } | { ok: false; why: string } {
+  if (p.consent || !p.email || !emailsOn) return { ok: true };
+  if (!p.emailedAt) return { ok: false, why: "The email goes first" };
+  if (now.getTime() - Date.parse(p.emailedAt) < EMAIL_LEAD_MS) return { ok: false, why: "Called two days after the email" };
+  return { ok: true };
+}
+
+/** Who gets the email in the next batch: everyone not yet written to whom we may write — a landline too, before its call. */
+export function emailDue(p: Prospect): boolean {
+  if (!p.email || p.emailedAt || p.dnc || p.consent) return false;
+  const k = routeFor(p).kind;
+  return k === "email" || k === "ai-call" || k === "check";
+}
+
+/**
+ * The one text after a call they asked for: their consent covers texts, the number isn't a landline (it can't take
+ * one), they haven't said stop, and nothing was texted since they asked.
+ */
+export function textDue(p: Prospect): boolean {
+  if (!p.phone || p.dnc || !consentCoversTexts(p.consent)) return false;
+  if (p.line?.type === "landline") return false;
+  return !(p.textedAt && p.consent && p.textedAt >= p.consent.at);
 }
 
 /* ── The list ──────────────────────────────────────────────────────────── */
