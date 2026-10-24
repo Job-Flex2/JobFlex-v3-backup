@@ -69,11 +69,16 @@ import {
    before any bundle has arrived.
    THE PAGE'S CLOCK goes first (lib/pageClock, 2026-10-17): the moments are
    visible time since the load — a hidden tab's minutes are not the form's —
-   and the form measures itself only on the load this script ran in. */
+   and the form measures itself only on the load this script ran in.
+   A FORM THAT POSTS IS LET GO (2026-10-23). The short sign-up's step 1 posts to
+   ./checkout and works without the script; held, its button did nothing until
+   the bundle arrived — 14 s in Facebook's browser on a phone. Its first press
+   now goes to the server as the browser sends it; a second press before the
+   form is live is held, so one tap is one sign-up. */
 const STEP1_PRELUDE = `${pageClockScript("register")}(function(){var s={typedAt:0,submitAt:0,values:{},ready:false};window.__jfStep1=s;
 function v(){var c=window.__jfClock,t=performance.now(),h=0;if(c){for(var i=0;i<c.spans.length;i++)h+=c.spans[i][1]-c.spans[i][0];if(c.since>=0)h+=t-c.since;}return Math.max(1,Math.round(t-h));}
 document.addEventListener("input",function(e){var el=e.target;if(s.ready||!el||!el.form||el.form.id!=="step1Form"||!el.id)return;if(!s.typedAt)s.typedAt=v();s.values[el.id]=el.value;},true);
-document.addEventListener("submit",function(e){var f=e.target;if(s.ready||!f||f.id!=="step1Form")return;e.preventDefault();if(!s.submitAt)s.submitAt=v();},true);})();`;
+document.addEventListener("submit",function(e){var f=e.target;if(s.ready||!f||f.id!=="step1Form")return;if(!s.submitAt)s.submitAt=v();if(f.getAttribute("method")==="post"&&!s.sent){s.sent=1;return;}e.preventDefault();},true);})();`;
 
 /** ./checkout's refusals of a step 1 sent without JavaScript, by their code in `?e1=`. */
 const STEP1_REFUSALS: Record<string, string> = {
