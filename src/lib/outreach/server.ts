@@ -102,7 +102,8 @@ export async function allowUsCalls(): Promise<{ ok: true } | { ok: false; error:
     const res = await fetch(`${base.replace(/\/$/, "")}/v1/DialingPermissions/BulkCountryUpdates`, {
       method: "POST",
       headers: { Authorization: `Basic ${Buffer.from(`${s.accountSid}:${s.authToken}`).toString("base64")}`, "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ UpdateRequest: JSON.stringify([{ iso_code: "US", low_risk_numbers_enabled: "true" }]) }),
+      // Twilio wants all three switches, as strings ("unable to parse the updateRequest" otherwise); the high-risk two stay off.
+      body: new URLSearchParams({ UpdateRequest: JSON.stringify([{ iso_code: "US", low_risk_numbers_enabled: "true", high_risk_special_numbers_enabled: "false", high_risk_tollfraud_numbers_enabled: "false" }]) }),
       signal: AbortSignal.timeout(10_000),
       cache: "no-store",
     });
