@@ -1,0 +1,257 @@
+/* THE PHONE SIGN-UP'S FRAME (register-sheet.tsx). Phone only: every drawing rule is under (max-width: 768px). Above it
+   every box is `display: contents` and the register page draws itself as it does without the frame.
+
+   Geometry (docs/design/mobile.md): the layer is a fixed box sized 100% by its edges; the sheet hangs from it, its
+   ceiling --msheet-max-h, its padding, handle and home-indicator allowance read from the --msheet-* table. It moves
+   by transform only. Before the script (no [data-live]) the sheet stands open, with nothing hidden.
+
+   The register page inside is flattened so that this sheet is its one frame and its one scroller. Those rules name
+   five classes (.root .layer .sheet .body + the page's own): the page's phone rules carry two or three, its
+   "inside the app" ones ([data-appview]) three, so the build's chunk order cannot flip them. */
+
+@media (max-width: 768px) {
+  /* A flat ink film over the app behind: 22% at rest, 30% open. Only once the app is there to cover. */
+  .film {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    background: var(--ink);
+    opacity: 0.22;
+    pointer-events: none;
+    transition: opacity 0.3s var(--ease-out);
+  }
+  .root:not([data-live]) .film {
+    display: none;
+  }
+  .root[data-sheet="open"] .film {
+    opacity: 0.3;
+  }
+
+  /* ── the sheet ──────────────────────────────────────────────────────────────────────────────────────────── */
+  .layer {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: var(--msheet-z);
+    pointer-events: none;
+  }
+  .sheet {
+    /* Rest height before the script has measured it: about 45% of the screen (45 / 92 of the sheet). */
+    --peek-h: 49%;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--msheet-max-h);
+    display: flex;
+    flex-direction: column;
+    pointer-events: auto;
+    background: var(--paper);
+    border-top: 2px solid var(--ink);
+    transition: transform 0.3s var(--ease-out);
+    animation: rise 0.42s var(--ease-out) 0.12s backwards;
+  }
+  .root[data-live] .sheet[data-state="peek"] {
+    transform: translateY(calc(100% - var(--peek-h) - var(--msheet-foot-pad-y) - var(--msheet-safe-b)));
+    /* At rest nothing in the sheet scrolls, so a pull anywhere on it is the sheet's. */
+    touch-action: none;
+  }
+  @keyframes rise {
+    from {
+      translate: 0 100%;
+    }
+  }
+
+  /* The handle: a 44px strip across the top, the 3px bar in it. It overlaps the body's top padding. */
+  .grab {
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 44px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: grab;
+    touch-action: none;
+  }
+  .grab::before {
+    content: "";
+    display: block;
+    flex: 0 0 auto;
+    width: var(--msheet-grab-w);
+    height: var(--msheet-grab-h);
+    margin-top: var(--msheet-grab-top);
+    background: var(--ink-muted);
+    opacity: 0.45;
+  }
+  .grab:disabled {
+    cursor: default;
+  }
+  .grab:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -4px;
+  }
+
+  .body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+    padding: 26px var(--msheet-pad-x) calc(var(--msheet-foot-pad-y) + var(--msheet-safe-b));
+  }
+  .root[data-live] .sheet[data-state="peek"] .body {
+    overflow: hidden;
+  }
+  /* The plan step's carousel runs edge to edge and keeps its own 18px gutters. */
+  .root .layer .sheet .body:has(:global(.plan-sheet.is-in)) {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* ── the register page, flattened into the sheet ────────────────────────────────────────────────────────── */
+  .root .layer .sheet .body > div {
+    min-height: 0;
+    overflow: visible;
+    background: transparent;
+  }
+  /* The desk's picture of the app (lib/signupView): on a phone the live Overview stands in for it. */
+  .root :global([data-signup-preview]) {
+    display: none;
+  }
+  .root .layer .sheet .body :global(.auth) {
+    display: block;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    overflow: visible;
+    transform: none;
+    transition: none;
+  }
+  .root .layer .sheet .body :global(.auth.is-gone) {
+    display: none;
+  }
+  .root .layer .sheet .body :global(.auth-form) {
+    width: auto;
+    max-width: none;
+    min-height: 0;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow: visible;
+    animation: none;
+  }
+  .root .layer .sheet .body :global(.auth-form)::before {
+    content: none;
+    display: none;
+  }
+  /* The sheet is inside the app: no logo of its own. */
+  .root .layer .sheet .body :global(.brand) {
+    display: none;
+  }
+
+  /* The plan step, in the same sheet: in the flow under the handle instead of a full-screen page sliding in. */
+  .root .layer .sheet .body :global(.plan-sheet) {
+    position: static;
+    inset: auto;
+    z-index: auto;
+    display: none;
+    overflow: visible;
+    background: transparent;
+    transform: none;
+    visibility: visible;
+    transition: none;
+    will-change: auto;
+  }
+  .root .layer .sheet .body :global(.plan-sheet.is-in) {
+    display: block;
+  }
+  .root .layer .sheet .body :global(.plan-sheet-in) {
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    max-width: none;
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  /* Step 1, the passwordless form: the trial, Google, the email and Start first; the price plate after them.
+     Visual order only — the fields keep their order (name, email) for the keyboard and a screen reader. */
+  .root .layer .sheet .body :global([data-otp-screen="form"]) {
+    display: flex;
+    flex-direction: column;
+  }
+  .root .layer .sheet .body :global([data-otp-screen="form"] > *) {
+    order: 2;
+  }
+  .root .layer .sheet .body :global([data-otp-screen="form"] > .auth-h1) {
+    order: 0;
+  }
+  .root .layer .sheet .body :global([data-otp-screen="form"] > #googleBtn) {
+    order: 1;
+  }
+  .root .layer .sheet .body :global([data-otp-screen="form"] > #step1Form) {
+    order: 3;
+  }
+  .root .layer .sheet .body :global([data-otp-screen="form"] > [data-auto-plan-lede]) {
+    order: 4;
+    margin-top: 18px;
+  }
+  .root .layer .sheet .body :global([data-otp-screen="form"] > .foot) {
+    order: 5;
+  }
+  /* Facebook's and Instagram's browsers have no Google button: the email keeps the heading's distance from it. */
+  .root .layer .sheet .body :global([data-otp-screen="form"]:not(:has(> #googleBtn)) > #step1Form) {
+    margin-top: 24px;
+  }
+
+  /* The steps' row is left off step 1 (the sheet already says "7-day free trial"): the fields sit 45px higher, so
+     the keyboard rising does not cover the email on an 800px phone. */
+  .root .layer .sheet .body :global(.auth-body:has(#step1:not(.is-hidden)) > .stepper) {
+    display: none;
+  }
+  /* At rest the name waits under the fold, so Start sits right under the email. */
+  .root[data-live][data-sheet="peek"] .sheet .body :global(#step1Form .fld:has(> #name)) {
+    display: none;
+  }
+  /* What follows Start would show a sliver of its first line in the foot's padding at the screen's edge. */
+  .root[data-live][data-sheet="peek"] .sheet .body :global(#step1Form > [type="submit"] ~ *),
+  .root[data-live][data-sheet="peek"] .sheet .body :global([data-otp-screen="form"] > #step1Form ~ *) {
+    visibility: hidden;
+  }
+}
+
+@media (max-width: 768px) and (prefers-reduced-motion: reduce) {
+  .sheet,
+  .film {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* Above a phone the frame is not drawn: the register page is the whole page. */
+@media (min-width: 769px) {
+  .film,
+  .grab {
+    display: none;
+  }
+  .root,
+  .layer,
+  .sheet,
+  .body {
+    display: contents;
+  }
+}

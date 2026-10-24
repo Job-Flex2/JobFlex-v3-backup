@@ -36,14 +36,13 @@ import Link from "next/link";
 import type { Route } from "next";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import { HandoffHelp, useBrowserHandoff } from "@/components/auth/open-in-browser";
 import type { InAppBrowser } from "@/lib/inAppBrowser";
 import type { TradeType } from "@/lib/tradeTypes";
 import type { UtmParams } from "@/components/v3/landing-e/landing-variants";
 import type { OtpRestore } from "@/lib/signupOtp";
-import { SIGNUP_MODE_COOKIE, rememberOtpDraft, rememberSignupMode } from "@/lib/signupMode";
+import { rememberOtpDraft, rememberSignupMode } from "@/lib/signupMode";
 import { trackTraffic } from "@/lib/traffic-client";
-import { setSignupPosition, signupLeavingTo, signupProblem } from "@/lib/signup-watch";
+import { setSignupPosition, signupProblem } from "@/lib/signup-watch";
 import { reasonOfMessage } from "@/lib/signup-watch-shared";
 import { TRAFFIC_EVENTS } from "@/lib/traffic-contract";
 import {
@@ -185,7 +184,6 @@ export function PasswordlessStep({
   const goRef = React.useRef<HTMLButtonElement>(null);
   useKeepInView(headRef, goRef, screen === "code");
   const verifying = React.useRef(false);
-  const handoff = useBrowserHandoff(inApp ?? "instagram");
   // A plan or an edition named by the link rides the form sent without JavaScript (./checkout picks the plan by it).
   const params = useSearchParams();
   const plan = params?.get("plan") ?? null;
@@ -362,19 +360,9 @@ export function PasswordlessStep({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, as the page opens
   }, []);
 
+  // Facebook's and Instagram's browsers draw no Google button (below): there is no hand-off to make from here.
   function googleTap() {
-    if (!inApp) return onGoogle();
-    // Off to the phone's own browser for Google: a leave on purpose, not an abandon.
-    signupLeavingTo("google");
-    // To Safari / Chrome with the progress in the address: the draft, the
-    // referral (the webview's cookies stay behind) and the mode.
-    const url = new URL(window.location.href);
-    url.searchParams.set("google", "1");
-    if (draft) url.searchParams.set("d", draft);
-    if (attribution && !url.searchParams.has("ref") && !url.searchParams.has("promo")) url.searchParams.set(attribution.kind, attribution.code);
-    if (!url.searchParams.has("flow") && document.cookie.split("; ").includes(`${SIGNUP_MODE_COOKIE}=otp`)) url.searchParams.set("flow", "otp");
-    trackTraffic(TRAFFIC_EVENTS.signupStep1, { outcome: "google_handoff", reason: inApp, variant: "e", steps: 2, mode: "otp", plan_mode: planMode });
-    handoff.open(url.toString());
+    onGoogle();
   }
 
   async function onContinue(e: React.FormEvent) {
@@ -692,18 +680,22 @@ export function PasswordlessStep({
           <p className="auth-lede">Create your account in seconds. No password needed.</p>
         )}
 
-        <button className={`btn btn--ghost ${css.google}`} type="button" id="googleBtn" onClick={googleTap}>
-          <svg className="ic ic--brand" aria-hidden="true">
-            <use href="#i-google" />
-          </svg>
-          Sign up with Google
-        </button>
-        {/* The lines naming the email providers under the Google button and the divider are gone (owner, 2026-10-21). */}
-        {inApp ? <HandoffHelp handoff={handoff} /> : null}
-
-        <div className="divider">
-          <span className="kpi-lbl">No Google? Use any email</span>
-        </div>
+        {/* NO GOOGLE IN FACEBOOK'S OR INSTAGRAM'S BROWSER (2026-10-23): Google does not sign in inside them
+            (lib/inAppBrowser), so the email is the one way in there — no button, no divider. */}
+        {inApp ? null : (
+          <>
+            <button className={`btn btn--ghost ${css.google}`} type="button" id="googleBtn" onClick={googleTap}>
+              <svg className="ic ic--brand" aria-hidden="true">
+                <use href="#i-google" />
+              </svg>
+              Sign up with Google
+            </button>
+            {/* The lines naming the email providers under the Google button and the divider are gone (owner, 2026-10-21). */}
+            <div className="divider">
+              <span className="kpi-lbl">No Google? Use any email</span>
+            </div>
+          </>
+        )}
 
         {/* WITHOUT JAVASCRIPT (2026-10-19) the short sign-up still works: the form posts to ./checkout, whose answer is
             Stripe's card page (or step 1 again with the reason). With it, onContinue takes over and the same server

@@ -238,7 +238,10 @@ function quotaTip(q: NavLimit): string {
   return `${q.remaining} of ${q.limit} ${q.label} left${cycle}.`;
 }
 
-export function MobileDashboard({ data: seed, notice }: { data?: DashboardData; notice?: React.ReactNode }) {
+/** `sample`: the Overview drawn as a picture with made-up rows behind the phone sign-up
+ *  (components/v3/auth-register-mobile) — no session, so the bell is drawn still (its feed is a signed-in
+ *  action) and the estimator picker is not mounted. */
+export function MobileDashboard({ data: seed, notice, sample = false }: { data?: DashboardData; notice?: React.ReactNode; sample?: boolean }) {
   const [data, setData] = useState<DashboardData | null>(seed ?? null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -270,7 +273,7 @@ export function MobileDashboard({ data: seed, notice }: { data?: DashboardData; 
     };
   }, [seed]);
 
-  if (data) return <DashboardView data={data} notice={notice} />;
+  if (data) return <DashboardView data={data} notice={notice} sample={sample} />;
   return <BootScreen error={loadError} />;
 }
 
@@ -307,7 +310,7 @@ function BootScreen({ error }: { error: string | null }) {
   );
 }
 
-function DashboardView({ data, notice }: { data: DashboardData; notice?: React.ReactNode }) {
+function DashboardView({ data, notice, sample }: { data: DashboardData; notice?: React.ReactNode; sample: boolean }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -900,14 +903,20 @@ function DashboardView({ data, notice }: { data: DashboardData; notice?: React.R
               <Icon id="i-plus" />
             </button>
           )}
-          <NotificationBell buttonClassName={styles.tbarBtn} iconClassName={styles.ic} />
+          {sample ? (
+            <span className={styles.tbarBtn} aria-hidden="true">
+              <Icon id="i-bell" />
+            </span>
+          ) : (
+            <NotificationBell buttonClassName={styles.tbarBtn} iconClassName={styles.ic} />
+          )}
         </div>
       </header>
 
       {/* The dialog the bar's New Estimate button opens. Every other handheld
           surface gets it from <MobileNav />; this page draws its own bar, so it
           mounts its own copy. */}
-      <EstimatorPicker />
+      {sample ? null : <EstimatorPicker />}
 
       {/* ============ SCROLLER ============ */}
       <main className={styles.scroll} ref={scrollRef}>

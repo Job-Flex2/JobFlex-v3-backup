@@ -20,7 +20,7 @@
 // ./register-responsive.tsx for the mechanism and why it is a sibling file
 // rather than inline. /mobile-v1/auth/register remains as a direct preview URL.
 
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { SPOTLIGHT_COOKIE, spotlightFor } from "@/lib/planSpotlight";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -92,6 +92,17 @@ const STEP1_REFUSALS: Record<string, string> = {
 export const metadata: Metadata = {
   title: "JobFlex · Create account",
   description: "Set up your shop — your organization, your login, your first quote.",
+};
+
+/* THE PHONE SIGN-UP'S SHEET (components/v3/auth-register-mobile) hangs from a fixed layer: the keyboard shrinks the
+   visual viewport only, never the layout, so the open sheet does not move when the keyboard rises (Chrome's default,
+   said out loud), and a tap into a field does not zoom the page out of the sheet. */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
+  interactiveWidget: "resizes-visual",
 };
 
 // GOOGLE SIGNUPS finish here. The auth callback provisions the account + a
