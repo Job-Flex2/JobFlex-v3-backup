@@ -35,6 +35,10 @@ The short way: `bash go-live.sh` from this folder does steps 2–4 below and pri
 
 Until step 6 is done the app keeps its voicemail; the moment both variables are set, the desk answers live.
 
+## A brief's own tools
+
+A call's brief (the app's `/api/desk/call-brief`) may carry `tools` — JobFlex's own outreach calls to contractors do (the app's `lib/outreach/script.ts`: email the trial link, note how it went, never call again). The session then offers those instead of the desk's; `transfer_call` and `end_call` keep their meaning here, and any other of them is run by the app at `/api/desk/tool` with `{ token, name, args }`. A brief without tools gets the desk's own, as before.
+
 ## Knobs
 
 - `VOICE_MODEL` (default `gpt-realtime-mini`; `gpt-realtime` for the full model, about three times the cost). The app's "Test it here" (Settings → AI desk) reads the same variable on Vercel — set both to change the model everywhere.
