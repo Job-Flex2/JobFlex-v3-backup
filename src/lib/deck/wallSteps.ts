@@ -1,15 +1,20 @@
-// THE WALL'S STEPS FROM THE PHOTO'S OWN PIXELS (2026-10-23 night). Pure. Owner, with the live read beside the house
-// he expects: "still wrong — should be like on the second pic". The vision model, asked where the wall steps, found
-// one corner of the bump-out and read it the wrong way round (the porch roof's side as the part standing out). The
-// picture itself says both things plainly:
+// THE WALL'S STEPS FROM THE PHOTO'S OWN PIXELS (2026-10-23 night; the eave found on its own 2026-10-24). Pure. Owner,
+// with the live read beside the house he expects: "still wrong — should be like on the second pic". The vision
+// model, asked where the wall steps, found one corner of the bump-out and read it the wrong way round (the porch
+// roof's side as the part standing out). The picture itself says both things plainly:
 //   · WHERE the wall steps — a corner board runs the whole height of the wall, up BOTH storeys without a break; a
 //     window's frame stands up only within its own storey, a porch post only below the porch roof;
 //   · WHICH WAY — a part of the wall nearer the camera shows its eave higher in the picture (it is closer; the same
 //     height looks taller) — a few per cent of the wall's height for a 2-ft bump-out seen across a yard. A porch roof
 //     in front of a part does not move that part's eave.
-// So: the corners where an edge runs up both storeys, then each part's eave — the run of soffit, fascia and gutter
-// above it — matched against the main wall's (the widest part's) and said to stand out, back, or level. Nothing is
-// said where the photo doesn't show it plainly (no corner, no eave to match): the model's read stands.
+// So: the corners where an edge runs up both storeys, then each part's eave — the shadow of soffit, fascia and gutter
+// over the wall above it — compared across each corner. The eave is found by the picture, not by the model's line:
+// the model draws its eave line a few per cent off (on the gutter, under the soffit), so the plainest shadow band with
+// wall standing brighter under it, in a wide window around that line, is the eave; the other parts' eaves are looked
+// for near it, and the darkest row of each (where the soffit meets the wall) is the row compared. The rows are read
+// along the model's eave line, so the slope of a shot taken from one side is mostly taken out (an angled shot is
+// straightened before this). Nothing is said where the photo doesn't show it plainly (no corner, no eave to match):
+// the model's read stands.
 //
 // On the grey picture the browser makes of the photo (lib/deck/photoSnap's Gray), in the read's own fractions.
 
@@ -33,6 +38,10 @@ export interface WallStepsFound {
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 const lineY = (l: { left: { x: number; y: number }; right: { x: number; y: number } }, x: number) => l.left.y + ((l.right.y - l.left.y) * (x - l.left.x)) / Math.max(1e-6, l.right.x - l.left.x);
+const median = (a: number[]) => {
+  const s = [...a].sort((p, q) => p - q);
+  return s[Math.floor(s.length / 2)];
+};
 
 /** The corners of the wall: columns where an edge stands up through every storey of it. Fractions across the
  *  picture, left to right. */
@@ -88,10 +97,17 @@ export function wallCorners(read: HouseRead, g: Gray, gx?: Float32Array): number
     .sort((a, b) => a - b);
 }
 
-/** A part's eave: the picture's brightness in rows around the eave line (±`reach` px), averaged across the part's
- *  columns clear of any window just under the eave (index 0 = `reach` px above the line). Each column is read along
- *  the eave line's own slope, so a tilted photo isn't read as a step. */
-function eaveProfile(read: HouseRead, g: Gray, x0: number, x1: number, reach: number): number[] | null {
+/** A stretch of the wall read by row: `p` smoothed over five rows, `raw` as read. */
+interface Profile {
+  p: number[];
+  raw: number[];
+}
+
+/** A stretch of the wall's brightness by row around the eave line — rows `lo`…`hi` px from the line (above is
+ *  negative), each read along the line's own slope and averaged across the stretch's columns clear of any window
+ *  standing in those rows (its frame and glass would be read as the band). Smoothed over five rows, so one dark line
+ *  of a gutter's lip isn't the band. */
+function eaveProfile(read: HouseRead, g: Gray, x0: number, x1: number, lo: number, hi: number): Profile | null {
   const { w, h, data } = g;
   const a = Math.round(x0 * w);
   const b = Math.round(x1 * w);
@@ -99,13 +115,12 @@ function eaveProfile(read: HouseRead, g: Gray, x0: number, x1: number, reach: nu
   for (let x = a; x < b; x++) {
     const fx = x / w;
     const yE = lineY(read.eave!, fx);
-    // A window whose head is near the eave would put its own frame into the profile: its columns are left out.
-    if (read.windows.some((win) => fx >= win.x0 - 0.004 && fx <= win.x1 + 0.004 && (win.head - yE) * h < reach)) continue;
+    if (read.windows.some((win) => fx >= win.x0 - 0.004 && fx <= win.x1 + 0.004 && (win.head - yE) * h < hi && (win.sill - yE) * h > lo)) continue;
     cols.push(x);
   }
   if (cols.length < 3) return null;
   const rows: number[] = [];
-  for (let k = -reach; k <= reach; k++) {
+  for (let k = lo; k <= hi; k++) {
     let s = 0;
     let n = 0;
     for (const x of cols) {
@@ -114,32 +129,73 @@ function eaveProfile(read: HouseRead, g: Gray, x0: number, x1: number, reach: nu
       s += data[y * w + x];
       n++;
     }
-    if (!n) return null;
-    rows.push(s / n);
+    rows.push(n ? s / n : NaN);
   }
-  // Smoothed over a few rows: one dark line of a gutter's lip is not the band.
-  return rows.map((_, i) => {
+  // A row off the top or bottom of the picture takes its nearest neighbour's value.
+  for (let i = 1; i < rows.length; i++) if (Number.isNaN(rows[i])) rows[i] = rows[i - 1];
+  for (let i = rows.length - 2; i >= 0; i--) if (Number.isNaN(rows[i])) rows[i] = rows[i + 1];
+  if (rows.some((v) => Number.isNaN(v))) return null;
+  const p = rows.map((_, i) => {
     let s = 0;
     let n = 0;
     for (let k = -2; k <= 2; k++) if (rows[i + k] !== undefined) [s, n] = [s + rows[i + k], n + 1];
     return s / n;
   });
+  return { p, raw: rows };
 }
 
-/** The eave's shadow band in a profile: its darkest row, and how plainly it shows (how much darker than the
- *  profile's middle brightness, 0…1). */
-function shadowBand(p: number[]): { at: number; depth: number } {
-  let i0 = 0;
-  for (let i = 1; i < p.length; i++) if (p[i] < p[i0]) i0 = i;
-  // To a fraction of a row: the low point of the parabola through the darkest row and its neighbours.
-  let at = i0;
-  if (i0 > 0 && i0 < p.length - 1) {
-    const den = p[i0 - 1] - 2 * p[i0] + p[i0 + 1];
-    if (den > 1e-9) at = i0 + clamp((p[i0 - 1] - p[i0 + 1]) / (2 * den), -0.5, 0.5);
+/** A dark band across the wall with the wall standing brighter under it. */
+interface Band {
+  /** Where it sits, px from the eave line (above is negative), to a fraction of a row. */
+  at: number;
+  /** How much darker than the wall under it, 0…1. */
+  depth: number;
+  /** Its darkest row as read (before smoothing), 0…1. */
+  dark: number;
+}
+
+/** The eave's shadow bands a profile could hold: each dip with the wall brighter under it by a good margin — the
+ *  soffit's shadow over the siding, not the dark of the roof (the band itself is under that) nor the wall's own
+ *  texture. `lo` is the profile's first row, px from the eave line; `H` the wall's height, px. */
+function shadowBands({ p, raw }: Profile, lo: number, H: number): Band[] {
+  const d1 = Math.max(3, Math.round(H * 0.04));
+  const d2 = Math.max(d1 + 3, Math.round(H * 0.12));
+  const out: Band[] = [];
+  for (let i = 3; i < p.length - 3; i++) {
+    if (!(p[i] < p[i - 1] && p[i] <= p[i + 1])) continue;
+    const below = p.slice(Math.min(p.length, i + d1), Math.min(p.length, i + d2 + 1));
+    if (below.length < 3) continue;
+    const wall = median(below);
+    const depth = wall > 0 ? (wall - p[i]) / wall : 0;
+    if (depth < 0.3) continue;
+    // To a fraction of a row: the low point of the parabola through the dip and its neighbours.
+    const den = p[i - 1] - 2 * p[i] + p[i + 1];
+    const at = i + (den > 1e-9 ? clamp((p[i - 1] - p[i + 1]) / (2 * den), -0.5, 0.5) : 0);
+    out.push({ at: at + lo, depth, dark: Math.min(...raw.slice(i - 2, i + 3)) });
   }
-  const sorted = [...p].sort((a, b) => a - b);
-  const mid = sorted[Math.floor(sorted.length / 2)];
-  return { at, depth: mid > 0 ? (mid - p[i0]) / mid : 0 };
+  return out;
+}
+
+/** The band that stands for the eave among `cands`: the deepest near `from`, a little less for its distance (the
+ *  roof's dark above the eave and the wall's lines under it are farther from where the eave is expected). Null when
+ *  none lies within `span` px. */
+function pickBand(cands: Band[], from: number, span: number): { band: Band; score: number } | null {
+  let best: { band: Band; score: number } | null = null;
+  for (const band of cands) {
+    const off = Math.abs(band.at - from);
+    if (off > span) continue;
+    const score = band.depth - 0.4 * (off / span);
+    if (!best || score > best.score) best = { band, score };
+  }
+  return best;
+}
+
+/** The darkest band within `span` px of `from` — the deepest shadow is where the soffit meets the wall, and that is
+ *  the same row of every part on one plane, where a lesser dip (the gutter's shadow, the fascia's edge) is not. */
+function darkest(cands: Band[], from: number, span: number): Band | null {
+  let best: Band | null = null;
+  for (const band of cands) if (Math.abs(band.at - from) <= span && (!best || band.dark < best.dark)) best = band;
+  return best;
 }
 
 /**
@@ -154,30 +210,44 @@ export function wallSteps(read: HouseRead, g: Gray, opts: { depthFt?: number | n
   const xL = Math.min(read.base.left.x, read.base.right.x);
   const xR = Math.max(read.base.left.x, read.base.right.x);
   const H = (lineY(read.base, (xL + xR) / 2) - lineY(read.eave, (xL + xR) / 2)) * g.h;
-  // Wide enough to find the eave wherever the read put its line (a model's line can be a few per cent off).
-  const reach = Math.max(10, Math.round(H * 0.14));
+  if (H < 40) return null;
+  // The eave is looked for well above and below the model's line (its line can sit a good way off); the other parts'
+  // eaves near the one found, a step being a few per cent of the wall's height.
+  const R = Math.max(14, Math.round(H * 0.45));
+  const near = Math.max(6, Math.round(H * 0.15));
   const xs = [xL, ...corners, xR];
   const parts = xs.slice(0, -1).map((x0, i) => {
     const x1 = xs[i + 1];
     // Clear of the corner boards themselves, but no more: between a row of upper windows the gaps are narrow.
     const pad = Math.max(3 / g.w, (x1 - x0) * 0.04);
-    const prof = x1 - x0 > (xR - xL) * 0.05 ? eaveProfile(read, g, x0 + pad, x1 - pad, reach) : null;
-    const band = prof ? shadowBand(prof) : null;
-    // An eave that shows: its shadow band plainly darker than the wall and sky around it, not at the window's edge.
-    const plain = !!band && band.depth >= 0.3 && band.at > 2 && band.at < (prof?.length ?? 0) - 3;
-    return { x0, x1, band: plain ? band : null };
+    const prof = x1 - x0 > (xR - xL) * 0.05 ? eaveProfile(read, g, x0 + pad, x1 - pad, -R, R) : null;
+    return { x0, x1, cands: prof ? shadowBands(prof, -R, H) : [] };
   });
-  // Each corner by the two parts either side of it: the one whose eave's shadow sits higher in the picture is nearer
-  // the camera. A corner with an eave that doesn't show on either side says nothing.
+  // The eave itself: the part whose band shows plainest near the model's line (a wider part counting a little more),
+  // and in it the darkest row near that band.
+  let ref: { i: number; band: Band; score: number } | null = null;
+  parts.forEach((p, i) => {
+    const pick = pickBand(p.cands, 0, R);
+    if (!pick) return;
+    const score = pick.score + (0.1 * (p.x1 - p.x0)) / (xR - xL);
+    if (!ref || score > ref.score) ref = { i, band: pick.band, score };
+  });
+  if (!ref) return null;
+  const picked = ref as { i: number; band: Band };
+  const eave = darkest(parts[picked.i].cands, picked.band.at, near) ?? picked.band;
+  // Each part's band: the darkest near the eave found.
+  const bands = parts.map((p) => darkest(p.cands, eave.at, near));
+  // Each corner by the two parts either side of it: the one whose eave sits higher in the picture is nearer the
+  // camera. A corner with an eave that doesn't show on either side says nothing.
   const thr = Math.max(2.5, H * 0.02);
   const jogs: WallJog[] = [];
   const plane: Array<number | null> = parts.map(() => null);
-  const firstShown = parts.findIndex((p) => p.band);
+  const firstShown = bands.findIndex((b) => b);
   if (firstShown < 0) return null;
   plane[firstShown] = 0;
   corners.forEach((x, k) => {
-    const a = parts[k].band;
-    const b = parts[k + 1].band;
+    const a = bands[k];
+    const b = bands[k + 1];
     if (!a || !b) return;
     const d = b.at - a.at;
     if (Math.abs(d) < thr) {
@@ -194,11 +264,12 @@ export function wallSteps(read: HouseRead, g: Gray, opts: { depthFt?: number | n
   // Each part against the main wall (the widest whose plane is known), for the review's words and the QA.
   const known = parts.map((p, i) => ({ i, w: p.x1 - p.x0 })).filter(({ i }) => plane[i] !== null);
   const main = known.reduce((m, k) => (k.w > m.w ? k : m), known[0]);
-  const ref = parts[main.i].band!.at;
+  const refAt = bands[main.i]!.at;
   const out = parts.map((p, i) => {
     const pl = plane[i];
-    const state: PartState = pl === null || !p.band ? "unknown" : pl > (plane[main.i] as number) ? "out" : pl < (plane[main.i] as number) ? "back" : "level";
-    return { x0: p.x0, x1: p.x1, state, shiftPx: p.band ? Math.round((p.band.at - ref) * 10) / 10 : 0, corr: p.band ? Math.round(p.band.depth * 100) / 100 : 0 };
+    const band = bands[i];
+    const state: PartState = pl === null || !band ? "unknown" : pl > (plane[main.i] as number) ? "out" : pl < (plane[main.i] as number) ? "back" : "level";
+    return { x0: p.x0, x1: p.x1, state, shiftPx: band ? Math.round((band.at - refAt) * 10) / 10 : 0, corr: band ? Math.round(band.depth * 100) / 100 : 0 };
   });
   return { jogs, corners, parts: out };
 }

@@ -62,7 +62,7 @@ export interface HouseReview {
   /** The picture could not be read: the lines are a start to drag onto the wall. */
   byHand: string | null;
   /** How it was read: the looks taken, the model, the lines the picture's own edges moved. */
-  how?: { looks: number; model: string; snapped: number; split: number; /** The wall's steps measured off the photo's own pixels (lib/deck/wallSteps). */ stepsFromPhoto?: number } | null;
+  how?: { looks: number; model: string; snapped: number; split: number; /** The wall's steps measured off the photo's own pixels (lib/deck/wallSteps) — 0 when the photo didn't show them and the model's read stands. */ stepsFromPhoto?: number } | null;
 }
 
 /**
@@ -353,7 +353,7 @@ export function useHousePhoto({
           const depths = read.jogs.map((j) => j.depthFt).filter((d): d is number => d !== null && d > 0).sort((a, b) => a - b);
           const steps = wallSteps(read, gray, { depthFt: depths.length ? depths[Math.floor(depths.length / 2)] : null });
           if (steps) read = { ...read, jogs: steps.jogs };
-          how = { looks, model: res.model, snapped: snapped.moved, split: snapped.split, ...(steps ? { stepsFromPhoto: steps.jogs.length } : {}) };
+          how = { looks, model: res.model, snapped: snapped.moved, split: snapped.split, stepsFromPhoto: steps ? steps.jogs.length : 0 };
         } else how = { looks, model: res.model, snapped: 0, split: 0 };
       } else
         byHand = res.configured
@@ -750,7 +750,7 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
             <div>
               <h3 className="v1-h3">Here&rsquo;s what I see</h3>
               <span className="v1-meta">
-                {r.byHand ? "Marked by hand" : `Read off the photo${r.how ? ` in ${r.how.looks === 2 ? "two looks" : "one look"}${r.how.snapped ? ", lined up with its edges" : ""}${r.how.stepsFromPhoto ? ", the wall's steps measured off the photo" : ""} (${r.how.model})` : ""}${r.straightened ? ` · straightened (the shot was ${r.straightened}% off square)` : ""}`} — drag any line that&rsquo;s off; tap a part
+                {r.byHand ? "Marked by hand" : `Read off the photo${r.how ? ` in ${r.how.looks === 2 ? "two looks" : "one look"}${r.how.snapped ? ", lined up with its edges" : ""}${r.how.stepsFromPhoto ? ", the wall's steps measured off the photo" : r.how.stepsFromPhoto === 0 ? ", the wall's steps as the model read them" : ""} (${r.how.model})` : ""}${r.straightened ? ` · straightened (the shot was ${r.straightened}% off square)` : ""}`} — drag any line that&rsquo;s off; tap a part
                 of the wall to set it out or back; tap a window, a door or a step to remove it.
               </span>
             </div>
