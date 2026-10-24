@@ -8,8 +8,9 @@
 //   describe → (thinking 850ms) → clarify → (thinking 850ms) → scope →
 //   contact → done, with `‹ Back` jumps to 0 / 1 / 2 and `restart` back to 0.
 //   `canRefine()` is `desc.trim().length > 0` (was `> 12`); `go()` collapses its delay to 0
-//   under reduced motion; the simulated upload pump ticks every 160ms at
-//   12 + rand(18)% and rebuilds the pane only when a file COMPLETES.
+//   under reduced motion. The photos picked go into the request's job folder
+//   for real once it is sent (2026-10-23, ../homeowner-landing/wizard/
+//   use-request-attachments) — the donor's upload pump only pretended.
 //
 // `paneKey` is the same fidelity device: it increments at exactly the donor's
 // `render()` call sites and keys the pane, so `.pane` / `.q` / `.sl` / `.up` /
@@ -56,12 +57,7 @@ import { submitHomeownerRequest, suggestHomeownerQuestions, suggestHomeownerScop
 import { browserTimeZone, type WizardPrefill } from "@/lib/home/prefill";
 import { prefersReducedMotion, referralCodeFromUrl, testKeyFromUrl } from "../homeowner-landing/use-homeowner-behavior";
 import { usePlaceholderCycle } from "../homeowner-landing/wizard/use-placeholder-cycle";
-
-type Upload = { name: string; kind: "pdf" | "photo"; progress: number };
-
-/** The photo / video picker only simulates an upload — nothing leaves the browser and no
- *  contractor ever sees the files — so it stays hidden until a real upload exists. */
-const UPLOADS_LIVE = false;
+import { attachmentsLine, useRequestAttachments } from "../homeowner-landing/wizard/use-request-attachments";
 
 /** useLayoutEffect warns during SSR; useEffect is inert there, so it stands in. */
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -78,7 +74,9 @@ const NEWLINE = "\n";
 export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; prefill?: WizardPrefill | null }) {
   const [step, setStep] = useState(0);
   const [desc, setDesc] = useState(prefill?.description ?? "");
-  const [uploads, setUploads] = useState<Upload[]>([]);
+  /* The photos, videos and PDFs picked — sent into the request's folder once it exists. */
+  const att = useRequestAttachments();
+  const { add: addAttachments, clear: clearAttachments, send: sendAttachments } = att;
   const [thinking, setThinking] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [paneKey, setPaneKey] = useState(0);
@@ -105,11 +103,11 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
      it, or a note that the link went by email. */
   const [homePath, setHomePath] = useState<string | null>(null);
   const [homeEmailed, setHomeEmailed] = useState(false);
-  const uploadsRef = useRef<Upload[]>([]);
+  /* The request's own token, for sending a file again. */
+  const [requestToken, setRequestToken] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const caret = useRef<number | null>(null);
-  const pumpTimer = useRef<number | null>(null);
   const goTimer = useRef<number | null>(null);
   const live = useRef({ step: 0, thinking: false });
 
@@ -139,49 +137,13 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
 
   /* ── attachments ───────────────────────────────────────────────────── */
 
-  const pump = useCallback(() => {
-    if (pumpTimer.current) return;
-    pumpTimer.current = window.setInterval(() => {
-      let busy = false;
-      let finished = false;
-      const next = uploadsRef.current.map((u) => {
-        if (u.progress >= 100) return u;
-        busy = true;
-        const progress = Math.min(100, u.progress + 12 + Math.random() * 18);
-        if (progress >= 100) finished = true;
-        return { ...u, progress };
-      });
-      if (busy) {
-        uploadsRef.current = next;
-        setUploads(next);
-        if (finished && live.current.step === 0 && !live.current.thinking) bump();
-      } else {
-        if (pumpTimer.current) window.clearInterval(pumpTimer.current);
-        pumpTimer.current = null;
-      }
-    }, 160);
-  }, [bump]);
-
+  /* A file picked or dropped appears as a chip — the donor rebuilt the pane, so its entrance plays. */
   const addFiles = useCallback(
     (list: FileList) => {
-      const next: Upload[] = [];
-      for (let i = 0; i < list.length && i < 6; i++) {
-        const f = list[i];
-        const nm = f.name || "file";
-        const type = f.type || "";
-        next.push({
-          name: nm.length > 22 ? nm.slice(0, 19) + "…" : nm,
-          kind: type.indexOf("pdf") > -1 ? "pdf" : "photo",
-          progress: 0,
-        });
-      }
-      const merged = uploadsRef.current.concat(next).slice(0, 6);
-      uploadsRef.current = merged;
-      setUploads(merged);
+      addAttachments(list);
       bump();
-      pump();
     },
-    [bump, pump]
+    [addAttachments, bump]
   );
 
   /* ── navigation ────────────────────────────────────────────────────── */
@@ -219,9 +181,7 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
   /* ── teardown: nothing outlives the page ───────────────────────────── */
   useEffect(() => {
     return () => {
-      if (pumpTimer.current) window.clearInterval(pumpTimer.current);
       if (goTimer.current) window.clearTimeout(goTimer.current);
-      pumpTimer.current = null;
       goTimer.current = null;
     };
   }, []);
@@ -358,8 +318,11 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
       setStatusPath(res.statusPath ?? null);
       setHomePath(res.homePath ?? null);
       setHomeEmailed(Boolean(res.homeEmailed));
+      setRequestToken(res.requestToken ?? null);
       setStep(4);
       bump();
+      // The files now go into the request's folder; the Done screen follows them.
+      if (res.requestToken) void sendAttachments(res.requestToken);
     } catch (err) {
       setSendErr(
         err instanceof Error && err.message
@@ -376,13 +339,40 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
     setStatusPath(null);
     setSendErr("");
     setDesc("");
-    uploadsRef.current = [];
-    setUploads([]);
+    clearAttachments();
     answers.current = [];
     bump();
   };
 
   /* ── panes ─────────────────────────────────────────────────────────── */
+
+  /** The files as chips: removable while writing; on the Done screen, each one's way into the folder. */
+  const chips = (removable: boolean) =>
+    att.items.length ? (
+      <div className="ups">
+        {att.items.map((u) => (
+          <span className={u.state === "failed" ? "up up-fail" : "up"} key={u.id} title={u.error} data-wizard-file={u.state}>
+            <svg className="ic">
+              <use href={u.kind === "pdf" ? "#jfmh-i-doc" : "#jfmh-i-img"} />
+            </svg>
+            <span className="up-n">{u.name}</span>
+            {u.state === "sent" ? (
+              <span className="up-ok">✓</span>
+            ) : u.state === "sending" ? (
+              <span className="up-bar">
+                <span style={{ width: u.progress + "%" }}></span>
+              </span>
+            ) : u.state === "failed" ? (
+              <span className="up-no">!</span>
+            ) : removable ? (
+              <button type="button" className="up-x" aria-label={`Remove ${u.file.name}`} onClick={() => att.remove(u.id)}>
+                ×
+              </button>
+            ) : null}
+          </span>
+        ))}
+      </div>
+    ) : null;
 
   const paneThinking = (
     <div className="pane think" key={paneKey}>
@@ -413,48 +403,28 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
         <DictateButton value={desc} onChange={(next) => setTextareaValue(descRef.current, next)} icon={<MicIcon />} label="Speak your project"
           wrapClassName="dictate" buttonClassName="mic" onClassName="on" noteClassName="dictate-note" />
       </div>
-      {uploads.length ? (
-        <div className="ups">
-          {uploads.map((u, i) => (
-            <span className="up" key={i}>
-              <svg className="ic">
-                <use href={u.kind === "pdf" ? "#jfmh-i-doc" : "#jfmh-i-img"} />
-              </svg>
-              <span className="up-n">{u.name}</span>
-              {u.progress >= 100 ? (
-                <span className="up-ok">✓</span>
-              ) : (
-                <span className="up-bar">
-                  <span style={{ width: u.progress + "%" }}></span>
-                </span>
-              )}
-            </span>
-          ))}
-        </div>
-      ) : null}
+      {chips(true)}
       <div className="tools">
-        {UPLOADS_LIVE && (
-          <>
-            <input
-              type="file"
-              className="file"
-              multiple
-              accept="image/*,video/*,.pdf"
-              style={{ display: "none" }}
-              ref={fileRef}
-              onChange={(e) => {
-                const files = e.currentTarget.files;
-                if (files && files.length) addFiles(files);
-              }}
-            />
-            <button className="tool tool-photo" type="button" onClick={() => fileRef.current?.click()}>
-              <svg className="ic">
-                <use href="#jfmh-i-img" />
-              </svg>
-              <span className="tool-l">Photos &amp; video</span>
-            </button>
-          </>
-        )}
+        <input
+          type="file"
+          className="file"
+          multiple
+          accept="image/*,video/*,.pdf"
+          style={{ display: "none" }}
+          ref={fileRef}
+          data-wizard-file-input
+          onChange={(e) => {
+            const files = e.currentTarget.files;
+            if (files && files.length) addFiles(files);
+            e.currentTarget.value = "";
+          }}
+        />
+        <button className="tool tool-photo" type="button" onClick={() => fileRef.current?.click()}>
+          <svg className="ic">
+            <use href="#jfmh-i-img" />
+          </svg>
+          <span className="tool-l">Photos &amp; video</span>
+        </button>
       </div>
       <div className="pane-foot">
         <button className="go go-refine" type="button" disabled={!canRefine} onClick={onRefine}>
@@ -535,12 +505,12 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
       );
       d++;
     });
-    if (uploads.length) {
+    if (att.items.length) {
       rows.push(
         <div className="sl" key="attachments" style={{ animationDelay: 0.12 + d * 0.1 + "s" }}>
           <i>✓</i>
           <span>
-            <b>Attachments:</b> {uploads.length} file{uploads.length > 1 ? "s" : ""} included
+            <b>Attachments:</b> {att.items.length} file{att.items.length > 1 ? "s" : ""} — they go into the project&rsquo;s folder when you send it
           </span>
         </div>
       );
@@ -647,6 +617,17 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
           or a request made from the dashboard); else the request page, as the
           confirmation email links it. Plain anchors: runtime tokens, no literal
           route for typedRoutes. */}
+      {att.items.length ? (
+        <div className="done-files" data-wizard-files={att.sending ? "sending" : att.failed ? "failed" : "sent"}>
+          {chips(false)}
+          <p className="done-p" aria-live="polite">{attachmentsLine(att)}</p>
+          {att.failed && !att.sending && requestToken ? (
+            <button className="restart" type="button" onClick={() => void sendAttachments(requestToken)}>
+              Try the {att.failed === 1 ? "file" : "files"} again
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {homePath ? (
         <a className="done-link" href={homePath}>
           Open your home dashboard →
@@ -680,7 +661,7 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
         className={dragging ? "win drag anim a4" : "win anim a4"}
         ref={rootRef}
         onDragOver={(e) => {
-          if (!UPLOADS_LIVE) return;
+          if (live.current.step >= 4) return;
           e.preventDefault();
           setDragging(true);
         }}
@@ -690,7 +671,7 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
           if (e.target === root || !root.contains(e.relatedTarget as Node | null)) setDragging(false);
         }}
         onDrop={(e) => {
-          if (!UPLOADS_LIVE) return;
+          if (live.current.step >= 4) return;
           e.preventDefault();
           setDragging(false);
           if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
@@ -698,11 +679,9 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
           }
         }}
       >
-        {UPLOADS_LIVE && (
-          <div className="drop-veil">
-            <span>Drop photos, video, or blueprint PDFs</span>
-          </div>
-        )}
+        <div className="drop-veil">
+          <span>Drop photos, video, or blueprint PDFs</span>
+        </div>
         <div className="win-head">
           <div className="win-step">{headLabel}</div>
           <div className="win-ticks">

@@ -203,6 +203,7 @@ const PART_STEP: Record<string, StepId> = {
   Height: "size",
   Ledger: "house",
   "On the house": "house",
+  "Doors and windows": "house",
   "Standing free": "house",
   Site: "house",
   Load: "house",

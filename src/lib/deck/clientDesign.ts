@@ -270,6 +270,17 @@ export function clientCopyOf(design: DeckDesign): DeckDesign {
   return design.photo ? { ...design, photo: null } : design;
 }
 
+/** Where the photos a client sends through their link are kept: the shop's private folder, under the link's own. */
+export const clientPhotoFolder = (orgId: string, token: string) => `deck-photos/${orgId}/client/${token}/`;
+
+/** A design as the client's page shows it (2026-10-23): the house a photo built stays, the shop's own picture never
+ *  reaches the page — only a photo the client sent themselves (`ownPhoto`, a test on its stored URL). */
+export function forTheClient(design: DeckDesign, ownPhoto: (url: string) => boolean): DeckDesign {
+  const keepHouse = !design.house.photo || ownPhoto(design.house.photo.url);
+  if (!design.photo && keepHouse) return design;
+  return { ...design, photo: null, house: keepHouse ? design.house : { ...design.house, photo: null } };
+}
+
 /** A blank start: the stock deck, on the contractor's site, house and lumber. */
 export function blankFor(base: DeckDesign): DeckDesign {
   // The house the contractor drew stays: a blank deck, not a blank house.
@@ -322,7 +333,7 @@ const FIXTURE_SAID: Record<FixtureKind, [string, string]> = {
  * height, stairs, rail style, boards, lower level, roof look and lights;
  * everything else from `base`. Settled to the tables unless `settle: false`.
  */
-export function mergeClientDesign(base: DeckDesign, raw: unknown, opts: { settle?: boolean } = {}): DeckDesign {
+export function mergeClientDesign(base: DeckDesign, raw: unknown, opts: { settle?: boolean; photoOk?: (url: string) => boolean } = {}): DeckDesign {
   const c = normalizeDeckDesign(raw, { state: base.site.state, frostIn: base.frostIn });
   const sameKind = c.structure === base.structure;
   const roof: RoofDesign = { ...c.roof };
@@ -338,8 +349,9 @@ export function mergeClientDesign(base: DeckDesign, raw: unknown, opts: { settle
     footing: base.footing,
     extras: base.extras,
     site: base.site,
-    // The house is the client's: they stand in front of it with a tape.
-    house: c.house,
+    // The house is the client's: they stand in front of it with a tape — or (2026-10-23) photograph it. The photo it
+    // was built from only when it came through their link (`photoOk`); else the contractor's, as it was.
+    house: { ...c.house, photo: c.house.photo && opts.photoOk?.(c.house.photo.url) ? c.house.photo : (base.house.photo ?? null) },
     photo: base.photo,
     electrical: mergeFixtures(base.electrical, c.electrical),
     rail: { ...c.rail, heightIn: base.rail.heightIn, postSpacingFt: base.rail.postSpacingFt, customPerFt: base.rail.customPerFt, type: c.rail.type === "custom" && base.rail.type !== "custom" ? base.rail.type : c.rail.type },

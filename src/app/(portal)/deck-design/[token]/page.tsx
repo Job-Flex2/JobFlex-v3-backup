@@ -6,7 +6,8 @@ import type { Metadata } from "next";
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { CLIENT_TOKEN_RE, clientLinkKey, parseClientLink } from "@/lib/deck/clientDesign";
+import { CLIENT_TOKEN_RE, clientLinkKey, clientPhotoFolder, forTheClient, parseClientLink } from "@/lib/deck/clientDesign";
+import { isPrivateFileUnder } from "@/lib/media/privateStore";
 import { DeckClientDesigner } from "@/components/v3/deck-client-design/deck-client-designer";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +42,8 @@ export default async function DeckDesignPage({ params }: { params: Promise<{ tok
   const found = await load(token);
   if (!found) return notFound();
   const { link, org, expired, proposal } = found;
+  // The client sees the house a photo built, never the shop's own picture — only one they sent themselves.
+  const own = (url: string) => isPrivateFileUnder(url, clientPhotoFolder(link.orgId, link.token));
   return (
     <DeckClientDesigner
       proposal={proposal}
@@ -50,8 +53,8 @@ export default async function DeckDesignPage({ params }: { params: Promise<{ tok
       clientPhone={link.clientPhone}
       address={link.address}
       start={link.start}
-      base={link.base}
-      work={link.work}
+      base={forTheClient(link.base, own)}
+      work={link.work ? forTheClient(link.work, own) : link.work}
       note={link.note}
       unsure={link.unsure}
       sentAt={link.sentAt}

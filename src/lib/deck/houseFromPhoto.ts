@@ -17,7 +17,7 @@
 // The same read and the same picture always build the same house, so the QA script can prove it.
 
 import { baseYAt, DOOR_HEIGHT_FT, JOG_DEFAULT_FT, scaleFromRead, type PhotoScale } from "./photoFit";
-import { HOUSE_LIMITS, OPENING_LIMITS, isHouseHex, wallParts, type HouseDesign, type HouseHex, type HouseJog, type HouseMaterial, type HouseOpening, type HousePhoto, type HouseRoof } from "./house";
+import { HOUSE_LIMITS, OPENING_LIMITS, isHouseHex, toInchFt, wallParts, type HouseDesign, type HouseHex, type HouseJog, type HouseMaterial, type HouseOpening, type HousePhoto, type HouseRoof } from "./house";
 import type { HouseRead } from "./houseRead";
 
 export interface PhotoHouseInput {
@@ -152,10 +152,10 @@ export function houseFromPhoto(input: PhotoHouseInput): PhotoHouse | null {
   const openings: HouseOpening[] = [];
   for (const w of read.windows) {
     const cx = (w.x0 + w.x1) / 2;
-    openings.push({ id: `w${openings.length + 1}`, kind: "window", xFt: q4(deckFt(cx)), widthFt: q4(clamp(((w.x1 - w.x0) * photoW) / k, OL.widthFt.min, OL.widthFt.max)), heightFt: q4(clamp(((w.sill - w.head) * photoH) / k, OL.heightFt.min, OL.heightFt.max)), sillFt: q4(clamp(above(w.sill, cx), OL.sillFt.min, OL.sillFt.max)) });
+    openings.push({ id: `w${openings.length + 1}`, kind: "window", xFt: q4(deckFt(cx)), widthFt: q4(clamp(((w.x1 - w.x0) * photoW) / k, OL.widthFt.min, OL.widthFt.max)), heightFt: q4(clamp(((w.sill - w.head) * photoH) / k, OL.heightFt.min, OL.heightFt.max)), sillFt: toInchFt(clamp(above(w.sill, cx), OL.sillFt.min, OL.sillFt.max)) });
   }
   for (const d of doors) {
-    openings.push({ id: `d${openings.length + 1}`, kind: d.kind, xFt: q4(d.atFt - deckAtFt), widthFt: q4(clamp(d.widthFt, 2, OL.widthFt.max)), heightFt: q4(clamp(d.heightFt, 6, 9)), sillFt: q4(clamp(d.sillFt, 0, OL.sillFt.max)) });
+    openings.push({ id: `d${openings.length + 1}`, kind: d.kind, xFt: q4(d.atFt - deckAtFt), widthFt: q4(clamp(d.widthFt, 2, OL.widthFt.max)), heightFt: q4(clamp(d.heightFt, 6, 9)), sillFt: toInchFt(clamp(d.sillFt, 0, OL.sillFt.max)) });
   }
   openings.sort((a, b) => a.xFt - b.xFt || a.sillFt - b.sillFt);
   // A bump-out with an upper-storey window in it stands as tall as the house.

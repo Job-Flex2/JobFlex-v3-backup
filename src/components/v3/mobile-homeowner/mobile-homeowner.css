@@ -625,6 +625,14 @@ body:has(.jf-mobile-homeowner)::before { content: none; }
   background: var(--blueprint);
   transition: width 0.2s linear;
 }
+/* A real file (2026-10-23): removed with ×, a failure marked, the Done screen's files a little apart. */
+.jf-mobile-homeowner .up-x { flex: none; margin: calc(-6px * var(--s)) calc(-8px * var(--s)) calc(-6px * var(--s)) 0; min-width: 44px; min-height: 36px;
+  border-radius: var(--radius); font-size: calc(17px * var(--s)); font-weight: 700; line-height: 1; color: var(--muted); }
+.jf-mobile-homeowner .up-x:active, .jf-mobile-homeowner .up-x:focus-visible { color: var(--ink); background: var(--hair); }
+.jf-mobile-homeowner .up-fail { border-color: var(--danger, #a83232); }
+.jf-mobile-homeowner .up-no { flex: none; font-weight: 900; color: var(--danger, #a83232); }
+.jf-mobile-homeowner .done-files { margin-top: calc(14px * var(--s)); width: 100%; }
+.jf-mobile-homeowner .done-files .ups { padding: 0; justify-content: center; }
 
 /* Two secondary tools on one row; the primary action lives in the sticky
    foot with every other step's primary action. */

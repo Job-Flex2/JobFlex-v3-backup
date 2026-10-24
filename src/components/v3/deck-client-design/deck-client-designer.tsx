@@ -63,6 +63,7 @@ import { DeckKindPicker } from "@/components/v3/deck-estimator-blueprint/deck-ki
 import { markDeckClientOpened, saveDeckClientWork, sendDeckClientDesign } from "@/actions/deckClientDesign";
 import { Chips, Section, Stepper, clamp, cx, ftWords, half, inWords } from "./parts";
 import { ClientHouse } from "./client-house";
+import { ClientHousePhoto } from "./client-house-photo";
 import s from "./deck-client-designer.module.css";
 // The Talk to design button and the panel's styles load with the page (the panel itself loads when first opened).
 import "@/components/v3/deck-voice/deck-voice.css";
@@ -659,7 +660,8 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
             </Section>
 
             {design.placement !== "detached" ? (
-              <Section n={next()} id="step-house" title="Your house's back wall" sub={<>Pick the shape of the wall the deck goes on and how your house looks. Measuring it is optional — the deck fits itself around the corners you add.</>}>
+              <Section n={next()} id="step-house" title="Your house's back wall" sub={<>Build it from a photo of the wall, or pick its shape and how your house looks. Measuring it is optional — the deck fits itself around the corners you add.</>}>
+                <ClientHousePhoto token={token} design={design} patch={patch} />
                 <ClientHouse shape={design.shape} house={design.house} shopName={shopName} onChange={(n2) => change(applyDeckPatch(design, { ...(n2.house ? { house: n2.house } : {}), ...(n2.shape ? { shape: n2.shape } : {}) }))} />
               </Section>
             ) : null}

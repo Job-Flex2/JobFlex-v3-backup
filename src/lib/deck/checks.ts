@@ -47,6 +47,7 @@ import { SNOW_TABLE_MAX_PSF, TERMITE_LABEL, deckLoadForSnow, roofLoadForSnow } f
 import { POST_ACTUAL_IN, STAIR_MIN_WIDTH_IN } from "./codeTables";
 import { FRAMING_SPECIES, defaultFramingSpecies } from "./catalog";
 import { cite, codeWords, inFrac, stateName } from "./stateCodes";
+import { openingChecks } from "./openingChecks";
 
 /** A change to a design, part by part; anything left out stays as it is. */
 export type DeckPatch = {
@@ -90,6 +91,8 @@ export function deckChecks(s: DeckStructure): DeckCheck[] {
   siteChecks(s, add);
   codeCheck(s, add);
   if (frame) guardAndStairChecks(s, add);
+  // The house's real doors and windows (2026-10-23, read off a photo): the deck against each one (lib/deck/openingChecks).
+  openingChecks(s, add);
   electricalChecks(s, add);
   // ── The hot-tub spot ─────────────────────────────────────────────
   if (frame && design.spa.on) {
@@ -512,7 +515,9 @@ function roofChecks(roof: RoofFrame, design: DeckDesign, frame: DeckFrame | null
     if (roof.hardware.wallHangers) add({ id: "roof-wall-hangers", level: "pass", part: "On the house", text: "The side headers end on beam hangers bolted to the house framing; the ridge beam sits in a bracket on the wall.", rule: RULE.ledgerBoard });
     const meetIn = roof.ledger ? roof.ledger.zIn : roof.peakIn;
     const above = meetIn - roof.floorIn;
-    add({ id: "roof-wall-height", level: "info", part: "On the house", text: `The roof meets the house ${ftIn(Math.round(above))} above the ${roof.floor === "deck" ? "deck" : "floor"} (${ftIn(Math.round(meetIn))} above the ground). Check it clears the windows and the house's own eave; the siding there is cut back and flashed (${Math.round(roof.wallFt)} ft).`, rule: "IRC R903.2" });
+    // The windows themselves are checked when the house carries them (lib/deck/openingChecks, "roof-openings").
+    const known = !!design.house.openings?.length;
+    add({ id: "roof-wall-height", level: "info", part: "On the house", text: `The roof meets the house ${ftIn(Math.round(above))} above the ${roof.floor === "deck" ? "deck" : "floor"} (${ftIn(Math.round(meetIn))} above the ground). Check it clears ${known ? "" : "the windows and "}the house's own eave; the siding there is cut back and flashed (${Math.round(roof.wallFt)} ft).`, rule: "IRC R903.2" });
   } else if (!pergola) {
     add({ id: "roof-free", level: "info", part: "Standing free", text: `A free-standing ${kindName} roof: ${plural(roof.posts.length, "post")}, headers all round, knee braces. The building office may want its lateral bracing shown.`, rule: RULE.selfSupporting });
   }

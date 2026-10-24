@@ -40,7 +40,7 @@ import {
 import { colourZones, dominantColour, ftIn, houseFromPhoto, type PhotoHouse } from "@/lib/deck/houseFromPhoto";
 import { snapRead, type Gray } from "@/lib/deck/photoSnap";
 import { applyHomography, autoRectify, transformRead } from "@/lib/deck/photoFit";
-import { deckClientPhotoData, deckClientPhotos, deckPhotoHref, readHousePhoto, uploadDeckPhoto, type ClientPhoto } from "@/actions/deckEstimator";
+import { deckClientPhotoData, deckClientPhotos, deckPhotoHref, readHousePhoto, uploadDeckPhoto, type ClientPhoto, type DeckPhotoResult, type HousePhotoRead } from "@/actions/deckEstimator";
 import { cropPhoto, shrinkPhoto, straightenPhoto, trimLetterbox } from "@/components/v3/deck-estimator-blueprint/deck-photo";
 import { NumberInput, Toggle, cx, feetText, parseFeet } from "./deck-v1-parts";
 
@@ -62,7 +62,24 @@ export interface HouseReview {
   how?: { looks: number; model: string; snapped: number; split: number } | null;
 }
 
+/**
+ * The server's half, by who is asking (2026-10-23): the studio's actions behind its gate, or the client's design link's
+ * (actions/deckClientDesign, the token the key) — the same read, the picture kept under the link's own folder. Only the
+ * studio has the photos clients put in their job folders.
+ */
+export interface HousePhotoApi {
+  read: (form: FormData) => Promise<HousePhotoRead>;
+  upload: (form: FormData) => Promise<DeckPhotoResult>;
+  href: (url: string) => Promise<string | null>;
+  clientPhotos?: typeof deckClientPhotos;
+  clientPhotoData?: typeof deckClientPhotoData;
+}
+
+const STUDIO_API: HousePhotoApi = { read: readHousePhoto, upload: uploadDeckPhoto, href: deckPhotoHref, clientPhotos: deckClientPhotos, clientPhotoData: deckClientPhotoData };
+
 export interface HousePhotoState {
+  /** Who it is for: the card's words (the client's page has no clients' photos). */
+  audience: "studio" | "client";
   busy: string | null;
   error: string | null;
   review: HouseReview | null;
@@ -218,7 +235,21 @@ async function lookForm(src: { file: File; w: number; h: number }, look: "wide" 
 
 const luma = (hex: string) => (0.299 * parseInt(hex.slice(1, 3), 16) + 0.587 * parseInt(hex.slice(3, 5), 16) + 0.114 * parseInt(hex.slice(5, 7), 16)) / 255;
 
-export function useHousePhoto({ design, patch, clientId, onBuilt }: { design: DeckDesign; patch: (p: DeckPatch, keys?: string[]) => void; clientId?: string; onBuilt?: () => void }): HousePhotoState {
+export function useHousePhoto({
+  design,
+  patch,
+  clientId,
+  onBuilt,
+  api = STUDIO_API,
+  audience = "studio",
+}: {
+  design: DeckDesign;
+  patch: (p: DeckPatch, keys?: string[]) => void;
+  clientId?: string;
+  onBuilt?: () => void;
+  api?: HousePhotoApi;
+  audience?: "studio" | "client";
+}): HousePhotoState {
   const [busy, setBusy] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [review, setReview] = React.useState<HouseReview | null>(null);
@@ -235,11 +266,11 @@ export function useHousePhoto({ design, patch, clientId, onBuilt }: { design: De
       queueMicrotask(() => live && setThumb(null));
       return;
     }
-    void deckPhotoHref(photo.url).then((h) => live && setThumb(h));
+    void api.href(photo.url).then((h) => live && setThumb(h));
     return () => {
       live = false;
     };
-  }, [photo?.url]);
+  }, [photo?.url, api]);
 
   const built = React.useMemo(
     () =>
@@ -265,7 +296,7 @@ export function useHousePhoto({ design, patch, clientId, onBuilt }: { design: De
       const small = await shrinkPhoto(file);
       const clean = await trimLetterbox(small.file, small.w, small.h);
       setBusy("Finding the house's wall…");
-      const res = await readHousePhoto(await lookForm(clean, "wide"));
+      const res = await api.read(await lookForm(clean, "wide"));
       let image: { file: File; w: number; h: number } = clean;
       let read: HouseRead = blankHouseRead();
       let straightened: number | null = null;
@@ -298,7 +329,7 @@ export function useHousePhoto({ design, patch, clientId, onBuilt }: { design: De
           setBusy("Looking closer at the windows and doors…");
           const cut = await cropPhoto(image.file, crop, image.w, image.h);
           const at = { x: Math.round(crop.x * image.w) / image.w, y: Math.round(crop.y * image.h) / image.h, w: cut.w / image.w, h: cut.h / image.h };
-          const close = await readHousePhoto(await lookForm(cut, "close")).catch(() => null);
+          const close = await api.read(await lookForm(cut, "close")).catch(() => null);
           if (close?.ok) {
             const merged = mergeLooks(read, readFromCrop(close.read, at));
             if (merged !== read) looks = 2;
@@ -325,14 +356,16 @@ export function useHousePhoto({ design, patch, clientId, onBuilt }: { design: De
       up.set("file", image.file);
       up.set("w", String(image.w));
       up.set("h", String(image.h));
-      const saved = await uploadDeckPhoto(up);
+      const saved = await api.upload(up);
       if (!saved.ok) {
         setError(saved.error);
         return;
       }
       setReview({
         url: saved.url,
-        href: saved.href,
+        // No file store on the server (the client's page): the picture is shown from the browser's own copy, and the
+        // house is built without keeping it.
+        href: saved.href || URL.createObjectURL(image.file),
         w: saved.w,
         h: saved.h,
         read,
@@ -359,7 +392,8 @@ export function useHousePhoto({ design, patch, clientId, onBuilt }: { design: De
   const openClientPhotos = async () => {
     setError(null);
     setBusy("Finding your clients' photos…");
-    const res = await deckClientPhotos({ clientId: clientId ?? null }).catch(() => null);
+    if (!api.clientPhotos) return;
+    const res = await api.clientPhotos({ clientId: clientId ?? null }).catch(() => null);
     setBusy(null);
     if (!res || !res.ok) {
       setError(res && !res.ok ? res.error : "The clients' photos could not be read right now.");
@@ -368,8 +402,9 @@ export function useHousePhoto({ design, patch, clientId, onBuilt }: { design: De
     setClientPhotos(res.photos);
   };
   const pickClientPhoto = async (id: string) => {
+    if (!api.clientPhotoData) return;
     setBusy("Opening the photo…");
-    const res = await deckClientPhotoData(id).catch(() => null);
+    const res = await api.clientPhotoData(id).catch(() => null);
     if (!res || !res.ok) {
       setBusy(null);
       setError(res && !res.ok ? res.error : "That photo could not be opened.");
@@ -396,7 +431,7 @@ export function useHousePhoto({ design, patch, clientId, onBuilt }: { design: De
       deckAtFt: built.deckAtFt,
       at: new Date().toISOString(),
     };
-    const p: DeckPatch = { house: { ...built.house, photo: kept } };
+    const p: DeckPatch = { house: { ...built.house, photo: review.url ? kept : null } };
     if (review.useHeight && built.heightIn) p.heightIn = built.heightIn;
     const veneer = built.house.material === "brick" || built.house.material === "stone";
     if (veneer && review.veneer) p.wall = "brick-veneer";
@@ -408,7 +443,7 @@ export function useHousePhoto({ design, patch, clientId, onBuilt }: { design: De
   /** The review again, from the saved picture and its read — no second look by the model. */
   const lookAgain = async () => {
     if (!photo) return;
-    const href = thumb ?? (await deckPhotoHref(photo.url).catch(() => null));
+    const href = thumb ?? (await api.href(photo.url).catch(() => null));
     if (!href) {
       setError("The saved picture could not be opened — upload it again.");
       return;
@@ -434,6 +469,7 @@ export function useHousePhoto({ design, patch, clientId, onBuilt }: { design: De
   const removePhoto = () => patch({ house: { photo: null } });
 
   return {
+    audience,
     busy,
     error,
     review,
@@ -514,10 +550,11 @@ export function HousePhotoCard({ hp, design }: { hp: HousePhotoState; design: De
       ) : (
         <>
           <div className="v1-hp-lead">
-            <b>Build the house from a photo</b>
+            <b>{hp.audience === "client" ? "Build your house from a photo" : "Build the house from a photo"}</b>
             <span>
-              The back (or side) wall where the deck goes — the client&rsquo;s picture or yours. The wall, its steps, the windows and doors, the storeys, the roof and the colour come off it; then
-              adjust anything.
+              {hp.audience === "client"
+                ? "Stand in the yard and take the back (or side) wall where the deck goes, the whole wall in the picture. Its shape, steps, windows and doors, storeys, roof and colour come off it — then adjust anything."
+                : "The back (or side) wall where the deck goes — the client’s picture or yours. The wall, its steps, the windows and doors, the storeys, the roof and the colour come off it; then adjust anything."}
             </span>
           </div>
           <div className="v1-row-acts">
@@ -527,9 +564,11 @@ export function HousePhotoCard({ hp, design }: { hp: HousePhotoState; design: De
             <button type="button" className="v1-btn v1-btn-sm" onClick={hp.pickCamera} disabled={!!hp.busy} data-deck-house-photo-camera>
               <Camera size={15} aria-hidden="true" /> Take a photo
             </button>
-            <button type="button" className="v1-btn v1-btn-sm" onClick={() => void hp.openClientPhotos()} disabled={!!hp.busy} data-deck-house-photo-clients>
-              <Users size={15} aria-hidden="true" /> Client&rsquo;s photos
-            </button>
+            {hp.audience === "studio" ? (
+              <button type="button" className="v1-btn v1-btn-sm" onClick={() => void hp.openClientPhotos()} disabled={!!hp.busy} data-deck-house-photo-clients>
+                <Users size={15} aria-hidden="true" /> Client&rsquo;s photos
+              </button>
+            ) : null}
           </div>
         </>
       )}

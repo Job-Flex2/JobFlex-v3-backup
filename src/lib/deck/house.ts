@@ -89,6 +89,9 @@ export interface HouseOpening {
   sillFt: number;
 }
 export const OPENING_LIMITS = { count: 40, widthFt: { min: 1, max: 20 }, heightFt: { min: 1, max: 12 }, sillFt: { min: 0, max: 30 } } as const;
+/** A sill or a threshold is kept to the inch (2026-10-23): the deck's surface is checked against a door's threshold in
+ *  inches (lib/deck/openingChecks) — a quarter foot was 3 in. Older designs' quarter feet read back the same. */
+export const toInchFt = (ft: number) => Math.round(ft * 12) / 12;
 
 
 /** The photo a house was built from: the stored picture, the read in its own fractions (so the house can be built again without a second look), the wall's width it gave, what set the scale, and where the deck's left end stood along that wall. */
@@ -191,7 +194,7 @@ export function normalizeOpenings(raw: unknown[], fromFt: number, toFt: number):
       const id = typeof v.id === "string" && v.id && !seen.has(v.id) ? v.id : `o${i + 1}`;
       seen.add(id);
       const L = OPENING_LIMITS;
-      return { id, kind, xFt: q4(num(v.xFt, NaN)), widthFt: q4(clamp(num(v.widthFt, 3), L.widthFt.min, L.widthFt.max)), heightFt: q4(clamp(num(v.heightFt, 4), L.heightFt.min, L.heightFt.max)), sillFt: q4(clamp(num(v.sillFt, 3), L.sillFt.min, L.sillFt.max)) };
+      return { id, kind, xFt: q4(num(v.xFt, NaN)), widthFt: q4(clamp(num(v.widthFt, 3), L.widthFt.min, L.widthFt.max)), heightFt: q4(clamp(num(v.heightFt, 4), L.heightFt.min, L.heightFt.max)), sillFt: toInchFt(clamp(num(v.sillFt, 3), L.sillFt.min, L.sillFt.max)) };
     })
     .filter((o) => Number.isFinite(o.xFt) && o.xFt - o.widthFt / 2 >= fromFt - 0.5 && o.xFt + o.widthFt / 2 <= toFt + 0.5)
     .sort((a, b) => a.xFt - b.xFt || a.sillFt - b.sillFt)

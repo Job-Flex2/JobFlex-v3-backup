@@ -38,6 +38,7 @@ import {
   clientLinkKey,
   clientLinkMessage,
   clientLinkRow,
+  clientPhotoFolder,
   deckDraftKey,
   mergeClientDesign,
   parseClientLink,
@@ -50,6 +51,9 @@ import {
   linkTitle,
 } from "@/lib/deck/clientDesign";
 import { markClientLinkSeen, unseenClientReturns, withProposals } from "@/lib/deck/clientLinksServer";
+import { keepHousePhoto, readHouseImage, type DeckPhotoResult, type HousePhotoRead } from "@/lib/deck/housePhotoServer";
+import { isPrivateFileUnder } from "@/lib/media/privateStore";
+import { mediaHref } from "@/lib/media/signedLink";
 
 type Gate = { ok: true; organizationId: string; userId: string } | { ok: false; error: string };
 
@@ -294,7 +298,7 @@ export async function saveDeckClientWork(token: string, design: unknown): Promis
   if (braked) return { ok: false, error: braked };
   const at = new Date().toISOString();
   try {
-    await writeLink({ ...link, work: mergeClientDesign(link.base, design, { settle: false }), workAt: at, openedAt: link.openedAt ?? at });
+    await writeLink({ ...link, work: mergeClientDesign(link.base, design, { settle: false, photoOk: ownPhoto(link) }), workAt: at, openedAt: link.openedAt ?? at });
     return { ok: true, at };
   } catch (err) {
     logServerError("deck-client-save", err, { kind: "action", organizationId: link.orgId });
@@ -317,8 +321,8 @@ export async function sendDeckClientDesign(
   const phone = (input.phone ?? "").trim().slice(0, 40) || link.clientPhone;
   const note = (input.note ?? "").trim().slice(0, CLIENT_NOTE_MAX);
   const unsure: ClientUnsure[] = Array.isArray(input.unsure) && input.unsure.includes("height") ? ["height"] : [];
-  const work = mergeClientDesign(link.base, input.design, { settle: false });
-  const settled = mergeClientDesign(link.base, input.design);
+  const work = mergeClientDesign(link.base, input.design, { settle: false, photoOk: ownPhoto(link) });
+  const settled = mergeClientDesign(link.base, input.design, { photoOk: ownPhoto(link) });
   const at = new Date().toISOString();
   const draftId = link.draftId ?? randomUUID();
   try {
@@ -370,6 +374,39 @@ export async function sendDeckClientDesign(
     console.warn("[deck-client] email not sent:", err instanceof Error ? err.message : err);
   });
   return { ok: true, at };
+}
+
+/* ── the photo of the house (2026-10-23) ───────────────────────────── */
+
+/** The client's photos live in the shop's private folder, under this link's own. */
+const photoFolder = (link: ClientDesignLink) => clientPhotoFolder(link.orgId, link.token);
+/** A photo in the client's design is kept only when it came through this link. */
+const ownPhoto = (link: ClientDesignLink) => (url: string) => isPrivateFileUnder(url, photoFolder(link));
+
+/** The client's photo of the back of the house, kept (only with a file store: their design is saved as it goes, and a
+ *  picture as a data URL would not fit it — then the house is built and the picture not kept). */
+export async function uploadClientHousePhoto(token: string, form: FormData): Promise<DeckPhotoResult> {
+  const link = await readLink(token);
+  if (!live(link)) return { ok: false, error: CLOSED };
+  const braked = (await brake(`deckclient-photo:${token}`, 10, "photos")) ?? (await brake(`deckclient-photo-ip:${await clientIp()}`, 30, "photos"));
+  if (braked) return { ok: false, error: braked };
+  return keepHousePhoto(form, photoFolder(link), { organizationId: link.orgId }, { inline: false });
+}
+
+/** The same read the studio makes (two looks: the whole picture, then the wall cut out) — each look one call. */
+export async function readClientHousePhoto(token: string, form: FormData): Promise<HousePhotoRead> {
+  const link = await readLink(token);
+  if (!live(link)) return { ok: false, error: CLOSED, configured: true };
+  const braked = (await brake(`deckclient-read:${token}`, 16, "photo reads")) ?? (await brake(`deckclient-read-ip:${await clientIp()}`, 40, "photo reads"));
+  if (braked) return { ok: false, error: braked, configured: true };
+  return readHouseImage(form, { organizationId: link.orgId });
+}
+
+/** A fresh read link for the client's own photo (never the contractor's — that is the shop's private file). */
+export async function clientHousePhotoHref(token: string, url: string): Promise<string | null> {
+  const link = await readLink(token);
+  if (!live(link) || typeof url !== "string" || !ownPhoto(link)(url)) return null;
+  return mediaHref(url);
 }
 
 async function emailTheMaker(
