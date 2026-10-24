@@ -243,6 +243,14 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
   const px = clamp(roomy ? pan.x : 0, -panRoom.x, panRoom.x);
   const py = clamp(roomy ? pan.y : 0, -panRoom.y, panRoom.y);
   const view = { x: vbX + vbW / 2 + px - vw / 2, y: vbY + vbH / 2 + py - vh / 2, w: vw, h: vh };
+  // HELD STILL WHILE SOMETHING IS DRAGGED (owner, 2026-10-24: "when I move the deck wider or narrower it slides so fast
+  // that it's hard to stop in the right place"): the drawing re-fits itself to what it shows, so a deck pulled wider
+  // shrank the plan under the pointer and its end ran away from the hand. Now the view stays where it was when the drag
+  // began, and re-fits when the pointer lets go. The drawing's origin is the deck's left end, so where the deck moves
+  // against the house — its left end pulled, the deck slid along the wall — the view moves with the origin by as much
+  // as the deck moved, and the house (or, at the house's end, the house's end with the deck's) stays under the hand.
+  const [held, setHeld] = React.useState<{ view: typeof view; kind: DragKind; widthFt: number; leftFt: number; pick: WallPick | null } | null>(null);
+  const shown = held ? { ...held.view, x: held.view.x + (held.kind === "deck-left" ? W - held.widthFt : held.kind === "deck-slide" ? held.leftFt - house.leftFt : 0) } : view;
   // The type and the handles keep their size on screen when zoomed: zooming in makes room, not bigger letters.
   const font = font0 / z;
   const handleR = handle0 / z;
@@ -432,6 +440,7 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
     drag.current = { kind, id: extra.id, part: extra.part, parts: parts.length, rect, vb, x0: e.clientX, y0: e.clientY, fx0: f.x, fy0: f.y, appliedX: 0, appliedY: 0, moved: false, axis: null, before: { house, shape }, pan0: { x: px, y: py } };
     if (pickHere) setPick(pickHere);
     setNotice(null);
+    if (kind !== "pan") setHeld({ view: vb, kind, widthFt: W, leftFt: house.leftFt, pick });
     e.currentTarget.setPointerCapture(e.pointerId);
     e.preventDefault();
     // Focus follows the pointer, so the arrow keys move what was just picked.
@@ -495,6 +504,7 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
       // A step dropped to nothing merges two parts and the indexes shift: that ends the drag.
       if (parts.length !== d.parts) {
         drag.current = null;
+        setHeld(null);
         return;
       }
       if (d.axis === "x") {
@@ -521,7 +531,10 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
       const depthFt = clamp(half(p.y), DECK_LIMITS.depthFt.min, DECK_LIMITS.depthFt.max);
       if (depthFt !== D) onChange({ shape: { ...shape, depthFt } });
     } else if (d.kind === "deck-left") {
-      const next = resizeDeckLeft(house, shape, W - half(p.x), DECK_LIMITS.widthFt.min, DECK_LIMITS.widthFt.max);
+      // The deck's left end is the drawing's origin: as it moves, the house (and the pointer's frame, held from the
+      // start) shifts under it — so the width is taken from where the drag began, not from the width of the moment
+      // (that fed back on itself: the deck ran away at a foot a frame — owner, 2026-10-24: "it slides so fast").
+      const next = resizeDeckLeft(house, shape, half(d.before.shape.widthFt - (p.x - d.fx0)), DECK_LIMITS.widthFt.min, DECK_LIMITS.widthFt.max);
       if (next.shape !== shape) onChange(next);
     } else if (d.kind === "deck-slide") {
       // The deck slides by how far it was pulled, wherever it was grabbed.
@@ -537,6 +550,7 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
   const up = () => {
     const d = drag.current;
     drag.current = null;
+    setHeld(null);
     if (d && d.kind === "pan" && !d.moved) setPick(null);
   };
   const key = (e: React.KeyboardEvent<SVGElement>, a: WallPick) => {
@@ -594,7 +608,10 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
   const partPick = (a: number): WallPick => ({ kind: "part", index: a, n: parts.length });
   const hovered = (a: WallPick) => samePick(hover, a);
   const picked = (a: WallPick) => samePick(pick, a);
-  const pickedPart = pick && pick.kind === "part" && pick.n === parts.length && parts[pick.index] ? { index: pick.index, part: parts[pick.index] } : null;
+  // The pad keeps showing what it showed when a drag began: switching it to the grabbed thing's buttons mid-drag made
+  // it taller and the drawing above it smaller under the pointer. It switches when the pointer lets go.
+  const padPick = held ? held.pick : pick;
+  const pickedPart = padPick && padPick.kind === "part" && padPick.n === parts.length && parts[padPick.index] ? { index: padPick.index, part: parts[padPick.index] } : null;
   const plusX = pickedPart ? half(clamp((pickedPart.part.x0 + pickedPart.part.x1) / 2, xMin + 1, xMax - 1)) : W;
   const canAdd = house.jogs.length < HOUSE_LIMITS.jogs && !house.jogs.some((j) => Math.abs(j.atFt - plusX) < 1);
   const padBtn = (label: string, a: PadAction, opts: { disabled?: boolean; primary?: boolean; hold?: boolean; test?: string } = {}) => (
@@ -615,8 +632,8 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
         {Math.abs(part.depthFt) >= 0.5 && !locked ? padBtn("Level with the house", { kind: "part-level", index }, { hold: false }) : null}
       </>
     );
-  } else if (pick?.kind === "jog" && house.jogs.some((k) => k.id === pick.id)) {
-    const j = house.jogs.find((k) => k.id === pick.id)!;
+  } else if (padPick?.kind === "jog" && house.jogs.some((k) => k.id === padPick.id)) {
+    const j = house.jogs.find((k) => k.id === padPick.id)!;
     padBody = (
       <>
         <span className={s.wallPadTitle} data-deck-wall-picked="jog">Step at {ft(j.atFt)} · the wall to its right {j.dir === "toward" ? "comes out" : "steps back"} {ft(j.depthFt)}</span>
@@ -628,16 +645,16 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
         {padBtn("Remove this step", { kind: "jog-remove", id: j.id }, { hold: false })}
       </>
     );
-  } else if (pick?.kind === "end") {
-    const v = pick.side === "left" ? house.leftFt : house.rightFt;
+  } else if (padPick?.kind === "end") {
+    const v = padPick.side === "left" ? house.leftFt : house.rightFt;
     padBody = (
       <>
-        <span className={s.wallPadTitle} data-deck-wall-picked="end">The house&apos;s {pick.side} end · {ft(v)} past the deck</span>
-        {padBtn(pick.side === "left" ? "◀ Wider" : "◀ Narrower", { kind: "end", side: pick.side, by: pick.side === "left" ? 0.5 : -0.5 })}
-        {padBtn(pick.side === "left" ? "Narrower ▶" : "Wider ▶", { kind: "end", side: pick.side, by: pick.side === "left" ? -0.5 : 0.5 })}
+        <span className={s.wallPadTitle} data-deck-wall-picked="end">The house&apos;s {padPick.side} end · {ft(v)} past the deck</span>
+        {padBtn(padPick.side === "left" ? "◀ Wider" : "◀ Narrower", { kind: "end", side: padPick.side, by: padPick.side === "left" ? 0.5 : -0.5 })}
+        {padBtn(padPick.side === "left" ? "Narrower ▶" : "Wider ▶", { kind: "end", side: padPick.side, by: padPick.side === "left" ? -0.5 : 0.5 })}
       </>
     );
-  } else if (pick?.kind === "deck") {
+  } else if (padPick?.kind === "deck") {
     padBody = (
       <>
         <span className={s.wallPadTitle} data-deck-wall-picked="deck">The deck · {ft(W)} × {ft(D)}</span>
@@ -694,7 +711,7 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
   const drawing = (
     <svg
       ref={svgRef}
-      viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
+      viewBox={`${shown.x} ${shown.y} ${shown.w} ${shown.h}`}
       preserveAspectRatio="xMidYMid meet"
       className={cx(s.wallPlanSvg, roomy && s.wallPlanSvgLarge, hand && z > 1 && s.wallPlanHand)}
       onPointerMove={move}
@@ -828,10 +845,10 @@ export function HouseWallPlan({ shape, house, onChange, size = "small", onOpenLa
         <title>Slide the deck along the wall</title>
       </rect>
       {/* A + where a step would go (the large drawings only — the small one is crowded; the pad's + does the same). */}
-      {roomy && canAdd && (pick?.kind === "part" || pick?.kind === "deck") ? (
+      {roomy && canAdd && (padPick?.kind === "part" || padPick?.kind === "deck") ? (
         <g className={s.wallPlus} onClick={() => run({ kind: "add-step", atFt: plusX })} data-deck-wall-plus={plusX} role="button" tabIndex={0} aria-label={`Add a step in the wall at ${ft(plusX)}`} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); run({ kind: "add-step", atFt: plusX }); } }}>
-          <circle cx={plusX + handleR * 2.6} cy={depthAt(plusX) + (pick?.kind === "deck" ? handleR * 2.6 : -handleR * 2.6)} r={handleR * 0.85} />
-          <text x={plusX + handleR * 2.6} y={depthAt(plusX) + (pick?.kind === "deck" ? handleR * 2.6 : -handleR * 2.6) + font * 0.38} fontSize={font * 1.1} textAnchor="middle">+</text>
+          <circle cx={plusX + handleR * 2.6} cy={depthAt(plusX) + (padPick?.kind === "deck" ? handleR * 2.6 : -handleR * 2.6)} r={handleR * 0.85} />
+          <text x={plusX + handleR * 2.6} y={depthAt(plusX) + (padPick?.kind === "deck" ? handleR * 2.6 : -handleR * 2.6) + font * 0.38} fontSize={font * 1.1} textAnchor="middle">+</text>
         </g>
       ) : null}
     </svg>

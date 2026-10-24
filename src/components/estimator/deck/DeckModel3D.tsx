@@ -236,7 +236,6 @@ const GRASS = 0x8fa078;
 const SIDING = 0xe9e5db;
 const FOUNDATION = 0xa9a69d;
 const ROOF = 0x55524c;
-const GLASS_C = 0x2f3a44;
 const TRIM_WHITE = 0xf7f5ef;
 const OSB = 0xd6bf90;
 const CEILING_WOOD = 0xe6d5b2;
@@ -1471,7 +1470,19 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         };
         const baseMat = new THREE.MeshStandardMaterial({ color: FOUNDATION, roughness: 1, map: concrete });
         const roofMat = new THREE.MeshStandardMaterial({ color: H.roofColour ? new THREE.Color(H.roofColour) : ROOF, roughness: 0.95, map: shingles, side: THREE.DoubleSide });
-        const glassMat = new THREE.MeshStandardMaterial({ color: GLASS_C, roughness: 0.15, metalness: 0.4 });
+        // The windows' glass as it looks from the yard by day (owner, 2026-10-24: "the windows are like mirrors, blooming"): a
+        // dull dielectric, not a dark metal — the sky's light toward the top of the pane, the room's dark toward the sill, a
+        // soft sheen rather than a mirror's image and the sun's flare.
+        const glassTex = canvasTexture(8, 64, (g) => {
+          const grad = g.createLinearGradient(0, 0, 0, 64);
+          grad.addColorStop(0, "#93adc0");
+          grad.addColorStop(0.42, "#5a6e7f");
+          grad.addColorStop(1, "#2b3540");
+          g.fillStyle = grad;
+          g.fillRect(0, 0, 8, 64);
+        });
+        const glassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: glassTex, roughness: 0.42, metalness: 0, envMapIntensity: 0.6 });
+        owned.push(glassTex);
         const trimMat = new THREE.MeshStandardMaterial({ color: TRIM_WHITE, roughness: 0.8 });
         const doorMat = new THREE.MeshStandardMaterial({ color: 0xf1eee6, roughness: 0.7 });
         owned.push(wallMat, baseMat, roofMat, glassMat, trimMat, doorMat);
