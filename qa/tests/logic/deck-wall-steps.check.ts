@@ -3,7 +3,8 @@
 // board at each corner, windows in both storeys, and a porch roof on a post over the right part's ground storey — the
 // corners are where an edge runs up both storeys (not a window's frame, not the porch post), the middle comes out,
 // the porch roof makes no step; a recess reads the other way, a flat wall and a wall with no eave say nothing, a
-// mirrored photo says the mirror. Pure, no photo in the repo.
+// mirrored photo says the mirror; the eave is found by the picture when the model's line is well off it. Pure, no photo
+// in the repo.
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/deck-wall-steps.check.ts
 import { wallCorners, wallSteps } from "@/lib/deck/wallSteps";
 import type { HouseRead } from "@/lib/deck/houseRead";
@@ -110,6 +111,14 @@ const off = readOf(BUMP);
 const shifted = { ...off, eave: { left: { x: off.eave!.left.x + 0.01, y: off.eave!.left.y - 0.02 }, right: { x: off.eave!.right.x - 0.01, y: off.eave!.right.y - 0.02 } }, base: { left: { x: off.base.left.x + 0.01, y: off.base.left.y + 0.01 }, right: { x: off.base.right.x - 0.01, y: off.base.right.y + 0.01 } } };
 const st2 = wallSteps(shifted, g);
 check("the read's lines a little off: the same steps", !!st2 && st2.jogs.map((j) => j.dir).join(",") === "toward,away", JSON.stringify(st2?.parts));
+// The model's eave line a good way off — drawn under the soffit (3.5% of the picture low) or up on the roof (5% high),
+// as the live model drew it: the eave is found by the picture, not by the line. (2026-10-24: with the line 3% low the
+// bump-out's band fell at the edge of the search and nothing was said; the model's one-step read stood.)
+for (const dy of [0.035, -0.05]) {
+  const far = { ...off, eave: { left: { ...off.eave!.left, y: off.eave!.left.y + dy }, right: { ...off.eave!.right, y: off.eave!.right.y + dy } } };
+  const stf = wallSteps(far, g);
+  check(`the read's eave line ${dy > 0 ? "well under" : "well above"} the eave (${Math.abs(dy) * 100}% of the picture): the same steps`, !!stf && stf.jogs.length === st.jogs.length && stf.jogs.every((j, i) => j.dir === st.jogs[i].dir && near(j.x, st.jogs[i].x, 0.01)), JSON.stringify(stf?.jogs));
+}
 
 console.log("— the other way round, flat, unreadable, mirrored —");
 const NOOK: Part[] = [
