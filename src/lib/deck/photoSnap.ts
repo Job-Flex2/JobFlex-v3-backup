@@ -45,6 +45,8 @@ interface Field {
   h: number;
   gx: Float32Array;
   gy: Float32Array;
+  /** The picture's luminance 0…1 (for what a box holds — glass is not siding). */
+  lum: Float32Array;
 }
 
 /** How strongly a vertical line at column x stands out between rows y0…y1 (the mean |∂x|). */
@@ -350,13 +352,218 @@ export function alignBoxes(f: Field, boxes: Box[]): (b: Box) => Box {
   };
 }
 
+/** The mean luminance of a rectangle (px), or null when nothing of it is in the picture. */
+function meanLum(f: Field, x0: number, x1: number, y0: number, y1: number): number | null {
+  let s = 0;
+  let n = 0;
+  for (let y = Math.max(0, y0); y < Math.min(f.h, y1); y++) for (let x = Math.max(0, x0); x < Math.min(f.w, x1); x++) [s, n] = [s + f.lum[y * f.w + x], n + 1];
+  return n ? s / n : null;
+}
+
+/** What a box holds: the mean luminance of its inside (the middle 60 % each way) — a row's panes hold the same glass,
+ *  dark by day or lit at dusk; a box over siding holds the wall. */
+function insideLum(f: Field, b: Box): number {
+  const X0 = Math.round(b.x0 * f.w), X1 = Math.round(b.x1 * f.w), T = Math.round(b.top * f.h), B = Math.round(b.bottom * f.h);
+  const bw = X1 - X0, bh = B - T;
+  return meanLum(f, Math.round(X0 + bw * 0.2), Math.round(X1 - bw * 0.2), Math.round(T + bh * 0.2), Math.round(B - bh * 0.2)) ?? 0.5;
+}
+
+/** A box's outline on the picture, in fractions. */
+const boxScore = (f: Field, b: Box) => outlineScore(f, Math.round(b.x0 * f.w), Math.round(b.x1 * f.w), Math.round(b.top * f.h), Math.round(b.bottom * f.h));
+
+/**
+ * ROWS OF WINDOWS, TOGETHER (2026-10-24 — owner, the live read: "make windows read right"). The model read a row of
+ * four panes one pane to the right: three boxes on panes, the fourth past the house's corner, the first pane bare —
+ * and each box alone, snapping a short way, found a frame under it and stayed. A row of windows — boxes of one height
+ * and one width at a steady pitch — is moved as a row: by whole panes either way, the move that puts every box on a
+ * frame wins (one box on siding sinks a wrong one). Then the row runs on: a pane the model missed, a pitch past either
+ * end with a frame as plain as the row's, is added; a box with no frame to speak of under it (a quarter of the row's)
+ * is dropped; so is any box past the wall's end.
+ */
+function fitRows(f: Field, boxes: Box[], span: { x0: number; x1: number }): Box[] {
+  const h = (b: Box) => b.bottom - b.top;
+  const w = (b: Box) => b.x1 - b.x0;
+  const cx = (b: Box) => (b.x0 + b.x1) / 2;
+  const alike = (a: Box, b: Box) => {
+    const iy = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+    return iy > 0.6 * Math.min(h(a), h(b)) && w(a) / w(b) > 0.7 && w(a) / w(b) < 1.4;
+  };
+  // Boxes of one height and width, in order across the wall; a gap of most of a box between two of them ends a row (a
+  // row's panes share a mullion — the windows of two rooms stand apart).
+  const groups: Box[][] = [];
+  for (const b of [...boxes].sort((p, q) => p.x0 - q.x0)) {
+    const g = groups.find((r) => alike(r[0], b));
+    if (g) g.push(b);
+    else groups.push([b]);
+  }
+  const rows: Box[][] = [];
+  for (const g of groups) {
+    let run: Box[] = [];
+    for (const b of g) {
+      if (run.length && b.x0 - run[run.length - 1].x1 > 0.8 * w(b)) {
+        rows.push(run);
+        run = [];
+      }
+      run.push(b);
+    }
+    rows.push(run);
+  }
+  // A box's weaker side on the picture: the lesser of its two standing edges (a frame has both; the wall's corner
+  // board, a downspout, the edge of a porch roof has one).
+  const weakSide = (b: Box) => {
+    const X0 = Math.round(b.x0 * f.w), X1 = Math.round(b.x1 * f.w), T = Math.round(b.top * f.h), B = Math.round(b.bottom * f.h);
+    const y0 = Math.round(T + (B - T) * 0.1), y1 = Math.round(B - (B - T) * 0.1);
+    const at = (x: number) => Math.max(colScore(f, x - 1, y0, y1), colScore(f, x, y0, y1), colScore(f, x + 1, y0, y1));
+    return Math.min(at(X0), at(X1));
+  };
+  const out: Box[] = [];
+  for (const row of rows) {
+    if (row.length < 2) {
+      out.push(...row);
+      continue;
+    }
+    // A row's steady pitch — or, with an end box off it (the box a shifted row left past the row's end, snapped onto
+    // the last pane's frame and overlapping it), the pitch of the rest; that end box is then judged with the rest.
+    const pitchOf = (bs: Box[]) => {
+      const gaps = bs.slice(1).map((b, i) => cx(b) - cx(bs[i]));
+      const pitch = [...gaps].sort((p, q) => p - q)[Math.floor(gaps.length / 2)];
+      return pitch > w(bs[0]) * 0.7 && gaps.every((gp) => Math.abs(gp - pitch) < pitch * 0.25) ? pitch : null;
+    };
+    let core = row;
+    let loose: Box[] = [];
+    let pitch = pitchOf(row);
+    if (pitch === null && row.length >= 3) {
+      for (const trial of [row.slice(0, -1), row.slice(1)]) {
+        const p2 = pitchOf(trial);
+        if (p2 !== null) {
+          [core, loose, pitch] = [trial, row.filter((b) => !trial.includes(b)), p2];
+          break;
+        }
+      }
+    }
+    if (pitch === null) {
+      out.push(...row);
+      continue;
+    }
+    const pitchFt = pitch;
+    const moved = (bs: Box[], dx: number) => bs.map((b) => ({ ...b, x0: b.x0 + dx, x1: b.x1 + dx }));
+    const total = (bs: Box[]) => bs.reduce((t, b) => t + boxScore(f, b), 0);
+    let best = core;
+    let top = total(core);
+    for (const k of [-2, -1, 1, 2]) {
+      for (let fine = -6; fine <= 6; fine++) {
+        const c = moved(core, k * pitchFt + fine / f.w);
+        if (c[0].x0 < span.x0 - w(c[0]) * 0.5 || c[c.length - 1].x1 > span.x1 + w(c[0]) * 0.5) continue;
+        const v = total(c);
+        if (v > top) [best, top] = [c, v];
+      }
+    }
+    // The row moves only when it clearly sits better, by panes; a move of less than a quarter pane is no move.
+    let fitted = top >= total(core) * 1.3 && Math.abs(cx(best[0]) - cx(core[0])) > pitchFt * 0.25 ? best : core;
+    const median = (xs: number[]) => [...xs].sort((p, q) => p - q)[Math.floor(xs.length / 2)];
+    const typical = () => median(fitted.map(weakSide));
+    // The row's glass, and how much its panes differ among themselves: a box holding something else — the wall — is no
+    // pane of it.
+    const glassOf = () => {
+      const lums = fitted.map((b) => insideLum(f, b));
+      const med = median(lums);
+      const spread = median(lums.map((l) => Math.abs(l - med)));
+      return { med, tol: Math.max(0.1, 4 * spread) };
+    };
+    const holdsGlass = (b: Box) => {
+      const { med, tol } = glassOf();
+      return Math.abs(insideLum(f, b) - med) <= tol;
+    };
+    const mean = () => total(fitted) / fitted.length;
+    // A pane the model missed at either end: a pitch on, settled a few pixels either way, with a frame as plain as the
+    // row's — both its sides standing.
+    for (const dir of [-1, 1]) {
+      for (let n = 0; n < 2; n++) {
+        const end = dir < 0 ? fitted[0] : fitted[fitted.length - 1];
+        const c0 = { ...end, x0: end.x0 + dir * pitchFt, x1: end.x1 + dir * pitchFt };
+        if (c0.x0 < span.x0 - w(c0) * 0.25 || c0.x1 > span.x1 + w(c0) * 0.25) break;
+        let c = c0;
+        let v = 0;
+        for (let fine = -6; fine <= 6; fine++) {
+          const t = { ...c0, x0: c0.x0 + fine / f.w, x1: c0.x1 + fine / f.w };
+          const tv = boxScore(f, t);
+          if (tv > v) [c, v] = [t, tv];
+        }
+        // Each side then onto its own frame edge (the end pane can be narrower than the one it was copied from).
+        c = snapBox(f, c);
+        v = boxScore(f, c);
+        if (v < 0.03 || v < mean() * 0.7 || weakSide(c) < typical() * 0.5 || !holdsGlass(c)) break;
+        fitted = dir < 0 ? [c, ...fitted] : [...fitted, c];
+      }
+    }
+    // A box with nothing like a window under it: a weak outline, one side only, or siding where the glass would be
+    // (the last pane's frame and the wall's corner board make two sides of a box with nothing in it).
+    const scores = fitted.map((b) => boxScore(f, b));
+    const m = scores.reduce((p, v) => p + v, 0) / scores.length;
+    const typ = typical();
+    let kept = fitted.filter((b, i) => scores[i] >= m * 0.25 && (fitted.length < 3 || (weakSide(b) >= typ * 0.35 && holdsGlass(b))));
+    // The loose end box: kept only as a window in its own right — a frame on both sides, the row's glass, not on a
+    // pane the row already has.
+    for (const b of loose) {
+      const onRow = kept.some((k) => Math.min(k.x1, b.x1) - Math.max(k.x0, b.x0) > w(b) * 0.4);
+      if (!onRow && boxScore(f, b) >= m * 0.25 && weakSide(b) >= typ * 0.35 && holdsGlass(b)) kept = [...kept, b].sort((p, q) => p.x0 - q.x0);
+    }
+    // The row's end box riding the wall's corner board — its outer side within a hair of the wall's end — holds no
+    // window: a window stops short of the corner by its trim at least (the last pane's frame and the corner board made
+    // the two sides of it).
+    const hair = 0.012;
+    while (kept.length >= 3 && kept[kept.length - 1].x1 > span.x1 - hair) kept = kept.slice(0, -1);
+    while (kept.length >= 3 && kept[0].x0 < span.x0 + hair) kept = kept.slice(1);
+    out.push(...kept);
+  }
+  // Past the wall's end — more than half of it — is no window of this wall.
+  return out.filter((b) => Math.min(b.x1, span.x1) - Math.max(b.x0, span.x0) >= w(b) * 0.5).map((b) => ({ x0: r3(b.x0), x1: r3(b.x1), top: r3(b.top), bottom: r3(b.bottom) }));
+}
+
+/**
+ * THE WHOLE WINDOW (2026-10-24 — owner: "and shape"): the model boxes a window short — the upper sash, or the glass
+ * without its sill — and a box snaps only a little way. A window's frame is a closed rectangle: from the box's two
+ * sides, which stand on the frame, the box grows down and up while those sides keep running (a few rows at a time,
+ * while the edge there stays over half as strong as inside the box), and each end then sits on the strongest row edge
+ * near where the sides stop — the sill, the head. Sides not on a frame grow nothing.
+ */
+function growToFrame(f: Field, b: Box): Box {
+  const X0 = Math.round(b.x0 * f.w), X1 = Math.round(b.x1 * f.w);
+  const T = Math.round(b.top * f.h), B = Math.round(b.bottom * f.h);
+  const bh = B - T;
+  if (bh < 6 || X1 - X0 < 6) return b;
+  const col = (x: number, y0: number, y1: number) => Math.max(colScore(f, x - 1, y0, y1), colScore(f, x, y0, y1), colScore(f, x + 1, y0, y1));
+  const side = (y0: number, y1: number) => col(X0, Math.round(y0), Math.round(y1)) + col(X1, Math.round(y0), Math.round(y1));
+  const inside = side(T + bh * 0.1, B - bh * 0.1);
+  if (inside < 0.06) return b;
+  const step = Math.max(2, Math.round(bh * 0.08));
+  const down = Math.max(bh * 1.6, f.h * 0.06), up = Math.max(bh, f.h * 0.04);
+  let nb = B;
+  for (let y = B; y + step <= Math.min(f.h - 2, B + down); y += step) {
+    if (side(y, y + step) < inside * 0.55) break;
+    nb = y + step;
+  }
+  let nt = T;
+  for (let y = T; y - step >= Math.max(1, T - up); y -= step) {
+    if (side(y - step, y) < inside * 0.55) break;
+    nt = y - step;
+  }
+  if (nb === B && nt === T) return b;
+  const xa = Math.round(X0 + (X1 - X0) * 0.15), xb = Math.round(X1 - (X1 - X0) * 0.15);
+  const row = (y: number) => rowScore(f, y, xa, xb);
+  // The frame's outside edge, not its inside against the glass (outerEdge, as a box's own snap).
+  if (nb !== B) nb = outerEdge(bestNear(nb, step + 2, 1, f.h - 2, row, 1.2), 1, bh, row) ?? nb;
+  if (nt !== T) nt = outerEdge(bestNear(nt, step + 2, 1, f.h - 2, row, 1.2), -1, bh, row) ?? nt;
+  return { ...b, top: r3(nt / f.h), bottom: r3(nb / f.h) };
+}
+
 /**
  * The read moved onto the picture's edges: windows and doors (a row of windows split), the wall's corners, its base,
  * its eave and each step. Back come the read and how many lines moved.
  */
 export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: number; split: number } {
   const { gx, gy } = gradients(g);
-  const f: Field = { w: g.w, h: g.h, gx, gy };
+  const f: Field = { w: g.w, h: g.h, gx, gy, lum: g.data };
   let moved = 0;
   let split = 0;
   const near = (a: number, b: number) => Math.abs(a - b) < 0.0015;
@@ -369,7 +576,7 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
   };
   const windows: HouseRead["windows"] = [];
   for (const w of read.windows) {
-    const box0 = snapBox(f, own(align({ x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill })));
+    const box0 = growToFrame(f, snapBox(f, own(align({ x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill }))));
     const parts = splitRow(f, box0);
     if (parts.length > 1) split += parts.length - 1;
     for (const p of parts) {
@@ -387,6 +594,13 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
   };
   for (let i = windows.length - 1; i >= 0; i--) if (windows.slice(0, i).some((o) => overlap(o, windows[i]) > 0.6)) windows.splice(i, 1);
   windows.sort((a, b) => a.x0 - b.x0 || a.head - b.head);
+  // The rows moved as rows and run on, then each window grown to its whole frame.
+  {
+    const span = { x0: Math.min(read.base.left.x, read.base.right.x), x1: Math.max(read.base.left.x, read.base.right.x) };
+    const fitted = fitRows(f, windows.map((w) => ({ x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill })), span).map((b) => growToFrame(f, b));
+    windows.splice(0, windows.length, ...fitted.map((b) => ({ x0: b.x0, x1: b.x1, head: b.top, sill: b.bottom })));
+    windows.sort((a, b) => a.x0 - b.x0 || a.head - b.head);
+  }
   // Two windows side by side never overlap: where each one's side ran past the mullion onto the other's frame, the two
   // sides trade places — each back on its own side of the mullion.
   for (const a of windows) {
