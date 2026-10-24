@@ -101,6 +101,23 @@ console.log("— the wall's corner —");
 const corner = snapRead({ ...read0(truth), base: { left: { x: fx(75), y: 0.9 }, right: { x: fx(860), y: 0.9 } } }, g);
 check("the wall's left corner moves onto its corner board", Math.abs(corner.read.base.left.x * W - 60) <= 5, String(corner.read.base.left.x * W));
 
+console.log("— rows as rows, the whole window (2026-10-24: 'make windows read right — and shape') —");
+// The live model read a row of four one pane to the right (three boxes on panes, the fourth past the row), the lower
+// windows short (sills 40 px high), a pane missing from a row, a box past the wall's end.
+const rowOf = (ws: HouseRead["windows"]) => ws.filter((w) => w.head < 0.3);
+const shiftedRow = snapRead(read0(truth.map((w) => (w.head < 0.3 ? { ...w, x0: w.x0 + 58 / W, x1: w.x1 + 58 / W } : w))), g);
+check("a row of four read one pane to the right comes back on its four frames (within 4 px)", shiftedRow.read.windows.length === 7 && worst(shiftedRow.read.windows, truth) <= 4, `${shiftedRow.read.windows.length} windows, worst ${worst(shiftedRow.read.windows, truth)}`);
+const squat = snapRead(read0(truth.map((w) => (w.head > 0.3 ? { ...w, sill: w.sill - 40 / H } : w))), g);
+check("windows read short — sills 40 px high — grow to their sills (within 4 px)", squat.read.windows.length === 7 && worst(squat.read.windows, truth) <= 4, `${squat.read.windows.length} windows, worst ${worst(squat.read.windows, truth)}`);
+const sash = snapRead(read0(truth.map((w) => (w.head > 0.3 ? { ...w, sill: w.head + (w.sill - w.head) * 0.45 } : w))), g);
+check("a window read as its upper sash alone comes back whole", worst(sash.read.windows, truth) <= 4, String(worst(sash.read.windows, truth)));
+const missing = snapRead(read0(truth.filter((w) => !(w.head < 0.3 && w.x0 * W > 570))), g);
+check("a pane the model missed at a row's end is added — four again", rowOf(missing.read.windows).length === 4 && worst(missing.read.windows, truth) <= 4, `${rowOf(missing.read.windows).length} in the row, worst ${worst(missing.read.windows, truth)}`);
+const phantom = snapRead(read0([...truth, box([20, 300, 58, 390])]), g);
+check("a box past the wall's end is dropped", phantom.read.windows.length === 7 && worst(phantom.read.windows, truth) <= 4, `${phantom.read.windows.length} windows`);
+const stillRight = snapRead(read0(truth), g);
+check("a read already right still stays (rows and growth change nothing)", worst(stillRight.read.windows, truth) <= 3, String(worst(stillRight.read.windows, truth)));
+
 console.log("— the steps from the wall's sections —");
 const base = { base: { left: { x: 0.05, y: 0.8 }, right: { x: 0.95, y: 0.8 } }, eave: { left: { x: 0.05, y: 0.3 }, right: { x: 0.95, y: 0.3 } }, storeys: 2, windows: [], doors: [] };
 const bump = parseHouseRead({ ...base, sections: [{ x0: 0.05, x1: 0.2, outFt: 0 }, { x0: 0.2, x1: 0.5, outFt: 2 }, { x0: 0.5, x1: 0.95, outFt: 0 }], jogs: [{ x: 0.55, dir: "toward", depthFt: 6 }] })!;
