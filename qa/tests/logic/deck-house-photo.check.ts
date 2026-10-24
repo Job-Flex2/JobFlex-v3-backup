@@ -6,7 +6,7 @@
 // back of a house (and an old one unchanged); the deck slid and widened with the wall kept still; the review's hand
 // edits; the two looks (the wall cut out, read again, put back and merged); the colours off the pixels. Pure.
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/deck-house-photo.check.ts
-import { HOUSE_READ_PROMPT, mergeLooks, readFromCrop, wallCrop, parseHouseRead, mapHouseRead, moveHouseMark, addReadWindow, addReadDoor, addReadJog, removeReadWindow, removeReadDoor, removeReadJog, flipReadJog, blankHouseRead, type HouseRead } from "@/lib/deck/houseRead";
+import { HOUSE_READ_PROMPT, mergeLooks, readFromCrop, wallCrop, parseHouseRead, mapHouseRead, moveHouseMark, addReadWindow, addReadDoor, addReadJog, removeReadWindow, removeReadDoor, removeReadJog, flipReadJog, blankHouseRead, readSections, setSectionOut, mainSection, type HouseRead } from "@/lib/deck/houseRead";
 import { houseFromPhoto, houseScale, dominantColour, colourZones, paintable } from "@/lib/deck/houseFromPhoto";
 import { defaultHouse, houseScene, normalizeHouse, slideDeck } from "@/lib/deck/house";
 import { defaultDeckDesign, type DeckShape } from "@/lib/deck/design";
@@ -70,6 +70,33 @@ check("the back door read only as `door` is among the doors, a sliding door by i
 check("a window drawn over that door is dropped", withDoor.windows.length === UPPER.length, `${withDoor.windows.length} of ${UPPER.length}`);
 check("the prompt tells the model to look past what stands in front of the wall", /LOOK PAST/.test(HOUSE_READ_PROMPT) && /porch roof/.test(HOUSE_READ_PROMPT) && /grid/.test(HOUSE_READ_PROMPT));
 
+console.log("— the wall as its parts —");
+const secs = readSections(read);
+check("three parts: the narrow left, the middle out 2 ft, the right — the widest, the main wall", secs.length === 3 && secs.map((x) => x.outFt).join(",") === "0,2,0" && near(secs[1].x0, fx(148), 0.002) && near(secs[2].x0, fx(372), 0.002), JSON.stringify(secs));
+const flat = setSectionOut(read, 1, 0);
+check("the middle set to the main wall: a flat wall — its corners kept as dividers, nothing stepped", flat.jogs.length === 2 && flat.jogs.every((j) => j.depthFt === 0) && readSections(flat).every((x) => x.outFt === 0));
+check("…and built as a straight wall", houseFromPhoto({ read: flat, photoW: W, photoH: H, deckWidthFt: defaultDeckDesign({ state: "WA" }).shape.widthFt, house: defaultDeckDesign({ state: "WA" }).house })!.house.jogs.length === 0);
+check("…set out again, the middle comes back out between the same corners", readSections(setSectionOut(flat, 1, 2)).map((x) => x.outFt).join(",") === "0,2,0");
+check("the main wall is the widest part (the right)", mainSection(secs) === 2);
+const back3 = setSectionOut(read, 0, -3);
+check("the left set back 3 ft: out 5 to the middle, back 2 to the main wall — the labels stay put", back3.jogs.length === 2 && back3.jogs[0].dir === "toward" && back3.jogs[0].depthFt === 5 && back3.jogs[1].dir === "away" && back3.jogs[1].depthFt === 2 && readSections(back3).map((x) => x.outFt).join(",") === "-3,2,0", JSON.stringify(back3.jogs));
+// The live misread (2026-10-23): the porch roof read as one step "out 4 ft" at the right — two taps fix it.
+const misread = { ...read, jogs: [{ x: fx(372), y: read.base.left.y, dir: "toward" as const, depthFt: 4 }] };
+check("a porch roof read as a bump-out shows as one part out 4 ft", readSections(misread).map((x) => x.outFt).join(",") === "0,4");
+const level = setSectionOut(misread, 1, 0);
+check("…set to the main wall in one tap (no step left)", readSections(level).every((x) => x.outFt === 0));
+// Then a step added (a divider in the wider part's middle, nothing changed yet), dragged onto the left corner, and the
+// middle part set out: the wall the photo shows.
+const divided = addReadJog(level);
+check("a step added divides the wider part and changes nothing yet", divided.jogs.length === 2 && readSections(divided).every((x) => x.outFt === 0));
+const moved = moveHouseMark(divided, "jog-0", { x: fx(148), y: read.base.left.y });
+const shaped = setSectionOut(moved, 1, 2);
+check("dragged to the corner and the middle set out: left and right on the main wall, the middle out 2 ft", readSections(shaped).map((x) => x.outFt).join(",") === "0,2,0", JSON.stringify(readSections(shaped)));
+check("the prompt says a lower roof over the ground storey of part of the wall is not a bump-out", /lean-to/.test(HOUSE_READ_PROMPT) && /GROUND storey/.test(HOUSE_READ_PROMPT));
+const flatTwo = addReadJog(addReadJog({ ...read, jogs: [] }));
+check("a step added to a flat wall goes in its middle; a second splits the wider half, never on the first", flatTwo.jogs.length === 2 && Math.abs(flatTwo.jogs[0].x - flatTwo.jogs[1].x) > 0.1, JSON.stringify(flatTwo.jogs.map((j) => j.x)));
+check("half-foot steps, held to 8 ft either way", setSectionOut(read, 1, 12).jogs[0].depthFt === 8 && setSectionOut(read, 1, 2.3).jogs[0].depthFt === 2.5);
+
 console.log("— the house it builds —");
 const design = defaultDeckDesign({ state: "WA" });
 const Wd = design.shape.widthFt;
@@ -87,7 +114,11 @@ check("the house spans the wall: its reach past the deck's ends + the deck = the
 check("the deck is centred on the patio (no door), held inside the wall", b.centredOn === "patio" && b.house.leftFt >= 0 && b.house.rightFt >= 0);
 check("two steps: out 2 ft then back 2 ft", b.house.jogs.length === 2 && b.house.jogs[0].dir === "toward" && b.house.jogs[1].dir === "away" && b.house.jogs.every((j) => j.depthFt === 2));
 check("the steps stand where the picture has them (≈ 8.6 and 24.1 ft from the wall's left corner)", near(b.house.jogs[0].atFt + b.deckAtFt, 8.6, 0.6) && near(b.house.jogs[1].atFt + b.deckAtFt, 24.1, 0.6), JSON.stringify(b.house.jogs));
-check("the bump-out has an upper window in it, so it is as tall as the house", b.house.bumpOuts === "full");
+check("the wall's steps run the house's full height (its shape, under the one roof)", b.house.bumpOuts === "full");
+// 2026-10-23 evening (owner: "it should make the shape of the back wall"): even with no upper window seen in the
+// bump-out, it stands the house's full height — never a one-storey block under a roof of its own (a porch roof's look).
+const lowerOnly = { ...read, windows: read.windows.filter((w) => !(w.head < fy(720) && w.x0 > fx(150) && w.x1 < fx(370))) };
+check("a bump-out with no upper window seen is full height too", houseFromPhoto({ read: lowerOnly, photoW: W, photoH: H, deckWidthFt: Wd, house: design.house })!.house.bumpOuts === "full");
 const ws = b.house.openings!.filter((o) => o.kind === "window");
 check("fourteen windows on the house, no door", ws.length === 14 && b.house.openings!.length === 14);
 const upper = ws.filter((o) => o.sillFt > 10);

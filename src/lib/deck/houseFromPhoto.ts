@@ -8,7 +8,9 @@
 //   · the SCALE — a wall width the contractor typed, else a measure drawn on the picture, else the back door's 80 in.,
 //     else the wall's storeys to the eave (the roughest: said so);
 //   · the WALL — its width, its steps (in the deck's feet, as the house keeps them), its storeys, its roof, what it is
-//     clad in, bump-outs as tall as the house when an upper window stands in one;
+//     clad in; every part of it as tall as the house under the one roof — the wall's shape, stepped (2026-10-23 evening,
+//     owner: "it should make the shape of the back wall"; a lower roof over part of it was a porch roof he'd said to
+//     leave out, and a one-storey block under its own roof is what it built);
 //   · the DECK on it — centred on the back door, else on a patio at the wall's base, else in the middle; the wall's
 //     reach past each end from there;
 //   · the WINDOWS and DOORS where they are, their sizes and heights;
@@ -136,7 +138,8 @@ export function houseFromPhoto(input: PhotoHouseInput): PhotoHouse | null {
   if (wallFt < W - 0.5) checks.push(`The deck (${ftIn(W)}) is wider than the wall seen (${ftIn(wallFt)}) — the house is drawn out to the deck's ends.`);
 
   // THE STEPS in the wall.
-  const jogs: HouseJog[] = read.jogs.slice(0, HOUSE_LIMITS.jogs).map((j, i) => ({ id: `j${i + 1}`, atFt: half(deckFt(j.x)), dir: j.dir, depthFt: half(clamp(j.depthFt ?? JOG_DEFAULT_FT, HOUSE_LIMITS.depthFt.min, HOUSE_LIMITS.depthFt.max)) }));
+  // A divider the contractor left level on the review (depth 0) is no step.
+  const jogs: HouseJog[] = read.jogs.filter((j) => j.depthFt === null || j.depthFt >= 0.25).slice(0, HOUSE_LIMITS.jogs).map((j, i) => ({ id: `j${i + 1}`, atFt: half(deckFt(j.x)), dir: j.dir, depthFt: half(clamp(j.depthFt ?? JOG_DEFAULT_FT, HOUSE_LIMITS.depthFt.min, HOUSE_LIMITS.depthFt.max)) }));
   const unsizedSteps = read.jogs.filter((j) => j.depthFt === null).length;
 
   // STOREYS, the roof, the cladding, the colours.
@@ -158,10 +161,8 @@ export function houseFromPhoto(input: PhotoHouseInput): PhotoHouse | null {
     openings.push({ id: `d${openings.length + 1}`, kind: d.kind, xFt: q4(d.atFt - deckAtFt), widthFt: q4(clamp(d.widthFt, 2, OL.widthFt.max)), heightFt: q4(clamp(d.heightFt, 6, 9)), sillFt: toInchFt(clamp(d.sillFt, 0, OL.sillFt.max)) });
   }
   openings.sort((a, b) => a.xFt - b.xFt || a.sillFt - b.sillFt);
-  // A bump-out with an upper-storey window in it stands as tall as the house.
-  const upper = (o: HouseOpening) => o.sillFt >= 8;
-  const parts = wallParts({ ...input.house, leftFt, rightFt, jogs }, { kind: "rect", widthFt: W, depthFt: 12 });
-  const tallBump = storeys === 2 && openings.some((o) => upper(o) && parts.some((p) => p.depthFt > 0.4 && o.xFt > p.x0 && o.xFt < p.x1));
+  // Every step of the wall runs the house's full height: the wall's shape, under the one roof.
+  const tallBump = storeys === 2 && wallParts({ ...input.house, leftFt, rightFt, jogs }, { kind: "rect", widthFt: W, depthFt: 12 }).some((p) => p.depthFt > 0.4);
 
   // THE DECK'S HEIGHT from the back door: an inch under its threshold.
   const thresholdIn = mainDoor ? Math.round(mainDoor.sillFt * 12) : null;
@@ -177,7 +178,7 @@ export function houseFromPhoto(input: PhotoHouseInput): PhotoHouse | null {
     siding: sidingColour ?? input.house.siding,
     roofColour: roofColour ?? input.house.roofColour,
     material,
-    bumpOuts: tallBump ? "full" : "low",
+    bumpOuts: "full",
     openings,
   };
   // The pitch the photo shows; else the one already set, when the roof is still the same shape; else the shape's own.

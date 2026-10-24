@@ -25,11 +25,13 @@ import {
   addReadJog,
   addReadWindow,
   blankHouseRead,
-  flipReadJog,
   mapHouseRead,
   mergeLooks,
   moveHouseMark,
   readFromCrop,
+  mainSection,
+  readSections,
+  setSectionOut,
   removeReadDoor,
   removeReadJog,
   removeReadWindow,
@@ -615,7 +617,37 @@ export function HousePhotoCard({ hp, design }: { hp: HousePhotoState; design: De
 /* ── "Here's what I see" — the review ─────────────────────────────────── */
 
 const pct = (f: number) => `${(f * 100).toFixed(2)}%`;
-type Sel = { kind: "win" | "door" | "jog"; i: number } | null;
+type Sel = { kind: "win" | "door" | "jog" | "sec"; i: number } | null;
+
+/** A part of the wall in words: how it stands against the main wall. */
+const sectionWords = (outFt: number) => (outFt > 0 ? `Out ${ftIn(outFt)}` : outFt < 0 ? `Back ${ftIn(-outFt)}` : "Main wall");
+
+/**
+ * The wall seen from above (2026-10-23 evening): its parts as they stand, the yard below — so a step read the wrong
+ * way round shows at a glance. Each part can be tapped, like its chip on the photo.
+ */
+function WallTopView({ sections, selected, onPick }: { sections: ReturnType<typeof readSections>; selected: number | null; onPick: (i: number) => void }) {
+  if (!sections.length) return null;
+  const x0 = sections[0].x0;
+  const span = Math.max(1e-6, sections[sections.length - 1].x1 - x0);
+  const most = Math.max(2, ...sections.map((s) => Math.abs(s.outFt)));
+  const W = 1000;
+  const X = (x: number) => ((x - x0) / span) * (W - 40) + 20;
+  const Y = (out: number) => 34 + (out / most) * 22;
+  const path = sections.map((s, i) => `${i ? "L" : "M"}${X(s.x0).toFixed(1)},${Y(s.outFt).toFixed(1)} L${X(s.x1).toFixed(1)},${Y(s.outFt).toFixed(1)}`).join(" ");
+  return (
+    <figure className="v1-hp-top" data-deck-house-top-view>
+      <svg viewBox={`0 0 ${W} 74`} role="group" aria-label="The wall seen from above">
+        <path className="v1-hp-top-house" d={`${path} L${X(sections[sections.length - 1].x1).toFixed(1)},4 L${X(x0).toFixed(1)},4 Z`} />
+        <path className="v1-hp-top-wall" d={path} />
+        {sections.map((s, i) => (
+          <rect key={i} className={cx("v1-hp-top-hit", selected === i && "is-sel")} x={X(s.x0)} y={0} width={Math.max(4, X(s.x1) - X(s.x0))} height={74} onClick={() => onPick(i)} aria-label={`${sectionWords(s.outFt)} — part ${i + 1}`} />
+        ))}
+      </svg>
+      <figcaption>Seen from above — the house at the top, the yard below</figcaption>
+    </figure>
+  );
+}
 
 export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: DeckDesign }) {
   const r = hp.review;
@@ -642,6 +674,18 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
   const read = r.read;
   const b = hp.built;
   const setRead = (next: HouseRead) => hp.setReview((v) => (v ? { ...v, read: next } : v));
+  // The wall as its parts: tinted on the photo, a chip on each, and seen from above.
+  const sections = readSections(read);
+  const lineY = (l: { left: { x: number; y: number }; right: { x: number; y: number } }, x: number) => l.left.y + ((l.right.y - l.left.y) * (x - l.left.x)) / Math.max(1e-6, l.right.x - l.left.x);
+  const eaveY = (x: number) => (read.eave ? lineY(read.eave, x) : lineY(read.base, x) - 0.25);
+  const secSel = sel?.kind === "sec" && sections[sel.i] ? sel.i : null;
+  const mainAt = mainSection(sections);
+  const setOut = (i: number, outFt: number) => {
+    const next = setSectionOut(read, i, outFt);
+    setRead(next);
+    // A part merged into its neighbour (its step dropped) leaves nothing to keep picked.
+    setSel(readSections(next).length === sections.length ? { kind: "sec", i } : null);
+  };
   const at = (e: React.PointerEvent) => {
     const box = stageRef.current?.getBoundingClientRect();
     if (!box) return { x: 0, y: 0 };
@@ -659,6 +703,8 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
     const d = drag.current;
     if (!d) return;
     if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 4) return;
+    // A step dragged re-draws the wall's parts: a part picked before is not the same part any more.
+    if (!d.moved && d.mark.startsWith("jog-")) setSel((v) => (v?.kind === "sec" ? null : v));
     d.moved = true;
     setRead(moveHouseMark(read, d.mark, at(e)));
   };
@@ -696,8 +742,8 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
             <div>
               <h3 className="v1-h3">Here&rsquo;s what I see</h3>
               <span className="v1-meta">
-                {r.byHand ? "Marked by hand" : `Read off the photo${r.how ? ` in ${r.how.looks === 2 ? "two looks" : "one look"}${r.how.snapped ? ", lined up with its edges" : ""} (${r.how.model})` : ""}${r.straightened ? ` · straightened (the shot was ${r.straightened}% off square)` : ""}`} — drag any line that&rsquo;s off; tap a
-                window, a door or a step to remove it.
+                {r.byHand ? "Marked by hand" : `Read off the photo${r.how ? ` in ${r.how.looks === 2 ? "two looks" : "one look"}${r.how.snapped ? ", lined up with its edges" : ""} (${r.how.model})` : ""}${r.straightened ? ` · straightened (the shot was ${r.straightened}% off square)` : ""}`} — drag any line that&rsquo;s off; tap a part
+                of the wall to set it out or back; tap a window, a door or a step to remove it.
               </span>
             </div>
             <button ref={closeRef} type="button" className="v1-icon-btn" onClick={() => hp.setReview(null)} aria-label="Close without building">
@@ -731,6 +777,20 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
                       <line className="v1-hp-l-side" x1={read.base.right.x * 1000} y1={read.base.right.y * 1000} x2={read.eave.right.x * 1000} y2={read.eave.right.y * 1000} />
                     </>
                   ) : null}
+                  {sections.map((sec, i) => (
+                    <polygon
+                      key={`s${i}`}
+                      className={cx("v1-hp-l-sec", sec.outFt > 0 ? "is-out" : sec.outFt < 0 ? "is-back" : "is-main", secSel === i && "is-sel")}
+                      points={[
+                        [sec.x0, eaveY(sec.x0)],
+                        [sec.x1, eaveY(sec.x1)],
+                        [sec.x1, lineY(read.base, sec.x1)],
+                        [sec.x0, lineY(read.base, sec.x0)],
+                      ]
+                        .map(([x, y]) => `${(x * 1000).toFixed(1)},${(y * 1000).toFixed(1)}`)
+                        .join(" ")}
+                    />
+                  ))}
                   {read.windows.map((w, i) => (
                     <rect
                       key={`w${i}`}
@@ -754,7 +814,7 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
                   {read.jogs.map((j, i) => (
                     <line
                       key={`j${i}`}
-                      className={cx("v1-hp-l-jog", sel?.kind === "jog" && sel.i === i && "is-sel")}
+                      className={cx("v1-hp-l-jog", j.depthFt === 0 && "is-flat", sel?.kind === "jog" && sel.i === i && "is-sel")}
                       x1={j.x * 1000}
                       y1={
                         (read.eave ? read.eave.left.y + ((read.eave.right.y - read.eave.left.y) * (j.x - read.eave.left.x)) / Math.max(1e-6, read.eave.right.x - read.eave.left.x) : j.y - 0.25) * 1000
@@ -776,7 +836,69 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
                   </React.Fragment>
                 ))}
                 {read.windows.map((w, i) => handle(`win-${i}`, (w.x0 + w.x1) / 2, (w.head + w.sill) / 2, `Window ${i + 1}`, { kind: "win", i }, "is-win"))}
+                {sections.map((sec, i) => (
+                  <button
+                    key={`sc${i}`}
+                    type="button"
+                    className={cx("v1-hp-sec", sec.outFt > 0 ? "is-out" : sec.outFt < 0 ? "is-back" : "is-main", secSel === i && "is-sel")}
+                    style={{ left: pct((sec.x0 + sec.x1) / 2), top: pct(Math.min(0.97, lineY(read.base, (sec.x0 + sec.x1) / 2) + 0.03)) }}
+                    onClick={() => setSel(secSel === i ? null : { kind: "sec", i })}
+                    aria-pressed={secSel === i}
+                    data-deck-house-section={i}
+                  >
+                    {i === mainAt && sections.length > 1 ? "Main wall" : sectionWords(sec.outFt)}
+                  </button>
+                ))}
               </div>
+              <WallTopView sections={sections} selected={secSel} onPick={(i) => setSel(secSel === i ? null : { kind: "sec", i })} />
+              {secSel !== null ? (
+                <div className="v1-row-acts v1-hp-tools v1-hp-sec-tools" data-deck-house-section-tools>
+                  {secSel === mainAt ? (
+                    <span className="v1-hp-sec-note">
+                      {sections.length > 1 ? "The main wall — the widest part. The other parts come out or step back from it: tap one of them." : "One flat wall. Where it steps, add a step (+ Step) and drag it there — then tap the part that comes out."}
+                    </span>
+                  ) : (
+                    <>
+                  <span className="v1-lbl">This part of the wall</span>
+                  <div className="v1-seg" role="group" aria-label="How this part stands">
+                    {(
+                      [
+                        ["back", "Set back"],
+                        ["main", "Main wall"],
+                        ["out", "Comes out"],
+                      ] as const
+                    ).map(([k, label]) => {
+                      const cur = sections[secSel].outFt;
+                      const on = k === "main" ? cur === 0 : k === "out" ? cur > 0 : cur < 0;
+                      return (
+                        <button
+                          key={k}
+                          type="button"
+                          className={cx("v1-seg-btn", on && "is-on")}
+                          aria-pressed={on}
+                          onClick={() => setOut(secSel, k === "main" ? 0 : (k === "out" ? 1 : -1) * Math.max(1, Math.abs(cur) || 2))}
+                          data-deck-house-section-set={k}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {sections[secSel].outFt !== 0 ? (
+                    <span className="v1-hp-sec-depth">
+                      <button type="button" className="v1-btn v1-btn-sm" onClick={() => setOut(secSel, Math.sign(sections[secSel].outFt) * Math.max(0.5, Math.abs(sections[secSel].outFt) - 0.5))} aria-label="Half a foot less">
+                        −
+                      </button>
+                      <b>{ftIn(Math.abs(sections[secSel].outFt))}</b>
+                      <button type="button" className="v1-btn v1-btn-sm" onClick={() => setOut(secSel, Math.sign(sections[secSel].outFt) * Math.min(8, Math.abs(sections[secSel].outFt) + 0.5))} aria-label="Half a foot more">
+                        +
+                      </button>
+                    </span>
+                  ) : null}
+                    </>
+                  )}
+                </div>
+              ) : null}
               <div className="v1-row-acts v1-hp-tools">
                 <button type="button" className="v1-btn v1-btn-sm" onClick={() => setRead(addReadWindow(read, r.w, r.h))} data-deck-house-review-add-window>
                   + Window
@@ -784,15 +906,19 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
                 <button type="button" className="v1-btn v1-btn-sm" onClick={() => setRead(addReadDoor(read, r.w, r.h))} data-deck-house-review-add-door>
                   + Door
                 </button>
-                <button type="button" className="v1-btn v1-btn-sm" onClick={() => setRead(addReadJog(read))} disabled={read.jogs.length >= 4}>
+                <button
+                  type="button"
+                  className="v1-btn v1-btn-sm"
+                  onClick={() => {
+                    setRead(addReadJog(read));
+                    setSel(null);
+                  }}
+                  disabled={read.jogs.length >= 4}
+                  data-deck-house-review-add-step
+                >
                   + Step
                 </button>
-                {sel?.kind === "jog" ? (
-                  <button type="button" className="v1-btn v1-btn-sm" onClick={() => setRead(flipReadJog(read, sel.i))}>
-                    {read.jogs[sel.i]?.dir === "toward" ? "It comes out → steps back" : "It steps back → comes out"}
-                  </button>
-                ) : null}
-                {sel ? (
+                {sel && sel.kind !== "sec" ? (
                   <button type="button" className="v1-btn v1-btn-sm v1-btn-danger" onClick={removeSel} data-deck-house-review-remove>
                     Remove the {sel.kind === "win" ? "window" : sel.kind === "door" ? "door" : "step"}
                   </button>
