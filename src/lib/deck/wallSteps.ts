@@ -322,11 +322,35 @@ function darkest(cands: Band[], from: number, span: number): Band | null {
  * photo doesn't say — no eave, no corner, or no part decided (the model's read stands then).
  */
 export function wallSteps(modelRead: HouseRead, g: Gray, opts: { depthFt?: number | null } = {}): WallStepsFound | null {
+  return wallStepsReport(modelRead, g, opts).steps;
+}
+
+/** Why the photo said nothing about the wall's steps: no eave line in the read to look near, no corner running up
+ *  every storey, no eave shadow to compare on either side of any corner, or the corners' eaves level (a flat wall, or
+ *  a step too shallow to show). */
+export type WallStepsWhy = "no-eave" | "no-corners" | "no-band" | "flat";
+
+export interface WallStepsReport {
+  /** The steps found, or null with `why`. */
+  steps: WallStepsFound | null;
+  why: WallStepsWhy | null;
+  /** The corners found, whether or not the eave decided anything about them. */
+  corners: number[];
+  /** Those corners as dividers on the wall's base (depth 0: a part there to tap out or back), for when the photo
+   *  shows where the wall breaks but not which way. */
+  dividers: WallJog[];
+}
+
+/** The same as wallSteps, saying why when nothing was found (the review says it; a corner found with no way to tell
+ *  its direction still stands as a divider there). */
+export function wallStepsReport(modelRead: HouseRead, g: Gray, opts: { depthFt?: number | null } = {}): WallStepsReport {
+  const dividers = (corners: number[]): WallJog[] => corners.map((x) => ({ x, y: r3(lineY(modelRead.base, x)), dir: "toward" as const, depthFt: 0 }));
+  const none = (why: WallStepsWhy, corners: number[] = []): WallStepsReport => ({ steps: null, why, corners, dividers: dividers(corners) });
   const modelEave = modelRead.eave;
-  if (!modelEave) return null;
+  if (!modelEave) return none("no-eave");
   const { gx } = gradients(g);
   const corners = wallCorners(modelRead, g, gx);
-  if (!corners.length) return null;
+  if (!corners.length) return none("no-corners");
   // Every part's rows are read along the way the wall runs across the picture (its windows' heads), not as the model's
   // eave line leans.
   const slope = wallSlope(modelRead, g, corners);
@@ -334,7 +358,7 @@ export function wallSteps(modelRead: HouseRead, g: Gray, opts: { depthFt?: numbe
   const xL = Math.min(read.base.left.x, read.base.right.x);
   const xR = Math.max(read.base.left.x, read.base.right.x);
   const H = (lineY(read.base, (xL + xR) / 2) - lineY(read.eave, (xL + xR) / 2)) * g.h;
-  if (H < 40) return null;
+  if (H < 40) return none("no-corners", corners);
   // The eave is looked for well above and below the model's line (its line can sit a good way off); the other parts'
   // eaves near the one found, a step being a few per cent of the wall's height.
   const R = Math.max(14, Math.round(H * 0.45));
@@ -356,7 +380,7 @@ export function wallSteps(modelRead: HouseRead, g: Gray, opts: { depthFt?: numbe
     const score = pick.score + (0.1 * (p.x1 - p.x0)) / (xR - xL);
     if (!ref || score > ref.score) ref = { i, band: pick.band, score };
   });
-  if (!ref) return null;
+  if (!ref) return none("no-band", corners);
   const picked = ref as { i: number; band: Band };
   const eave = darkest(parts[picked.i].cands, picked.band.at, near) ?? picked.band;
   // Each part's band: the darkest near the eave found.
@@ -367,12 +391,14 @@ export function wallSteps(modelRead: HouseRead, g: Gray, opts: { depthFt?: numbe
   const jogs: WallJog[] = [];
   const plane: Array<number | null> = parts.map(() => null);
   const firstShown = bands.findIndex((b) => b);
-  if (firstShown < 0) return null;
+  if (firstShown < 0) return none("no-band", corners);
   plane[firstShown] = 0;
+  let compared = 0;
   corners.forEach((x, k) => {
     const a = bands[k];
     const b = bands[k + 1];
     if (!a || !b) return;
+    compared++;
     const d = b.at - a.at;
     if (Math.abs(d) < thr) {
       if (plane[k] !== null) plane[k + 1] = plane[k];
@@ -384,7 +410,7 @@ export function wallSteps(modelRead: HouseRead, g: Gray, opts: { depthFt?: numbe
     // 2 ft and says it's a guess) — so a bump-out's two sides come out the same.
     jogs.push({ x, y: r3(lineY(read.base, x)), dir: d < 0 ? "toward" : "away", depthFt: opts.depthFt ?? null });
   });
-  if (!jogs.length) return null;
+  if (!jogs.length) return none(compared ? "flat" : "no-band", corners);
   // Each part against the main wall (the widest whose plane is known), for the review's words and the QA.
   const known = parts.map((p, i) => ({ i, w: p.x1 - p.x0 })).filter(({ i }) => plane[i] !== null);
   const main = known.reduce((m, k) => (k.w > m.w ? k : m), known[0]);
@@ -395,5 +421,5 @@ export function wallSteps(modelRead: HouseRead, g: Gray, opts: { depthFt?: numbe
     const state: PartState = pl === null || !band ? "unknown" : pl > (plane[main.i] as number) ? "out" : pl < (plane[main.i] as number) ? "back" : "level";
     return { x0: p.x0, x1: p.x1, state, shiftPx: band ? Math.round((band.at - refAt) * 10) / 10 : 0, corr: band ? Math.round(band.depth * 100) / 100 : 0 };
   });
-  return { jogs, corners, parts: out };
+  return { steps: { jogs, corners, parts: out }, why: null, corners, dividers: dividers(corners) };
 }

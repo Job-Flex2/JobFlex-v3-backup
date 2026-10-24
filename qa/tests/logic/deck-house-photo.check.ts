@@ -205,6 +205,7 @@ check("the close look put back lands on the wall", near(close.base.left.x, read.
 const merged = mergeLooks(read, close);
 check("merged: the windows from the close look, the roof, the cladding and the patio from the whole picture", near(merged.windows[3].x0, close.windows[3].x0, 1e-9) && merged.roof.kind === "hip" && merged.material === "lap" && !!merged.patio);
 check("a close look that lost the wall is not trusted", mergeLooks(read, { ...close, windows: close.windows.slice(0, 3) }) === read && mergeLooks(read, null) === read);
+check("a close look with no eave line keeps the wide look's eave (the pixel pass needs one)", mergeLooks(read, { ...close, eave: null }).eave !== null && JSON.stringify(mergeLooks(read, { ...close, eave: null }).eave) === JSON.stringify(read.eave));
 
 console.log("— the colours off the pixels —");
 const px: number[] = [];

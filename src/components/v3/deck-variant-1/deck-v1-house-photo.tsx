@@ -41,8 +41,8 @@ import {
 } from "@/lib/deck/houseRead";
 import { colourZones, dominantColour, ftIn, houseFromPhoto, type PhotoHouse } from "@/lib/deck/houseFromPhoto";
 import { snapRead, type Gray } from "@/lib/deck/photoSnap";
-import { SQUARE_ON_PCT, levelRead, photoObliqueness, wallSteps } from "@/lib/deck/wallSteps";
-import { AUTO_STRAIGHTEN_PCT, applyHomography, autoRectify, obliqueness, transformRead } from "@/lib/deck/photoFit";
+import { SQUARE_ON_PCT, levelRead, photoObliqueness, wallStepsReport, type WallStepsReport, type WallStepsWhy } from "@/lib/deck/wallSteps";
+import { type WallJog, AUTO_STRAIGHTEN_PCT, applyHomography, autoRectify, obliqueness, transformRead } from "@/lib/deck/photoFit";
 import { deckClientPhotoData, deckClientPhotos, deckPhotoHref, readHousePhoto, uploadDeckPhoto, type ClientPhoto, type DeckPhotoResult, type HousePhotoRead } from "@/actions/deckEstimator";
 import { cropPhoto, shrinkPhoto, straightenPhoto, trimLetterbox } from "@/components/v3/deck-estimator-blueprint/deck-photo";
 import { NumberInput, Toggle, cx, feetText, parseFeet } from "./deck-v1-parts";
@@ -62,7 +62,7 @@ export interface HouseReview {
   /** The picture could not be read: the lines are a start to drag onto the wall. */
   byHand: string | null;
   /** How it was read: the looks taken, the model, the lines the picture's own edges moved. */
-  how?: { looks: number; model: string; snapped: number; split: number; /** The wall's steps measured off the photo's own pixels (lib/deck/wallSteps) — 0 when the photo didn't show them and the model's read stands. */ stepsFromPhoto?: number; /** The model's lines leaned this much, percent — enough to straighten — but the photo's own rows of windows ran parallel: kept square (2026-10-24). */ squareOn?: number } | null;
+  how?: { looks: number; model: string; snapped: number; split: number; /** The wall's steps measured off the photo's own pixels (lib/deck/wallSteps) — 0 when the photo didn't show them and the model's read stands. */ stepsFromPhoto?: number; /** Why the photo's pixels said nothing about the steps, and how many corners they found anyway (2026-10-24). */ stepsWhy?: WallStepsWhy; cornersFromPhoto?: number; /** The steps were read on the clean picture, before it was straightened (the warp, made from the model's leaning lines, loses the corners). */ stepsBeforeWarp?: boolean; /** The model's lines leaned this much, percent — enough to straighten — but the photo's own rows of windows ran parallel: kept square (2026-10-24). */ squareOn?: number } | null;
 }
 
 /**
@@ -228,6 +228,29 @@ async function grayOf(file: Blob): Promise<Gray | null> {
   }
 }
 
+/** The one depth for the wall's steps: the model's median, else none (the house takes its usual 2 ft, said to be a guess). */
+function stepDepthOf(read: HouseRead): number | null {
+  const depths = read.jogs.map((j) => j.depthFt).filter((d): d is number => d !== null && d > 0).sort((a, b) => a - b);
+  return depths.length ? depths[Math.floor(depths.length / 2)] : null;
+}
+
+/** What the review says when the photo's pixels didn't settle the wall's steps. */
+function stepsWhyWords(why: WallStepsWhy | undefined, corners: number): string {
+  const found = corners ? `${corners} corner${corners === 1 ? "" : "s"} found` : "no corner found";
+  switch (why) {
+    case "no-eave":
+      return "the wall's steps as the model read them (no eave line to read the photo by)";
+    case "no-corners":
+      return "the wall's steps as the model read them (no corner showed up both storeys of the photo)";
+    case "no-band":
+      return `${found} in the photo, its eave's shadow not plain enough to tell which way — tap a part to set it out or back`;
+    case "flat":
+      return `${found} in the photo, its eave level across them — tap a part to set it out or back`;
+    default:
+      return "the wall's steps as the model read them";
+  }
+}
+
 /** The form for one look: the gridded picture, and which look it is. */
 async function lookForm(src: { file: File; w: number; h: number }, look: "wide" | "close"): Promise<FormData> {
   const form = new FormData();
@@ -317,6 +340,12 @@ export function useHousePhoto({
         // photoObliqueness): its rows of window heads run parallel when the shot is square-on. Then the model's lines
         // are turned to the wall's own way across the picture, and nothing is warped.
         gray0 = await grayOf(clean.file).catch(() => null);
+        // THE STEPS OFF THE CLEAN PICTURE FIRST (2026-10-24 — owner, the same photo a fourth time: "it's still wrong"):
+        // when the photo's rows of windows can't say the shot is square-on (the model missed some), the model's leaning
+        // lines have the square-on photo straightened, and on the warped picture the corner boards lean and no corner
+        // is found — the model's misread stood. The steps read here, on the photo as it is, are carried through the warp.
+        let early: WallStepsReport | null = null;
+        let mapPt = (p: { x: number; y: number }) => p;
         if (gray0) {
           const seen = photoObliqueness(snapRead(read, gray0).read, gray0);
           if (seen && seen.obliquePct < SQUARE_ON_PCT) {
@@ -325,6 +354,7 @@ export function useHousePhoto({
             levelSlope = seen.slope;
             if (leaned !== null && leaned >= AUTO_STRAIGHTEN_PCT) squareOn = leaned;
           }
+          early = wallStepsReport(snapRead(read, gray0).read, gray0, { depthFt: stepDepthOf(read) });
         }
         // An angled shot is straightened first (lib/deck/photoFit autoRectify), so a foot is a foot across the wall.
         const plan = autoRectify(read, clean.w, clean.h);
@@ -340,6 +370,7 @@ export function useHousePhoto({
               return { x: m.x / warped.w, y: m.y / warped.h };
             };
             read = mapHouseRead(read, (r) => transformRead(r, plan.H, clean.w, clean.h, warped.w, warped.h), pt);
+            mapPt = pt;
             image = warped;
             straightened = plan.obliquePct;
           }
@@ -370,10 +401,24 @@ export function useHousePhoto({
           // on the second pic"): its corners where an edge runs up every storey, which way each part stands by where its
           // eave sits in the picture. The model said one corner the wrong way round (a porch roof's side as the part
           // standing out); where the photo shows plainly, the photo's steps stand — at the model's own depth.
-          const depths = read.jogs.map((j) => j.depthFt).filter((d): d is number => d !== null && d > 0).sort((a, b) => a - b);
-          const steps = wallSteps(read, gray, { depthFt: depths.length ? depths[Math.floor(depths.length / 2)] : null });
-          if (steps) read = { ...read, jogs: steps.jogs };
-          how = { looks, model: res.model, snapped: snapped.moved, split: snapped.split, stepsFromPhoto: steps ? steps.jogs.length : 0, ...(squareOn !== null ? { squareOn } : {}) };
+          const report = wallStepsReport(read, gray, { depthFt: stepDepthOf(read) });
+          // The clean picture's steps, in this picture's places (the same when nothing was warped).
+          const carry = (jogs: WallJog[]) => jogs.map((j) => ({ ...j, ...mapPt({ x: j.x, y: j.y }) }));
+          const earlyJogs = early?.steps ? carry(early.steps.jogs) : null;
+          // The steps: the clean picture's where this one was straightened (the warp, made from the model's lines,
+          // can lose a corner); else this picture's (the close look's windows kept out of its rows); else the clean
+          // picture's; else, where the photo shows corners but can't say which way, dividers there — the parts between
+          // them to tap out or back, not the model's guess at them, which has been the wrong way round.
+          const steps = straightened !== null && earlyJogs ? earlyJogs : report.steps ? report.steps.jogs : earlyJogs;
+          const beforeWarp = !!steps && steps === earlyJogs && straightened !== null;
+          if (steps) read = { ...read, jogs: steps };
+          else {
+            const dividers = report.dividers.length ? report.dividers : early?.dividers.length ? carry(early.dividers) : [];
+            if (dividers.length) read = { ...read, jogs: dividers };
+          }
+          const why = steps ? null : report.why ?? early?.why ?? null;
+          const corners = Math.max(report.corners.length, early?.corners.length ?? 0);
+          how = { looks, model: res.model, snapped: snapped.moved, split: snapped.split, stepsFromPhoto: steps ? steps.length : 0, ...(why ? { stepsWhy: why, cornersFromPhoto: corners } : {}), ...(beforeWarp ? { stepsBeforeWarp: true } : {}), ...(squareOn !== null ? { squareOn } : {}) };
         } else how = { looks, model: res.model, snapped: 0, split: 0 };
       } else
         byHand = res.configured
@@ -770,7 +815,7 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
             <div>
               <h3 className="v1-h3">Here&rsquo;s what I see</h3>
               <span className="v1-meta">
-                {r.byHand ? "Marked by hand" : `Read off the photo${r.how ? ` in ${r.how.looks === 2 ? "two looks" : "one look"}${r.how.snapped ? ", lined up with its edges" : ""}${r.how.stepsFromPhoto ? ", the wall's steps measured off the photo" : r.how.stepsFromPhoto === 0 ? ", the wall's steps as the model read them" : ""}${r.how.squareOn ? ", shot square-on — not straightened" : ""} (${r.how.model})` : ""}${r.straightened ? ` · straightened (the shot was ${r.straightened}% off square)` : ""}`} — drag any line that&rsquo;s off; tap a part
+                {r.byHand ? "Marked by hand" : `Read off the photo${r.how ? ` in ${r.how.looks === 2 ? "two looks" : "one look"}${r.how.snapped ? ", lined up with its edges" : ""}${r.how.stepsFromPhoto ? `, the wall's steps measured off the photo${r.how.stepsBeforeWarp ? " before it was straightened" : ""}` : r.how.stepsFromPhoto === 0 ? `, ${stepsWhyWords(r.how.stepsWhy, r.how.cornersFromPhoto ?? 0)}` : ""}${r.how.squareOn ? ", shot square-on — not straightened" : ""} (${r.how.model})` : ""}${r.straightened ? ` · straightened (the shot was ${r.straightened}% off square)` : ""}`} — drag any line that&rsquo;s off; tap a part
                 of the wall to set it out or back; tap a window, a door or a step to remove it.
               </span>
             </div>
