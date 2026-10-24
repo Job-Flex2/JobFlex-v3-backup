@@ -16,6 +16,15 @@
 // straightened before this). Nothing is said where the photo doesn't show it plainly (no corner, no eave to match):
 // the model's read stands.
 //
+// THE WALL'S WAY ACROSS THE PICTURE IS THE PHOTO'S TOO (2026-10-24 — owner, the same photo: "still wrong"). The model's
+// eave and base lines lean a few per cent off the wall's real ones. Leaning 1½ % of the picture, the rows read along
+// the model's line moved each part's band by more than a bump-out's step and the middle read level; leaning 3 %, the
+// two lines looked like an angled shot, the square-on photo was "straightened", its corner boards leaned, no corner was
+// found and the model's own steps stood. So the rows are read along the windows' heads — windows in one row on one
+// part of the wall stand at one height on one plane (wallSlope) — and an angled shot is told by the upper row's heads
+// against the lower row's (photoObliqueness): parallel on a wall shot square-on, closing toward the far end on an
+// angled one. (The soffit's sharpest edge was tried for the slope and dropped: a porch roof's lower edge is sharper.)
+//
 // On the grey picture the browser makes of the photo (lib/deck/photoSnap's Gray), in the read's own fractions.
 
 import type { WallJog } from "./photoFit";
@@ -42,6 +51,116 @@ const median = (a: number[]) => {
   const s = [...a].sort((p, q) => p - q);
   return s[Math.floor(s.length / 2)];
 };
+type Line = { left: { x: number; y: number }; right: { x: number; y: number } };
+const r4 = (n: number) => Math.round(n * 10000) / 10000;
+
+/** `l` turned about its middle to `slope` — px down per px across on a picture `g.w` × `g.h`. */
+export function lineAtSlope(l: Line, slope: number, g: { w: number; h: number }): Line {
+  const xm = (l.left.x + l.right.x) / 2;
+  const ym = lineY(l, xm);
+  const k = (slope * g.w) / g.h;
+  return { left: { x: l.left.x, y: r4(ym + k * (l.left.x - xm)) }, right: { x: l.right.x, y: r4(ym + k * (l.right.x - xm)) } };
+}
+
+/** The read with its eave and base lines turned to `slope` about their middles — a wall shot square-on: every line
+ *  across it runs the same way, whatever the model drew. */
+export function levelRead(read: HouseRead, slope: number, g: { w: number; h: number }): HouseRead {
+  return { ...read, base: lineAtSlope(read.base, slope, g), eave: read.eave ? lineAtSlope(read.eave, slope, g) : null };
+}
+
+/** Under this many per cent off square, by the photo's own rows of windows, a shot is square-on: the model's lines are
+ *  turned parallel and nothing is straightened (an angled shot measures 8 % and up; the rows' own reading wanders a few
+ *  per cent, so the line is drawn well under that). */
+export const SQUARE_ON_PCT = 5;
+
+/** A window's middle across the picture (fraction). */
+const centreOf = (win: { x0: number; x1: number }) => (win.x0 + win.x1) / 2;
+
+/**
+ * The wall's windows in rows: each storey's windows (a two-storey wall split at 0.4 of its height under the eave),
+ * each with the part of the wall it stands in (between two of `corners`). Only windows inside the wall's span.
+ */
+function windowRows(read: HouseRead, g: { w: number; h: number }, corners: number[]) {
+  const { h } = g;
+  const xL = Math.min(read.base.left.x, read.base.right.x);
+  const xR = Math.max(read.base.left.x, read.base.right.x);
+  const yE = (x: number) => (read.eave ? lineY(read.eave, x) : lineY(read.base, x) - 0.3) * h;
+  const Hm = (x: number) => lineY(read.base, x) * h - yE(x);
+  const partOf = (x: number) => corners.filter((c) => c < x).length;
+  const inWall = read.windows.filter((win) => centreOf(win) > xL && centreOf(win) < xR && win.head * h > yE(centreOf(win)));
+  const row = (lower: boolean) => inWall.filter((win) => (win.head * h > yE(centreOf(win)) + Hm(centreOf(win)) * 0.4) === lower).map((win) => ({ win, x: centreOf(win), part: partOf(centreOf(win)) }));
+  return { xL, xR, lower: row(true), upper: row(false) };
+}
+
+/** The slopes (px down per px across) that pairs of window heads in one row and one part of the wall give — one plane,
+ *  one head height, so the pair runs the wall's own way across the picture. Pairs closer than a tenth of the wall are
+ *  left out (a pixel at their heads is too much slope). Each with its weight, the pair's spread. */
+function headSlopes(row: Array<{ win: { head: number }; x: number; part: number }>, g: { w: number; h: number }, minDx: number): Array<{ s: number; wt: number }> {
+  const out: Array<{ s: number; wt: number }> = [];
+  for (let i = 0; i < row.length; i++)
+    for (let j = i + 1; j < row.length; j++) {
+      if (row[i].part !== row[j].part) continue;
+      const dx = (row[j].x - row[i].x) * g.w;
+      if (Math.abs(dx) < minDx * g.w) continue;
+      out.push({ s: ((row[j].win.head - row[i].win.head) * g.h) / dx, wt: Math.abs(dx) });
+    }
+  return out;
+}
+
+/** The weighted median of `xs`. */
+function weightedMedian(xs: Array<{ s: number; wt: number }>): number {
+  const sorted = [...xs].sort((a, b) => a.s - b.s);
+  const half = sorted.reduce((t, x) => t + x.wt, 0) / 2;
+  let run = 0;
+  for (const x of sorted) {
+    run += x.wt;
+    if (run >= half) return x.s;
+  }
+  return sorted[sorted.length - 1].s;
+}
+
+/**
+ * The way the wall runs across the picture, px down per px across — from its windows' heads (lined up with their own
+ * edges by photoSnap first), never the model's two lines: windows in one row and one part of the wall stand on one
+ * plane at one head height. Null when no two windows of a part share a row far enough apart.
+ */
+export function wallSlope(read: HouseRead, g: { w: number; h: number }, corners: number[]): number | null {
+  const { xL, xR, lower, upper } = windowRows(read, g, corners);
+  const pairs = [...headSlopes(lower, g, (xR - xL) * 0.1), ...headSlopes(upper, g, (xR - xL) * 0.1)];
+  return pairs.length ? Math.round(weightedMedian(pairs) * 1e5) / 1e5 : null;
+}
+
+/**
+ * How far off square the shot is, percent — told by the picture, not the model's two lines (owner's photo, 2026-10-24:
+ * the model's eave leaned 3 % and a square-on shot was "straightened"): the upper storey's window heads against the
+ * lower storey's. Shot square-on, the two rows run parallel however the phone was held; shot from one side, they close
+ * toward the far end, and the gap between them at each end of the wall is how tall that end stands. `slope` is the
+ * wall's way across the picture (wallSlope), for levelRead. Null when the picture doesn't say — one row of windows, or
+ * rows too short to measure (the model's lines decide then).
+ */
+export function photoObliqueness(read: HouseRead, g: Gray): { slope: number; obliquePct: number } | null {
+  const corners = wallCorners(read, g);
+  const { xL, xR, lower, upper } = windowRows(read, g, corners);
+  const span = xR - xL;
+  const lineOf = (row: typeof lower) => {
+    const xs = row.map((r) => r.x);
+    if (row.length < 2 || Math.max(...xs) - Math.min(...xs) < span / 3) return null;
+    const pairs = headSlopes(row, g, span * 0.1);
+    if (!pairs.length) return null;
+    const s = weightedMedian(pairs);
+    const mid = (xL + xR) / 2;
+    // The row's head height at the wall's middle: each window's head carried along that slope, the median of them.
+    return { s, at: median(row.map((r) => r.win.head * g.h - s * (r.x - mid) * g.w)) };
+  };
+  const lo = lineOf(lower);
+  const up = lineOf(upper);
+  if (!lo || !up) return null;
+  const gap = lo.at - up.at;
+  if (gap < 8) return null;
+  const delta = Math.abs(lo.s - up.s) * span * g.w;
+  const slope = wallSlope(read, g, corners) ?? (lo.s + up.s) / 2;
+  return { slope, obliquePct: Math.round((delta / (gap + delta / 2)) * 100) };
+}
 
 /** The corners of the wall: columns where an edge stands up through every storey of it. Fractions across the
  *  picture, left to right. */
@@ -202,11 +321,16 @@ function darkest(cands: Band[], from: number, span: number): Band | null {
  * The wall's steps from the photo: its corners, and each part out, back or level against the main wall. Null when the
  * photo doesn't say — no eave, no corner, or no part decided (the model's read stands then).
  */
-export function wallSteps(read: HouseRead, g: Gray, opts: { depthFt?: number | null } = {}): WallStepsFound | null {
-  if (!read.eave) return null;
+export function wallSteps(modelRead: HouseRead, g: Gray, opts: { depthFt?: number | null } = {}): WallStepsFound | null {
+  const modelEave = modelRead.eave;
+  if (!modelEave) return null;
   const { gx } = gradients(g);
-  const corners = wallCorners(read, g, gx);
+  const corners = wallCorners(modelRead, g, gx);
   if (!corners.length) return null;
+  // Every part's rows are read along the way the wall runs across the picture (its windows' heads), not as the model's
+  // eave line leans.
+  const slope = wallSlope(modelRead, g, corners);
+  const read = { ...modelRead, eave: slope !== null ? lineAtSlope(modelEave, slope, g) : modelEave };
   const xL = Math.min(read.base.left.x, read.base.right.x);
   const xR = Math.max(read.base.left.x, read.base.right.x);
   const H = (lineY(read.base, (xL + xR) / 2) - lineY(read.eave, (xL + xR) / 2)) * g.h;
