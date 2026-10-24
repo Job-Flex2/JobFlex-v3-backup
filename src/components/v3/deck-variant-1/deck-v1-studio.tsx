@@ -1361,6 +1361,22 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
       return null;
     }
   }, [onPackage, design, address, savedRef]);
+  /** The permit & build set from the header, at any step (owner, 2026-10-23: "don't see where permits plans") — the
+   *  link built when it is asked for, not on every change. */
+  const openPermit = () => {
+    if (preview && !viewOnly) {
+      askAddon("Print the lists and the permit sheet with Deck Studio");
+      return;
+    }
+    let href: string | null = savedRef ? `/deck-permit?${savedRef}` : null;
+    if (!href)
+      try {
+        href = `/deck-permit?d=${encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify({ design, address })))))}`;
+      } catch {
+        href = null;
+      }
+    if (href) window.open(href, "_blank", "noopener");
+  };
   const yardHref = React.useMemo(() => (onPackage || savedRef ? materialsHref("yard") : null), [onPackage, savedRef, materialsHref]);
   const installerHref = React.useMemo(() => (onPackage || savedRef ? materialsHref("installer") : null), [onPackage, savedRef, materialsHref]);
   /* ── a check row ── */
@@ -3192,6 +3208,12 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
                     Send<span className="v1-hide-s"> to client</span>
                   </span>
                   {inbox.length ? <span className="v1-count" aria-hidden="true">{inbox.length}</span> : null}
+                </button>
+                <button type="button" className="v1-btn v1-btn-sm v1-dock-btn" onClick={openPermit} aria-label="Permit plans — the drawings for the county, in a new tab" data-deck-permit-head>
+                  {preview && !viewOnly ? <Lock size={14} strokeWidth={2.5} aria-hidden="true" /> : <FileText size={16} aria-hidden="true" />}
+                  <span className="v1-hide-s" aria-hidden="true">
+                    Permit plans
+                  </span>
                 </button>
                 <button type="button" className={cx("v1-btn", "v1-btn-sm", "v1-dock-btn", "v1-talk-btn", voiceOpen && "is-on")} aria-pressed={voiceOpen} onClick={() => openVoice(!voiceOpen)} data-deck-talk>
                   <Mic size={16} aria-hidden="true" /> Talk
