@@ -3,11 +3,13 @@
 // board at each corner, windows in both storeys, and a porch roof on a post over the right part's ground storey — the
 // corners are where an edge runs up both storeys (not a window's frame, not the porch post), the middle comes out,
 // the porch roof makes no step; a recess reads the other way, a flat wall and a wall with no eave say nothing, a
-// mirrored photo says the mirror; the eave is found by the picture when the model's line is well off it. Pure, no photo
-// in the repo.
+// mirrored photo says the mirror; the eave is found by the picture when the model's line is well off it; the model's
+// lines leaning change nothing, a square-on shot is told from an angled one by its rows of windows (2026-10-24). Pure,
+// no photo in the repo.
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/deck-wall-steps.check.ts
-import { wallCorners, wallSteps } from "@/lib/deck/wallSteps";
-import type { HouseRead } from "@/lib/deck/houseRead";
+import { SQUARE_ON_PCT, levelRead, photoObliqueness, wallCorners, wallSlope, wallSteps } from "@/lib/deck/wallSteps";
+import { mapHouseRead, type HouseRead } from "@/lib/deck/houseRead";
+import { applyHomography, autoRectify, homography, invertHomography, obliqueness, transformRead } from "@/lib/deck/photoFit";
 import type { Gray } from "@/lib/deck/photoSnap";
 
 let bad = 0;
@@ -119,6 +121,46 @@ for (const dy of [0.035, -0.05]) {
   const stf = wallSteps(far, g);
   check(`the read's eave line ${dy > 0 ? "well under" : "well above"} the eave (${Math.abs(dy) * 100}% of the picture): the same steps`, !!stf && stf.jogs.length === st.jogs.length && stf.jogs.every((j, i) => j.dir === st.jogs[i].dir && near(j.x, st.jogs[i].x, 0.01)), JSON.stringify(stf?.jogs));
 }
+
+console.log("— the model's lines leaning; square-on or angled, by the photo —");
+// The live read's eave line leaned (owner's photo, 2026-10-24): read along it, each part's band moved by more than the
+// bump-out's step and the middle read level. The rows are read along the windows' heads now.
+for (const lean of [0.03, -0.03]) {
+  const leant = { ...off, eave: { left: { ...off.eave!.left, y: off.eave!.left.y - lean / 2 }, right: { ...off.eave!.right, y: off.eave!.right.y + lean / 2 } } };
+  const sl = wallSteps(leant, g);
+  check(`the read's eave line leaning ${lean * 100}% of the picture across the wall: the same steps`, !!sl && sl.jogs.map((j) => j.dir).join(",") === "toward,away" && near(sl.jogs[0].x, fx(160), 0.01) && near(sl.jogs[1].x, fx(380), 0.01), JSON.stringify(sl?.parts));
+}
+check("the wall's way across the picture, from its windows' heads: level", wallSlope(off, g, corners) === 0, String(wallSlope(off, g, corners)));
+// Square-on, the model's lines leaning enough to look like an angled shot (it was "straightened", its corners leaned,
+// no step was read): the photo's own rows of windows run parallel — square.
+const leaning = { ...off, eave: { left: { ...off.eave!.left, y: off.eave!.left.y - 0.02 }, right: { ...off.eave!.right, y: off.eave!.right.y + 0.02 } } };
+const seen = photoObliqueness(leaning, g);
+check("square-on, the model's lines leaning as if angled: the photo says square", (obliqueness(leaning) ?? 0) >= 8 && !!seen && seen.obliquePct < SQUARE_ON_PCT, `model ${obliqueness(leaning)}%, photo ${JSON.stringify(seen)}`);
+const levelled = levelRead(leaning, seen?.slope ?? 0, g);
+check("levelled to the photo's way: the eave and the base run parallel, nothing to straighten", obliqueness(levelled) === 0 && autoRectify(levelled, W, H) === null, `${obliqueness(levelled)}%`);
+// A wall shot from one side: the same wall, its right end a fifth shorter in the picture. Still straightened.
+const side = homography([{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: H }, { x: 0, y: H }], [{ x: 0, y: 0 }, { x: W, y: H * 0.1 }, { x: W, y: H * 0.9 }, { x: 0, y: H }])!;
+const inv = invertHomography(side)!;
+const angled: Gray = { w: W, h: H, data: new Float32Array(W * H) };
+for (let y = 0; y < H; y++)
+  for (let x = 0; x < W; x++) {
+    const q = applyHomography(inv, { x, y });
+    const x0 = Math.floor(q.x);
+    const y0 = Math.floor(q.y);
+    if (x0 < 0 || y0 < 0 || x0 + 1 >= W || y0 + 1 >= H) continue;
+    const ax = q.x - x0;
+    const ay = q.y - y0;
+    const at = (xx: number, yy: number) => g.data[yy * W + xx];
+    angled.data[y * W + x] = at(x0, y0) * (1 - ax) * (1 - ay) + at(x0 + 1, y0) * ax * (1 - ay) + at(x0, y0 + 1) * (1 - ax) * ay + at(x0 + 1, y0 + 1) * ax * ay;
+  }
+const angledRead = mapHouseRead(off, (r) => transformRead(r, side, W, H, W, H) as never, (p) => {
+  const q = applyHomography(side, { x: p.x * W, y: p.y * H });
+  return { x: q.x / W, y: q.y / H };
+});
+const seenAngled = photoObliqueness(angledRead, angled);
+const truth = obliqueness(angledRead) ?? 0;
+check("a wall shot from one side: the photo says so — nowhere near square", truth >= 15 && !!seenAngled && seenAngled.obliquePct >= SQUARE_ON_PCT * 2 && near(seenAngled.obliquePct, truth, 6), `truth ${truth}%, photo ${JSON.stringify(seenAngled)}`);
+check("one row of windows, or none: the photo doesn't say (the model's lines decide)", photoObliqueness({ ...off, windows: off.windows.filter((w) => w.head > fy(300)) }, g) === null && photoObliqueness({ ...off, windows: [] }, g) === null);
 
 console.log("— the other way round, flat, unreadable, mirrored —");
 const NOOK: Part[] = [
