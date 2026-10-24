@@ -10,7 +10,7 @@ import { clientIp, DAY, enforceRateLimit, HOUR, RateLimitError } from "@/lib/rat
 import { toE164 } from "@/lib/phone";
 import { emailFirst, funnel, routeFor, callableNow, type Prospect } from "@/lib/outreach/rules";
 import { deleteProspect, listProspects, readProspect, updateProspect } from "@/lib/outreach/store";
-import { callNext, callProspect, checkLines, emailProspects, importProspects, outreachReadiness, readCallMeToken, requestCallMe, testCallToAdmin, type OutreachReadiness } from "@/lib/outreach/server";
+import { allowUsCalls, callNext, callProspect, checkLines, emailProspects, importProspects, outreachReadiness, readCallMeToken, requestCallMe, testCallToAdmin, type OutreachReadiness } from "@/lib/outreach/server";
 
 type Fail = { ok: false; error: string };
 
@@ -101,6 +101,13 @@ export async function outreachTestCall(input: { phone: string; name: string; bus
   if (!toE164(input.phone)) return { ok: false, error: "Type your own phone number." };
   const r = await testCallToAdmin({ phone: input.phone, name: input.name || a.name || "", business: input.business || "Test Roofing", trade: input.trade || "roofing", adminEmail: a.email }, await base());
   return r.ok ? { ok: true, note: r.note } : r;
+}
+
+/** Turn on US calling on JobFlex's Twilio account (the Voice geo permission), from the Outreach page. */
+export async function allowOutreachUsCalls(): Promise<{ ok: true } | Fail> {
+  const a = await admin();
+  if (!a.ok) return a;
+  return allowUsCalls();
 }
 
 /* ── The contractor's door ─────────────────────────────────────────── */
