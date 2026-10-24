@@ -446,6 +446,9 @@ export function mergeLooks(wide: HouseRead, close: HouseRead | null): HouseRead 
   if (closeSpan < wideSpan * 0.5 || close.windows.length < wide.windows.length * 0.5) return wide;
   return {
     ...close,
+    // The close look sees the wall cut out: its eave line can be missing (the roof mostly out of the cut), and then the
+    // wide look's eave stands — the picture's own pass needs one to find the eave's shadow near.
+    eave: close.eave ?? wide.eave,
     jogs: wide.jogs,
     storeys: wide.storeys ?? close.storeys,
     roof: wide.roof.kind ? wide.roof : close.roof,

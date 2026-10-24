@@ -7,7 +7,7 @@
 // lines leaning change nothing, a square-on shot is told from an angled one by its rows of windows (2026-10-24). Pure,
 // no photo in the repo.
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/deck-wall-steps.check.ts
-import { SQUARE_ON_PCT, levelRead, photoObliqueness, wallCorners, wallSlope, wallSteps } from "@/lib/deck/wallSteps";
+import { SQUARE_ON_PCT, levelRead, photoObliqueness, wallCorners, wallSlope, wallSteps, wallStepsReport } from "@/lib/deck/wallSteps";
 import { mapHouseRead, type HouseRead } from "@/lib/deck/houseRead";
 import { applyHomography, autoRectify, homography, invertHomography, obliqueness, transformRead } from "@/lib/deck/photoFit";
 import type { Gray } from "@/lib/deck/photoSnap";
@@ -172,6 +172,13 @@ const nook = wallSteps(readOf(NOOK), draw(NOOK, WINS, false));
 check("a recess in the middle (its eave lower): back at the left corner, out at the right", !!nook && nook.jogs.map((j) => j.dir).join(",") === "away,toward", JSON.stringify(nook?.parts));
 const FLAT: Part[] = BUMP.map((p) => ({ ...p, eave: 210 }));
 check("a flat wall with its corner boards says nothing (the model's read stands)", wallSteps(readOf(FLAT), draw(FLAT, WINS, true)) === null);
+// The report says why, and keeps the corners as dividers (2026-10-24: the review tells the owner which path ran, and a
+// corner found with no way to tell its direction stands as a divider to tap).
+const flatRep = wallStepsReport(readOf(FLAT), draw(FLAT, WINS, true));
+check("a flat wall: the report says 'flat', its two corners kept as depth-0 dividers on the base", flatRep.steps === null && flatRep.why === "flat" && flatRep.corners.length === 2 && flatRep.dividers.length === 2 && flatRep.dividers.every((d) => d.depthFt === 0 && near(d.y, fy(BASE), 0.01)), JSON.stringify(flatRep));
+check("no eave read: the report says 'no-eave'", wallStepsReport({ ...misread, eave: null }, g).why === "no-eave");
+check("a picture with nothing in it: 'no-corners', no dividers", wallStepsReport(misread, { w: W, h: H, data: new Float32Array(W * H).fill(0.5) }).why === "no-corners" && wallStepsReport(misread, { w: W, h: H, data: new Float32Array(W * H).fill(0.5) }).dividers.length === 0);
+check("steps found: the report carries them, no why", wallStepsReport(misread, g).steps !== null && wallStepsReport(misread, g).why === null);
 check("no eave read, nothing said", wallSteps({ ...misread, eave: null }, g) === null);
 const blank: Gray = { w: W, h: H, data: new Float32Array(W * H).fill(0.5) };
 check("a picture with nothing in it says nothing", wallSteps(misread, blank) === null);
