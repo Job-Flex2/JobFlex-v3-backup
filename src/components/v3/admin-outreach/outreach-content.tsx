@@ -12,7 +12,7 @@ import { useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/components/ui/Toast";
 import { relative, shortDate } from "@/lib/format";
-import { LINE_WORDS, OUTCOME_WORDS, type OutreachCall } from "@/lib/outreach/rules";
+import { LINE_WORDS, OUTCOME_WORDS, emailDue, type OutreachCall } from "@/lib/outreach/rules";
 import type { OutreachReadiness } from "@/lib/outreach/server";
 import {
   callOutreachNext,
@@ -63,8 +63,8 @@ export function AdminOutreachContent({ rows, readiness, funnel }: { rows: Outrea
   const sheetRef = useRef<SheetHandle | null>(null);
   const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.key, rows.filter((r) => match(r, f.key)).length])) as Record<Filter, number>, [rows]);
   const shown = useMemo(() => rows.filter((r) => match(r, filter)), [rows, filter]);
-  const callableCount = rows.filter((r) => r.route.kind === "ai-call" && !r.waitWhy).length;
-  const toEmail = rows.filter((r) => r.route.kind === "email" && !r.emailedAt).length;
+  const callableCount = rows.filter((r) => r.route.kind === "ai-call" && !r.waitWhy && !r.seqWhy).length;
+  const toEmail = rows.filter(emailDue).length;
 
   const run = async <R extends { ok: true } | { ok: false; error: string }>(key: string, fn: () => Promise<R>, words: (r: Extract<R, { ok: true }>) => string) => {
     setBusy(key);
@@ -125,10 +125,13 @@ export function AdminOutreachContent({ rows, readiness, funnel }: { rows: Outrea
         </div>
         <ol className={styles.how}>
           <li>
-            <b>Landlines get the AI&rsquo;s call.</b> A business landline may get a call in an AI voice; a cell phone or a home line may not without the person&rsquo;s written consent. &ldquo;Check lines&rdquo; asks Twilio which is which (a fraction of a cent a number).
+            <b>The email goes first,</b> to everyone with an address: one plain note in their trade&rsquo;s words — a roofer reads about measuring roofs from aerial imagery, a fence builder about drawing the fence on the map — with a &ldquo;Have the AI desk call me&rdquo; link.
           </li>
           <li>
-            <b>Everyone else gets one email</b> with a &ldquo;Have the AI desk call me&rdquo; link. Whoever taps it and ticks the box asked for the call — the AI calls them half a minute later, on any kind of phone.
+            <b>Landlines then get the AI&rsquo;s call,</b> two days after the email (at once when there is no email). A business landline may get a call in an AI voice; a cell phone or a home line may not without the person&rsquo;s written consent. &ldquo;Check lines&rdquo; asks Twilio which is which (a fraction of a cent a number).
+          </li>
+          <li>
+            <b>Cell phones are called and texted only once they ask:</b> whoever taps the email&rsquo;s link and ticks the box is called half a minute later, then gets one text in their trade&rsquo;s words with the free-trial link. No cold texts — the law and Twilio&rsquo;s rules forbid them, and they would cost JobFlex its texting number.
           </li>
           <li>
             <b>Calling hours:</b> 9&nbsp;am–8&nbsp;pm on their clock, Monday to Saturday; two calls at most. &ldquo;Don&rsquo;t call me&rdquo; on a call, or Unsubscribe in the email, ends it for good. The AI says it is a virtual assistant and that the call is recorded.
@@ -359,6 +362,7 @@ function ProspectSheet({ handleRef, rows, onChanged }: { handleRef: React.RefObj
           <p className={styles.why} data-outreach-why>
             <b>{r.dnc ? "Never called again" : ROUTE[r.route.kind].label}:</b> {r.dnc ? `asked ${r.dnc.via === "email" ? "by unsubscribing" : r.dnc.via === "call" ? "on a call" : "— marked here"} ${relative(r.dnc.at)}` : r.route.why}
             {r.waitWhy && r.route.kind === "ai-call" ? ` · ${r.waitWhy}` : ""}
+            {!r.waitWhy && r.seqWhy && r.route.kind === "ai-call" ? ` · ${r.seqWhy} (Call now doesn’t wait)` : ""}
           </p>
           {r.consent ? (
             <div className={styles.consent} data-outreach-consent>
@@ -376,6 +380,11 @@ function ProspectSheet({ handleRef, rows, onChanged }: { handleRef: React.RefObj
             <p className={styles.why}>
               <b>How it went:</b> {r.interest.level} — {r.interest.note}
               {r.interest.callBack ? ` · call back ${r.interest.callBack}` : ""}
+            </p>
+          ) : null}
+          {r.textedAt ? (
+            <p className={styles.why}>
+              <b>Texted</b> the trial link {relative(r.textedAt)}
             </p>
           ) : null}
           {r.linkSentTo ? (

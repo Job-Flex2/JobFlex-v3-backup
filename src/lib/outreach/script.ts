@@ -50,6 +50,65 @@ export function tradeWords(trade: string | null): { who: string; help: string; d
   return (trade && TRADE_WORDS[trade]) || { who: "contractors", help: "taking care of people's homes", demo: "a homeowner calling for a quote" };
 }
 
+/**
+ * WHAT JOBFLEX DOES FOR THIS TRADE (2026-10-24, owner: "if it's a roofing company — hey, we have a good tool for you
+ * for roofing; a fence — say it's a fence; a general contractor — something about JobFlex in general; each
+ * specialty"). The same true thing said four ways: the call's lead (`call`), the email's paragraph (`email`), the
+ * text's line (`sms`, short) and the voicemail's (`voicemail`). Only what JobFlex does today for every account.
+ */
+export interface TradePitch {
+  /** The tool, named: "the roof estimator". */
+  tool: string;
+  call: string;
+  email: string;
+  sms: string;
+  voicemail: string;
+}
+
+const DESK = "the AI desk answers every call in your company's name and books the visit on your calendar";
+const GENERAL: TradePitch = {
+  tool: "JobFlex",
+  call: `For a business like theirs, lead with the AI desk (${DESK}), then Smart Proposal — a full proposal written from a few sentences, that the homeowner signs on their phone — and running the job: schedule, crew app with photos, invoices, reviews.`,
+  email: `For a business like yours: ${DESK}, Smart Proposal writes the whole proposal from a few sentences, the homeowner signs it on their phone and pays the deposit online, and the schedule, the crew's photos and the invoices live in the same place.`,
+  sms: "JobFlex answers your calls with an AI desk, writes your proposals, and runs the job — schedule, crew, invoices.",
+  voicemail: "We help contractors answer every call, send proposals faster, and run their jobs.",
+};
+const TRADE_PITCHES: Record<string, TradePitch> = {
+  roofing: {
+    tool: "the roof estimator",
+    call: "For a roofer, lead with the roof estimator: it measures the roof from aerial imagery in minutes and prices it with their own rates, and the proposal goes out the same visit for the homeowner to sign on their phone. Then the AI desk for the calls they miss on a roof.",
+    email: "For a roofer: JobFlex measures the roof from aerial imagery in minutes, prices it with your own rates, and sends a proposal the homeowner signs on their phone — while the AI desk answers the calls you can't take on a roof.",
+    sms: "For roofers: measure a roof from aerial imagery in minutes, price it, and send a proposal they sign on their phone.",
+    voicemail: "For roofers, it measures the roof from aerial imagery and has the proposal out in minutes.",
+  },
+  fencing: {
+    tool: "the fence estimator",
+    call: "For a fence builder, lead with the fence estimator: draw the fence on the map, see it in 3D, and get the materials and the price, then a proposal the homeowner signs on their phone. Then the AI desk for the calls they miss.",
+    email: "For a fence builder: draw the fence on the map, see it in 3D with the gates and the posts, get the materials and the price, and send a proposal the homeowner signs on their phone.",
+    sms: "For fence builders: draw the fence on the map, see it in 3D, and send the priced proposal in minutes.",
+    voicemail: "For fence builders, you draw the fence on the map, see it in 3D and send the price in minutes.",
+  },
+  hvac: {
+    tool: "the HVAC estimator",
+    call: "For an HVAC company, lead with the HVAC estimator: it sizes the system with a Manual J-style load, matches the equipment, and builds the proposal the homeowner signs on their phone. Then the AI desk, which books service calls straight onto the calendar.",
+    email: "For an HVAC company: size the system with a Manual J-style load, match the equipment, and send the proposal the homeowner signs on their phone — while the AI desk books the service calls onto your calendar.",
+    sms: "For HVAC: size the system with a Manual J-style load, match the equipment, and send the proposal in minutes.",
+    voicemail: "For HVAC companies, it sizes the system with a Manual J-style load and builds the proposal in minutes.",
+  },
+  decks: {
+    tool: "Deck Studio",
+    call: "For a deck builder, lead with Deck Studio: design the deck with the homeowner in 3D, with the material list and the permit drawings, priced in the same place — and a link the homeowner can design on themselves. Deck Studio is in the free trial.",
+    email: "For a deck builder: Deck Studio designs the deck with your client in 3D, with the material list and the permit drawings, prices it, and sends a link your client can design on themselves.",
+    sms: "For deck builders: design the deck in 3D with your client, with the material list and permit drawings, and price it.",
+    voicemail: "For deck builders, Deck Studio designs the deck in 3D with the material list and the permit drawings.",
+  },
+  remodeling: GENERAL,
+};
+/** The pitch for a trade (the list's own word for it, lib/outreach/rules tradeKey): one of its own, or JobFlex in general. */
+export function tradePitch(trade: string | null): TradePitch {
+  return (trade && TRADE_PITCHES[trade]) || GENERAL;
+}
+
 const firstName = (name: string) => name.trim().split(/\s+/)[0] || "";
 
 /** The greeting, word for word: who is calling, that it is a virtual assistant, that the call is recorded, and why. */
@@ -78,7 +137,7 @@ export function outreachInstructions(p: Prospect, f: ScriptFacts, now: Date): st
     `2. Ask if they have two minutes. If not: offer to email the free-trial link (email_trial_link) or ask a better time (note_interest with call_back), then end.`,
     `3. Thank them, sincerely and briefly, for the work they do — people count on ${t.who}: ${t.help}. Mean it; don't flatter.`,
     "4. Ask one or two questions about how they run things today: how they answer calls when they're on a job, how long an estimate and a proposal take them, what eats their evenings.",
-    `5. Tell them what JobFlex would do for them — pick the two or three things that answer what they just told you, not the whole list.`,
+    `5. Tell them what JobFlex would do for them — pick the two or three things that answer what they just told you, not the whole list. ${tradePitch(p.trade).call}`,
     `6. Offer a short demo: "Want to hear how I'd answer your customers? Pretend you're ${t.demo}." Play the company's receptionist for a few turns (their business name), then step back out and ask what they thought.`,
     `7. Offer the free trial${f.trialDays ? ` (${f.trialDays} days)` : ""}: ask for their email, read it back letter by letter if it is unusual, and call email_trial_link. If they'd rather go themselves, the site is ${f.site}.`,
     "8. Before you hang up, call note_interest with how it went (hot, warm or cold, and one line of what they said), say goodbye and call end_call.",
@@ -137,8 +196,24 @@ export function outreachTools(canTransfer: boolean): ToolDef[] {
 }
 
 /** The short voicemail a machine gets: who called, why, the way back (the law asks for both on a recorded message). */
-export function outreachVoicemail(p: Pick<Prospect, "name" | "business">, callBack: string | null, site: string): string {
+export function outreachVoicemail(p: Pick<Prospect, "name" | "business" | "trade">, callBack: string | null, site: string): string {
   const who = firstName(p.name);
   const digits = callBack ? callBack.replace(/^\+1/, "").replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3") : null;
-  return `Hi${who ? ` ${who}` : ""}, this is the virtual assistant from JobFlex, a software company for contractors${p.business ? `, calling for ${p.business}` : ""}. We help contractors answer every call, send estimates and proposals faster, and run their jobs. ${digits ? `You can call us back at ${digits}, ` : ""}or see ${site.replace(/\./g, " dot ")}. If you'd rather not get calls from us, ${digits ? "tell us when you call back, or reply to any email from us" : "reply to any email from us"} and we'll take you off our list. Thank you, and have a good day.`;
+  return `Hi${who ? ` ${who}` : ""}, this is the virtual assistant from JobFlex, a software company for contractors${p.business ? `, calling for ${p.business}` : ""}. ${tradePitch(p.trade).voicemail} ${digits ? `You can call us back at ${digits}, ` : ""}or see ${site.replace(/\./g, " dot ")}. If you'd rather not get calls from us, ${digits ? "tell us when you call back, or reply to any email from us" : "reply to any email from us"} and we'll take you off our list. Thank you, and have a good day.`;
+}
+
+/** Two text segments in the plain SMS alphabet (153 characters each when joined): one character outside it — a
+ *  dash, a curly quote — turns the whole text into 70-character segments. */
+export const TEXT_MAX = 306;
+const plain = (s: string) => s.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/[\u2013\u2014]/g, "-").replace(/[^\x20-\x7E]/g, "");
+
+/** The one text after a call they asked for — JobFlex named, the trade's line, the trial link, how to stop (the carriers ask for all of it). */
+export function outreachText(input: { p: Pick<Prospect, "name" | "trade">; answered: boolean; link: string; trialDays: number }): string {
+  const who = plain(firstName(input.p.name)).slice(0, 20);
+  const hi = `Hi${who ? ` ${who}` : ""},`;
+  const open = input.answered ? `${hi} thanks for taking JobFlex's call.` : `${hi} JobFlex here - we tried to call you back as you asked.`;
+  const tail = `Free ${input.trialDays}-day trial: ${input.link} Reply STOP to opt out.`;
+  const full = plain(`${open} ${tradePitch(input.p.trade).sms} ${tail}`);
+  // Too long (a long link): the trade's line gives way, never the brand, the link or the way to stop.
+  return full.length <= TEXT_MAX ? full : plain(`${open} ${tail}`);
 }

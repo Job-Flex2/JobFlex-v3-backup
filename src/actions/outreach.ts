@@ -8,7 +8,7 @@ import { appBaseUrl } from "@/lib/appUrl";
 import { requirePlatformAdmin, UnauthorizedError } from "@/lib/orgContext";
 import { clientIp, DAY, enforceRateLimit, HOUR, RateLimitError } from "@/lib/rateLimit";
 import { toE164 } from "@/lib/phone";
-import { funnel, routeFor, callableNow, type Prospect } from "@/lib/outreach/rules";
+import { emailFirst, funnel, routeFor, callableNow, type Prospect } from "@/lib/outreach/rules";
 import { deleteProspect, listProspects, readProspect, updateProspect } from "@/lib/outreach/store";
 import { callNext, callProspect, checkLines, emailProspects, importProspects, outreachReadiness, readCallMeToken, requestCallMe, testCallToAdmin, type OutreachReadiness } from "@/lib/outreach/server";
 
@@ -30,6 +30,8 @@ export interface OutreachRow extends Prospect {
   route: ReturnType<typeof routeFor>;
   /** Why the AI may not call now, when it may not. */
   waitWhy: string | null;
+  /** Why the run waits on this one (the email goes first, two days before the call) — "Call now" doesn't. */
+  seqWhy: string | null;
 }
 
 export async function outreachBoard(): Promise<{ ok: true; rows: OutreachRow[]; readiness: OutreachReadiness; funnel: ReturnType<typeof funnel> } | Fail> {
@@ -39,7 +41,8 @@ export async function outreachBoard(): Promise<{ ok: true; rows: OutreachRow[]; 
   const now = new Date();
   const rows = list.map((p) => {
     const may = callableNow(p, now);
-    return { ...p, route: routeFor(p), waitWhy: may.ok ? null : may.why };
+    const seq = emailFirst(p, now, readiness.emails);
+    return { ...p, route: routeFor(p), waitWhy: may.ok ? null : may.why, seqWhy: seq.ok ? null : seq.why };
   });
   return { ok: true, rows, readiness, funnel: funnel(list) };
 }

@@ -7,8 +7,8 @@
 // and its subject passes the spam words; the call token's kind. Pure.
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/outreach.check.ts
 process.env.VOICE_SERVER_SECRET = process.env.VOICE_SERVER_SECRET || "qa-secret";
-import { ALL_ZONES, MAX_CALLS, OUTREACH_CONSENT_TEXT, callableNow, funnel, parseProspectList, routeFor, stateCode, tradeKey, twilioWords, withinCallingHours, type Prospect } from "@/lib/outreach/rules";
-import { outreachGreeting, outreachInstructions, outreachTools, outreachVoicemail, tradeWords } from "@/lib/outreach/script";
+import { ALL_ZONES, EMAIL_LEAD_MS, MAX_CALLS, OUTREACH_CONSENT_TEXT, callableNow, consentCoversTexts, emailDue, emailFirst, funnel, parseProspectList, routeFor, stateCode, textDue, tradeKey, twilioWords, withinCallingHours, type Prospect } from "@/lib/outreach/rules";
+import { outreachGreeting, outreachInstructions, outreachText, outreachTools, outreachVoicemail, tradePitch, tradeWords } from "@/lib/outreach/script";
 import { outreachLetter } from "@/lib/outreach/letter";
 import { spammySubject } from "@/lib/adminMail/compose";
 import { signCallToken, verifyCallToken } from "@/lib/aiDesk/voiceToken";
@@ -96,6 +96,34 @@ check("the call-me link, the unsubscribe and the postal address, in the HTML and
 check("it thanks them and says it is a one-time introduction", /thank you for what you do/.test(L.text) && /one-time note/.test(L.text));
 check("the subject has no spam words", spammySubject(L.subject) === null, `${L.subject} → ${spammySubject(L.subject)}`);
 check("a business name with < > & is escaped in the HTML", !outreachLetter({ ...{ p: { ...ll, business: "A<b>&C" } }, sender: "D", callMeUrl: "u", siteUrl: "s", unsubscribeUrl: "x", postal: "p" }).html.includes("A<b>"));
+
+console.log("— each trade's own pitch —");
+const PITCH: Array<[string, RegExp]> = [["roofing", /aerial imagery/], ["fencing", /on the map/], ["hvac", /Manual J-style/], ["decks", /3D/]];
+for (const [trade, word] of PITCH) {
+  const pt = tradePitch(trade);
+  check(`${trade}: its tool in the call, the email, the text and the voicemail`, [pt.call, pt.email, pt.sms, pt.voicemail].every((x) => word.test(x)), JSON.stringify(pt));
+  check(`${trade}: the call's brief leads with it, the email says it, the voicemail too`, outreachInstructions({ ...ll, trade }, facts, mon10).includes(pt.call) && outreachLetter({ p: { ...ll, trade }, sender: "D", callMeUrl: "u", siteUrl: "s", unsubscribeUrl: "x", postal: "p" }).text.includes(pt.email) && outreachVoicemail({ ...ll, trade }, null, "jobflex.app").includes(pt.voicemail));
+}
+check("a plumber, a remodeler, an unknown trade and none: JobFlex in general (the AI desk, Smart Proposal, the job)", ["plumbing", "remodeling", "underwater welding", null].every((t) => /AI desk/.test(tradePitch(t).email) && /Smart Proposal/.test(tradePitch(t).email)));
+const txt = outreachText({ p: ll, answered: true, link: "https://jobflex.app/auth/register?utm_source=jobflex-call&utm_medium=sms&utm_campaign=roofing", trialDays: 7 });
+check("the text: names JobFlex, the trade's line, the trial, how to stop — two segments at most", /JobFlex/.test(txt) && txt.includes(tradePitch("roofing").sms) && /Free 7-day trial/.test(txt) && /Reply STOP to opt out\.$/.test(txt) && txt.length <= 306, `${txt.length}: ${txt}`);
+check("…and for a call that didn't reach them, it says we tried to call back as they asked", /tried to call you back as you asked/.test(outreachText({ p: ll, answered: false, link: "l", trialDays: 7 })));
+const texts = ["roofing", "fencing", "hvac", "decks", "plumbing"].flatMap((t) => [true, false].map((answered) => outreachText({ p: { name: "Christopher-Alexander", trade: t }, answered, link: "https://jobflex.app/auth/register?utm_source=jobflex-call&utm_medium=sms&utm_campaign=landscaping", trialDays: 14 })));
+check("every trade's text: two segments at most, in the plain SMS alphabet (no dash that would make it 70-character segments)", texts.every((x) => x.length <= 306 && /^[\x20-\x7E]+$/.test(x) && /Reply STOP to opt out\.$/.test(x)), texts.map((x) => x.length).join(","));
+check("a link too long for the trade's line: the line gives way, the brand, the link and STOP stay", (() => { const x = outreachText({ p: ll, answered: true, link: `https://jobflex.app/${"x".repeat(200)}`, trialDays: 7 }); return x.length <= 306 && /JobFlex/.test(x) && x.includes("x".repeat(200)) && /Reply STOP/.test(x); })());
+
+console.log("— the email first, then the call and the text —");
+const day = 24 * 60 * 60 * 1000;
+const withEmail = P({ line: line("landline") });
+check("a landline with an email: the email goes first", emailFirst(withEmail, mon10, true).ok === false && emailDue(withEmail));
+check("…called two days after it, not before", !emailFirst({ ...withEmail, emailedAt: new Date(mon10.getTime() - day).toISOString() }, mon10, true).ok && emailFirst({ ...withEmail, emailedAt: new Date(mon10.getTime() - EMAIL_LEAD_MS - 1000).toISOString() }, mon10, true).ok);
+check("…no email, or emails can't go out on this server: the call needn't wait", emailFirst({ ...withEmail, email: null }, mon10, true).ok && emailFirst(withEmail, mon10, false).ok);
+check("who asked for the call never waits for an email", emailFirst({ ...withEmail, consent: { text: OUTREACH_CONSENT_TEXT, at, ip: null, ua: null, page: "call-me" } }, mon10, true).ok);
+check("the email batch: a cell or a landline not yet written to; not twice, not after 'don't call', not one who asked", emailDue(P({ line: line("mobile") })) && !emailDue({ ...withEmail, emailedAt: at }) && !emailDue({ ...withEmail, dnc: { at, via: "admin" } }) && !emailDue({ ...withEmail, consent: { text: OUTREACH_CONSENT_TEXT, at, ip: null, ua: null, page: "call-me" } }) && !emailDue({ ...withEmail, email: null }));
+const askedNew = P({ line: line("mobile"), consent: { text: OUTREACH_CONSENT_TEXT, at, ip: null, ua: null, page: "call-me" } });
+check("the consent now covers texts, and says how to stop", consentCoversTexts(askedNew.consent) && /reply STOP/i.test(OUTREACH_CONSENT_TEXT) && /Message and data rates/.test(OUTREACH_CONSENT_TEXT));
+check("a text goes to one who asked with the new words; not on the old words (calls and email only)", textDue(askedNew) && !textDue({ ...askedNew, consent: { ...askedNew.consent!, text: "I agree that JobFlex may call me at this number — using an AI voice assistant and automated technology — to show me the AI desk and tell me about JobFlex, and may email me." } }));
+check("…not to a landline, not twice for one ask, not after 'don't call', not to a list contractor who never asked", !textDue({ ...askedNew, line: line("landline") }) && !textDue({ ...askedNew, textedAt: new Date(Date.parse(at) + 60000).toISOString() }) && textDue({ ...askedNew, textedAt: "2026-01-01T00:00:00.000Z" }) && !textDue({ ...askedNew, dnc: { at, via: "sms" } }) && !textDue(P({ line: line("mobile") })));
 
 console.log("— the call token —");
 const tok = signCallToken({ callSid: "CA9", organizationId: "jobflex-outreach", from: "+12065550142", kind: "outreach", ref: "aaaaaaaaaaaaaaaaaa" });

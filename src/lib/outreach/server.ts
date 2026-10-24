@@ -22,9 +22,11 @@ import {
   callableNow,
   lineTypeOf,
   parseProspectList,
-  routeFor,
   stateCode,
   tradeKey,
+  emailDue,
+  emailFirst,
+  textDue,
   twilioWords,
   type CallStatus,
   type LineType,
@@ -32,7 +34,9 @@ import {
   type OutreachCall,
   type Prospect,
 } from "./rules";
-import { outreachInstructions, outreachTools, outreachVoicemail, type ScriptFacts } from "./script";
+import { outreachInstructions, outreachText, outreachTools, outreachVoicemail, type ScriptFacts } from "./script";
+import { sendText } from "@/lib/sms/send";
+import { appBaseUrl } from "@/lib/appUrl";
 import { outreachLetter } from "./letter";
 import { listProspects, newProspectId, optOutId, readProspect, updateProspect, writeProspect } from "./store";
 
@@ -55,22 +59,49 @@ const postal = () => process.env.JOBFLEX_POSTAL_ADDRESS?.trim() || null;
 export interface OutreachReadiness {
   calls: boolean;
   emails: boolean;
+  /** JobFlex's own number is approved for texts (the one text after a call a contractor asked for). */
+  texts: boolean;
   /** What is missing, in words, for the page. */
   missing: string[];
   from: string | null;
   transfer: boolean;
 }
 
+/**
+ * Does Twilio let this account call US numbers (its Voice geo permissions)? Asked of Twilio's dialing-permissions API
+ * (2026-10-24: the owner's first test calls were refused — "Account not authorized to call +1…" — and the setting had
+ * to be found in the right account). True / false as Twilio says; null when it couldn't be asked.
+ */
+async function usCallsAllowed(s: { accountSid: string; authToken: string }): Promise<boolean | null> {
+  const base = (process.env.NODE_ENV !== "production" && process.env.TWILIO_VOICE_BASE?.trim()) || "https://voice.twilio.com";
+  try {
+    const res = await fetch(`${base.replace(/\/$/, "")}/v1/DialingPermissions/Countries/US`, {
+      headers: { Authorization: `Basic ${Buffer.from(`${s.accountSid}:${s.authToken}`).toString("base64")}` },
+      signal: AbortSignal.timeout(6000),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const j = (await res.json().catch(() => ({}))) as { low_risk_numbers_enabled?: unknown };
+    return typeof j.low_risk_numbers_enabled === "boolean" ? j.low_risk_numbers_enabled : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function outreachReadiness(): Promise<OutreachReadiness> {
-  const [tw, from] = await Promise.all([twilioSettings().catch(() => null), outreachFrom()]);
+  const [tw, from, textFrom] = await Promise.all([twilioSettings().catch(() => null), outreachFrom(), jobflexSender().catch(() => null)]);
   const missing: string[] = [];
   if (!tw) missing.push("Twilio isn't connected (Admin → Texting).");
+  // Only Twilio's own "no" holds the calls back; a check that couldn't be made doesn't.
+  const usOk = tw ? await usCallsAllowed(tw) : null;
+  if (tw && usOk === false) missing.push(`Twilio won't call US numbers from JobFlex's account (${tw.accountSid.slice(0, 6)}…${tw.accountSid.slice(-4)}). In the Twilio Console, switch to that account, then Voice → Settings → Geo permissions → tick United States & Canada → Save.`);
   if (!voiceServerConfigured()) missing.push("The AI desk's voice server isn't connected (VOICE_SERVER_URL and VOICE_SERVER_SECRET).");
   if (!from) missing.push("No number to call from: set TWILIO_SALES_FROM to a JobFlex Twilio number (a local one answers best).");
   const emailsOk = isEmailEnabled() && !!postal();
   if (!isEmailEnabled()) missing.push("Email isn't set up on this server.");
   if (!postal()) missing.push("Emails need JobFlex's postal address in their footer — the email law asks for it in every email like this. Set JOBFLEX_POSTAL_ADDRESS (a street address or a PO box).");
-  return { calls: !!tw && voiceServerConfigured() && !!from, emails: emailsOk, missing, from, transfer: !!transferTo() };
+  if (!textFrom) missing.push("Texts need JobFlex's own number approved by Twilio for texting — until then the text after a call isn't sent.");
+  return { calls: !!tw && voiceServerConfigured() && !!from && usOk !== false, emails: emailsOk, texts: !!tw && !!textFrom, missing, from, transfer: !!transferTo() };
 }
 
 /* ── The list ─────────────────────────────────────────────────────────── */
@@ -226,7 +257,9 @@ export async function callProspect(id: string, base: string): Promise<{ ok: true
 /** The next `n` the AI may call now: who asked for a call first, then the landlines in the order they came in. */
 export async function callNext(n: number, base: string): Promise<{ placed: number; failed: number; waiting: number; errors: string[] }> {
   const now = new Date();
-  const list = (await listProspects()).filter((p) => callableNow(p, now).ok);
+  // The email goes first: a landline that has one is called two days after it (lib/outreach/rules emailFirst).
+  const emailsOn = (await outreachReadiness()).emails;
+  const list = (await listProspects()).filter((p) => callableNow(p, now).ok && emailFirst(p, now, emailsOn).ok);
   list.sort((a, b) => Number(!!b.consent) - Number(!!a.consent) || a.createdAt.localeCompare(b.createdAt));
   let placed = 0;
   let failed = 0;
@@ -287,7 +320,7 @@ export async function outreachAfter(id: string): Promise<string> {
 /** Twilio's word on how the call ended: a call nobody (or no machine) picked up. */
 export async function outreachStatus(id: string, params: Record<string, string>): Promise<void> {
   const status = (params.CallStatus ?? "").toLowerCase();
-  await updateProspect(id, (p) => {
+  const after = await updateProspect(id, (p) => {
     const c = lastCall(p);
     if (!c || (c.sid && params.CallSid && c.sid !== params.CallSid)) return p;
     const seconds = Number(params.CallDuration) || c.seconds;
@@ -297,6 +330,9 @@ export async function outreachStatus(id: string, params: Record<string, string>)
     if (c.status === "calling") return withLastCall(p, { status: "no-answer", outcome: c.outcome ?? "no-answer", seconds });
     return withLastCall(p, { seconds: Math.max(c.seconds, seconds) });
   });
+  // A call they asked for that didn't talk (no answer, busy, a voicemail): the text with the link instead.
+  const c = after ? lastCall(after) : null;
+  if (c && (c.status === "no-answer" || c.status === "busy" || c.status === "voicemail")) await textAfterCall(id, false).catch((err) => logServerError("outreach-text", err, { kind: "action" }));
 }
 
 /* ── What the voice server asks while the AI talks ───────────────────── */
@@ -318,7 +354,22 @@ export async function outreachBrief(t: CallToken): Promise<{ ok: true; instructi
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
 
 /** The trial's sign-up page, marked as coming from this call. */
-const trialUrl = (base: string, p: Prospect) => `${base}/auth/register?utm_source=jobflex-call&utm_medium=ai-desk${p.trade ? `&utm_campaign=${encodeURIComponent(p.trade)}` : ""}`;
+const trialUrl = (base: string, p: Prospect, medium: "ai-desk" | "sms" = "ai-desk") => `${base}/auth/register?utm_source=jobflex-call&utm_medium=${medium}${p.trade ? `&utm_campaign=${encodeURIComponent(p.trade)}` : ""}`;
+
+/**
+ * The one text after a call they asked for (lib/outreach/rules textDue): from JobFlex's own number through the one
+ * texting chokepoint (lib/sms/send — a number that replied STOP is never texted, caps, the log). Sent or held, it is
+ * marked; a STOP on record marks them "don't call" too.
+ */
+async function textAfterCall(id: string, answered: boolean): Promise<void> {
+  const p = await readProspect(id);
+  if (!p || !textDue(p) || !p.phone) return;
+  const base = (await appBaseUrl()).replace(/\/$/, "");
+  const { trialDays } = await scriptFacts();
+  const r = await sendText({ organizationId: null, to: p.phone, body: outreachText({ p, answered, link: trialUrl(base, p, "sms"), trialDays }), kind: "jobflex-outreach" });
+  if (r.ok && (r.status === "SENT" || r.status === "HELD")) await updateProspect(id, (x) => ({ ...x, textedAt: nowIso() }));
+  else if (!r.ok && r.reason === "opted-out") await updateProspect(id, (x) => ({ ...x, dnc: x.dnc ?? { at: nowIso(), via: "sms" } }));
+}
 
 export async function outreachTool(t: CallToken, name: string, args: Record<string, unknown>, base: string): Promise<{ ok: true; outcome?: "done"; output: Record<string, unknown> } | { ok: false; error: string }> {
   const id = t.ref ?? "";
@@ -386,6 +437,8 @@ export async function finishOutreachCall(t: CallToken, input: { outcome: string;
     const status: CallStatus = input.outcome === "failed" ? "failed" : "done";
     return withLastCall(p, { status, seconds: Math.max(c.seconds, Math.round(input.seconds)), outcome, transcript: text || null, summary: input.outcome === "transfer" ? "transfer" : (p.interest?.note ?? null), error: input.error });
   });
+  // The text with the trial link — not to one who just asked never to hear from us (do_not_call marked them).
+  if (input.transcript.some((l) => l.role === "caller")) await textAfterCall(id, true).catch((err) => logServerError("outreach-text", err, { kind: "action" }));
 }
 
 /* ── The email, and the call-me page it links to ─────────────────────── */
@@ -423,7 +476,8 @@ export async function emailProspects(n: number, base: string, admin: { name: str
   const sentToday = list.filter((p) => p.emailedAt?.startsWith(today)).length;
   const room = Math.max(0, EMAILS_PER_DAY - sentToday);
   if (!room) return { sent: 0, skipped: 0, error: `${EMAILS_PER_DAY} emails went out today already — the rest go tomorrow.` };
-  const todo = list.filter((p) => routeFor(p).kind === "email" && p.email && !p.emailedAt).slice(0, Math.min(room, Math.max(1, n)));
+  // Everyone with an address who wasn't written to — a landline too, before its call (lib/outreach/rules emailDue).
+  const todo = list.filter(emailDue).slice(0, Math.min(room, Math.max(1, n)));
   const sender = (admin.name ?? "").trim().split(/\s+/)[0] || "The JobFlex team";
   let sent = 0;
   let skipped = 0;
