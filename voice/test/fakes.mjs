@@ -69,9 +69,10 @@ export function fakeRealtime({ port = 0, scenario = process.env.FAKE_SCENARIO ||
         session.audio = (session.audio || 0) + 1;
         if (session.audio === 50 && session.steps === 1) {
           send({ type: "input_audio_buffer.speech_started" });
-          send({ type: "conversation.item.input_audio_transcription.completed", transcript: scenario === "transfer" ? "Can I talk to someone there?" : scenario === "message" ? "Please have someone call me back about my gutters." : "Can someone come look at my roof this week?" });
+          send({ type: "conversation.item.input_audio_transcription.completed", transcript: scenario === "transfer" ? "Can I talk to someone there?" : scenario === "message" ? "Please have someone call me back about my gutters." : scenario === "outreach" ? "Sure, email me the link — sam@example.com." : "Can someone come look at my roof this week?" });
           session.steps = 2;
           if (scenario === "transfer") call("transfer_call", { reason: "caller asked for a person" });
+          else if (scenario === "outreach") call("email_trial_link", { email: "sam@example.com" });
           else if (scenario === "message") call("take_message", { name: "Dana Lee", phone: "+12065550123", about: "Gutters — call back" });
           else call("open_times", { service: "roof estimate", days: 7 });
         }
@@ -101,8 +102,8 @@ export function fakeRealtime({ port = 0, scenario = process.env.FAKE_SCENARIO ||
         }
         const last = seen.items[seen.items.length - 1];
         const out = last ? JSON.parse(last.output || "{}") : {};
-        if (out.booked || out.taken) {
-          speak(out.booked ? `You're booked for ${out.when}. Anything else?` : "I've passed that on. Anything else?");
+        if (out.booked || out.taken || out.sent) {
+          speak(out.booked ? `You're booked for ${out.when}. Anything else?` : out.sent ? "It's in your inbox. Thanks for your time." : "I've passed that on. Anything else?");
           call("end_call", {});
           return;
         }
@@ -123,6 +124,12 @@ export function fakeRealtime({ port = 0, scenario = process.env.FAKE_SCENARIO ||
   return { wss, seen, get port() { return wss.address().port; }, close: () => wss.close() };
 }
 
+/** The tools an outreach brief brings (the app's lib/outreach has the real ones). */
+export const OUTREACH_TOOLS = [
+  { type: "function", name: "email_trial_link", description: "Email the free-trial link.", parameters: { type: "object", properties: { email: { type: "string" } }, required: ["email"] } },
+  { type: "function", name: "end_call", description: "End the call after the goodbye.", parameters: { type: "object", properties: {}, required: [] } },
+];
+
 /** A fake JobFlex internal API: a brief for any token except "bad", and a log of every call. */
 export function fakeApp({ port = 0 } = {}) {
   const log = [];
@@ -140,7 +147,12 @@ export function fakeApp({ port = 0 } = {}) {
       if (json.token === "bad") return reply({ ok: false, error: "bad token" }, 403);
       switch (req.url) {
         case "/api/desk/call-brief":
+          // An outreach call (JobFlex calling a contractor) brings its own tools.
+          if (json.token === "tok-outreach")
+            return reply({ ok: true, instructions: "You are JobFlex's virtual assistant calling Sam at Test Roofing.", voice: "marin", maxSeconds: 300, callSid: "CAout", tools: OUTREACH_TOOLS });
           return reply({ ok: true, instructions: "You are the phone assistant for Test Roofing.", voice: "marin", maxSeconds: 120, callSid: "CAtest" });
+        case "/api/desk/tool":
+          return reply({ ok: true, outcome: "done", output: { sent: true, to: json.args?.email ?? null } });
         case "/api/desk/open-times":
           return reply({ ok: true, times: [{ id: "t1", label: "Tue, Oct 14 · 8:00 AM", startsAt: "2026-10-14T15:00:00.000Z" }, { id: "t2", label: "Tue, Oct 14 · 10:00 AM", startsAt: "2026-10-14T17:00:00.000Z" }], note: "Free estimate, 1 hour." });
         case "/api/desk/book":

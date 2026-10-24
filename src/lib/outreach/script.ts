@@ -1,0 +1,144 @@
+// THE OUTREACH CALL'S SCRIPT (2026-10-23) — pure: what JobFlex's virtual assistant is told when it calls a contractor
+// (lib/outreach/rules says who may be called). Owner: "they can say oh, thank you for what you guys doing, you guys
+// helping people with your service — and then start offering the JobFlex platform that they need, that would make
+// their business better."
+//
+// KEEP IT TRUE. Every claim below is what JobFlex does today (lib/support/handbook is the long version); the prices
+// and the trial come from the live plan catalog at call time, never from here. Nothing the marketing page was told to
+// stop saying (no "verified pros", no lead counts, no promised results).
+
+import { MAX_CALLS, localNowWords, type Prospect } from "./rules";
+
+export interface PlanFact {
+  name: string;
+  /** "$45" — formatted already. */
+  price: string;
+}
+
+export interface ScriptFacts {
+  plans: PlanFact[];
+  trialDays: number;
+  /** Whether a person at JobFlex can take the call right now (transfer_call is offered only then). */
+  canTransfer: boolean;
+  /** "jobflex.app". */
+  site: string;
+}
+
+/** What JobFlex does, in the words the assistant may use. */
+export const JOBFLEX_FACTS = [
+  "The AI desk (what is calling now): answers the company's phone in the company's own name, day and night or only the calls they miss; books visits straight onto their calendar from their open hours; takes messages; texts the owner what came in. It tells callers the company's services and prices as the owner sets them.",
+  "Estimating: a roofing estimate measured from aerial data; fences drawn on the map; HVAC sized with a Manual J-style load and real equipment; decks designed in 3D with a material list (Deck Studio, an add-on); estimates from a video walk-through or a set of plans; a Smart Proposal written from a few sentences.",
+  "Proposals with the company's logo that the homeowner signs on their phone, with deposits and payments taken online.",
+  "Running the job: the calendar and scheduling, a crew app (start and finish, photos), change orders, invoices, reviews, the client list.",
+  "Homeowners who ask for a contractor on JobFlex's homeowner page are routed to contractors on JobFlex — say it as a way more work can come in, never as a number of leads.",
+] as const;
+
+const TRADE_WORDS: Record<string, { who: string; help: string; demo: string }> = {
+  roofing: { who: "roofers", help: "keeping a roof over people's heads", demo: "a homeowner calling about a leak after a storm" },
+  hvac: { who: "HVAC techs", help: "keeping people warm in the winter and cool in the summer", demo: "a homeowner whose furnace stopped working" },
+  fencing: { who: "fence builders", help: "giving families a safe yard for their kids and dogs", demo: "a homeowner who wants a quote for a new cedar fence" },
+  decks: { who: "deck builders", help: "building the place families spend their summers", demo: "a homeowner who wants a new deck off the back of the house" },
+  remodeling: { who: "remodelers", help: "making people's homes work for them", demo: "a homeowner planning a kitchen remodel" },
+  plumbing: { who: "plumbers", help: "showing up when water is where it shouldn't be", demo: "a homeowner with a leaking water heater" },
+  electrical: { who: "electricians", help: "keeping people's homes powered and safe", demo: "a homeowner whose breaker keeps tripping" },
+  landscaping: { who: "landscapers", help: "making people proud of their yard", demo: "a homeowner who wants their yard cleaned up and maintained" },
+  painting: { who: "painters", help: "making homes look new again", demo: "a homeowner who wants the outside of the house painted" },
+};
+
+/** The trade's own words, or plain ones for any other trade. */
+export function tradeWords(trade: string | null): { who: string; help: string; demo: string } {
+  return (trade && TRADE_WORDS[trade]) || { who: "contractors", help: "taking care of people's homes", demo: "a homeowner calling for a quote" };
+}
+
+const firstName = (name: string) => name.trim().split(/\s+/)[0] || "";
+
+/** The greeting, word for word: who is calling, that it is a virtual assistant, that the call is recorded, and why. */
+export function outreachGreeting(p: Pick<Prospect, "name" | "business" | "consent">): string {
+  const who = firstName(p.name);
+  const ask = who ? `Is this ${who}${p.business ? ` at ${p.business}` : ""}?` : p.business ? `Is this ${p.business}?` : "";
+  return p.consent
+    ? `Hi${who ? ` ${who}` : ""}, this is JobFlex's virtual assistant — you asked on our website for a call, so here I am. This call is recorded. ${ask}`.trim()
+    : `Hi, this is the virtual assistant from JobFlex, a software company for contractors — this call is recorded. ${ask || "Could I speak with the owner?"}`.trim();
+}
+
+/** The instructions for the realtime voice model. */
+export function outreachInstructions(p: Prospect, f: ScriptFacts, now: Date): string {
+  const t = tradeWords(p.trade);
+  const plans = f.plans.length ? f.plans.map((x) => `${x.name} ${x.price} a month`).join(", ") : null;
+  const lowest = f.plans.length ? f.plans.map((x) => x.price).sort((a, b) => Number(a.replace(/[^\d.]/g, "")) - Number(b.replace(/[^\d.]/g, "")))[0] : null;
+  const asked = !!p.consent;
+  const attempt = p.calls.length + 1;
+  return [
+    `You are JobFlex's virtual assistant, making a phone call for JobFlex — a software company for contractors — to ${p.name || "the owner"}${p.business ? ` of ${p.business}` : ""}${p.city || p.state ? `, in ${[p.city, p.state].filter(Boolean).join(", ")}` : ""}${p.trade ? ` (${p.trade})` : ""}. ${asked ? "They asked for this call on JobFlex's website a moment ago." : "They did not ask for this call: their business number is on JobFlex's list. Be brief and polite, and take no for an answer the first time."} It is ${localNowWords(p.state, now)} where they are. This is call ${attempt} of at most ${MAX_CALLS}.`,
+    "",
+    `GREETING (say it exactly, first): "${outreachGreeting(p)}"`,
+    "",
+    "THE CALL, in this order — a conversation, not a speech. Short sentences, one question at a time, warm and plain, like a person from a small company:",
+    `1. Make sure you have the owner (or whoever runs the office). If someone else answered, ask for the owner by name; if they are not there, ask when is a good time or for an email to send the information to, call note_interest with what you learned, thank them and end.`,
+    `2. Ask if they have two minutes. If not: offer to email the free-trial link (email_trial_link) or ask a better time (note_interest with call_back), then end.`,
+    `3. Thank them, sincerely and briefly, for the work they do — people count on ${t.who}: ${t.help}. Mean it; don't flatter.`,
+    "4. Ask one or two questions about how they run things today: how they answer calls when they're on a job, how long an estimate and a proposal take them, what eats their evenings.",
+    `5. Tell them what JobFlex would do for them — pick the two or three things that answer what they just told you, not the whole list.`,
+    `6. Offer a short demo: "Want to hear how I'd answer your customers? Pretend you're ${t.demo}." Play the company's receptionist for a few turns (their business name), then step back out and ask what they thought.`,
+    `7. Offer the free trial${f.trialDays ? ` (${f.trialDays} days)` : ""}: ask for their email, read it back letter by letter if it is unusual, and call email_trial_link. If they'd rather go themselves, the site is ${f.site}.`,
+    "8. Before you hang up, call note_interest with how it went (hot, warm or cold, and one line of what they said), say goodbye and call end_call.",
+    "",
+    "WHAT JOBFLEX DOES (say only these things, in your own words):",
+    ...JOBFLEX_FACTS.map((x) => `- ${x}`),
+    plans ? `- The plans today: ${plans}${lowest ? ` — starting at ${lowest} a month` : ""}; a ${f.trialDays}-day free trial; cancel any time.` : `- Prices: say they are on ${f.site}/pricing — you don't have them in front of you.`,
+    "",
+    "RULES:",
+    "- You are a virtual assistant (an AI). Say so whenever you are asked, and never pretend to be a person.",
+    `- If they say they're not interested: thank them for their time, call note_interest (cold), say goodbye, end_call. Don't argue, don't ask twice.`,
+    "- If they say anything like \"don't call me\", \"take me off your list\", \"stop calling\" or \"remove me\": call do_not_call at once, tell them they won't be called again, apologise for the interruption, say goodbye and end_call.",
+    "- If an automated menu, a voicemail greeting or a recording answers: call end_call at once without a word.",
+    "- Never invent a feature, a price, a number of customers, a result or a guarantee. If you don't know, say someone from the team will follow up by email, and note it.",
+    "- Never ask for card numbers, passwords or bank details. Never promise discounts.",
+    f.canTransfer ? "- If they want to talk to a person at JobFlex now, say you'll put them through and call transfer_call." : "- If they want to talk to a person at JobFlex, say someone will call them back, and note the best time with note_interest.",
+    "- Keep the whole call under four minutes unless they are the one asking questions.",
+  ].join("\n");
+}
+
+type ToolDef = { type: "function"; name: string; description: string; parameters: { type: "object"; properties: Record<string, unknown>; required: string[] } };
+
+/** The tools an outreach call brings (the voice server offers these instead of the desk's; the app runs them). */
+export function outreachTools(canTransfer: boolean): ToolDef[] {
+  const tools: ToolDef[] = [
+    {
+      type: "function",
+      name: "email_trial_link",
+      description: "Email the contractor JobFlex's free-trial link. Only after they said yes to it and gave their email (read it back first).",
+      parameters: { type: "object", properties: { email: { type: "string", description: "Their email address, as confirmed" } }, required: ["email"] },
+    },
+    {
+      type: "function",
+      name: "note_interest",
+      description: "Note how the call went, once, before you hang up: how interested they are, what they said in one line, and when to call back if they asked for that.",
+      parameters: {
+        type: "object",
+        properties: {
+          level: { type: "string", enum: ["hot", "warm", "cold"] },
+          note: { type: "string", description: "One line: what they said, what they need, who answered" },
+          call_back: { type: "string", description: "When they asked to be called back, in their words, if they did" },
+        },
+        required: ["level", "note"],
+      },
+    },
+    {
+      type: "function",
+      name: "do_not_call",
+      description: "They asked not to be called again (\"don't call me\", \"take me off your list\"). Call it at once, then say they won't be called again, and end.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+    { type: "function", name: "end_call", description: "End the call after the goodbye — or at once if a machine or a menu answered.", parameters: { type: "object", properties: {}, required: [] } },
+  ];
+  if (canTransfer) tools.splice(3, 0, { type: "function", name: "transfer_call", description: "Put the contractor through to a person at JobFlex, when they ask for one. Say you are putting them through first.", parameters: { type: "object", properties: { reason: { type: "string" } }, required: [] } });
+  return tools;
+}
+
+/** The short voicemail a machine gets: who called, why, the way back (the law asks for both on a recorded message). */
+export function outreachVoicemail(p: Pick<Prospect, "name" | "business">, callBack: string | null, site: string): string {
+  const who = firstName(p.name);
+  const digits = callBack ? callBack.replace(/^\+1/, "").replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3") : null;
+  return `Hi${who ? ` ${who}` : ""}, this is the virtual assistant from JobFlex, a software company for contractors${p.business ? `, calling for ${p.business}` : ""}. We help contractors answer every call, send estimates and proposals faster, and run their jobs. ${digits ? `You can call us back at ${digits}, ` : ""}or see ${site.replace(/\./g, " dot ")}. If you'd rather not get calls from us, ${digits ? "tell us when you call back, or reply to any email from us" : "reply to any email from us"} and we'll take you off our list. Thank you, and have a good day.`;
+}

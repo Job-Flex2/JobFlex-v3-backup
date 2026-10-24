@@ -1,0 +1,411 @@
+"use client";
+
+// ADMIN · OUTREACH — BLUEPRINT (2026-10-23). JobFlex's own AI desk calls contractors and tells them about JobFlex
+// (lib/outreach). Paste a list; "Check lines" asks Twilio which numbers are landlines (the AI may call those); "Call the
+// next 5" dials them in calling hours; the rest — cell phones, internet lines — get "Email the call-me link": one
+// plain email whose link lets them ask for the call themselves. Every row opens the contractor: their line, why they
+// are (or aren't) called, their consent as given, each call with its transcript, "don't call". A test call rings the
+// admin's own phone with the script a contractor hears.
+// Furniture: the partner-money kit (admin-influencers/admin-ui). The page is a server component: router.refresh().
+
+import { useImperativeHandle, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "@/components/ui/Toast";
+import { relative, shortDate } from "@/lib/format";
+import { LINE_WORDS, OUTCOME_WORDS, type OutreachCall } from "@/lib/outreach/rules";
+import type { OutreachReadiness } from "@/lib/outreach/server";
+import {
+  callOutreachNext,
+  callOutreachOne,
+  checkOutreachLines,
+  emailOutreach,
+  importOutreachList,
+  outreachTestCall,
+  removeOutreach,
+  setOutreachDnc,
+  type OutreachRow,
+} from "@/actions/outreach";
+import { Chip, Empty, KpiStrip, Meta, Sheet, type Tone, actionError, cx, useMdl, useReveal } from "@/components/v3/admin-influencers/admin-ui";
+import ui from "@/components/v3/admin-influencers/admin-ui.module.css";
+import styles from "./outreach.module.css";
+
+type Funnel = { total: number; landlines: number; emailOnly: number; unchecked: number; called: number; reached: number; linkSent: number; interested: number; asked: number; dnc: number };
+
+type Filter = "all" | "ai-call" | "email" | "check" | "called" | "interested" | "dnc";
+const FILTERS: Array<{ key: Filter; label: string }> = [
+  { key: "all", label: "All" },
+  { key: "ai-call", label: "AI calls" },
+  { key: "email", label: "Email" },
+  { key: "check", label: "Not checked" },
+  { key: "called", label: "Called" },
+  { key: "interested", label: "Interested" },
+  { key: "dnc", label: "Don't call" },
+];
+const ROUTE: Record<OutreachRow["route"]["kind"], { label: string; tone: Tone }> = {
+  "ai-call": { label: "AI calls", tone: "bp" },
+  email: { label: "Email", tone: "wait" },
+  check: { label: "Check line", tone: "mute" },
+  none: { label: "No contact", tone: "mute" },
+};
+const last = (r: OutreachRow): OutreachCall | null => r.calls[r.calls.length - 1] ?? null;
+const match = (r: OutreachRow, f: Filter) =>
+  f === "all" ? true : f === "called" ? r.calls.length > 0 : f === "interested" ? !!r.interest && r.interest.level !== "cold" : f === "dnc" ? !!r.dnc : r.route.kind === f;
+
+export function AdminOutreachContent({ rows, readiness, funnel }: { rows: OutreachRow[]; readiness: OutreachReadiness; funnel: Funnel }) {
+  const router = useRouter();
+  const rootRef = useRef<HTMLDivElement>(null);
+  useReveal(rootRef);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [list, setList] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [said, setSaid] = useState<string | null>(null);
+  const [test, setTest] = useState({ phone: "", business: "Test Roofing", trade: "roofing" });
+  const sheetRef = useRef<SheetHandle | null>(null);
+  const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.key, rows.filter((r) => match(r, f.key)).length])) as Record<Filter, number>, [rows]);
+  const shown = useMemo(() => rows.filter((r) => match(r, filter)), [rows, filter]);
+  const callableCount = rows.filter((r) => r.route.kind === "ai-call" && !r.waitWhy).length;
+  const toEmail = rows.filter((r) => r.route.kind === "email" && !r.emailedAt).length;
+
+  const run = async <R extends { ok: true } | { ok: false; error: string }>(key: string, fn: () => Promise<R>, words: (r: Extract<R, { ok: true }>) => string) => {
+    setBusy(key);
+    setSaid(null);
+    try {
+      const r = await fn();
+      if (!r.ok) {
+        toast.error((r as { ok: false; error: string }).error || "That didn't work.");
+        return;
+      }
+      setSaid(words(r as Extract<R, { ok: true }>));
+      router.refresh();
+    } catch (err) {
+      toast.error(actionError(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div ref={rootRef} className={styles.root} data-outreach>
+      <div className="page-head rv">
+        <div>
+          <div className="kicker">Operate · Outreach</div>
+          <h1 className="page-title">Outreach calls</h1>
+        </div>
+      </div>
+
+      {readiness.missing.length ? (
+        <section className={cx("card rv", styles.warn)} data-outreach-missing>
+          <div className="card-title">Before the first call</div>
+          <ul className={styles.missing}>
+            {readiness.missing.map((m) => (
+              <li key={m}>{m}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <KpiStrip
+        cols={6}
+        cells={[
+          { label: "On the list", value: String(funnel.total) },
+          { label: "Landlines", value: String(funnel.landlines), accent: true },
+          { label: "Reached", value: String(funnel.reached) },
+          { label: "Trial link sent", value: String(funnel.linkSent), tone: funnel.linkSent ? "ok" : undefined },
+          { label: "Asked for a call", value: String(funnel.asked), tone: funnel.asked ? "ok" : undefined },
+          { label: "Don't call", value: String(funnel.dnc), tone: funnel.dnc ? "warn" : undefined },
+        ]}
+      />
+
+      <section className="card rv">
+        <div className="card-head">
+          <div className="card-titles">
+            <div className="card-title">How it works</div>
+            <div className="card-sub">The rules the phone law sets, built in.</div>
+          </div>
+        </div>
+        <ol className={styles.how}>
+          <li>
+            <b>Landlines get the AI&rsquo;s call.</b> A business landline may get a call in an AI voice; a cell phone or a home line may not without the person&rsquo;s written consent. &ldquo;Check lines&rdquo; asks Twilio which is which (a fraction of a cent a number).
+          </li>
+          <li>
+            <b>Everyone else gets one email</b> with a &ldquo;Have the AI desk call me&rdquo; link. Whoever taps it and ticks the box asked for the call — the AI calls them half a minute later, on any kind of phone.
+          </li>
+          <li>
+            <b>Calling hours:</b> 9&nbsp;am–8&nbsp;pm on their clock, Monday to Saturday; two calls at most. &ldquo;Don&rsquo;t call me&rdquo; on a call, or Unsubscribe in the email, ends it for good. The AI says it is a virtual assistant and that the call is recorded.
+          </li>
+          <li>Not legal advice — have a TCPA lawyer read this before the first run.</li>
+        </ol>
+      </section>
+
+      <section className="card rv">
+        <div className="card-head">
+          <div className="card-titles">
+            <div className="card-title">Add contractors</div>
+            <div className="card-sub">Paste rows from a spreadsheet or a CSV: business, owner&rsquo;s name, phone, email, trade, state, city — any order, with or without a header row. Companies already on JobFlex are left out.</div>
+          </div>
+        </div>
+        <div className={styles.field}>
+          <label className={styles.lbl} htmlFor="outreachList">
+            The list
+          </label>
+          <textarea
+            id="outreachList"
+            className={cx(styles.in, styles.list)}
+            rows={6}
+            value={list}
+            placeholder={"Business,Owner,Phone,Email,Trade,State\nSummit Roofing,Dana Lee,(206) 555-0142,dana@summitroof.com,Roofing,WA"}
+            onChange={(e) => setList(e.target.value)}
+            data-outreach-list
+          />
+        </div>
+        <div className={styles.acts}>
+          <button
+            type="button"
+            className={cx("btn btn-primary", busy === "import" && ui.btnBusy)}
+            disabled={!!busy || !list.trim()}
+            onClick={() => void run("import", () => importOutreachList(list), (r) => {
+              setList("");
+              return `Added ${r.added}${r.merged ? `, filled in ${r.merged} already on the list` : ""}${r.onJobflex ? `, left out ${r.onJobflex} already on JobFlex` : ""}${r.skipped ? `, skipped ${r.skipped} (no phone or email, or twice)` : ""}.`;
+            })}
+            data-outreach-import
+          >
+            Add to the list
+          </button>
+        </div>
+      </section>
+
+      <section className="card rv">
+        <div className="card-head">
+          <div className="card-titles">
+            <div className="card-title">Run</div>
+            <div className="card-sub">Each button does one batch; press again for the next.</div>
+          </div>
+        </div>
+        <div className={styles.acts}>
+          <button type="button" className={cx("btn", busy === "lines" && ui.btnBusy)} disabled={!!busy || !funnel.unchecked} onClick={() => void run("lines", () => checkOutreachLines(50), (r) => `Checked ${r.checked} number${r.checked === 1 ? "" : "s"}${r.left ? `; ${r.left} to go` : ""}${r.error ? ` — ${r.error}` : ""}.`)} data-outreach-check>
+            Check lines{funnel.unchecked ? ` (${funnel.unchecked})` : ""}
+          </button>
+          <button type="button" className={cx("btn btn-primary", busy === "call" && ui.btnBusy)} disabled={!!busy || !readiness.calls || !callableCount} onClick={() => void run("call", () => callOutreachNext(5), (r) => `Calling ${r.placed}${r.failed ? `; ${r.failed} didn't go out (${r.errors.join("; ")})` : ""}${r.waiting ? `; ${r.waiting} more ready` : ""}.`)} data-outreach-call>
+            Call the next {Math.min(5, callableCount) || 5}
+          </button>
+          <button type="button" className={cx("btn", busy === "email" && ui.btnBusy)} disabled={!!busy || !readiness.emails || !toEmail} onClick={() => void run("email", () => emailOutreach(20), (r) => `Emailed ${r.sent}${r.skipped ? ` (${r.skipped} had unsubscribed)` : ""}${r.error ? ` — ${r.error}` : ""}.`)} data-outreach-email>
+            Email the call-me link{toEmail ? ` (${Math.min(20, toEmail)})` : ""}
+          </button>
+        </div>
+        {said ? (
+          <p className={styles.said} role="status" data-outreach-said>
+            {said}
+          </p>
+        ) : null}
+        <div className={styles.test}>
+          <div className={styles.testH}>Hear it first — call my phone</div>
+          <div className={styles.testRow}>
+            <input className={styles.in} aria-label="Your phone" placeholder="Your phone" inputMode="tel" value={test.phone} onChange={(e) => setTest({ ...test, phone: e.target.value })} data-outreach-test-phone />
+            <input className={styles.in} aria-label="Pretend business" placeholder="Pretend business" value={test.business} onChange={(e) => setTest({ ...test, business: e.target.value })} />
+            <input className={styles.in} aria-label="Trade" placeholder="Trade" value={test.trade} onChange={(e) => setTest({ ...test, trade: e.target.value })} />
+            <button type="button" className={cx("btn", busy === "test" && ui.btnBusy)} disabled={!!busy || !readiness.calls || !test.phone.trim()} onClick={() => void run("test", () => outreachTestCall({ ...test, name: "" }), (r) => r.note)} data-outreach-test>
+              Call me
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="card rv">
+        <div className={cx("card-head", ui.cardHead)}>
+          <div className="card-titles">
+            <div className="card-title">Contractors</div>
+            <div className="card-sub">Open one for their line, their consent and every call.</div>
+          </div>
+          <div className={ui.filters} role="group" aria-label="Filter contractors">
+            {FILTERS.map((f) => (
+              <button key={f.key} type="button" className={cx(ui.filter, filter === f.key && ui.filterOn)} aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>
+                {f.label}
+                <i>{counts[f.key]}</i>
+              </button>
+            ))}
+          </div>
+        </div>
+        {shown.length === 0 ? (
+          <Empty>{rows.length === 0 ? "No contractors yet — paste a list above." : "None here."}</Empty>
+        ) : (
+          <div className={ui.tbl} role="table" aria-label="Contractors">
+            <div className={cx(ui.tr, ui.th, styles.cols)} role="row">
+              <span>Business</span>
+              <span>Phone</span>
+              <span>Line</span>
+              <span>Next</span>
+              <span>Last call</span>
+            </div>
+            {shown.map((r) => {
+              const c = last(r);
+              return (
+                <button key={r.id} type="button" className={cx(ui.tr, ui.trBtn, styles.cols)} onClick={() => sheetRef.current?.open(r.id)} data-outreach-row={r.id} aria-label={`Open ${r.business || r.name || r.phone}`}>
+                  <span className={ui.tdWide}>
+                    <span className={ui.tdName}>{r.business || r.name || "—"}</span>
+                    <span className={ui.tdSub}>{[r.name && r.business ? r.name : null, r.trade, r.state].filter(Boolean).join(" · ") || " "}</span>
+                  </span>
+                  <span className={styles.cell}>
+                    <span className={ui.tdLbl}>Phone</span>
+                    {r.phone ?? r.email ?? "—"}
+                  </span>
+                  <span className={styles.cell}>
+                    <span className={ui.tdLbl}>Line</span>
+                    {r.line ? LINE_WORDS[r.line.type] : "—"}
+                  </span>
+                  <span>
+                    <span className={ui.tdLbl}>Next</span>
+                    {r.dnc ? <Chip tone="bad">Don&rsquo;t call</Chip> : <Chip tone={ROUTE[r.route.kind].tone}>{ROUTE[r.route.kind].label}</Chip>}
+                    {r.consent ? <Meta>asked</Meta> : null}
+                  </span>
+                  <span className={styles.cell}>
+                    <span className={ui.tdLbl}>Last call</span>
+                    {c ? `${c.outcome ? OUTCOME_WORDS[c.outcome] : c.status === "calling" ? "Calling…" : c.status} · ${relative(c.at)}` : r.emailedAt ? `Emailed ${shortDate(r.emailedAt)}` : "—"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <ProspectSheet handleRef={sheetRef} rows={rows} onChanged={() => router.refresh()} />
+    </div>
+  );
+}
+
+type SheetHandle = { open: (id: string) => void };
+
+/** One contractor, by id — read from the list each render, so a refresh after an action shows the new state. */
+function ProspectSheet({ handleRef, rows, onChanged }: { handleRef: React.RefObject<SheetHandle | null>; rows: OutreachRow[]; onChanged: () => void }) {
+  const { ref, open, close } = useMdl();
+  const [id, setId] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useImperativeHandle(handleRef, () => ({
+    open: (next: string) => {
+      setId(next);
+      setError(null);
+      open();
+    },
+  }), [open]);
+  const row = id ? (rows.find((x) => x.id === id) ?? null) : null;
+  const done = () => close();
+  const act = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>) => {
+    setBusy(key);
+    setError(null);
+    try {
+      const r = await fn();
+      if (!r.ok) setError(r.error ?? "That didn't work.");
+      else onChanged();
+    } catch (err) {
+      setError(actionError(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const r = row;
+  return (
+    <Sheet
+      mdlRef={ref}
+      title={r ? r.business || r.name || "Contractor" : "Contractor"}
+      titleId="outreachSheetTitle"
+      size="drawer"
+      onClose={done}
+      error={error}
+      foot={
+        r ? (
+          <>
+            <button type="button" className={cx("btn btn-primary", busy === "call" && ui.btnBusy)} disabled={!!busy || r.route.kind !== "ai-call" || !!r.waitWhy} onClick={() => void act("call", () => callOutreachOne(r.id))} data-outreach-call-one>
+              Call now
+            </button>
+            <button type="button" className={cx("btn", busy === "dnc" && ui.btnBusy)} disabled={!!busy} onClick={() => void act("dnc", () => setOutreachDnc(r.id, !r.dnc))} data-outreach-dnc>
+              {r.dnc ? "Allow calls again" : "Don’t call"}
+            </button>
+            <button type="button" className="btn btn-ghost" disabled={!!busy} onClick={() => void act("remove", async () => { const x = await removeOutreach(r.id); if (x.ok) done(); return x; })}>
+              Remove
+            </button>
+          </>
+        ) : null
+      }
+    >
+      {r ? (
+        <div className={styles.sheet} data-outreach-sheet={r.id}>
+          <div className={ui.facts}>
+            <div className={ui.fact}>
+              <div className={ui.factL}>Owner</div>
+              <div className={ui.factV}>{r.name || "—"}</div>
+            </div>
+            <div className={ui.fact}>
+              <div className={ui.factL}>Trade · place</div>
+              <div className={ui.factV}>{[r.trade, r.city, r.state].filter(Boolean).join(" · ") || "—"}</div>
+            </div>
+            <div className={ui.fact}>
+              <div className={ui.factL}>Phone</div>
+              <div className={ui.factV}>{r.phone ?? "—"}</div>
+            </div>
+            <div className={ui.fact}>
+              <div className={ui.factL}>Line</div>
+              <div className={ui.factV}>{r.line ? `${LINE_WORDS[r.line.type]}${r.line.carrier ? ` · ${r.line.carrier}` : ""}` : "not checked"}</div>
+            </div>
+            <div className={ui.fact}>
+              <div className={ui.factL}>Email</div>
+              <div className={ui.factV}>{r.email ?? "—"}</div>
+            </div>
+            <div className={ui.fact}>
+              <div className={ui.factL}>Emailed</div>
+              <div className={ui.factV}>{r.emailedAt ? shortDate(r.emailedAt) : "—"}</div>
+            </div>
+          </div>
+          <p className={styles.why} data-outreach-why>
+            <b>{r.dnc ? "Never called again" : ROUTE[r.route.kind].label}:</b> {r.dnc ? `asked ${r.dnc.via === "email" ? "by unsubscribing" : r.dnc.via === "call" ? "on a call" : "— marked here"} ${relative(r.dnc.at)}` : r.route.why}
+            {r.waitWhy && r.route.kind === "ai-call" ? ` · ${r.waitWhy}` : ""}
+          </p>
+          {r.consent ? (
+            <div className={styles.consent} data-outreach-consent>
+              <div className={styles.subH}>Their consent</div>
+              <p>
+                &ldquo;{r.consent.text}&rdquo;
+              </p>
+              <Meta>
+                Ticked {new Date(r.consent.at).toLocaleString("en-US")} · {r.consent.page}
+                {r.consent.ip ? ` · ${r.consent.ip}` : ""}
+              </Meta>
+            </div>
+          ) : null}
+          {r.interest ? (
+            <p className={styles.why}>
+              <b>How it went:</b> {r.interest.level} — {r.interest.note}
+              {r.interest.callBack ? ` · call back ${r.interest.callBack}` : ""}
+            </p>
+          ) : null}
+          {r.linkSentTo ? (
+            <p className={styles.why}>
+              <b>Trial link</b> emailed to {r.linkSentTo} {r.linkSentAt ? relative(r.linkSentAt) : ""}
+            </p>
+          ) : null}
+          <div className={styles.subH}>Calls</div>
+          {r.calls.length ? (
+            r.calls
+              .slice()
+              .reverse()
+              .map((c, i) => (
+                <div key={`${c.at}-${i}`} className={styles.call} data-outreach-call-row>
+                  <div className={styles.callHead}>
+                    <b>{c.outcome ? OUTCOME_WORDS[c.outcome] : c.status === "calling" ? "Calling…" : c.status}</b>
+                    <Meta>
+                      {new Date(c.at).toLocaleString("en-US")} · {c.seconds ? `${Math.round(c.seconds)} s` : "—"}
+                      {c.answeredBy ? ` · ${c.answeredBy}` : ""}
+                    </Meta>
+                  </div>
+                  {c.error ? <p className={styles.callErr}>{c.error}</p> : null}
+                  {c.transcript ? <pre className={styles.transcript}>{c.transcript}</pre> : null}
+                </div>
+              ))
+          ) : (
+            <Empty>Not called yet.</Empty>
+          )}
+        </div>
+      ) : null}
+    </Sheet>
+  );
+}
