@@ -239,6 +239,8 @@ export async function createHomeownerLead(data: HomeownerIntake, opts: IntakeOpt
     platformLeadId: platformLead.id,
     /** The homeowner's status page — the wizard's Done screen links it. */
     statusPath: `/request/${platformLead.accessToken}`,
+    /** The request's own token — the wizard's photos go into its folder with it (lib/home/freshRequest). */
+    requestToken: platformLead.accessToken,
     /** The home dashboard, when it may be shown on screen (see above); else it went by email. */
     homePath: homePathOut,
     homeEmailed,

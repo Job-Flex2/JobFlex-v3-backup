@@ -20,6 +20,7 @@ import { buildHomeFilesAdded, buildHomeFilesRequest } from "@/lib/email/build/pl
 import { IMAGE_TYPES, VIDEO_TYPES, isImageType, isVideoType } from "@/lib/jobMediaShared";
 import { safePathname } from "@/lib/media/privateStore";
 import { homeUrl } from "./portal";
+import { FRESH_REQUEST_KEY, FRESH_REQUEST_MAX_FILES, FRESH_REQUEST_MS } from "./freshRequest";
 
 export const DOCUMENT_TYPES: readonly string[] = ["application/pdf"];
 export const FOLDER_TYPES: readonly string[] = [...IMAGE_TYPES, ...VIDEO_TYPES, ...DOCUMENT_TYPES];
@@ -50,6 +51,27 @@ export async function homeownerFolder(key: string, token: string) {
   return { home, lead };
 }
 
+/** The wizard's door (2026-10-23, lib/home/freshRequest): the request's own token, for a little while after it was
+ *  sent, on a request that has joined its home. Adding files only — deleting needs the key. */
+export async function freshRequestFolder(token: string) {
+  const lead = await db.platformLead.findFirst({ where: { accessToken: token, homeId: { not: null }, createdAt: { gte: new Date(Date.now() - FRESH_REQUEST_MS) } } });
+  if (!lead?.homeId) return null;
+  const home = await db.home.findUnique({ where: { id: lead.homeId } });
+  if (!home) return null;
+  return { home, lead };
+}
+
+/** The door an upload comes through: the home's key and a request on it, or the request just sent. */
+export async function folderDoor(key: string, token: string) {
+  return key === FRESH_REQUEST_KEY ? freshRequestFolder(token) : homeownerFolder(key, token);
+}
+
+/** How many files may be in the folder after an upload through this door. */
+export const folderCap = (key: string) => (key === FRESH_REQUEST_KEY ? FRESH_REQUEST_MAX_FILES : FOLDER_MAX_FILES);
+
+/** The folder is full, said for the door the file came through. */
+export const folderFullWords = (cap: number) => `This project's folder holds ${cap} files${cap < FOLDER_MAX_FILES ? " for now — add more from your home dashboard" : " — remove one first"}.`;
+
 /** The shop's door: a lead of theirs that came from the Lead Center. Null when
  *  the lead is theirs but carries no homeowner folder (an older lead, or one
  *  that came another way). */
@@ -67,8 +89,22 @@ export async function orgMayReadFolder(organizationId: string, platformLeadId: s
   const pl = await db.platformLead.findUnique({ where: { id: platformLeadId }, select: { matchedOrgId: true } });
   if (!pl) return false;
   if (pl.matchedOrgId === organizationId) return true;
-  const had = await db.leadOffer.findFirst({ where: { platformLeadId, organizationId, status: { in: ["ACCEPTED", "REJECTED_BY_CLIENT"] } }, select: { id: true } });
+  const had = await db.leadOffer.findFirst({ where: { platformLeadId, organizationId, status: { in: FOLDER_OFFER_STATES } }, select: { id: true } });
   return Boolean(had);
+}
+
+const FOLDER_OFFER_STATES = ["ACCEPTED", "REJECTED_BY_CLIENT"];
+
+/** Every request whose folder this shop may read (the same rule as orgMayReadFolder), the newest first — so a file
+ *  the homeowner sent BEFORE the shop took the project is the shop's to see too (its row names no shop). */
+export async function foldersOrgMayRead(organizationId: string, take = 200): Promise<string[]> {
+  const rows = await db.platformLead.findMany({
+    where: { OR: [{ matchedOrgId: organizationId }, { offers: { some: { organizationId, status: { in: FOLDER_OFFER_STATES } } } }] },
+    orderBy: { createdAt: "desc" },
+    take,
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
 }
 
 export interface FolderFileView {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
-import { FOLDER_TYPES, homeownerFolder } from "@/lib/home/files";
+import { FOLDER_TYPES, folderDoor } from "@/lib/home/files";
 import { MAX_FILE_BYTES } from "@/lib/jobMediaShared";
 import { privateToken } from "@/lib/media/privateStore";
 
@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 // the browser asks here for a short-lived upload token, sends the file to the
 // private Blob store itself, then records it (actions/homeFiles
 // registerHomeFile). A token is handed out only for a request on the home the
-// key opens, under that request's own folder, for a picture, a video or a
+// key opens (or the request just sent from the wizard — lib/home/freshRequest), under that request's own folder, for a picture, a video or a
 // PDF up to 100 MB.
 export async function POST(req: Request, ctx: { params: Promise<{ key: string }> }) {
   const token = privateToken();
@@ -36,7 +36,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ key: string }>
           payload = {};
         }
         if (!payload.token) throw new Error("Which project?");
-        const door = await homeownerFolder(key, payload.token);
+        const door = await folderDoor(key, payload.token);
         if (!door) throw new Error("Not authorized");
         if (!pathname.startsWith(`home/${door.home.id}/${door.lead.id}/`)) throw new Error("Wrong folder");
         return {

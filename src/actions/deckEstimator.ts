@@ -29,10 +29,10 @@ import { applyMemberDiscount } from "@/lib/servicePlanBook";
 import { recordInventoryLink } from "@/lib/inventoryPick";
 import { logServerError } from "@/lib/server-events";
 import { runVisionJson } from "@/lib/sdk/openaiVision";
-import { friendlyAIError, getVisionModel, isOpenAIEnabled } from "@/lib/sdk/openai";
+import { friendlyAIError, isOpenAIEnabled } from "@/lib/sdk/openai";
 import { parseWallRead, WALL_READ_PROMPT, type WallRead } from "@/lib/deck/photoFit";
-import { HOUSE_READ_PROMPT, HOUSE_ZOOM_NOTE, parseHouseRead, type HouseRead } from "@/lib/deck/houseRead";
-import { orgMayReadFolder } from "@/lib/home/files";
+import { keepHousePhoto, photoOf, readHouseImage, type DeckPhotoResult, type HousePhotoRead } from "@/lib/deck/housePhotoServer";
+import { foldersOrgMayRead, orgMayReadFolder } from "@/lib/home/files";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { sanitizeDeckRateBook, type DeckRateBook } from "@/lib/deck/rates";
 import { deckBookKey as bookKey } from "@/lib/deck/rateBookStore";
@@ -44,7 +44,7 @@ import { findClientForLead } from "@/lib/leadClient";
 import { CLIENT_TOKEN_RE, linkTitle } from "@/lib/deck/clientDesign";
 import { saveProposal } from "@/actions/proposals";
 import { proposalRef } from "@/components/v3/manual-card-lab/manual-blueprint/manual-blueprint-bridge";
-import { isPrivateFileUnder, putPrivate, readStoredAsDataUrl } from "@/lib/media/privateStore";
+import { isPrivateFileUnder, readStoredAsDataUrl } from "@/lib/media/privateStore";
 import { mediaHref } from "@/lib/media/signedLink";
 import { normalizeDeckDesign, structureWords, type DeckDesign } from "@/lib/deck/design";
 import { fitGround } from "@/lib/deck/site";
@@ -87,11 +87,7 @@ export async function saveDeckRateBook(raw: unknown): Promise<{ ok: true; book: 
 
 /* ── The photo of the house (M2, 2026-10-10) ───────────────────────── */
 
-const PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-/** The studio shrinks a photo to about 1,600 px before sending it; this is the ceiling, not the aim. */
-const PHOTO_MAX_BYTES = 6 * 1024 * 1024;
-
-export type DeckPhotoResult = { ok: true; url: string; href: string; w: number; h: number } | { ok: false; error: string };
+export type { DeckPhotoResult, HousePhotoRead } from "@/lib/deck/housePhotoServer";
 
 /**
  * A photo of the back of the house, kept in the PRIVATE file store under
@@ -102,23 +98,7 @@ export type DeckPhotoResult = { ok: true; url: string; href: string; w: number; 
 export async function uploadDeckPhoto(form: FormData): Promise<DeckPhotoResult> {
   const g = await gate("design");
   if (!g.ok) return { ok: false, error: g.error };
-  const file = form.get("file");
-  if (!(file instanceof File)) return { ok: false, error: "No picture was sent." };
-  if (!PHOTO_TYPES.has(file.type)) return { ok: false, error: "Use a JPEG, PNG or WebP picture." };
-  if (file.size > PHOTO_MAX_BYTES) return { ok: false, error: "That picture is too big — the studio should have shrunk it. Try again." };
-  const w = Math.round(Number(form.get("w")));
-  const h = Math.round(Number(form.get("h")));
-  if (!Number.isFinite(w) || !Number.isFinite(h) || w < 16 || h < 16 || w > 20000 || h > 20000) return { ok: false, error: "The picture's size could not be read." };
-  try {
-    const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-    const body = Buffer.from(await file.arrayBuffer());
-    const stored = await putPrivate(`deck-photos/${g.organizationId}/${randomUUID()}.${ext}`, body, file.type);
-    const href = mediaHref(stored.url) ?? stored.url;
-    return { ok: true, url: stored.url, href, w, h };
-  } catch (err) {
-    logServerError("deck-photo", err, { kind: "action", organizationId: g.organizationId });
-    return { ok: false, error: "The picture could not be saved. Try again in a moment." };
-  }
+  return keepHousePhoto(form, `deck-photos/${g.organizationId}/`, { organizationId: g.organizationId });
 }
 
 export type DeckPhotoRead = { ok: true; read: WallRead } | { ok: false; error: string; configured: boolean };
@@ -135,10 +115,9 @@ export type DeckPhotoRead = { ok: true; read: WallRead } | { ok: false; error: s
 export async function readDeckPhoto(form: FormData): Promise<DeckPhotoRead> {
   const g = await gate("design");
   if (!g.ok) return { ok: false, error: g.error, configured: true };
-  const file = form.get("file");
-  if (!(file instanceof File)) return { ok: false, error: "No picture was sent.", configured: true };
-  if (!PHOTO_TYPES.has(file.type)) return { ok: false, error: "Use a JPEG, PNG or WebP picture.", configured: true };
-  if (file.size > PHOTO_MAX_BYTES) return { ok: false, error: "That picture is too big — the studio should have shrunk it. Try again.", configured: true };
+  const p = photoOf(form);
+  if (!p.ok) return { ...p, configured: true };
+  const file = p.file;
   if (!isOpenAIEnabled()) return { ok: false, error: "Reading the picture needs the AI key on the server — drag the outline to the wall instead.", configured: false };
   try {
     const dataUrl = `data:${file.type};base64,${Buffer.from(await file.arrayBuffer()).toString("base64")}`;
@@ -152,52 +131,16 @@ export async function readDeckPhoto(form: FormData): Promise<DeckPhotoRead> {
   }
 }
 
-export type HousePhotoRead = { ok: true; read: HouseRead; /** Which model answered. */ model: string } | { ok: false; error: string; configured: boolean };
-
 /**
- * THE HOUSE READ OFF ITS PHOTO (2026-10-23): the vision model looks at the picture of the back wall once and says the
- * wall's lines (as the smart fit reads them) and what the 3D house needs besides — every door and window, the roof's
- * shape, the cladding, a patio roof, an old deck, a slab (lib/deck/houseRead HOUSE_READ_PROMPT). The studio builds the
- * house from it in the browser (lib/deck/houseFromPhoto). Owner: "the client will just give the back wall picture …
- * and it just takes the shapes and move it into our 3D shaper".
+ * THE HOUSE READ OFF ITS PHOTO (2026-10-23): the vision model looks at the picture of the back wall and says the wall's
+ * lines and what the 3D house needs besides (lib/deck/housePhotoServer readHouseImage — the same read the client's link
+ * makes). The studio builds the house from it in the browser (lib/deck/houseFromPhoto). Owner: "the client will just
+ * give the back wall picture … and it just takes the shapes and move it into our 3D shaper".
  */
 export async function readHousePhoto(form: FormData): Promise<HousePhotoRead> {
   const g = await gate("design");
   if (!g.ok) return { ok: false, error: g.error, configured: true };
-  const file = form.get("file");
-  if (!(file instanceof File)) return { ok: false, error: "No picture was sent.", configured: true };
-  if (!PHOTO_TYPES.has(file.type)) return { ok: false, error: "Use a JPEG, PNG or WebP picture.", configured: true };
-  if (file.size > PHOTO_MAX_BYTES) return { ok: false, error: "That picture is too big — the studio should have shrunk it. Try again.", configured: true };
-  if (!isOpenAIEnabled()) return { ok: false, error: "Reading the picture needs the AI key on the server.", configured: false };
-  try {
-    const dataUrl = `data:${file.type};base64,${Buffer.from(await file.arrayBuffer()).toString("base64")}`;
-    // Two looks (2026-10-23): the whole picture, then the wall cut out and enlarged — the same JSON, told which it is.
-    // The whole picture's look — the wall's sections, the step a porch roof is NOT — goes to a reasoning model first
-    // (OPENAI_HOUSE_MODEL, else gpt-5), the estimators' vision model standing in when the key's project lacks it.
-    const close = form.get("look") === "close";
-    const ask = (model?: string) => runVisionJson<unknown>({ model, systemPrompt: close ? `${HOUSE_READ_PROMPT}\n${HOUSE_ZOOM_NOTE}` : HOUSE_READ_PROMPT, userPrompt: close ? "Read the house's wall in this close picture and answer with the JSON." : "Read this photo of the house and answer with the JSON.", imageUrl: dataUrl, detail: "high" });
-    let raw: unknown = null;
-    let model = getVisionModel();
-    const strong = close ? null : process.env.OPENAI_HOUSE_MODEL?.trim() || "gpt-5";
-    if (strong) {
-      try {
-        raw = await ask(strong);
-        model = strong;
-      } catch (err) {
-        logServerError("deck-house-read-model", err, { kind: "action", organizationId: g.organizationId });
-      }
-    }
-    if (!parseHouseRead(raw)) {
-      raw = await ask();
-      model = getVisionModel();
-    }
-    const read = parseHouseRead(raw);
-    if (!read) return { ok: false, error: "The house's wall could not be found in that picture — take it square on from the yard, the whole wall in it.", configured: true };
-    return { ok: true, read, model };
-  } catch (err) {
-    logServerError("deck-house-read", err, { kind: "action", organizationId: g.organizationId });
-    return { ok: false, error: friendlyAIError(err, "deck-house-read"), configured: true };
-  }
+  return readHouseImage(form, { organizationId: g.organizationId });
 }
 
 export interface ClientPhoto {
@@ -220,12 +163,11 @@ export async function deckClientPhotos(input: { clientId?: string | null } = {})
   if (!g.ok) return { ok: false, error: g.error };
   try {
     const client = input.clientId ? await db.client.findFirst({ where: { id: input.clientId, organizationId: g.organizationId, deletedAt: null }, select: { email: true, name: true } }) : null;
-    const files = await db.homeFile.findMany({ where: { organizationId: g.organizationId, media: "photo", deletedAt: null }, orderBy: { createdAt: "desc" }, take: 60, select: { id: true, name: true, createdAt: true, platformLeadId: true, home: { select: { name: true, email: true } } } });
-    const mayRead = new Map<string, boolean>();
+    // The folders this shop may read — a photo sent with the request, before any shop took it, names no shop.
+    const folders = await foldersOrgMayRead(g.organizationId);
+    const files = folders.length ? await db.homeFile.findMany({ where: { platformLeadId: { in: folders }, media: "photo", deletedAt: null }, orderBy: { createdAt: "desc" }, take: 60, select: { id: true, name: true, createdAt: true, platformLeadId: true, home: { select: { name: true, email: true } } } }) : [];
     const out: ClientPhoto[] = [];
     for (const f of files) {
-      if (!mayRead.has(f.platformLeadId)) mayRead.set(f.platformLeadId, await orgMayReadFolder(g.organizationId, f.platformLeadId));
-      if (!mayRead.get(f.platformLeadId)) continue;
       const mine = !!client?.email && client.email.trim().toLowerCase() === f.home.email.toLowerCase();
       out.push({ id: f.id, name: f.name.slice(0, 80), from: f.home.name.slice(0, 60), at: f.createdAt.toISOString(), mine });
     }

@@ -2,7 +2,8 @@
 
 // THE JOB FOLDER'S DOORS (2026-10-03, lib/home/files). The homeowner's side is
 // public like the dashboard — the key and the request's token are the
-// authorization; the shop's side is the session. Each carries its own brake.
+// authorization (or, just after the wizard sent it, the request's token alone:
+// lib/home/freshRequest); the shop's side is the session. Each carries its own brake.
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
@@ -17,7 +18,7 @@ import { MAX_INLINE_PHOTO_BYTES, fileSize, isImageType } from "@/lib/jobMediaSha
 import { isPrivateFileUnder, kindOfUrl, readStoredAsDataUrl, storageMode } from "@/lib/media/privateStore";
 import { deleteStoredUnlessReferenced } from "@/lib/media/ownedFiles";
 import { IMAGE_DATA_URL } from "@/lib/safeHref";
-import { FOLDER_MAX_FILES, FOLDER_TYPES, contractorFolder, homeownerFolder, mediaOfType, orgMayReadFolder, tellHomeownerFilesAsked, tellShopFilesAdded } from "@/lib/home/files";
+import { FOLDER_TYPES, contractorFolder, folderCap, folderDoor, folderFullWords, homeownerFolder, mediaOfType, orgMayReadFolder, tellHomeownerFilesAsked, tellShopFilesAdded } from "@/lib/home/files";
 
 export type HomeFilesResult = { ok: true; note: string; id?: string } | { ok: false; error: string };
 
@@ -47,7 +48,7 @@ const registerInput = z.object({
 /** A file the browser put in the store itself is recorded on the request. */
 export async function registerHomeFile(raw: unknown): Promise<HomeFilesResult> {
   const data = registerInput.parse(raw);
-  const door = await homeownerFolder(data.key, data.token);
+  const door = await folderDoor(data.key, data.token);
   if (!door) return { ok: false, error: "This link is not valid." };
   const braked = await brake(`home-file:${door.home.id}`, 120, "files");
   if (braked) return { ok: false, error: braked };
@@ -56,7 +57,7 @@ export async function registerHomeFile(raw: unknown): Promise<HomeFilesResult> {
   // Only a file under this request's own folder in the store is accepted —
   // the browser names what it uploaded, never what it would like to claim.
   if (!isPrivateFileUnder(data.url, `home/${door.home.id}/${door.lead.id}/`)) return { ok: false, error: "That file isn't in this project's folder." };
-  return record(door, { url: data.url, name: data.name, contentType: type, bytes: data.bytes, note: data.note ?? null }, data.notify ?? null);
+  return record(door, { url: data.url, name: data.name, contentType: type, bytes: data.bytes, note: data.note ?? null }, data.notify ?? null, folderCap(data.key));
 }
 
 const inlineInput = z.object({
@@ -71,7 +72,7 @@ const inlineInput = z.object({
 /** Production before the file store exists: a small picture rides as a data URL. */
 export async function uploadHomeFileInline(raw: unknown): Promise<HomeFilesResult> {
   const data = inlineInput.parse(raw);
-  const door = await homeownerFolder(data.key, data.token);
+  const door = await folderDoor(data.key, data.token);
   if (!door) return { ok: false, error: "This link is not valid." };
   const braked = await brake(`home-file:${door.home.id}`, 120, "files");
   if (braked) return { ok: false, error: braked };
@@ -79,12 +80,12 @@ export async function uploadHomeFileInline(raw: unknown): Promise<HomeFilesResul
   if (!m || !isImageType(m[1].toLowerCase())) return { ok: false, error: "Without file storage only pictures go through — the office can switch storage on." };
   const bytes = Math.floor((m[2].length * 3) / 4);
   if (bytes > MAX_INLINE_PHOTO_BYTES) return { ok: false, error: `That picture is ${fileSize(bytes)} — the limit without file storage is ${fileSize(MAX_INLINE_PHOTO_BYTES)}.` };
-  return record(door, { url: data.dataUrl, name: data.name, contentType: m[1].toLowerCase(), bytes, note: data.note ?? null }, data.notify ?? null);
+  return record(door, { url: data.dataUrl, name: data.name, contentType: m[1].toLowerCase(), bytes, note: data.note ?? null }, data.notify ?? null, folderCap(data.key));
 }
 
-async function record(door: NonNullable<Awaited<ReturnType<typeof homeownerFolder>>>, f: { url: string; name: string; contentType: string; bytes: number; note: string | null }, notify: { count: number } | null): Promise<HomeFilesResult> {
+async function record(door: NonNullable<Awaited<ReturnType<typeof homeownerFolder>>>, f: { url: string; name: string; contentType: string; bytes: number; note: string | null }, notify: { count: number } | null, cap: number): Promise<HomeFilesResult> {
   const count = await db.homeFile.count({ where: { platformLeadId: door.lead.id, deletedAt: null } });
-  if (count >= FOLDER_MAX_FILES) return { ok: false, error: `This project's folder holds ${FOLDER_MAX_FILES} files — remove one first.` };
+  if (count >= cap) return { ok: false, error: folderFullWords(cap) };
   const media = mediaOfType(f.contentType);
   const row = await db.homeFile.create({
     data: { homeId: door.home.id, platformLeadId: door.lead.id, organizationId: door.lead.matchedOrgId, url: f.url, name: f.name, contentType: f.contentType, bytes: f.bytes, media, note: f.note, uploadedBy: "HOMEOWNER" },

@@ -273,6 +273,14 @@ body:has(.jf-homeowner-landing)::before { content: none; }
 .jf-homeowner-landing .up-bar { position: absolute; left: 0; right: 0; bottom: 0; height: calc(2px * var(--s)); background: var(--hair); }
 .jf-homeowner-landing .up-bar span { display: block; height: 100%; width: 0; background: var(--blueprint);
   transition: width .2s linear; }
+/* A real file (2026-10-23): removed with ×, a failure marked, the Done screen's files a little apart. */
+.jf-homeowner-landing .up-x { margin: calc(-4px * var(--s)) calc(-6px * var(--s)) calc(-4px * var(--s)) 0; min-width: calc(24px * var(--s)); min-height: calc(24px * var(--s));
+  border-radius: var(--radius); font-size: calc(15px * var(--s)); font-weight: 700; line-height: 1; color: var(--muted); }
+.jf-homeowner-landing .up-x:hover, .jf-homeowner-landing .up-x:focus-visible { color: var(--ink); background: var(--hair); }
+.jf-homeowner-landing .up-fail { border-color: var(--danger, #a83232); }
+.jf-homeowner-landing .up-no { font-weight: 900; color: var(--danger, #a83232); }
+.jf-homeowner-landing .done-files { margin-top: calc(14px * var(--s)); }
+.jf-homeowner-landing .done-files .ups { padding: 0; justify-content: center; }
 
 .jf-homeowner-landing .tools { display: flex; flex-wrap: wrap; align-items: center; gap: calc(9px * var(--s));
   padding: calc(13px * var(--s)) calc(20px * var(--s)); border-top: var(--border-thin); }

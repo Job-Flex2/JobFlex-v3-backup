@@ -1,0 +1,198 @@
+// THE DECK AGAINST THE HOUSE'S DOORS AND WINDOWS (2026-10-23, Stage 3 of "build the house from a photo of the back
+// wall") — pure. Owner: "if there is a windows on the way, then … make it smart". Once the house carries its real doors
+// and windows (read off a photo, lib/deck/houseFromPhoto), the deck is checked against each one it stands in front of:
+//   · the door it serves — its threshold against the deck's surface (water, and the step the code allows);
+//   · a window the ledger or the boards would run across, and a window under the deck (a way out of a bedroom);
+//   · glass that becomes low glass beside the new walking surface (safety glazing);
+//   · a covered deck's roof running into a window or a door where it meets the house;
+//   · glass by the hot tub.
+// Houses drawn by rule (no openings) are not checked: their doors and windows are a picture, not a measurement.
+// Estimating grade — the building department decides.
+
+import { DECK_LIMITS, ROOF_LIMITS, spaRectIn, type DeckDesign } from "./design";
+import { DRESSED_DEPTH_IN, ftIn, joistDepthIn } from "./codeTables";
+import type { HouseOpening } from "./house";
+import type { DeckStructure } from "./structure";
+import type { RoofFrame } from "./roof";
+import type { DeckCheck } from "./checks";
+
+const PART = "Doors and windows";
+/** The usual mark: the boards an inch under the threshold — under it for the water, close for the foot. */
+export const UNDER_THRESHOLD_IN = 1;
+/** The step down from a door the code allows onto the landing outside: 1½ in.; 7¾ in. where the door does not swing out over it. */
+export const STEP_ANY_DOOR_IN = 1.5;
+export const STEP_NO_SWING_IN = 7.75;
+/** How far above a roof the wall's flashing turns up, and so where a window above it may begin. */
+export const ROOF_FLASHING_IN = 4;
+/** Safety glass beside a walking surface (IRC R308.4.3): a pane over 9 sq ft whose bottom is under 18 in. up and whose top is over 36 in. */
+const LOW_GLASS = { bottomIn: 18, topIn: 36, areaSqFt: 9 } as const;
+/** Glass by a hot tub (IRC R308.4.5): within 60 in. of the water's edge and under 60 in. up. */
+const TUB_GLASS_IN = 60;
+
+const WHAT: Record<HouseOpening["kind"], string> = { window: "window", door: "door", slider: "sliding door" };
+const where = (o: HouseOpening) => `${ftIn(Math.round(Math.max(0, o.xFt) * 12))} along the deck`;
+/** Several openings' places along the deck, in one breath: "3'-6", 6'-6" and 9'-3" along the deck". */
+const places = (os: HouseOpening[]) => {
+  const at = os.map((o) => ftIn(Math.round(Math.max(0, o.xFt) * 12)));
+  return `${at.length > 1 ? `${at.slice(0, -1).join(", ")} and ${at[at.length - 1]}` : at[0]} along the deck`;
+};
+const span = (o: HouseOpening) => ({ x0: (o.xFt - o.widthFt / 2) * 12, x1: (o.xFt + o.widthFt / 2) * 12 });
+const overlapIn = (a: { x0: number; x1: number }, b: { x0: number; x1: number }) => Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0);
+const inches = (n: number) => `${Math.round(n * 4) / 4} in.`;
+
+/** Where a covered deck's roof meets the house: its stretch along the wall and the roof's line against it, inches. */
+export function roofAtWall(roof: RoofFrame, design: DeckDesign): { x0: number; x1: number; z: (x: number) => number; ledgerIn: number } | null {
+  if (roof.attach !== "wall") return null;
+  const p = design.roof.plan;
+  if (p.shape === "hexagon" || p.shape === "octagon" || p.shape === "round") return null;
+  const W = design.shape.widthFt * 12;
+  const cx = p.shape === "follows-deck" ? W / 2 : W / 2 + p.offsetFt * 12;
+  const half = p.shape === "follows-deck" ? W / 2 : (p.widthFt * 12) / 2;
+  if (!(half > 0)) return null;
+  // What the roof hangs on at the wall: its ledger, or (a ridge into the wall) about a rafter's depth.
+  const ledgerIn = roof.ledger ? (DRESSED_DEPTH_IN[Number(roof.ledger.nominal.split("x")[1])] ?? 7.25) : 7.25;
+  // A shed: one line, its ledger. A ridge running into the wall (a gable, a deep hip): the gable's line, from the eave at
+  // the corners up to the peak in the middle.
+  if (roof.kind === "shed" && roof.ledger) {
+    const z = roof.ledger.zIn;
+    return { x0: cx - half, x1: cx + half, z: () => z, ledgerIn };
+  }
+  const peak = Math.max(roof.peakIn, roof.ledger?.zIn ?? 0);
+  const eave = roof.headerTopIn;
+  return { x0: cx - half, x1: cx + half, z: (x) => eave + (peak - eave) * Math.max(0, 1 - Math.abs(x - cx) / half), ledgerIn };
+}
+
+export function openingChecks(s: DeckStructure, add: (c: DeckCheck) => void): void {
+  const { design, frame, roof } = s;
+  const all = design.house.openings;
+  if (!all?.length || design.placement === "detached" || !frame) return;
+  const W = design.shape.widthFt * 12;
+  const deck = { x0: 0, x1: W };
+  const top = design.heightIn;
+  const onDeck = all.filter((o) => overlapIn(span(o), deck) > 3);
+  const minH = DECK_LIMITS.heightIn.min;
+  const maxH = DECK_LIMITS.heightIn.max;
+
+  /* ── The door the deck serves ─────────────────────────────────────── */
+  onDeck
+    .filter((o) => o.kind !== "window")
+    .forEach((d, i) => {
+      const id = `door-threshold${i ? `-${i + 1}` : ""}`;
+      const th = Math.round(d.sillFt * 12 * 4) / 4;
+      const drop = th - top;
+      const what = WHAT[d.kind];
+      const set = Math.round(th - UNDER_THRESHOLD_IN);
+      const fix = set >= minH && set <= maxH && set !== top ? { label: `Set the deck at ${set} in.`, patch: { heightIn: set } } : undefined;
+      if (drop < 0) add({ id, level: "fail", part: PART, text: `The deck's surface stands ${inches(-drop)} above the ${what}'s threshold (${where(d)}): rain runs in under it${d.kind === "door" ? " and the door can't swing out over the boards" : ""}. Keep the boards about ${UNDER_THRESHOLD_IN} in. under it.`, rule: "IRC R311.3.1 · R507.2.4", fix });
+      else if (drop < 0.5) add({ id, level: "warn", part: PART, text: `The deck's surface is level with the ${what}'s threshold (${where(d)}) — no room for the flashing under the door, and water stands at the sill. About ${UNDER_THRESHOLD_IN} in. under it is the usual mark.`, rule: "IRC R311.3.1 · R507.2.4", fix });
+      else if (drop <= STEP_ANY_DOOR_IN) add({ id, level: "pass", part: PART, text: `The deck's surface sits ${inches(drop)} under the ${what}'s threshold (${where(d)}) — the step the code allows at any door.`, rule: "IRC R311.3.1" });
+      else if (drop <= STEP_NO_SWING_IN) add({ id, level: d.kind === "slider" ? "pass" : "info", part: PART, text: `A ${inches(drop)} step down from the ${what} (${where(d)}) onto the deck: allowed where the door does not swing out over the deck${d.kind === "slider" ? " — a sliding door doesn't" : " — a door that swings in, as most back doors do. A door swinging out wants the deck within 1½ in."}.`, rule: "IRC R311.3.1, exception", fix: d.kind === "door" ? fix : undefined });
+      else add({ id, level: "warn", part: PART, text: `A ${inches(drop)} step down from the ${what}'s threshold (${where(d)}) to the deck — past the 7¾ in. the code allows. Raise the deck, or build a landing step at the door.`, rule: "IRC R311.3.1", fix });
+    });
+
+  /* ── Windows the deck runs across, and windows under it ───────────── */
+  if (design.placement === "attached") {
+    const ledgerTop = top - UNDER_THRESHOLD_IN;
+    const ledgerBottom = ledgerTop - joistDepthIn(frame.joistSize);
+    const underDeck: HouseOpening[] = [];
+    onDeck
+      .filter((o) => o.kind === "window")
+      .forEach((w, i) => {
+        const sill = w.sillFt * 12;
+        const head = sill + w.heightFt * 12;
+        const n = i ? `-${i + 1}` : "";
+        if (sill < top + 0.5 && head > ledgerBottom) {
+          // The ledger or the boards cross it. Below the window's sill, the deck could sit under it.
+          const under = Math.floor(sill - 2);
+          const fix = under >= minH && under < top && sill - 2 > joistDepthIn(frame.joistSize) + 2 ? { label: `Lower the deck to ${under} in.`, patch: { heightIn: under } } : undefined;
+          add({ id: `window-ledger${n}`, level: "fail", part: PART, text: `The ${sill < ledgerBottom ? "deck's ledger" : "deck"} would run across the window ${where(w)} — its sill is ${ftIn(Math.round(sill))} off the ground, the deck's surface ${ftIn(Math.round(top))}${sill >= ledgerBottom ? ` and its ledger down to ${ftIn(Math.round(ledgerBottom))}` : ""}. A ledger needs solid wall to bolt to: lower the deck under the window, end it before the window, or stand that part on its own posts.`, rule: "IRC R507.9", fix, alts: [{ label: "Stand the deck free beside the house", patch: { placement: "beside" } }] });
+        } else if (head <= ledgerBottom && sill >= 0) underDeck.push(w);
+      });
+    if (underDeck.length) {
+      const clear = ledgerBottom;
+      const which = underDeck.length === 1 ? `A window under the deck ${where(underDeck[0])}` : `${underDeck.length} windows under the deck (${places(underDeck)})`;
+      add({ id: "window-under", level: clear < 36 ? "warn" : "info", part: PART, text: `${which}. If ${underDeck.length === 1 ? "it is" : "one is"} a bedroom's escape window, it must still open all the way and leave a way out under the deck at least 36 in. high to the yard — ${clear < 36 ? `the frame there is only ${ftIn(Math.round(clear))} off the ground` : `the frame there is ${ftIn(Math.round(clear))} up`}.`, rule: "IRC R310 · escape openings under decks" });
+    }
+  }
+
+  /* ── Low glass beside the new walking surface ─────────────────────── */
+  const lowGlass = onDeck.filter((w) => {
+    const bottom = w.sillFt * 12 - top;
+    return w.kind === "window" && bottom >= 0 && bottom < LOW_GLASS.bottomIn && bottom + w.heightFt * 12 > LOW_GLASS.topIn && w.widthFt * w.heightFt > LOW_GLASS.areaSqFt;
+  });
+  if (lowGlass.length) {
+    const lows = lowGlass.map((w) => w.sillFt * 12 - top);
+    const lo = Math.min(...lows);
+    const hi = Math.max(...lows);
+    const height = lo === hi ? inches(lo) : `${Math.round(lo)}–${inches(hi)}`;
+    const which = lowGlass.length === 1 ? `The window ${where(lowGlass[0])} starts` : `${lowGlass.length} windows (${places(lowGlass)}) start`;
+    add({ id: "window-low-glass", level: "warn", part: PART, text: `${which} ${height} above the deck: glass that low beside a walking surface, a pane over 9 sq ft, must be safety (tempered) glass. Check the stamp in ${lowGlass.length === 1 ? "its" : "each one's"} corner; where it isn't, the sash is replaced — price it.`, rule: "IRC R308.4.3" });
+  }
+
+  /* ── A covered deck's roof where it meets the house ───────────────── */
+  const rw = roof ? roofAtWall(roof, design) : null;
+  if (rw && roof) {
+    const r = design.roof;
+    let worst: { o: HouseOpening; lower: number; raise: number } | null = null;
+    all.forEach((o) => {
+      const sp = span(o);
+      const lo = Math.max(sp.x0, rw.x0);
+      const hi = Math.min(sp.x1, rw.x1);
+      if (hi - lo <= 3) return;
+      const zs = [lo, hi, Math.min(Math.max((rw.x0 + rw.x1) / 2, lo), hi)].map(rw.z);
+      const zMax = Math.max(...zs);
+      const zMin = Math.min(...zs);
+      const sill = o.sillFt * 12;
+      const head = sill + o.heightFt * 12;
+      if (!(sill < zMax + ROOF_FLASHING_IN && head > zMin - rw.ledgerIn)) return;
+      // Above the roof's line (an upper window): the roof comes down; under it (a tall door, a transom): the roof goes up.
+      const lower = (sill + head) / 2 > zMax ? zMax + ROOF_FLASHING_IN - sill : 0;
+      const raise = lower ? 0 : head - (zMin - rw.ledgerIn);
+      if (!worst || Math.max(lower, raise) > Math.max(worst.lower, worst.raise)) worst = { o, lower, raise };
+    });
+    if (worst) {
+      const { o, lower, raise } = worst as { o: HouseOpening; lower: number; raise: number };
+      const depthFt = r.plan.shape === "follows-deck" ? design.shape.depthFt : r.plan.depthFt;
+      let fix: DeckCheck["fix"];
+      const alts: NonNullable<DeckCheck["alts"]> = [];
+      if (roof.kind === "shed" && depthFt > 0) {
+        // A shed's line at the wall moves a pitch-step's rise per foot of its run: about `depthFt` inches per 1:12.
+        const step = Math.ceil(Math.max(lower, raise) / depthFt);
+        const pitch = lower ? r.pitch - step : r.pitch + step;
+        if (pitch >= ROOF_LIMITS.pitch.min && pitch <= ROOF_LIMITS.pitch.max) fix = { label: `Pitch the roof ${pitch}:12`, patch: { roof: { ...r, pitch } } };
+        const eave = lower ? Math.floor(r.eaveHeightIn - lower) : Math.ceil(r.eaveHeightIn + raise);
+        if (eave >= ROOF_LIMITS.eaveHeightIn.min && eave <= ROOF_LIMITS.eaveHeightIn.max) {
+          const e = { label: `${lower ? "Drop" : "Raise"} the roof's eave to ${ftIn(eave)}`, patch: { roof: { ...r, eaveHeightIn: eave } } };
+          if (fix) alts.push(e);
+          else fix = e;
+        }
+      }
+      add({
+        id: "roof-openings",
+        level: "fail",
+        part: "On the house",
+        text: lower
+          ? `The roof would meet the house across the ${WHAT[o.kind]} ${where(o)}: its sill is ${ftIn(Math.round(o.sillFt * 12))} off the ground, and the roof with its flashing reaches ${ftIn(Math.round(o.sillFt * 12 + lower))} there. Bring the roof down ${inches(lower)} — a lower pitch or a lower eave — or stop it short of the window.`
+          : `The roof's ledger would cross the top of the ${WHAT[o.kind]} ${where(o)}: it stands ${ftIn(Math.round((o.sillFt + o.heightFt) * 12))} at its head, and the ledger needs solid wall above it. Raise the roof ${inches(raise)}.`,
+        rule: "IRC R903.2 · R507.9",
+        fix,
+        alts: alts.length ? alts : undefined,
+      });
+    } else {
+      const n = all.filter((o) => overlapIn(span(o), rw) > 3).length;
+      if (n) add({ id: "roof-openings", level: "pass", part: "On the house", text: `The roof meets the house clear of the ${n === 1 ? "window or door" : `${n} windows and doors`} along it, with room for the flashing.`, rule: "IRC R903.2" });
+    }
+  }
+
+  /* ── Glass by the hot tub ─────────────────────────────────────────── */
+  const tub = design.spa.on ? spaRectIn(design) : null;
+  if (tub) {
+    const near = onDeck.filter((w) => {
+      if (w.kind !== "window") return false;
+      const sp = span(w);
+      const dx = Math.max(0, sp.x0 - tub.x1, tub.x0 - sp.x1);
+      return Math.hypot(dx, tub.y0) <= TUB_GLASS_IN && w.sillFt * 12 - top < TUB_GLASS_IN;
+    });
+    if (near.length) add({ id: "spa-glass", level: "warn", part: "Hot tub spot", text: `${near.length === 1 ? `The window ${where(near[0])} is` : `${near.length} windows are`} within 5 ft of the tub's water and less than 5 ft above the deck: that glass must be safety (tempered) glass. Check the stamps, or move the tub toward the rail.`, rule: "IRC R308.4.5" });
+  }
+}
