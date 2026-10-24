@@ -41,6 +41,7 @@ import {
 } from "@/lib/deck/houseRead";
 import { colourZones, dominantColour, ftIn, houseFromPhoto, type PhotoHouse } from "@/lib/deck/houseFromPhoto";
 import { snapRead, type Gray } from "@/lib/deck/photoSnap";
+import { wallSteps } from "@/lib/deck/wallSteps";
 import { applyHomography, autoRectify, transformRead } from "@/lib/deck/photoFit";
 import { deckClientPhotoData, deckClientPhotos, deckPhotoHref, readHousePhoto, uploadDeckPhoto, type ClientPhoto, type DeckPhotoResult, type HousePhotoRead } from "@/actions/deckEstimator";
 import { cropPhoto, shrinkPhoto, straightenPhoto, trimLetterbox } from "@/components/v3/deck-estimator-blueprint/deck-photo";
@@ -61,7 +62,7 @@ export interface HouseReview {
   /** The picture could not be read: the lines are a start to drag onto the wall. */
   byHand: string | null;
   /** How it was read: the looks taken, the model, the lines the picture's own edges moved. */
-  how?: { looks: number; model: string; snapped: number; split: number } | null;
+  how?: { looks: number; model: string; snapped: number; split: number; /** The wall's steps measured off the photo's own pixels (lib/deck/wallSteps). */ stepsFromPhoto?: number } | null;
 }
 
 /**
@@ -345,7 +346,14 @@ export function useHousePhoto({
         if (gray) {
           const snapped = snapRead(read, gray);
           read = snapped.read;
-          how = { looks, model: res.model, snapped: snapped.moved, split: snapped.split };
+          // THE WALL'S STEPS FROM ITS PIXELS (lib/deck/wallSteps, 2026-10-23 night — owner: "still wrong, should be like
+          // on the second pic"): its corners where an edge runs up every storey, which way each part stands by where its
+          // eave sits in the picture. The model said one corner the wrong way round (a porch roof's side as the part
+          // standing out); where the photo shows plainly, the photo's steps stand — at the model's own depth.
+          const depths = read.jogs.map((j) => j.depthFt).filter((d): d is number => d !== null && d > 0).sort((a, b) => a - b);
+          const steps = wallSteps(read, gray, { depthFt: depths.length ? depths[Math.floor(depths.length / 2)] : null });
+          if (steps) read = { ...read, jogs: steps.jogs };
+          how = { looks, model: res.model, snapped: snapped.moved, split: snapped.split, ...(steps ? { stepsFromPhoto: steps.jogs.length } : {}) };
         } else how = { looks, model: res.model, snapped: 0, split: 0 };
       } else
         byHand = res.configured
@@ -742,7 +750,7 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
             <div>
               <h3 className="v1-h3">Here&rsquo;s what I see</h3>
               <span className="v1-meta">
-                {r.byHand ? "Marked by hand" : `Read off the photo${r.how ? ` in ${r.how.looks === 2 ? "two looks" : "one look"}${r.how.snapped ? ", lined up with its edges" : ""} (${r.how.model})` : ""}${r.straightened ? ` · straightened (the shot was ${r.straightened}% off square)` : ""}`} — drag any line that&rsquo;s off; tap a part
+                {r.byHand ? "Marked by hand" : `Read off the photo${r.how ? ` in ${r.how.looks === 2 ? "two looks" : "one look"}${r.how.snapped ? ", lined up with its edges" : ""}${r.how.stepsFromPhoto ? ", the wall's steps measured off the photo" : ""} (${r.how.model})` : ""}${r.straightened ? ` · straightened (the shot was ${r.straightened}% off square)` : ""}`} — drag any line that&rsquo;s off; tap a part
                 of the wall to set it out or back; tap a window, a door or a step to remove it.
               </span>
             </div>
