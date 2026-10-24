@@ -15,6 +15,7 @@ import { relative, shortDate } from "@/lib/format";
 import { LINE_WORDS, OUTCOME_WORDS, emailDue, type OutreachCall } from "@/lib/outreach/rules";
 import type { OutreachReadiness } from "@/lib/outreach/server";
 import {
+  allowOutreachUsCalls,
   callOutreachNext,
   callOutreachOne,
   checkOutreachLines,
@@ -101,6 +102,13 @@ export function AdminOutreachContent({ rows, readiness, funnel }: { rows: Outrea
               <li key={m}>{m}</li>
             ))}
           </ul>
+          {readiness.usCalls === false ? (
+            <div className={styles.acts}>
+              <button type="button" className={cx("btn btn-primary", busy === "allow" && ui.btnBusy)} disabled={!!busy} onClick={() => void run("allow", () => allowOutreachUsCalls(), () => "US calls are on for JobFlex's Twilio account. Try the call again.")} data-outreach-allow-us>
+                Allow US calls on this account
+              </button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -195,6 +203,12 @@ export function AdminOutreachContent({ rows, readiness, funnel }: { rows: Outrea
             Email the call-me link{toEmail ? ` (${Math.min(20, toEmail)})` : ""}
           </button>
         </div>
+        {readiness.from ? (
+          <p className={styles.from} data-outreach-from>
+            Calls go from <b>{readiness.from.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3")}</b>
+            {readiness.texts ? " · the text after a call too" : ""}
+          </p>
+        ) : null}
         {said ? (
           <p className={styles.said} role="status" data-outreach-said>
             {said}

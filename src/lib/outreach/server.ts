@@ -61,6 +61,8 @@ export interface OutreachReadiness {
   emails: boolean;
   /** JobFlex's own number is approved for texts (the one text after a call a contractor asked for). */
   texts: boolean;
+  /** Twilio lets the account call US numbers: true / false as Twilio says, null when it couldn't be asked. */
+  usCalls: boolean | null;
   /** What is missing, in words, for the page. */
   missing: string[];
   from: string | null;
@@ -88,6 +90,31 @@ async function usCallsAllowed(s: { accountSid: string; authToken: string }): Pro
   }
 }
 
+/**
+ * "Allow US calls" (owner, 2026-10-24: "you can go and do it"): the Voice geo permission turned on through Twilio's
+ * own API on JobFlex's account — low-risk US & Canada numbers only, nothing premium or high-risk — then asked again.
+ */
+export async function allowUsCalls(): Promise<{ ok: true } | { ok: false; error: string }> {
+  const s = await twilioSettings().catch(() => null);
+  if (!s) return { ok: false, error: "Twilio isn't connected." };
+  const base = (process.env.NODE_ENV !== "production" && process.env.TWILIO_VOICE_BASE?.trim()) || "https://voice.twilio.com";
+  try {
+    const res = await fetch(`${base.replace(/\/$/, "")}/v1/DialingPermissions/BulkCountryUpdates`, {
+      method: "POST",
+      headers: { Authorization: `Basic ${Buffer.from(`${s.accountSid}:${s.authToken}`).toString("base64")}`, "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ UpdateRequest: JSON.stringify([{ iso_code: "US", low_risk_numbers_enabled: "true" }]) }),
+      signal: AbortSignal.timeout(10_000),
+      cache: "no-store",
+    });
+    const j = (await res.json().catch(() => ({}))) as { message?: string; update_count?: number };
+    if (!res.ok) return { ok: false, error: j.message ? `Twilio: ${j.message}` : `Twilio answered ${res.status}.` };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Twilio couldn't be reached." };
+  }
+  const now = await usCallsAllowed(s);
+  return now === false ? { ok: false, error: "Twilio took the change but still says no — this may be a subaccount whose parent account holds the setting; set it there (Voice → Settings → Geo permissions)." } : { ok: true };
+}
+
 export async function outreachReadiness(): Promise<OutreachReadiness> {
   const [tw, from, textFrom] = await Promise.all([twilioSettings().catch(() => null), outreachFrom(), jobflexSender().catch(() => null)]);
   const missing: string[] = [];
@@ -101,7 +128,7 @@ export async function outreachReadiness(): Promise<OutreachReadiness> {
   if (!isEmailEnabled()) missing.push("Email isn't set up on this server.");
   if (!postal()) missing.push("Emails need JobFlex's postal address in their footer — the email law asks for it in every email like this. Set JOBFLEX_POSTAL_ADDRESS (a street address or a PO box).");
   if (!textFrom) missing.push("Texts need JobFlex's own number approved by Twilio for texting — until then the text after a call isn't sent.");
-  return { calls: !!tw && voiceServerConfigured() && !!from && usOk !== false, emails: emailsOk, texts: !!tw && !!textFrom, missing, from, transfer: !!transferTo() };
+  return { calls: !!tw && voiceServerConfigured() && !!from && usOk !== false, emails: emailsOk, texts: !!tw && !!textFrom, usCalls: usOk, missing, from, transfer: !!transferTo() };
 }
 
 /* ── The list ─────────────────────────────────────────────────────────── */

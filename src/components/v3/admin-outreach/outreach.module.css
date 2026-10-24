@@ -23,6 +23,8 @@
 :global(.jf-blueprint .content) .list { min-height: 140px; resize: vertical; font-family: var(--font-mono, ui-monospace, monospace); font-size: 13px; }
 :global(.jf-blueprint .content) .acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
 :global(.jf-blueprint .content) .said { margin: 12px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink); }
+:global(.jf-blueprint .content) .from { margin: 12px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .from b { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; }
 
 :global(.jf-blueprint .content) .test { margin-top: 18px; padding-top: 14px; border-top: 1.5px solid var(--hair); }
 :global(.jf-blueprint .content) .testH { font-size: 12px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); margin-bottom: 8px; }
