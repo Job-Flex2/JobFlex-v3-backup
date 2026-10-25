@@ -1,7 +1,7 @@
 "use server";
 // THE INVESTOR PAGE'S ACTIONS (2026-10-06) — platform admin only. The
 // reading itself is lib/investors (shared with the public link and the PDF);
-// these are the hand-typed ad budget, the assumptions and the link.
+// these are the hand-typed ad budget, the start day and the link.
 import { requirePlatformAdmin } from "@/lib/orgContext";
 import { addAdSpend, deleteAdSpend, investorReport, PLATFORMS, readInvestorSettings, rotateInvestorLink, saveInvestorSettings, type InvestorReport, type InvestorSettings, type SpendPlatform } from "@/lib/investors";
 
@@ -52,20 +52,19 @@ export async function deleteAdSpendAction(input: Record<string, unknown> = {}): 
   return fresh();
 }
 
-/** The realistic share, the projected daily spend, the horizon, the trial length. */
+/** The start day, the launch day, how far the chart looks, the daily budget, the readers' approval. No share of trials that pay
+ *  and no forward spend (2026-10-24): both are measured now. */
 export async function saveInvestorSettingsAction(input: Record<string, unknown> = {}): Promise<Result> {
   await requirePlatformAdmin();
   const patch: Partial<InvestorSettings> = {};
-  if (typeof input.realisticPct === "number") patch.realisticPct = input.realisticPct;
-  if (input.spendPerDayDollars === null) patch.spendPerDayCents = null;
-  else if (typeof input.spendPerDayDollars === "number") patch.spendPerDayCents = Math.round(input.spendPerDayDollars * 100);
   if (typeof input.horizonDays === "number") patch.horizonDays = input.horizonDays;
-  if (typeof input.trialDays === "number") patch.trialDays = input.trialDays;
   if (input.dailyBudgetDollars === null) patch.dailyBudgetCents = null;
   else if (typeof input.dailyBudgetDollars === "number" && Number.isFinite(input.dailyBudgetDollars) && input.dailyBudgetDollars > 0) patch.dailyBudgetCents = Math.round(input.dailyBudgetDollars * 100);
   if (input.budgetFrom === null) patch.budgetFrom = null;
   else if (typeof input.budgetFrom === "string" && DATE.test(input.budgetFrom)) patch.budgetFrom = input.budgetFrom;
   if (typeof input.approveReaders === "boolean") patch.approveReaders = input.approveReaders;
+  if (input.launchDate === null) patch.launchDate = null;
+  else if (typeof input.launchDate === "string" && DATE.test(input.launchDate)) patch.launchDate = input.launchDate;
   if (input.sinceDate === null) patch.sinceDate = null;
   else if (typeof input.sinceDate === "string" && DATE.test(input.sinceDate)) patch.sinceDate = input.sinceDate;
   try {

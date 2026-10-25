@@ -83,7 +83,7 @@ export default async function InvestorsPublicPage({ params, searchParams }: { pa
           <div>
             <div className={s.kicker}>JobFlex · Investors</div>
             <h1 className={s.h1}>Ads, trials and payback</h1>
-            <p className={s.sub}>Live figures since {longDate(report.figures.since)}, the day the first campaign went live. Read {new Date(report.at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}.</p>
+            <p className={s.sub}>Day {report.launch.day.toLocaleString("en-US")} since JobFlex launched on {longDate(report.launch.date)}. Live figures since {longDate(report.figures.since)}, the day the first campaign went live. Read {new Date(report.at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}.</p>
           </div>
           <a className={s.pdf} href={`/api/investors/${token}/pdf`}>Download PDF</a>
         </header>
