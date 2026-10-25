@@ -15,15 +15,12 @@ export default async function InvestorTourPage({ params }: { params: Promise<{ t
   const door = await investorReader(token);
   if ("door" in door) return door.door;
   return (
-    <main className={s.page}>
-      <div className={s.frame}>
+    <main className={`${s.page} ${s.pageWide}`}>
+      <div className={`${s.frame} ${s.frameWide}`}>
         <InvestorTop token={token} visitor={door.visitor} page="tour" />
-        <header className={s.head}>
-          <div>
-            <div className={s.kicker}>JobFlex · Investors</div>
-            <h1 className={s.h1}>Platform tour</h1>
-            <p className={s.sub}>{TOUR_SHOTS.length} real JobFlex screens in the order a job lives — from the first call to the money. They were taken on test copies of the app, so every company, person and address on them is made up.</p>
-          </div>
+        <header className={s.headWide}>
+          <h1 className={s.h1Wide}>Platform tour</h1>
+          <p className={s.subWide}>{TOUR_SHOTS.length} real JobFlex screens in the order a job lives — from the first call to the money. They were taken on test copies of the app, so every company, person and address on them is made up. F or Full screen gives them the whole screen.</p>
         </header>
         <PlatformTour />
       </div>

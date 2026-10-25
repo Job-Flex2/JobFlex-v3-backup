@@ -63,7 +63,7 @@ export function PitchWordsPanel({ initial, linkBase }: { initial: InvestorPitch;
           </div>
         ) : null}
       </div>
-      <p className={s.hint}>The investor link has three pages now: the figures, a <b>pitch deck</b> and a <b>platform tour</b> of 30 real screens. The deck builds itself from the product, these live figures, the plan prices and the comparison on the landing page; these three slides are yours to write.</p>
+      <p className={s.hint}>The investor link has three pages now: the figures, a <b>pitch deck</b> and a <b>platform tour</b> of 30 real screens. The deck builds itself from the product, these live figures, the homeowner leads in the Lead Center, the plan prices, the comparison on the landing page and market facts with their sources; these three slides are yours to write.</p>
       <div className={p.boxes}>
         {BOXES.map((b) => (
           <label key={b.key} className={p.box}>

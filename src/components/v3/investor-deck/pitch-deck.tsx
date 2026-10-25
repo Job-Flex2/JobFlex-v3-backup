@@ -1,14 +1,20 @@
 "use client";
-// THE PITCH DECK (owner, 2026-10-25: "a smart pitch deck — who we are and what we're doing" on the investor link).
+// THE PITCH DECK (owner, 2026-10-25: "a smart pitch deck — who we are and what we're doing"; then: "wide open, the
+// screen… what we do, how we save time for the contractors, the value… the homeowners' portal — homeowners submit the
+// projects and we charge for the leads… evaluate JobFlex as an investor would and show what they'd want to see").
 // Built from what JobFlex already says about itself: the product's screens (tour-shots), the live figures the Figures
-// page reads (lib/investors — the same numbers, the same words), the plan catalogue's prices, the researched
-// comparison the landing page shows (landing-compare). The owner's own words fill the three slides nothing else can —
-// what is next, the team, the raise — and a slide with no words does not show.
-import { useMemo, type ReactNode } from "react";
+// page reads (lib/investors — the same numbers, the same words), the homeowner side off the Lead Center
+// (lib/investorLeads), the plan catalogue's prices, the landing page's researched comparison, and outside facts quoted
+// with their sources (pitch-facts). The two calculators say they are examples. The owner's own words fill what is
+// next, the team and the raise — a slide with no words does not show.
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import type { LeadMarket } from "@/lib/investorLeads";
 import { TOUR_SHOTS, tourSrc } from "./tour-shots";
+import { ALL_TRADE_SHOPS, HOURS_FACT, LEAD_PRICES, LEADER, MARKET_FACTS, type PitchSource } from "./pitch-facts";
 import { useSlides } from "./use-slides";
+import { useFullscreen } from "./use-fullscreen";
 import s from "./investor-deck.module.css";
 
 export interface PitchData {
@@ -16,10 +22,18 @@ export interface PitchData {
   launch: { day: number; date: string };
   traction: {
     since: string; signups: number; paying: number; payingMrrCents: number; trialsNow: number;
-    ratePct: number | null; ratePaid: number; rateEnded: number;
+    ratePct: number | null; ratePaid: number; rateEnded: number; rateLowPct: number | null; rateHighPct: number | null;
     collected: { read: boolean; cents: number; invoices: number };
     at: string;
   };
+  unit: {
+    spendCents: number; won: number; wonMrrCents: number; arrCents: number;
+    costPerPayingCents: number | null; costPerSignupCents: number | null; paybackMonths: number | null;
+    expectedPayers: number | null; expectedMrrCents: number | null;
+  };
+  leads: LeadMarket | null;
+  leadPrice: { minCents: number; maxCents: number };
+  deskPack: { minutes: number; cents: number };
   plans: Array<{ name: string; priceCents: number; yearlyPriceCents: number | null; trialDays: number; highlight: boolean; features: string[] }>;
   compare: {
     competitors: Array<{ id: string; name: string }>;
@@ -31,13 +45,30 @@ export interface PitchData {
 
 const n = (v: number) => v.toLocaleString("en-US");
 const dollars = (cents: number) => "$" + Math.round(cents / 100).toLocaleString("en-US");
+const money = (cents: number | null) => (cents === null ? "—" : dollars(cents));
 const price = (cents: number) => (cents % 100 === 0 ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`);
+const compact = (cents: number) => {
+  const d = cents / 100;
+  if (d >= 1e9) return `$${(d / 1e9).toFixed(1).replace(/\.0$/, "")}B`;
+  if (d >= 1e6) return `$${(d / 1e6).toFixed(1).replace(/\.0$/, "")}M`;
+  if (d >= 1e4) return `$${Math.round(d / 1e3)}K`;
+  return `$${n(Math.round(d))}`;
+};
 const longDate = (iso: string) => new Date(iso + (iso.length === 10 ? "T12:00:00" : "")).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 const shot = (slug: string) => TOUR_SHOTS.find((x) => x.slug === slug)!;
 
-function Shot({ slug, className }: { slug: string; className?: string }) {
+function Shot({ slug, className, sizes = "(max-width: 860px) 92vw, 46vw" }: { slug: string; className?: string; sizes?: string }) {
   const x = shot(slug);
-  return <Image draggable={false} src={tourSrc(x.slug)} alt={x.title} width={x.w} height={x.h} sizes="(max-width: 860px) 90vw, 420px" className={`${s.slideImg} ${className ?? ""}`} data-kind={x.kind} style={{ objectPosition: x.focus ?? "top" }} />;
+  return <Image draggable={false} src={tourSrc(x.slug)} alt={x.title} width={x.w} height={x.h} sizes={x.kind === "phone" ? "260px" : sizes} className={`${s.slideImg} ${className ?? ""}`} data-kind={x.kind} style={{ objectPosition: x.focus ?? "top" }} />;
+}
+
+function Sources({ list }: { list: PitchSource[] }) {
+  const seen = list.filter((x, i) => list.findIndex((y) => y.url === x.url) === i);
+  return (
+    <p className={s.sources}>
+      Sources: {seen.map((x, i) => <span key={x.url}>{i ? " · " : ""}<a href={x.url} target="_blank" rel="noreferrer">{x.label}</a></span>)}
+    </p>
+  );
 }
 
 function cellWords(c: { status: string; label?: string; caveat?: string } | undefined, caveats: Record<string, string>): { text: string; tone: string } {
@@ -49,56 +80,152 @@ function cellWords(c: { status: string; label?: string; caveat?: string } | unde
   return { text: (c.caveat && caveats[c.caveat]) || "Partly", tone: "paid" };
 }
 
-type Slide = { id: string; kicker: string; body: ReactNode };
+/** A slider with its label and value — the calculators' one control. */
+function Dial({ id, label, value, min, max, step, show, onChange }: { id: string; label: string; value: number; min: number; max: number; step: number; show: (v: number) => string; onChange: (v: number) => void }) {
+  return (
+    <label className={s.dial} htmlFor={id}>
+      <span className={s.dialHead}><span>{label}</span><output htmlFor={id}>{show(value)}</output></span>
+      <input id={id} type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()} />
+    </label>
+  );
+}
+
+// The example shop and the example lead month — where the dials start. Examples, said so on the slide.
+const SHOP_START = { estimates: 5, perEstimate: 1.5, office: 4, hourly: 75 };
+const LEADS_START = { perMonth: 100, priceDollars: 50 };
+
+type Slide = { id: string; kicker: string; tone?: "blue" | "ink"; body: ReactNode };
 
 export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }) {
   const t = data.traction;
+  const u = data.unit;
+  const L = data.leads;
+  const [shop, setShop] = useState(SHOP_START);
+  const [leadMonth, setLeadMonth] = useState(LEADS_START);
+  // The plan the calculators and the market measure against: the one the catalogue marks, else the middle one.
+  const plan = data.plans.find((p) => p.highlight) ?? data.plans[Math.floor(data.plans.length / 2)] ?? null;
+
   const slides = useMemo<Slide[]>(() => {
     const out: Slide[] = [];
+
     out.push({
-      id: "cover", kicker: "JobFlex · Contractor OS",
+      id: "cover", kicker: "JobFlex · the contractor's operating system", tone: "blue",
       body: (
         <div className={s.cover}>
           <h1 className={s.coverTitle}>You build.<br />We run the rest.</h1>
-          <p className={s.lede}>One app for contractors, from the first call to the last payment: AI estimates, proposals clients sign and pay, the schedule, the crews and the money.</p>
-          <div className={s.coverFoot}><b>Day {n(data.launch.day)}</b> since launch · {longDate(data.launch.date)} · jobflex.app</div>
+          <p className={s.lede}>One app for a trade business, from the first call to the last payment — AI estimates from an address, proposals clients sign and pay on a phone, an AI front desk, the schedule, the crews and the money. And a free homeowner portal that turns projects into paid leads.</p>
+          <div className={s.chips}>
+            <span><b>Day {n(data.launch.day)}</b> since launch</span>
+            <span><b>{n(t.paying)}</b> paying · {dollars(t.payingMrrCents)}/mo</span>
+            {L && L.requests > 0 ? <span><b>{n(L.requests)}</b> homeowner {L.requests === 1 ? "request" : "requests"}</span> : null}
+            <span><b>6</b> estimators, one app</span>
+          </div>
+          <div className={s.coverFoot}>jobflex.app · launched {longDate(data.launch.date)} · figures read live</div>
         </div>
       ),
     });
+
     out.push({
       id: "problem", kicker: "The problem",
       body: (
-        <div>
-          <h2 className={s.title}>Running a trade business is five jobs at once</h2>
-          <ul className={`${s.points} ${s.pointsWide}`}>
-            <li><b>Estimates cost the evening.</b> A drive to every property, then take-offs by hand.</li>
-            <li><b>The phone rings on the roof.</b> A call nobody answers is a job someone else gets.</li>
-            <li><b>Quotes go out blind.</b> A PDF in an email, and no idea whether it was opened.</li>
-            <li><b>Five apps that don&apos;t talk.</b> The schedule, the crew, the invoices and the reviews each live somewhere else.</li>
-          </ul>
+        <div className={s.splitWide}>
+          <div>
+            <h2 className={s.title}>A trade business is five jobs — and the owner does all of them</h2>
+            <ul className={`${s.points} ${s.pointsBig}`}>
+              <li><b>Estimates cost the evening.</b> A drive to every property, a ladder, a tape, then the take-off by hand.</li>
+              <li><b>The phone rings on the roof.</b> A call nobody answers is a job someone else may get.</li>
+              <li><b>Quotes go out blind.</b> A PDF in an email, and no idea whether it was opened.</li>
+              <li><b>Five apps that don&apos;t talk.</b> The schedule, the crew, the invoices and the reviews each live somewhere else.</li>
+            </ul>
+          </div>
+          <aside className={s.statStack}>
+            <div className={s.stat}><b>{HOURS_FACT.figure}</b><span>{HOURS_FACT.line}</span></div>
+            <div className={s.stat}><b>{MARKET_FACTS[3].figure}</b><span>{MARKET_FACTS[3].line}</span></div>
+            <Sources list={[HOURS_FACT.source, MARKET_FACTS[3].source]} />
+          </aside>
         </div>
       ),
     });
+
     out.push({
-      id: "solution", kicker: "What JobFlex is",
+      id: "value", kicker: "The value · time given back",
+      body: (
+        <div>
+          <h2 className={s.title}>Hours back every week — and the jobs that used to slip away</h2>
+          <div className={s.beforeAfterWrap}>
+            <table className={s.beforeAfter}>
+              <thead><tr><th scope="col">The work</th><th scope="col">Without JobFlex</th><th scope="col">With JobFlex</th></tr></thead>
+              <tbody>
+                {[
+                  ["Roof estimate", "Drive out, climb, measure, write it up at night", "From the address at the desk — area, squares, pitch and facets measured from the air"],
+                  ["Fence estimate", "Walk the line with a wheel, sketch the gates", "Drawn on the satellite map, priced by the foot, shown in 3D on the lot's slope"],
+                  ["HVAC sizing", "A rule of thumb per square foot", "A Manual J-style load from the house's details, the unit sized to it, three options"],
+                  ["Deck design", "Drawings, lumber list and permit sheets by hand", "3D design, the state's rules, the lumber list and a permit set from one drawing"],
+                  ["The phone", "Rings while the crew is on a roof", "The AI desk answers, asks what the trade needs and books the visit"],
+                  ["The proposal", "A PDF by email — opened? nobody knows", "A link the client reads, signs and pays on a phone — and you see when it is opened"],
+                  ["Getting paid", "Paper invoices and reminder calls", "A payment schedule on every job: card or bank, reminders, mark paid"],
+                  ["The office", "Five apps that don't talk", "CRM, calendar, crews, financials and reviews on one record"],
+                ].map(([w, a, b]) => (
+                  <tr key={w}><th scope="row">{w}</th><td data-label="Without JobFlex">{a}</td><td data-label="With JobFlex">{b}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ),
+    });
+
+    {
+      const weekly = shop.estimates * shop.perEstimate + shop.office;
+      const monthHours = Math.round((weekly * 52) / 12);
+      const worthCents = monthHours * shop.hourly * 100;
+      const times = plan && plan.priceCents > 0 ? worthCents / plan.priceCents : null;
+      out.push({
+        id: "calculator", kicker: "The value · one shop, your numbers", tone: "ink",
+        body: (
+          <div className={s.calc}>
+            <div className={s.calcIn}>
+              <h2 className={s.title}>What it is worth to one shop</h2>
+              <Dial id="calc-estimates" label="Estimates a week" value={shop.estimates} min={1} max={30} step={1} show={(v) => String(v)} onChange={(v) => setShop((x) => ({ ...x, estimates: v }))} />
+              <Dial id="calc-per-estimate" label="Hours each one saves (drive, measure, write-up)" value={shop.perEstimate} min={0.5} max={6} step={0.5} show={(v) => `${v} h`} onChange={(v) => setShop((x) => ({ ...x, perEstimate: v }))} />
+              <Dial id="calc-office" label="Office hours saved a week (calls, scheduling, invoices)" value={shop.office} min={0} max={20} step={1} show={(v) => `${v} h`} onChange={(v) => setShop((x) => ({ ...x, office: v }))} />
+              <Dial id="calc-hourly" label="What the owner's hour is worth" value={shop.hourly} min={25} max={200} step={5} show={(v) => `$${v}`} onChange={(v) => setShop((x) => ({ ...x, hourly: v }))} />
+            </div>
+            <div className={s.calcOut} aria-live="polite">
+              <div><b data-calc="hours">{n(monthHours)} h</b><span>back a month</span></div>
+              <div><b data-calc="worth">{dollars(worthCents)}</b><span>of the owner&apos;s time, every month</span></div>
+              {times !== null && plan ? <div><b data-calc="times">{times >= 10 ? Math.round(times) : times.toFixed(1)}×</b><span>what the {plan.name} plan costs ({price(plan.priceCents)}/mo)</span></div> : null}
+              <p className={s.calcNote}>An example shop: every figure is a dial to move, none is a measurement of JobFlex customers. Not counted here: calls the AI desk answers after hours, proposals signed on the spot, homeowner leads.</p>
+            </div>
+          </div>
+        ),
+      });
+    }
+
+    out.push({
+      id: "product", kicker: "The product",
       body: (
         <div>
           <h2 className={s.title}>One app, the whole life of a job</h2>
-          <ol className={s.flow}>
+          <ol className={s.flowShots}>
             {[
-              ["Call", "The AI desk answers, asks what the trade needs and books the visit."],
-              ["Estimate", "Roof, fence, HVAC, deck and remodel estimates from an address, a map, a sentence or a plan set."],
-              ["Sell", "A proposal link the client reads, signs and pays on a phone; change orders in writing."],
-              ["Schedule", "The calendar, dispatch by crew, and a crew page with no login."],
-              ["Get paid", "A payment schedule on every job: invoices by card or bank, reminders, mark paid."],
-              ["Grow", "Reviews after the job, and homeowner requests that arrive as leads."],
-            ].map(([h, p], i) => (
-              <li key={h}><i>{String(i + 1).padStart(2, "0")}</i><b>{h}</b><span>{p}</span></li>
+              ["ai-desk", "Call", "The AI desk answers, asks what the trade needs and books the visit."],
+              ["roof-estimator", "Estimate", "Roof, fence, HVAC, deck and remodel estimates from an address, a map, a sentence or a plan set."],
+              ["client-proposal", "Sell", "A proposal link the client reads, signs and pays on a phone; change orders in writing."],
+              ["calendar", "Schedule", "The calendar, dispatch by crew, and a crew page with no login."],
+              ["financials", "Get paid", "A payment schedule on every job, invoices by card or bank, revenue against expenses."],
+              ["reviews", "Grow", "Reviews after the job, and homeowner requests that arrive as leads."],
+            ].map(([slug, h, p], i) => (
+              <li key={slug}>
+                <Shot slug={slug} className={s.flowImg} sizes="(max-width: 860px) 92vw, 30vw" />
+                <div><i>{String(i + 1).padStart(2, "0")}</i><b>{h}</b><span>{p}</span></div>
+              </li>
             ))}
           </ol>
         </div>
       ),
     });
+
     out.push({
       id: "estimators", kicker: "The product · estimating",
       body: (
@@ -113,46 +240,119 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
               ["smart-proposal", "Smart Proposal", "A sentence or a few photos in, priced lines out — any trade."],
               ["blueprint", "Blueprint", "A plan set in; measured and priced from the sheets."],
             ].map(([slug, h, p]) => (
-              <figure key={slug} className={s.tile}><Shot slug={slug} className={s.tileImg} /><figcaption><b>{h}</b>{p}</figcaption></figure>
+              <figure key={slug} className={s.tile}><Shot slug={slug} className={s.tileImg} sizes="(max-width: 860px) 92vw, 30vw" /><figcaption><b>{h}</b>{p}</figcaption></figure>
             ))}
           </div>
         </div>
       ),
     });
+
     out.push({
-      id: "two-sides", kicker: "Both sides of the job",
+      id: "homeowners", kicker: "The second engine · homeowners bring the work",
       body: (
-        <div className={s.split}>
+        <div className={s.leadSlide}>
           <div>
-            <h2 className={s.title}>The client is in the app too</h2>
-            <ul className={s.points}>
-              <li><b>A proposal link, not an attachment.</b> Read, signed and paid on a phone — we see when it is opened.</li>
-              <li><b>The client designs the deck.</b> A link to change it — even by talking — that comes back priced.</li>
-              <li><b>A free homeowner portal.</b> A homeowner describes the project; it becomes a scoped lead offered to a contractor on JobFlex.</li>
-              <li><b>The homeowner&apos;s own home page.</b> Every project on the house, every proposal and contractor, no password.</li>
-            </ul>
+            <h2 className={s.title}>Homeowners post projects free. Contractors pay for the lead.</h2>
+            <ol className={s.market2}>
+              <li><i>Homeowner</i><b>Describes the project — free</b><span>Photos, address, a few words. No account; the email link is their own home page with every project, proposal and contractor.</span></li>
+              <li><i>JobFlex</i><b>Reads it and picks one shop</b><span>The AI names the trade and the scope; the request goes to one contractor at a time — never to a crowd.</span></li>
+              <li><i>Contractor</i><b>Pays on Accept, then sees the contacts</b><span>The offer shows the trade, the town and the scope. Accept on a priced lead charges the card on file; then the contacts open and the lead lands in the CRM.</span></li>
+            </ol>
           </div>
-          <div className={s.phones}><Shot slug="client-designs-deck" /><Shot slug="home-dashboard" /></div>
+          <div className={s.leadShots}>
+            <Shot slug="homeowner-portal" className={s.leadDesk} sizes="(max-width: 860px) 92vw, 34vw" />
+            <Shot slug="home-dashboard" />
+          </div>
+          <div className={s.leadLive} data-leads={L ? "read" : "unread"}>
+            {L ? (
+              <>
+                <div data-lead="requests"><b>{n(L.requests)}</b><span>homeowner requests{L.since ? ` since ${longDate(L.since)}` : ""}</span></div>
+                <div data-lead="last30"><b>{n(L.last30)}</b><span>in the last 30 days</span></div>
+                <div data-lead="accepted"><b>{n(L.accepted)}</b><span>accepted by a shop · of {n(L.offered)} {L.offered === 1 ? "offer" : "offers"}</span></div>
+                <div data-lead="paid"><b>{dollars(L.paid.cents)}</b><span>{L.paid.count ? `paid for ${n(L.paid.count)} ${L.paid.count === 1 ? "lead" : "leads"}` : "paid for leads so far"}</span></div>
+                {L.trades.length ? <p className={s.leadTrades}>Asked for most: {L.trades.map((x) => `${x.trade} ${n(x.count)}`).join(" · ")}</p> : null}
+              </>
+            ) : <p className={s.note}>The Lead Center could not be read just now.</p>}
+          </div>
         </div>
       ),
     });
-    out.push({
-      id: "operations", kicker: "The product · running the business",
-      body: (
-        <div className={s.split}>
-          <div>
-            <h2 className={s.title}>The owner sees the company on one screen</h2>
-            <ul className={s.points}>
-              <li><b>CRM and the office.</b> Collected, owed, win rate, jobs in motion, lead to paid.</li>
-              <li><b>Calendar and dispatch.</b> Every crew&apos;s week; the AI desk books into reserved hours.</li>
-              <li><b>Roles.</b> Owner, manager, sales rep, estimator and installer — each sees their own app.</li>
-              <li><b>Financials.</b> Revenue against expenses, receipts read off a photo, invoices and change orders.</li>
-            </ul>
+
+    {
+      const leadCents = leadMonth.perMonth * leadMonth.priceDollars * 100;
+      out.push({
+        id: "model", kicker: "Business model · three ways JobFlex earns",
+        body: (
+          <div className={s.model}>
+            <div className={s.modelCol}>
+              <div className={s.modelHead}><i>1</i><b>Subscriptions</b><span>A flat monthly plan, no per-seat fees{plan?.trialDays ? `; a ${plan.trialDays}-day free trial` : ""}.</span></div>
+              <div className={s.planRow}>
+                {data.plans.map((p) => (
+                  <div key={p.name} className={s.planMini} data-highlight={p.highlight}>
+                    <span>{p.name}</span><b>{price(p.priceCents)}<small>/mo</small></b>
+                  </div>
+                ))}
+              </div>
+              <div className={s.modelHead}><i>2</i><b>AI desk minutes</b><span>Plans include minutes; more come in packs of {n(data.deskPack.minutes)} for {price(data.deskPack.cents)}.</span></div>
+            </div>
+            <div className={s.modelCol}>
+              <div className={s.modelHead}><i>3</i><b>Paid homeowner leads</b><span>Built and live: a priced lead is charged to the shop&apos;s card on Accept. Today JobFlex sets each lead&apos;s price by hand ({dollars(data.leadPrice.minCents)}–{dollars(data.leadPrice.maxCents)}); a lead with no price goes free.</span></div>
+              <table className={s.leadPrices}>
+                <tbody>
+                  {LEAD_PRICES.map((x) => <tr key={x.name}><th scope="row">{x.name}</th><td><b>{x.price}</b><span>{x.how}</span></td></tr>)}
+                  <tr className={s.leadUs}><th scope="row">JobFlex</th><td><b>Set by JobFlex per lead</b><span>one shop at a time, scoped by AI, free for the homeowner</span></td></tr>
+                </tbody>
+              </table>
+              <div className={s.leadCalc}>
+                <Dial id="lead-per-month" label="Leads accepted a month" value={leadMonth.perMonth} min={10} max={2000} step={10} show={(v) => n(v)} onChange={(v) => setLeadMonth((x) => ({ ...x, perMonth: v }))} />
+                <Dial id="lead-price" label="Price per lead" value={leadMonth.priceDollars} min={10} max={150} step={5} show={(v) => `$${v}`} onChange={(v) => setLeadMonth((x) => ({ ...x, priceDollars: v }))} />
+                <p className={s.leadSum} aria-live="polite"><b data-calc="lead-month">{dollars(leadCents)}</b> a month · <b>{compact(leadCents * 12)}</b> a year <span>— an example to move, not a forecast</span></p>
+              </div>
+              <Sources list={LEAD_PRICES.map((x) => x.source)} />
+            </div>
           </div>
-          <Shot slug="crm-office" />
+        ),
+      });
+    }
+
+    {
+      const onePct = Math.round(ALL_TRADE_SHOPS * 0.01);
+      out.push({
+        id: "market", kicker: "The market",
+        body: (
+          <div>
+            <h2 className={s.title}>Millions of small shops — and the leader serves the top</h2>
+            <div className={s.marketGrid}>
+              {MARKET_FACTS.map((f) => (
+                <div key={f.figure} className={s.marketFact}><b>{f.figure}</b><span>{f.line}{f.math ? ` (${f.math})` : ""}</span></div>
+              ))}
+            </div>
+            <div className={s.marketBand}>
+              <p><b>{LEADER.name}</b>, the category&apos;s public leader, took in {compact(LEADER.revenueCents)} from {n(LEADER.customers)} customers in fiscal 2025 — about {compact(LEADER.revenueCents / LEADER.customers)} a customer a year. Contractors pay for software; the big shops already have it. The small ones are the open field.</p>
+              {plan ? <p className={s.marketMath}>For scale: 1% of {n(ALL_TRADE_SHOPS)} shops is {n(onePct)}; on the {plan.name} plan at {price(plan.priceCents)}/mo that is <b>{compact(onePct * plan.priceCents * 12)} a year</b> — arithmetic, not a forecast.</p> : null}
+            </div>
+            <Sources list={[...MARKET_FACTS.map((f) => f.source), LEADER.source]} />
+          </div>
+        ),
+      });
+    }
+
+    out.push({
+      id: "why-now", kicker: "Why now",
+      body: (
+        <div>
+          <h2 className={s.title}>Why this can be built now</h2>
+          <ul className={`${s.points} ${s.pointsWide}`}>
+            <li><b>AI can read the job.</b> A plan set, a photo, a sentence, a phone call, an address seen from the air — the estimating that meant a drive and an evening now starts at the desk.</li>
+            <li><b>The leader serves the top.</b> {n(LEADER.customers)} customers at about {compact(LEADER.revenueCents / LEADER.customers)} a year each; the {MARKET_FACTS[1].figure} one-person shops need the same tools at a small shop&apos;s price.</li>
+            <li><b>Leads elsewhere are shared.</b> On the big marketplaces the same request goes to several pros at once; JobFlex offers each one to one shop at a time.</li>
+            <li><b>The client already lives on a phone.</b> Proposals signed and paid there, the deck changed by talking to it, the homeowner&apos;s own page for every project.</li>
+          </ul>
+          <Sources list={[LEADER.source, LEAD_PRICES[0].source]} />
         </div>
       ),
     });
+
     out.push({
       id: "traction", kicker: `Traction · live · read ${new Date(t.at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`,
       body: (
@@ -162,7 +362,7 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
             <div data-kpi="day"><b>Day {n(data.launch.day)}</b><span>since JobFlex launched · {longDate(data.launch.date)}</span></div>
             <div data-kpi="signed-up"><b>{n(t.signups)}</b><span>signed up with a card since {longDate(t.since)}</span></div>
             <div data-kpi="paying"><b>{n(t.paying)}</b><span>paying · {dollars(t.payingMrrCents)}/mo</span></div>
-            <div data-kpi="rate"><b>{t.ratePct === null ? "—" : `${t.ratePct}%`}</b><span>{t.ratePct === null ? "trial to paid · no trial has ended yet" : `trial to paid · ${t.ratePaid} of ${t.rateEnded} ended trials`}</span></div>
+            <div data-kpi="rate"><b>{t.ratePct === null ? "—" : `${t.ratePct}%`}</b><span>{t.ratePct === null ? "trial to paid · no trial has ended yet" : `trial to paid · ${t.ratePaid} of ${t.rateEnded} ended trials${t.rateLowPct !== null && t.rateHighPct !== null ? ` · 90% range ${t.rateLowPct}–${t.rateHighPct}%` : ""}`}</span></div>
             <div data-kpi="trials"><b>{n(t.trialsNow)}</b><span>on trial now</span></div>
             <div data-kpi="collected"><b>{t.collected.read ? dollars(t.collected.cents) : "—"}</b><span>{t.collected.read ? `collected so far · Stripe, ${t.collected.invoices} ${t.collected.invoices === 1 ? "payment" : "payments"}` : "collected · Stripe not read"}</span></div>
           </div>
@@ -170,27 +370,45 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
         </div>
       ),
     });
-    if (data.plans.length) {
-      out.push({
-        id: "model", kicker: "Business model",
-        body: (
-          <div>
-            <h2 className={s.title}>A flat monthly plan — no per-seat fees</h2>
-            <div className={s.plans}>
-              {data.plans.map((p) => (
-                <div key={p.name} className={s.plan} data-highlight={p.highlight}>
-                  <div className={s.planName}>{p.name}</div>
-                  <div className={s.planPrice}>{price(p.priceCents)}<small>/mo</small></div>
-                  {p.yearlyPriceCents ? <div className={s.planYear}>{price(p.yearlyPriceCents)} a year</div> : null}
-                  <ul>{p.features.slice(0, 5).map((f) => <li key={f}>{f}</li>)}</ul>
-                </div>
-              ))}
-            </div>
-            <p className={s.note}>{data.plans[0].trialDays && data.plans.every((p) => p.trialDays === data.plans[0].trialDays) ? `Every plan starts with a ${data.plans[0].trialDays}-day free trial. ` : ""}Prices from the live plan catalogue.</p>
+
+    out.push({
+      id: "unit", kicker: "Unit economics · measured, not modeled",
+      body: (
+        <div>
+          <h2 className={s.title}>What a customer costs, and how fast it comes back</h2>
+          <div className={s.kpis}>
+            <div data-kpi="cost-per-paying"><b>{money(u.costPerPayingCents)}</b><span>{u.won > 0 ? `ad spend per paying customer · ${dollars(u.spendCents)} ÷ ${n(u.won)}` : "ad spend per paying customer · none paying yet"}</span></div>
+            <div data-kpi="payback"><b>{u.paybackMonths === null ? "—" : `${Math.round(u.paybackMonths * 10) / 10} mo`}</b><span>{u.wonMrrCents > 0 ? `to earn the spend back · at those customers' ${dollars(u.wonMrrCents)} a month` : "to earn the spend back · once a customer pays"}</span></div>
+            <div data-kpi="arr"><b>{dollars(u.arrCents)}</b><span>a year, at today&apos;s paying customers</span></div>
+            <div data-kpi="per-signup"><b>{money(u.costPerSignupCents)}</b><span>ad spend per sign-up with a card</span></div>
+            <div data-kpi="expected"><b>{u.expectedPayers === null ? "—" : `≈${n(Math.round(u.expectedPayers))}`}</b><span>{u.expectedPayers === null ? "of the running trials will pay · once a trial has ended" : `of the running trials will pay at the measured rate${u.expectedMrrCents ? ` · +${dollars(u.expectedMrrCents)}/mo` : ""}`}</span></div>
+            <div data-kpi="spend"><b>{dollars(u.spendCents)}</b><span>spent on ads since {longDate(t.since)}</span></div>
           </div>
-        ),
-      });
-    }
+          <p className={s.note}>Read live from the ad accounts, Stripe and the sign-ups — the Figures page shows the month-by-month curve.</p>
+        </div>
+      ),
+    });
+
+    out.push({
+      id: "judge", kicker: "If we were the investor",
+      body: (
+        <div>
+          <h2 className={s.title}>How we would judge JobFlex — the four questions</h2>
+          <div className={s.judge}>
+            {[
+              ["Do trials turn into customers?", t.ratePct === null ? "No trial has ended yet" : `${t.ratePct}% — ${t.ratePaid} of ${t.rateEnded} ended trials`, t.rateLowPct !== null && t.rateHighPct !== null ? `The 90% range is ${t.rateLowPct}–${t.rateHighPct}%; it narrows with every trial that ends.` : "Measured as each trial ends."],
+              ["Does the ad money come back?", u.paybackMonths === null ? "Not yet measured" : `${money(u.costPerPayingCents)} a customer, back in ${Math.round(u.paybackMonths * 10) / 10} months`, "Spend ÷ the paying customers the ads brought, then months of their plan to repay it."],
+              ["Do homeowners bring work?", L ? `${n(L.requests)} requests, ${n(L.last30)} in 30 days` : "Not read", L && L.offered ? `${n(L.accepted)} of ${n(L.offered)} offers accepted by a shop.` : "Every request becomes a lead offered to one shop."],
+              ["Does a shop earn JobFlex more than its plan?", L ? `${dollars(L.paid.cents)} from paid leads` : "Not read", `Leads charged on Accept, plus AI desk minute packs (${price(data.deskPack.cents)} for ${n(data.deskPack.minutes)}).`],
+            ].map(([q, a, why]) => (
+              <div key={q} className={s.judgeRow}><b>{q}</b><strong>{a}</strong><span>{why}</span></div>
+            ))}
+          </div>
+          <p className={s.note}>Every answer above is read live, the moment this slide opens.</p>
+        </div>
+      ),
+    });
+
     if (data.compare.rows.length) {
       out.push({
         id: "competition", kicker: "Competition",
@@ -216,23 +434,25 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
         ),
       });
     }
+
     out.push({
       id: "go-to-market", kicker: "Go to market",
       body: (
         <div className={s.split}>
           <div>
             <h2 className={s.title}>How contractors find JobFlex</h2>
-            <ul className={s.points}>
+            <ul className={`${s.points} ${s.pointsBig}`}>
               <li><b>Trade-by-trade video ads.</b> Roof, fence, HVAC and deck films on Facebook and Instagram, each landing on its own trade&apos;s page.</li>
               <li><b>Homeowner demand.</b> The free homeowner portal turns requests into leads for contractors on JobFlex.</li>
               <li><b>Outbound by the AI desk itself.</b> It calls contractors&apos; business lines to introduce JobFlex; a mobile number gets an email asking first.</li>
-              <li><b>Try before paying.</b> A free trial on every plan; the figures page measures trial to paid as it happens.</li>
+              <li><b>Try before paying.</b> A free trial on every plan; the Figures page measures trial to paid as it happens.</li>
             </ul>
           </div>
-          <Shot slug="homeowner-portal" />
+          <Shot slug="lead-offer" />
         </div>
       ),
     });
+
     if (data.words.roadmap.length) {
       out.push({
         id: "roadmap", kicker: "What's next",
@@ -261,12 +481,12 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
       });
     }
     out.push({
-      id: "ask", kicker: "The ask",
+      id: "ask", kicker: "The ask", tone: "blue",
       body: (
         <div className={s.cover}>
           <h2 className={s.coverTitle}>{data.words.ask[0] ?? "We're raising"}</h2>
           {data.words.ask.length > 1 ? (
-            <ul className={s.points}>{data.words.ask.slice(1).map((l, i) => <li key={i}>{l}</li>)}</ul>
+            <ul className={`${s.points} ${s.pointsBig}`}>{data.words.ask.slice(1).map((l, i) => <li key={i}>{l}</li>)}</ul>
           ) : (
             <p className={s.lede}>Offers and first conversations are welcome.</p>
           )}
@@ -279,14 +499,16 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
       ),
     });
     return out;
-  }, [data, offer, t]);
+  }, [data, offer, t, u, L, plan, shop, leadMonth]);
 
   const { index, move, playing, togglePlay, swipe } = useSlides(slides.length, 9000);
   const slide = slides[index];
+  const deck = useRef<HTMLElement>(null);
+  const full = useFullscreen(deck);
 
   return (
-    <section className={s.deck} data-deck aria-roledescription="slideshow" aria-label="JobFlex pitch deck">
-      <div className={s.slide} key={slide.id} data-slide={slide.id} {...swipe} aria-live="polite">
+    <section className={s.deck} ref={deck} data-deck data-full={full.on || undefined} aria-roledescription="slideshow" aria-label="JobFlex pitch deck">
+      <div className={s.slide} key={slide.id} data-slide={slide.id} data-tone={slide.tone} {...swipe} aria-live="polite">
         <div className={s.slideKicker}><span>{slide.kicker}</span><span>{index + 1} / {slides.length}</span></div>
         <div className={s.slideBody}>{slide.body}</div>
       </div>
@@ -298,6 +520,7 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
           ))}
         </div>
         <button type="button" className={s.ctl} onClick={togglePlay} aria-pressed={playing} data-deck-play>{playing ? "Pause" : "Play"}</button>
+        {full.able ? <button type="button" className={s.ctl} onClick={full.toggle} aria-pressed={full.on} data-deck-full>{full.on ? "Exit full screen" : "Full screen"}</button> : null}
         <button type="button" className={`${s.ctl} ${s.ctlMain}`} onClick={() => move(index + 1)} disabled={index === slides.length - 1} data-deck-next>Next →</button>
       </div>
     </section>
