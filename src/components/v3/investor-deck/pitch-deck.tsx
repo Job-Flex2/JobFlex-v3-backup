@@ -7,7 +7,8 @@
 // Center count (owner, 2026-10-25: "don't show any lead center numbers, we are not opened yet") — the plan catalogue's
 // prices, the landing page's researched comparison, and outside facts quoted
 // with their sources (pitch-facts). The two calculators say they are examples. The owner's own words fill what is
-// next, the team and the raise — a slide with no words does not show.
+// next and the raise — a slide with no words does not show. The team is never on the link (shared after a preliminary
+// offer, 2026-10-25).
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -39,7 +40,8 @@ export interface PitchData {
     rows: Array<{ id: string; label: string; detail?: string; them: Record<string, { status: string; label?: string; caveat?: string }> }>;
     caveats: Record<string, string>;
   };
-  words: { team: string[]; ask: string[]; roadmap: string[] };
+  /** The owner's words: the raise and what is next. No team on the link — it is shared after a preliminary offer. */
+  words: { ask: string[]; roadmap: string[] };
 }
 
 const n = (v: number) => v.toLocaleString("en-US");
@@ -460,22 +462,8 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
         ),
       });
     }
-    if (data.words.team.length) {
-      out.push({
-        id: "team", kicker: "The team",
-        body: (
-          <div>
-            <h2 className={s.title}>The team</h2>
-            <ul className={s.team}>
-              {data.words.team.map((l, i) => {
-                const [name, role, ...rest] = l.split(/\s+[—–-]\s+/);
-                return <li key={i}><b>{name}</b>{role ? <span className={s.teamRole}>{role}</span> : null}{rest.length ? <span>{rest.join(" — ")}</span> : null}</li>;
-              })}
-            </ul>
-          </div>
-        ),
-      });
-    }
+    // No team slide (owner, 2026-10-25: "we don't show the founders and roles on the link — only on request; we review
+    // the offers and give the set-up of the company after a preliminary offer"). The ask says so.
     out.push({
       id: "ask", kicker: "The ask", tone: "blue",
       body: (
@@ -486,6 +474,13 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
           ) : (
             <p className={s.lede}>Offers and first conversations are welcome.</p>
           )}
+          {/* How the raise runs (owner, 2026-10-25: "very pro, so investors treat it very seriously"): the team and the
+              company's set-up follow a reviewed preliminary offer — never on the link. */}
+          <ol className={s.process} data-on-request aria-label="How the raise runs">
+            <li><b>Indicative offer</b><span>Your terms in a few minutes, from this page.</span></li>
+            <li><b>Founders&apos; review</b><span>Every offer is read by the founders; we reply by email.</span></li>
+            <li><b>Diligence</b><span>Shortlisted investors receive the founding team, the company structure and the cap table — and a call with the founders.</span></li>
+          </ol>
           <div className={s.askActs}>
             {offer}
             <Link className={s.askLink} href={`/investors/${data.token}/tour`}>Take the platform tour →</Link>

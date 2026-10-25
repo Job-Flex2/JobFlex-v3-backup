@@ -281,7 +281,7 @@ export function VcOfferButton({ token, visitor, lead }: { token: string; visitor
               </div>
             ) : (
               <form className={s.form} onSubmit={submit} noValidate>
-                <p className={s.sub}>Open to term sheets and to a first conversation — SAFE, priced round or notes. A few taps; we answer by email.</p>
+                <p className={s.sub}>Open to term sheets and to a first conversation — SAFE, priced round or notes. A few taps; we answer by email. Every indicative offer is reviewed by the founders; shortlisted investors receive the founding team, the company structure and the cap table, and a call with the founders.</p>
                 <div className={s.field}>
                   <span className={s.label}>What you&apos;re sending</span>
                   <div className={`${s.chipsWrap} ${problems.type ? s.bad : ""}`}>

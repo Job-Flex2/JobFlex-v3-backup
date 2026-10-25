@@ -73,7 +73,7 @@ export function InvestorTop({ token, visitor, page }: { token: string; visitor: 
     <>
       <div className={s.vcBar} data-vc-bar>
         <p className={s.vcWords}>
-          {visitor.visits > 1 ? "Welcome back" : "Welcome"}, <b>{visitor.name}</b> · {visitor.company}. We&apos;re raising — offers and first conversations welcome.
+          {visitor.visits > 1 ? "Welcome back" : "Welcome"}, <b>{visitor.name}</b> · {visitor.company}. JobFlex is raising. Indicative offers are welcome; the founding team, the company structure and the cap table are shared with shortlisted investors after the founders&apos; review.
           {visitor.admin ? <> <em data-admin-test>You are signed in as an admin: this is the page a reader sees. Your entry is kept out of the reader list; an offer from here is emailed as a test.</em></> : null}
         </p>
         <VcOfferButton token={token} visitor={{ name: visitor.name, company: visitor.company, kind: visitor.kind, email: visitor.email, phone: visitor.phone }} lead={lead} />
