@@ -46,6 +46,9 @@ export interface ScaleLine {
   a: Pt;
   b: Pt;
   lengthIn: number;
+  /** Where the measure came from: the picture's own rows of windows, one storey head to head (2026-10-25) — or, when
+   *  absent, the contractor's hand. */
+  kind?: "storey";
 }
 
 export interface WallJog {
@@ -161,7 +164,7 @@ export function parseWallRead(raw: unknown): WallRead | null {
   const sl = obj(r.scaleLine);
   const la = pt(sl.a);
   const lb = pt(sl.b);
-  const scaleLine = la && lb && typeof sl.lengthIn === "number" && Number.isFinite(sl.lengthIn) && sl.lengthIn >= 6 && sl.lengthIn <= 600 && Math.hypot(lb.x - la.x, lb.y - la.y) >= 0.01 ? { a: la, b: lb, lengthIn: Math.round(sl.lengthIn) } : null;
+  const scaleLine = la && lb && typeof sl.lengthIn === "number" && Number.isFinite(sl.lengthIn) && sl.lengthIn >= 6 && sl.lengthIn <= 600 && Math.hypot(lb.x - la.x, lb.y - la.y) >= 0.01 ? { a: la, b: lb, lengthIn: Math.round(sl.lengthIn), ...(sl.kind === "storey" ? { kind: "storey" as const } : {}) } : null;
   const b = obj(r.bars);
   const bars = { top: clamp(num(b.top, 0), 0, 0.35), bottom: clamp(num(b.bottom, 0), 0, 0.35) };
   const confidence = clamp(num(r.confidence, 0.5), 0, 1);
@@ -190,7 +193,7 @@ export function readInCrop(read: WallRead, crop: Crop): WallRead {
     door: read.door ? { x0: fx(read.door.x0), x1: fx(read.door.x1), bottom: fy(read.door.bottom), top: fy(read.door.top) } : null,
     windows: read.windows.map((w) => ({ x0: fx(w.x0), x1: fx(w.x1), sill: fy(w.sill), head: fy(w.head) })),
     patio: read.patio ? { x0: fx(read.patio.x0), x1: fx(read.patio.x1) } : null,
-    scaleLine: read.scaleLine ? { a: p(read.scaleLine.a), b: p(read.scaleLine.b), lengthIn: read.scaleLine.lengthIn } : null,
+    scaleLine: read.scaleLine ? { ...read.scaleLine, a: p(read.scaleLine.a), b: p(read.scaleLine.b) } : null,
     bars: { top: 0, bottom: 0 },
     confidence: read.confidence,
     note: read.note,

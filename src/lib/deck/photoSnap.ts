@@ -370,28 +370,13 @@ function insideLum(f: Field, b: Box): number {
   return meanLum(f, Math.round(X0 + bw * 0.2), Math.round(X1 - bw * 0.2), Math.round(T + bh * 0.2), Math.round(B - bh * 0.2)) ?? 0.5;
 }
 
-/**
- * THE WINDOWS OFF THE PICTURE ITSELF (2026-10-25 — owner, the live review: "why is it still wrong, the windows are
- * from the pic"). The vision model's boxes were too far off to snap: boxes over siding, a three-pane window as two, a
- * box past the house's corner. The picture says where the windows are: inside the wall (between the read's eave and
- * base, within its ends), what is not siding — lit glass at dusk, dark glass by day, white trim — grouped into blobs,
- * bright and dark apart (a dark band must not glue bright frames together); a blob the size and shape of a window,
- * solid or framed on three sides at least, not running into the eave's shadow, is a window. Boards and bands — a
- * corner board or downspout covering most of the height, the soffit's shadow or a porch roof's edge covering most of
- * the width — are cleared first. A box in a row of like boxes that took in a lamp beside it is cut to the row's width;
- * a lone blob far smaller than the rest (a lamp, a vent) is dropped. Fractions out.
- */
-export function findWindows(read: HouseRead, g: Gray, f: Field, opts: { diff?: number; edge?: number } = {}): Box[] {
-  if (!read.eave) return [];
+/** The eave's shadow band, from the picture: how many px below (+) or above (−) the model's eave line the darkest run
+ *  of rows lies, within a quarter of the wall's height of it, read along the line. Null when no row is plainly darker
+ *  than the rest (the model's line stands then). */
+function eaveBandOffset(read: HouseRead, g: Gray, xL: number, xR: number, H: number): number | null {
+  if (!read.eave) return null;
   const { w, h, data } = g;
-  const { gx, gy } = f;
-  const xL = Math.round(Math.min(read.base.left.x, read.base.right.x) * w), xR = Math.round(Math.max(read.base.left.x, read.base.right.x) * w);
-  const eaveAt = (x: number) => lineY(read.eave!, x / w) * h, baseAt = (x: number) => lineY(read.base, x / w) * h;
-  const H = baseAt((xL + xR) / 2) - eaveAt((xL + xR) / 2);
-  if (H < 40 || xR - xL < 40) return [];
-  // The top of the wall is the eave's own shadow band, found in the picture: the darkest run of rows within a quarter
-  // of the wall's height of the model's line (which sits a few per cent off, either way). Nothing above that band is a
-  // window — the roof, the sky beyond a corner — and a window just under it is not cut off.
+  const eaveAt = (x: number) => lineY(read.eave!, x / w) * h;
   const K = Math.round(H * 0.25);
   const prof: number[] = [];
   for (let k = -K; k <= K; k++) {
@@ -415,11 +400,40 @@ export function findWindows(read: HouseRead, g: Gray, f: Field, opts: { diff?: n
     if (v < vMin) [vMin, kMin] = [v, i - K];
   });
   const rowMed = [...sm].sort((p, q) => p - q)[Math.floor(sm.length / 2)];
-  const bandK = rowMed - vMin > 0.08 ? kMin : 0;
+  return rowMed - vMin > 0.08 ? kMin : null;
+}
+
+/**
+ * THE WINDOWS OFF THE PICTURE ITSELF (2026-10-25 — owner, the live review: "why is it still wrong, the windows are
+ * from the pic"). The vision model's boxes were too far off to snap: boxes over siding, a three-pane window as two, a
+ * box past the house's corner. The picture says where the windows are: inside the wall (between the read's eave and
+ * base, within its ends), what is not siding — lit glass at dusk, dark glass by day, white trim — grouped into blobs,
+ * bright and dark apart (a dark band must not glue bright frames together); a blob the size and shape of a window,
+ * solid or framed on three sides at least, not running into the eave's shadow, is a window. Boards and bands — a
+ * corner board or downspout covering most of the height, the soffit's shadow or a porch roof's edge covering most of
+ * the width — are cleared first. A box in a row of like boxes that took in a lamp beside it is cut to the row's width;
+ * a lone blob far smaller than the rest (a lamp, a vent) is dropped. Fractions out.
+ */
+export function findWindows(read: HouseRead, g: Gray, f: Field, opts: { diff?: number; edge?: number } = {}): Box[] {
+  if (!read.eave) return [];
+  const { w, h, data } = g;
+  const { gx, gy } = f;
+  const xL = Math.round(Math.min(read.base.left.x, read.base.right.x) * w), xR = Math.round(Math.max(read.base.left.x, read.base.right.x) * w);
+  const eaveAt = (x: number) => lineY(read.eave!, x / w) * h, baseAt = (x: number) => lineY(read.base, x / w) * h;
+  const H = baseAt((xL + xR) / 2) - eaveAt((xL + xR) / 2);
+  if (H < 40 || xR - xL < 40) return [];
+  // The top of the wall is the eave's own shadow band, found in the picture (eaveBandOffset): nothing above that band
+  // is a window — the roof, the sky beyond a corner — and a window just under it is not cut off.
+  const bandK = eaveBandOffset(read, g, xL, xR, H) ?? 0;
   const topAt = (x: number) => eaveAt(x) + bandK + H * 0.015;
-  const inWall = (x: number, y: number) => x >= xL && x < xR && y >= topAt(x) && y < baseAt(x) + H * 0.02;
+  // Down to a wall's height below the model's base: its base line can sit far too high (on a porch roof); what lies
+  // below the real base — the ground, a patio — is thrown out by its shape here and by the base found later (snapRead).
+  const bottomAt = (x: number) => Math.min(h - 1, baseAt(x) + H);
+  const inWall = (x: number, y: number) => x >= xL && x < xR && y >= topAt(x) && y < bottomAt(x);
+  // The siding's typical luminance: the wall between the band and the model's base — never the ground below it, which
+  // the region reaches down to.
   const sample: number[] = [];
-  for (let y = 0; y < h; y += 2) for (let x = xL; x < xR; x += 2) if (inWall(x, y)) sample.push(data[y * w + x]);
+  for (let y = 0; y < h; y += 2) for (let x = xL; x < xR; x += 2) if (inWall(x, y) && y < baseAt(x) - H * 0.03) sample.push(data[y * w + x]);
   sample.sort((a, b) => a - b);
   const med = sample[Math.floor(sample.length / 2)] ?? 0.5;
   const diff = opts.diff ?? 0.16, edge = opts.edge ?? 0.1;
@@ -468,7 +482,7 @@ export function findWindows(read: HouseRead, g: Gray, f: Field, opts: { diff?: n
       // Along the eave or an end, a wide-and-low or tall-and-thin thing is the band or the board, not a window.
       // Nothing a window: it never runs out of the top of the region (what does is the eave's band, the roof beyond a
       // corner, the sky), nor out of its bottom (the ground, a patio).
-      if (minY <= topAt((minX + maxX) / 2) + 1 || maxY >= baseAt((minX + maxX) / 2) + H * 0.02 - 2) continue;
+      if (minY <= topAt((minX + maxX) / 2) + 1 || maxY >= bottomAt((minX + maxX) / 2) - 2) continue;
       // At an end of the wall, a tall thin thing is the corner board, not a window.
       if ((minX <= xL + 1 || maxX >= xR - 2) && bh > 2.5 * bw) continue;
       const fill = px.length / (bw * bh);
@@ -816,12 +830,106 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
   const reachX = g.w * 0.025;
   const lx = snapX(L.x, reachX), rx = snapX(R.x, reachX);
   if (!near(lx, L.x) || !near(rx, R.x)) moved++;
-  const base2 = { left: { x: lx, y: base.left.y }, right: { x: rx, y: base.right.y } };
-  const eave2 = eave ? { left: { x: lx, y: eave.left.y }, right: { x: rx, y: eave.right.y } } : null;
+  let base2 = { left: { x: lx, y: base.left.y }, right: { x: rx, y: base.right.y } };
+  let eave2 = eave ? { left: { x: lx, y: eave.left.y }, right: { x: rx, y: eave.right.y } } : null;
   const jogs = read.jogs.map((j) => {
     const x = snapX(j.x, reachX);
     if (!near(x, j.x)) moved++;
     return { ...j, x };
   });
-  return { read: { ...read, base: base2, eave: eave2, jogs, windows: windows.slice(0, 30), doors, door }, moved, split, found };
+  // THE SCALE, THE BASE AND THE EAVE OFF THE PICTURE (2026-10-25 — owner, a live run: a 104-ft wall, a door the photo
+  // hasn't got, windows the size of garage doors; the model's base line sat on the porch roof and its door box set the
+  // scale). With the picture's own windows in two rows, one storey stands between the rows' heads — a measure the
+  // model's lines can't spoil; the eave is its shadow band; the base is the strongest row edge under the lowest sills,
+  // where the siding meets the ground; a door the model drew over the picture's windows is no door.
+  let scaleLine = read.scaleLine;
+  let storeys = read.storeys;
+  let doors2 = doors;
+  let door2 = door;
+  if (found && windows.length >= 3) {
+    // The rows: windows whose heads lie within most of a window's height of each other; the two fullest rows are the
+    // storeys, one above the other (a patio or the ground found below the wall makes a thin third row, left out).
+    const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+    const medH = median(windows.map((w) => w.sill - w.head));
+    const byHead = [...windows].sort((a, b) => a.head - b.head);
+    const rows: Array<HouseRead["windows"]> = [];
+    for (const w of byHead) {
+      const last = rows[rows.length - 1];
+      if (last && w.head - last[last.length - 1].head <= 0.8 * medH) last.push(w);
+      else rows.push([w]);
+    }
+    const [rowA, rowB] = [...rows].sort((a, b) => b.length - a.length).slice(0, 2).sort((a, b) => a[0].head - b[0].head);
+    const upperHead = rowA && rowB ? median(rowA.map((w) => w.head)) : 0;
+    const lowerHead = rowA && rowB ? median(rowB.map((w) => w.head)) : 0;
+    const storey = lowerHead - upperHead;
+    if (rowA && rowB && storey > medH && storey > 0.08 && storey < 0.5) {
+      const xm = r3((lx + rx) / 2);
+      if (!scaleLine) scaleLine = { a: { x: xm, y: r3(upperHead) }, b: { x: xm, y: r3(lowerHead) }, lengthIn: 114, kind: "storey" };
+      if (!storeys || storeys < 2) storeys = 2;
+      // The base: the strongest row edge under the lowest sill, from a sixth to a storey and a tenth below it, read along
+      // the model's base line's own slope over the columns clear of windows — and only when one row plainly stands out
+      // (twice the typical row), else the model's base stands.
+      const lowest = Math.max(...rowB.map((w) => w.sill));
+      let baseFound = false;
+      const slope = (base2.right.y - base2.left.y) / Math.max(1e-6, base2.right.x - base2.left.x);
+      const cols: number[] = [];
+      for (let x = Math.round(lx * g.w); x < Math.round(rx * g.w); x += 2) if (!windows.some((w) => x / g.w >= w.x0 && x / g.w <= w.x1)) cols.push(x);
+      if (cols.length >= 20) {
+        const y0 = Math.round((lowest + storey * 0.15) * g.h), y1 = Math.min(g.h - 2, Math.round((lowest + storey * 1.1) * g.h));
+        const scores: Array<[number, number]> = [];
+        for (let y = y0; y <= y1; y++) {
+          let s = 0;
+          let n = 0;
+          for (const x of cols) {
+            const yy = Math.round(y + ((x / g.w - xm) * slope) * g.h);
+            if (yy >= 1 && yy < g.h - 1) [s, n] = [s + f.gy[yy * g.w + x], n + 1];
+          }
+          scores.push([y, n ? s / n : 0]);
+        }
+        if (scores.length > 6) {
+          const best = scores.reduce((m, c) => (c[1] > m[1] ? c : m));
+          const typical = median(scores.map((c) => c[1]));
+          // One row standing clear of every other (a course of siding is a strong edge too, but its neighbours a few rows
+          // on are just as strong; the ground line has no twin).
+          const second = scores.filter((c) => Math.abs(c[0] - best[0]) >= 6).reduce((m, c) => Math.max(m, c[1]), 0);
+          const standsOut = best[1] > 1.5 * second;
+          if (best[1] > 2 * typical && best[1] > 0.03 && standsOut) {
+            const yb = best[0] / g.h;
+            const dy = yb - (base2.left.y + (xm - base2.left.x) * slope);
+            baseFound = true;
+            if (Math.abs(dy) * g.h > 1.5) {
+              base2 = { left: { x: lx, y: r3(base2.left.y + dy) }, right: { x: rx, y: r3(base2.right.y + dy) } };
+              moved++;
+            }
+          }
+        }
+      }
+      // What lies at or below the base found — the patio, the ground — is no window. Where no base was found and the
+      // model's sits up above the lower row (on a porch roof), the base goes under the lowest sill instead.
+      if (baseFound) {
+        const slope2 = (base2.right.y - base2.left.y) / Math.max(1e-6, base2.right.x - base2.left.x);
+        const kept = windows.filter((w) => w.sill < base2.left.y + ((w.x0 + w.x1) / 2 - base2.left.x) * slope2 - 0.01);
+        if (kept.length !== windows.length) windows.splice(0, windows.length, ...kept);
+      } else if (base2.left.y < lowest + storey * 0.1 || base2.right.y < lowest + storey * 0.1) {
+        const yb = r3(lowest + storey * 0.3);
+        base2 = { left: { x: lx, y: Math.max(base2.left.y, yb) }, right: { x: rx, y: Math.max(base2.right.y, yb) } };
+        moved++;
+      }
+      // The eave: its shadow band.
+      if (eave2) {
+        const H2 = (lineY(base2, xm) - lineY(eave2, xm)) * g.h;
+        const k = H2 > 40 ? eaveBandOffset({ ...read, eave: eave2, base: base2 }, g, Math.round(lx * g.w), Math.round(rx * g.w), H2) : null;
+        if (k !== null && Math.abs(k) > 1.5) {
+          eave2 = { left: { x: lx, y: r3(eave2.left.y + k / g.h) }, right: { x: rx, y: r3(eave2.right.y + k / g.h) } };
+          moved++;
+        }
+      }
+    }
+    // A door the model drew where the picture shows windows is no door.
+    const overlapArea = (d: { x0: number; x1: number; top: number; bottom: number }, w: HouseRead["windows"][number]) => Math.max(0, Math.min(d.x1, w.x1) - Math.max(d.x0, w.x0)) * Math.max(0, Math.min(d.bottom, w.sill) - Math.max(d.top, w.head));
+    const area = (d: { x0: number; x1: number; top: number; bottom: number }) => Math.max(1e-6, (d.x1 - d.x0) * (d.bottom - d.top));
+    doors2 = doors.filter((d) => windows.reduce((t, w) => t + overlapArea(d, w), 0) < 0.5 * area(d));
+    door2 = door && doors2.some((d) => Math.abs((d.x0 + d.x1) / 2 - (door.x0 + door.x1) / 2) < 0.03) ? door : null;
+  }
+  return { read: { ...read, base: base2, eave: eave2, jogs, windows: windows.slice(0, 30), doors: doors2, door: door2, scaleLine, storeys }, moved, split, found };
 }

@@ -133,6 +133,24 @@ console.log("— the windows off the picture itself (2026-10-25: 'why is it stil
   check("on a wall with one window the model's box is still lined up the old way (fewer than three found)", plain.found === 0 && plain.read.windows.length === 1 && worst(plain.read.windows, [box([150, 300, 205, 390])]) <= 4, `found ${plain.found}, worst ${worst(plain.read.windows, [box([150, 300, 205, 390])])}`);
 }
 
+console.log("— the scale off the picture: one storey between the rows of windows (2026-10-25) —");
+{
+  // The drawn wall's two rows: the row of four up top (heads at 120) and the singles below (heads at 300) — one storey
+  // of 180 px between their heads, a measure the model's lines can't spoil.
+  const sized = snapRead(read0(truth), g);
+  const sl = sized.read.scaleLine;
+  check("two rows of windows give a measure: one storey, head to head, 9 ft 6 in.", !!sl && sl.kind === "storey" && sl.lengthIn === 114 && Math.abs(sl.a.y * H - 120) <= 3 && Math.abs(sl.b.y * H - 300) <= 3, JSON.stringify(sl));
+  check("and the storeys read as two", sized.read.storeys === 2);
+  // The drawn wall has no ground line and no eave band: the model's lines stand.
+  check("with no ground edge and no eave band in the picture, the model's base and eave stand", Math.abs(sized.read.base.left.y - 0.9) < 0.004 && Math.abs(sized.read.eave!.left.y - 0.1) < 0.004, `${sized.read.base.left.y} ${sized.read.eave!.left.y}`);
+  // The model's base read far too high — on a porch roof, above the lower row: the lower windows are still found.
+  const highBase = snapRead(read0(truth.slice(0, 4)).base ? { ...read0(truth), base: { left: { x: fx(60), y: 0.45 }, right: { x: fx(860), y: 0.45 } } } : read0(truth), g);
+  check("a base read above the lower row still finds all seven windows and the storey", highBase.read.windows.length === 7 && highBase.read.scaleLine?.kind === "storey", `${highBase.read.windows.length} windows, ${JSON.stringify(highBase.read.scaleLine)}`);
+  // A door the model drew over the picture's windows is no door.
+  const doored = snapRead({ ...read0(truth), doors: [{ x0: fx(150), x1: fx(205), top: fy(300), bottom: fy(390), kind: "slider" }], door: { x0: fx(150), x1: fx(205), top: fy(300), bottom: fy(390) } } as never, g);
+  check("a door drawn over a window is dropped", doored.read.doors.length === 0 && doored.read.door === null, `${doored.read.doors.length} doors`);
+}
+
 console.log("— the steps from the wall's sections —");
 const base = { base: { left: { x: 0.05, y: 0.8 }, right: { x: 0.95, y: 0.8 } }, eave: { left: { x: 0.05, y: 0.3 }, right: { x: 0.95, y: 0.3 } }, storeys: 2, windows: [], doors: [] };
 const bump = parseHouseRead({ ...base, sections: [{ x0: 0.05, x1: 0.2, outFt: 0 }, { x0: 0.2, x1: 0.5, outFt: 2 }, { x0: 0.5, x1: 0.95, outFt: 0 }], jogs: [{ x: 0.55, dir: "toward", depthFt: 6 }] })!;

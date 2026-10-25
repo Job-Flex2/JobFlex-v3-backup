@@ -187,7 +187,7 @@ export function houseFromPhoto(input: PhotoHouseInput): PhotoHouse | null {
   else delete house.pitch;
 
   // IN WORDS — what was seen and what was guessed.
-  const scaleWords = scale.by === "width" ? "the wall's width you typed" : scale.by === "line" ? "your measure on the picture" : scale.by === "door" ? `the back door (${ftIn(DOOR_HEIGHT_FT)} tall)` : scale.by === "eave" ? `${storeys === 2 ? "two storeys" : "one storey"} of wall to the eave` : "nothing";
+  const scaleWords = scale.by === "width" ? "the wall's width you typed" : scale.by === "line" ? (read.scaleLine?.kind === "storey" ? `one storey of the wall, window head to window head (${ftIn(read.scaleLine.lengthIn)})` : "your measure on the picture") : scale.by === "door" ? `the back door (${ftIn(DOOR_HEIGHT_FT)} tall)` : scale.by === "eave" ? `${storeys === 2 ? "two storeys" : "one storey"} of wall to the eave` : "nothing";
   const rough = scale.by === "eave";
   facts.push({ id: "wall", label: "Wall", value: `≈ ${ftIn(Math.round(wallFt * 2) / 2)} wide · sized by ${scaleWords}`, guess: rough });
   facts.push({ id: "storeys", label: "House", value: `${storeys === 2 ? "Two storeys" : "One storey"} · ${read.roof.kind ? ROOF_WORDS[read.roof.kind] : `${roof} roof (not seen — kept)`}${read.roof.pitch ? ` · about ${read.roof.pitch}/12` : ""}`, guess: !read.storeys || !read.roof.kind });
