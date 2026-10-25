@@ -9,10 +9,11 @@
 // MEASURED, NOT ASSUMED (owner, 2026-10-24): no 60%, no "if every trial pays", no
 // behaviour guess — the share that stays is read off the trials that have ended,
 // and the running trials are expected to pay at that rate (lib/investorModel).
-// KEPT APART (owner, 2026-10-24): the days free trials needed no card go apart whole,
-// with every signup they brought — shown in their own block against the card's.
+// CARD DAYS ONLY (owner, 2026-10-24/25): the days free trials needed no card are out
+// whole — their spend shown nowhere; the no-card trials that pay now count as paying.
+// How many came back later (paid after their trial had ended) is counted.
 import type { ReactNode } from "react";
-import { apartSentence, dollars, longDate, outlookSentence, standingSentence, type InvestorFigures } from "@/lib/investorModel";
+import { dollars, longDate, outlookSentence, standingSentence, type InvestorFigures } from "@/lib/investorModel";
 import type { InvestorReport } from "@/lib/investors";
 import { PaybackChart } from "./payback-chart";
 import { SpendBars } from "./spend-bars";
@@ -32,9 +33,8 @@ export function InvestorReportView({ report, shared = false, between }: { report
   const ex = f.expected;
   const got = report.collected;
   const periods = report.periods;
-  const ap = report.apart;
-  const apartLater = f.since !== report.startDay;
-  const apartDays = ap.days.length === 0 ? "" : ap.days.length === 1 ? longDate(ap.days[0]) : `${longDate(ap.days[0])} – ${longDate(ap.days[ap.days.length - 1])}`;
+  const cardLater = f.since !== report.startDay;
+  const oc = f.outcomes;
   const budgetWords = a.dailyBudgetCents !== null && a.dailyBudgetCents !== undefined && a.budgetFrom ? `${dollars(a.dailyBudgetCents)}/day, all ads, since ${shortDate(a.budgetFrom)}${f.spend.bookedDays ? ` · ${f.spend.bookedDays} booked ${f.spend.bookedDays === 1 ? "day" : "days"}` : ""}` : `since ${shortDate(f.since)} · ${dollars(f.spend.perDayRecentCents)}/day lately`;
   const range = r.lowPct !== null && r.highPct !== null ? `likely ${r.lowPct}–${r.highPct}%` : null;
   const expectedRange = ex.payersLow !== null && ex.payersHigh !== null && ex.payersLow !== ex.payersHigh ? `likely ${ex.payersLow}–${ex.payersHigh}` : null;
@@ -64,8 +64,8 @@ export function InvestorReportView({ report, shared = false, between }: { report
         <Kpi label="Ad spend" value={dollars(f.spend.totalCents)} note={budgetWords} tone="ink" />
         <Kpi label="Visitors" value={f.visitors === null ? "—" : n(f.visitors)} note={f.visitors === null ? "analytics not reached" : `${money(f.unit.costPerVisitorCents)} each`} />
         <Kpi label="Signed up" value={n(f.signups)} note={`${f.unit.signupsPerDay}/day · ${pct(f.unit.visitorToSignupPct)} of visitors · ${money(f.unit.costPerSignupCents)} each`} />
-        <Kpi label="Paying" value={n(f.paying.count)} note={`${dollars(f.paying.mrrCents)}/mo · ${dollars(f.paying.arrCents)} a year${f.paying.preexisting > 0 ? ` · ${f.paying.preexisting} from before the start day` : ""}${report.payingUnpriced > 0 ? ` · ${report.payingUnpriced} without a list price` : ""}`} tone="good" />
-        <Kpi label="Stay after the trial" value={pct(r.pct)} note={r.pct === null ? "no trial has ended yet" : `${r.paid} of ${r.ended} ended trials paying${range ? ` · ${range}` : ""}`} tone="blue" data="rate" />
+        <Kpi label="Paying" value={n(f.paying.count)} note={`${dollars(f.paying.mrrCents)}/mo · ${dollars(f.paying.arrCents)} a year${f.paying.preexisting > 0 ? ` · ${f.paying.preexisting} from before the start day` : ""}${f.paying.fromNoCard > 0 ? ` · ${f.paying.fromNoCard} started without a card` : ""}${report.payingUnpriced > 0 ? ` · ${report.payingUnpriced} without a list price` : ""}`} tone="good" />
+        <Kpi label="Trial to paid" value={pct(r.pct)} note={r.pct === null ? "no trial has ended yet" : `${r.paid} of ${r.ended} ended trials converted${oc && oc.cameBack > 0 ? ` · ${oc.cameBack} came back later` : ""}${range ? ` · ${range}` : ""}`} tone="blue" data="rate" />
         <Kpi label="On trial now" value={n(f.trials.count)} note={ex.payers === null ? "no measured rate to predict with yet" : `${about(ex.payers)} expected to pay${expectedRange ? ` (${expectedRange})` : ""} · +${dollars(ex.mrrCents ?? 0)}/mo`} tone="trial" data="trials" />
       </section>
 
@@ -75,13 +75,14 @@ export function InvestorReportView({ report, shared = false, between }: { report
         {/* Who stays after the trial: counted on the trials that ended, then applied to the ones running. */}
         <section className={s.card} data-rate-card>
           <h2 className={s.h2}>Trial to paid, measured</h2>
-          <RateBar label={`Trials that ended · ${n(r.ended)}`} parts={[{ value: r.paid, cls: s.segPaid, words: `${n(r.paid)} paying` }, { value: r.ended - r.paid, cls: s.segGone, words: `${n(r.ended - r.paid)} did not stay` }]} empty="No trial has ended yet." />
+          <RateBar label={`Trials that ended · ${n(r.ended)}`} parts={[{ value: r.paid - (oc?.cameBack ?? 0), cls: s.segPaid, words: `${n(r.paid - (oc?.cameBack ?? 0))} paid at the end` }, { value: oc?.cameBack ?? 0, cls: s.segBack, words: `${n(oc?.cameBack ?? 0)} came back later` }, { value: r.ended - r.paid, cls: s.segGone, words: `${n(r.ended - r.paid)} did not convert` }]} empty="No trial has ended yet." />
           <RateBar label={`Running now · ${n(f.trials.count)}`} parts={ex.payers === null ? [{ value: f.trials.count, cls: s.segRun, words: `${n(f.trials.count)} on trial` }] : [{ value: ex.payers, cls: s.segExpected, words: `${about(ex.payers)} expected to pay` }, { value: Math.max(0, f.trials.count - ex.payers), cls: s.segRun, words: "" }]} empty="No trial is running now." />
           <table className={s.tbl}>
             <tbody>
-              <tr><td>Paying after the trial</td><td className={s.num}>{n(r.paid)}</td><td className={s.sub}>{dollars(f.paying.wonMrrCents)}/mo at list price</td></tr>
-              <tr><td>Did not stay</td><td className={s.num}>{n(r.ended - r.paid)}</td><td className={s.sub}>ran out, canceled, or a payment that failed</td></tr>
-              <tr className={s.strong} data-row="rate"><td>Stay after the trial</td><td className={s.num}>{pct(r.pct)}</td><td className={s.sub}>{r.pct === null ? "measured once a trial ends" : `${r.paid} of ${r.ended}${r.lowPct !== null && r.highPct !== null ? ` · the true rate is likely ${r.lowPct}–${r.highPct}%` : ""}`}</td></tr>
+              <tr data-row="converted"><td>Converted</td><td className={s.num}>{n(r.paid)}</td><td className={s.sub}>paid when the trial ended, or later · {n(f.paying.won)} paying today, {dollars(f.paying.wonMrrCents)}/mo</td></tr>
+              {oc && <tr data-row="came-back"><td>Came back later</td><td className={s.num}>{n(oc.cameBack)}</td><td className={s.sub}>paid after their trial had already ended — counted as converted</td></tr>}
+              <tr><td>Did not convert</td><td className={s.num}>{n(r.ended - r.paid)}</td><td className={s.sub}>canceled during the trial, or no payment ever went through</td></tr>
+              <tr className={s.strong} data-row="rate"><td>Trial to paid</td><td className={s.num}>{pct(r.pct)}</td><td className={s.sub}>{r.pct === null ? "measured once a trial ends" : `${r.paid} of ${r.ended}${r.lowPct !== null && r.highPct !== null ? ` · the true rate is likely ${r.lowPct}–${r.highPct}%` : ""}`}</td></tr>
               <tr><td>On trial now</td><td className={s.num}>{n(f.trials.count)}</td><td className={s.sub}>{dollars(f.trials.mrrCents)}/mo at list price{f.trials.priced < f.trials.count ? ` · ${f.trials.count - f.trials.priced} without a price` : ""}</td></tr>
               <tr data-row="expected"><td>Expected to pay</td><td className={s.num}>{ex.payers === null ? "—" : about(ex.payers)}</td><td className={s.sub}>{ex.payers === null ? "no measured rate yet" : `${expectedRange ? `${expectedRange} · ` : ""}+${dollars(ex.mrrCents ?? 0)}/mo at ${r.pct}%`}</td></tr>
               <tr className={s.strong}><td>Monthly revenue then</td><td className={s.num}>{dollars(ex.mrrWithPayingCents)}</td><td className={s.sub}>paying now {dollars(f.paying.mrrCents)} + expected {dollars(ex.mrrCents ?? 0)}</td></tr>
@@ -107,8 +108,6 @@ export function InvestorReportView({ report, shared = false, between }: { report
         </section>
       </div>
 
-      {(ap.days.length > 0 || ap.figures.signups > 0) && <ApartBlock report={report} />}
-
       {/* The costs (owner, 2026-10-08): by period, by day, and by campaign when Meta answers. */}
       <section className={s.card} data-costs>
         <div className={s.cardHead}>
@@ -130,7 +129,6 @@ export function InvestorReportView({ report, shared = false, between }: { report
             </div>
           ))}
         </div>
-        {ap.spendCents > 0 && <p className={s.apartNote} data-apart-note>Plus {dollars(ap.spendCents)} on the {ap.days.length} {ap.days.length === 1 ? "day" : "days"} free trials needed no card — kept apart, in none of these.</p>}
         <SpendBars rows={report.dailyRows} />
       </section>
 
@@ -155,58 +153,16 @@ export function InvestorReportView({ report, shared = false, between }: { report
       <section className={s.method}>
         <h2 className={s.h2}>How these are figured</h2>
         <ul>
-          <li>Counting from {longDate(report.startDay)}, the day the first campaign went live{apartLater ? ` — the figures with a card from ${longDate(f.since)}, the first day after the no-card days` : ""} — only what happened from that day on. Visitors are unique people on www.jobflex.app{apartLater ? ` since ${longDate(f.since)}` : ""}, bots and previews out.{report.before.paying > 0 ? ` ${report.before.paying} ${report.before.paying === 1 ? "account" : "accounts"} paying from before that day (${dollars(report.before.mrrCents)}/mo) ${report.before.paying === 1 ? "is" : "are"} counted as paying — their revenue from that day on — but not as signups of the period, nor in the rate.` : ""}</li>
-          <li data-method="rate">Nothing here is a share we chose. &ldquo;Stay after the trial&rdquo; is measured: of the trials that have ended since the start day, the share paying today ({r.pct === null ? "none has ended yet" : `${r.paid} of ${r.ended}`}). A trial that ran out, was canceled, or whose payment failed counts as not staying. &ldquo;Likely&rdquo; is the 90% range for that many trials — it narrows as more trials end. The trials running now are expected to pay at the measured rate; the figure moves as each trial ends.</li>
+          <li>Counting from {longDate(report.startDay)}, the day the first campaign went live{cardLater ? ` — the figures from ${longDate(f.since)}, from when every trial needed a card` : ""} — only what happened from that day on. Visitors are unique people on www.jobflex.app{cardLater ? ` since ${longDate(f.since)}` : ""}, bots and previews out.{report.before.paying > 0 ? ` ${report.before.paying} ${report.before.paying === 1 ? "account" : "accounts"} paying from before that day (${dollars(report.before.mrrCents)}/mo) ${report.before.paying === 1 ? "is" : "are"} counted as paying — their revenue from that day on — but not as signups of the period, nor in the rate.` : ""}</li>
+          <li data-method="rate">Nothing here is a share we chose. &ldquo;Trial to paid&rdquo; is measured on the trials that have ended ({r.pct === null ? "none has ended yet" : `${r.paid} of ${r.ended} converted`}): converted means a payment went through — when the trial ended, or later (&ldquo;came back later&rdquo;) — and one that left since still converted; not converted means canceled during the trial, or no payment ever went through. A card still being retried is counted once it settles. &ldquo;Likely&rdquo; is the 90% range for that many trials — it narrows as more trials end. The trials running now are expected to pay at the measured rate.</li>
           <li>Ad spend is {a.dailyBudgetCents !== null && a.dailyBudgetCents !== undefined && a.budgetFrom ? `the daily budget — ${dollars(a.dailyBudgetCents)} for all ads together — counted as spent every day since ${longDate(a.budgetFrom)}${f.spend.bookedDays ? `, with ${f.spend.bookedDays} ${f.spend.bookedDays === 1 ? "day" : "days"} at the figure booked for it` : ""}` : "what was booked per day; a day with nothing booked counts as zero"}{shared ? "" : " (set on this page; Meta's own figures per day once its API token is connected)"}. Tomorrow on it runs at the last full week&apos;s pace, {dollars(f.spend.perDayProjectedCents)} a day.</li>
           <li>&ldquo;Collected so far&rdquo; is what Stripe took for subscriptions since the start day from the accounts counted here. A trial or a paying account is valued at its plan&apos;s monthly list price: a yearly plan as a twelfth, a custom plan by its pages. Discounts, taxes and churn are not modelled in the list-price figures.</li>
           <li>The curve: each paying account earns a thirtieth of its monthly price a day from the day it started paying; a running trial, at the measured rate, from the day it ends; signups still to come arrive at the last week&apos;s pace ({f.unit.signupsPerDay}/day), at the average trial price ({dollars(f.trials.avgMonthlyCents)}/mo), and pay at the measured rate after a {f.trials.lengthDays}-day trial. Spend continues at {dollars(f.spend.perDayProjectedCents)}/day for {a.horizonDays} days.</li>
-          <li data-left-out>{ap.days.length > 0 || ap.figures.signups > 0 ? `Kept apart on purpose: ${ap.days.length > 0 ? `the ${ap.days.length} ${ap.days.length === 1 ? "day" : "days"} free trials needed no card (${apartDays}) — the whole ${dollars(ap.spendCents)} of ad spend on them, and every signup they brought (${ap.figures.signups}${ap.signups.card > 0 ? `, ${ap.signups.card} of them with a card given anyway` : ""})` : "the trials that started with no card"}; a no-card trial from any other day goes with them. A day goes apart whole if the no-card offer was up at any time that day. ` : ""}Every figure above is from the days a trial needed a card, and the trials that took one.</li>
+          <li data-left-out>{cardLater ? `Ad spend, visitors, signups and the trial-to-paid rate are counted from ${longDate(f.since)}, from when every trial needed a card. ` : "Every trial counted here took a card. "}{f.paying.fromNoCard > 0 ? `${f.paying.fromNoCard} paying ${f.paying.fromNoCard === 1 ? "customer" : "customers"} who started on an earlier free trial without a card ${f.paying.fromNoCard === 1 ? "is" : "are"} counted as paying (${dollars(f.paying.fromNoCardMrrCents)}/mo, and what ${f.paying.fromNoCard === 1 ? "it pays" : "they pay"}) — not as signups, in the rate, or in the cost of a customer.` : ""}</li>
           <li>Read on {new Date(report.at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}. The figures move as accounts sign up, end their trials and pay.</li>
         </ul>
       </section>
     </div>
-  );
-}
-
-/** KEPT APART (2026-10-24): the no-card days against the card days, side by side. */
-function ApartBlock({ report }: { report: InvestorReport }) {
-  const ap = report.apart;
-  const a = ap.figures;
-  const f = report.figures;
-  const span = ap.days.length === 0 ? "no whole day" : ap.days.length === 1 ? shortDate(ap.days[0]) : `${shortDate(ap.days[0])} – ${shortDate(ap.days[ap.days.length - 1])}`;
-  const rows: Array<[string, string, string, string?, string?]> = [
-    ["Days", n(ap.days.length), n(f.daysLive), span, `since ${shortDate(f.since)}`],
-    ["Ad spend", dollars(ap.spendCents), dollars(f.spend.totalCents)],
-    ["Signed up", n(a.signups), n(f.signups), ap.signups.card > 0 ? `${ap.signups.nocard} no card · ${ap.signups.card} card anyway` : undefined],
-    ["Per signup", money(a.unit.costPerSignupCents), money(f.unit.costPerSignupCents)],
-    ["Stayed after the trial", pct(a.rate.pct), pct(f.rate.pct), a.rate.ended > 0 ? `${a.rate.paid} of ${a.rate.ended}` : "none ended", f.rate.ended > 0 ? `${f.rate.paid} of ${f.rate.ended}` : "none ended"],
-    ["Paying today", n(a.paying.won), n(f.paying.won), `${dollars(a.paying.wonMrrCents)}/mo`, `${dollars(f.paying.wonMrrCents)}/mo`],
-    ["Per paying customer", money(a.unit.costPerPayingCents), money(f.unit.costPerPayingCents)],
-    ...(a.trials.count > 0 ? [["Still on trial", n(a.trials.count), n(f.trials.count)] as [string, string, string]] : []),
-    ...(ap.collectedCents !== null && report.collected.read ? [["Collected (Stripe)", dollars(ap.collectedCents), dollars(report.collected.wonCents)] as [string, string, string]] : []),
-  ];
-  return (
-    <section className={`${s.card} ${s.apart}`} data-apart>
-      <div className={s.cardHead}>
-        <h2 className={s.h2}>Kept apart: free trials with no card</h2>
-        <span className={s.cardNote}>{span} · in none of the figures above</span>
-      </div>
-      <p className={s.apartLead} data-apart-sentence>{apartSentence(ap, f)}</p>
-      <table className={`${s.tbl} ${s.cmp}`}>
-        <thead>
-          <tr><th scope="col" aria-label="Figure" /><th scope="col">No card</th><th scope="col">With a card</th></tr>
-        </thead>
-        <tbody>
-          {rows.map(([label, apart, card, apartNote, cardNote]) => (
-            <tr key={label} data-cmp={label}>
-              <td>{label}</td>
-              <td className={s.num}>{apart}{apartNote && <small className={s.cmpNote}>{apartNote}</small>}</td>
-              <td className={`${s.num} ${s.cmpCard}`}>{card}{cardNote && <small className={s.cmpNote}>{cardNote}</small>}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
   );
 }
 

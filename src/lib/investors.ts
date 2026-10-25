@@ -21,7 +21,7 @@ import { signupState } from "@/lib/traffic-live";
 import { TRAFFIC_SINCE, TRAFFIC_SINCE_MS, TRAFFIC_TZ } from "@/lib/traffic-visitor";
 import { fetchInvestorVisitors } from "@/lib/traffic-server";
 import { valueSignups } from "@/lib/trialProjectionRead";
-import { investorFigures, splitApart, launchDay, PLATFORMS, PLATFORM_LABEL, spendPeriods, addDays, type InvestorFigures, type ModelSettings, type PolicySpan, type SpendDay, type SpendPlatform, type SpendPeriod, type TrialCohort } from "@/lib/investorModel";
+import { investorFigures, splitApart, launchDay, daysBetween, PLATFORMS, PLATFORM_LABEL, spendPeriods, addDays, type InvestorFigures, type ModelSettings, type PolicySpan, type SpendDay, type SpendPlatform, type SpendPeriod, type TrialCohort, type EndedTrial } from "@/lib/investorModel";
 import { cardlessKey } from "@/lib/trialState";
 import { readTrialPolicyHistory, signupTrialState } from "@/lib/trialPolicyServer";
 import { readSubscriptionPayments } from "@/lib/investorPayments";
@@ -252,15 +252,11 @@ export interface InvestorReport {
   periods: SpendPeriod[];
   /** Meta's own figures, when read: by day for the bars. */
   insights: MetaInsights | null;
-  /** The last 30 days, one row each: what was spent that day and who signed up with a card; the no-card days marked apart. */
-  dailyRows: Array<{ date: string; spendCents: number; source: "booked" | "budget" | "none" | "apart"; clicks: number | null; signups: number }>;
+  /** The last 30 card days, one row each: what was spent that day and who signed up with a card. */
+  dailyRows: Array<{ date: string; spendCents: number; source: "booked" | "budget" | "none"; clicks: number | null; signups: number }>;
   /** The first campaign's day (the setting, else the live map's start). The card figures may start later: figures.since. */
   startDay: string;
-  /** KEPT APART (owner, 2026-10-14; whole days since 2026-10-24: "we had free trials with no card and it was not good —
-   *  remove that money from the stats and keep it separately"): the days the no-card offer was up, their whole spend,
-   *  every signup they brought (and any no-card trial from another day), their own figures (no curve), and what
-   *  Stripe took from those accounts. In no figure of the page; shown on its own. */
-  apart: { days: string[]; spendCents: number; signups: { nocard: number; card: number }; figures: InvestorFigures; collectedCents: number | null };
+
   /** WHAT CAME IN (2026-10-24): Stripe's paid subscription invoices since the start day from the accounts counted
    *  here — all of them, and the part from the customers the period brought (signed up since the start day).
    *  read false = Stripe not read, with why; never a guess. */
@@ -270,6 +266,13 @@ export interface InvestorReport {
   launch: { date: string; day: number; set: boolean };
   /** When this was read. */
   at: string;
+}
+
+/** The report as a reader of the shared link gets it (2026-10-25: "don't show the free trials' no-card budget
+ *  anywhere"): the page's own figures only — not the booked-spend list or Meta's per-day and per-campaign figures,
+ *  which carry the no-card days' money and would ride along in the page's data. */
+export function forReaders(r: InvestorReport): InvestorReport {
+  return { ...r, spend: { ...r.spend, entries: [] }, insights: null };
 }
 
 /** Midnight of `date` in `tz`, as a timestamp (the day's offset read from Intl). */
@@ -311,7 +314,7 @@ export async function investorReport({ refreshMeta = false }: { refreshMeta?: bo
     where: { createdAt: { gte: new Date(sinceMs) }, ...countedOrgs(hidden) },
     orderBy: { createdAt: "desc" },
     take: 5000,
-    select: { id: true, createdAt: true, utmCampaign: true, utmContent: true, utmSource: true, subscription: { select: { plan: true, status: true, trialEndsAt: true, stripePriceId: true, externalSubId: true, externalCustomerId: true, provider: true, createdAt: true } } },
+    select: { id: true, createdAt: true, utmCampaign: true, utmContent: true, utmSource: true, subscription: { select: { plan: true, status: true, trialEndsAt: true, canceledAt: true, stripePriceId: true, externalSubId: true, externalCustomerId: true, provider: true, createdAt: true } } },
   });
   // Every paying account; the ones from before the start day are named, not counted.
   const payingAll = await db.subscription.findMany({
@@ -319,9 +322,9 @@ export async function investorReport({ refreshMeta = false }: { refreshMeta?: bo
     select: { organizationId: true, plan: true, status: true, trialEndsAt: true, stripePriceId: true, externalSubId: true, externalCustomerId: true, provider: true, createdAt: true, organization: { select: { createdAt: true } } },
   });
 
-  const payRow = (p: (typeof payingAll)[number]) => ({ orgId: p.organizationId, createdAt: p.organization.createdAt, state: "paying" as const, sub: { plan: p.plan, status: p.status, trialEndsAt: p.trialEndsAt, stripePriceId: p.stripePriceId, externalSubId: p.externalSubId, provider: p.provider }, customer: p.externalCustomerId, subCreatedAt: p.createdAt, trialEndsAt: p.trialEndsAt });
+  const payRow = (p: (typeof payingAll)[number]) => ({ orgId: p.organizationId, createdAt: p.organization.createdAt, state: "paying" as const, sub: { plan: p.plan, status: p.status, trialEndsAt: p.trialEndsAt, stripePriceId: p.stripePriceId, externalSubId: p.externalSubId, provider: p.provider }, customer: p.externalCustomerId, subCreatedAt: p.createdAt, trialEndsAt: p.trialEndsAt, canceledAt: null as Date | null });
   const rows = [
-    ...orgs.map((o) => ({ orgId: o.id, createdAt: o.createdAt, state: signupState(o.subscription?.status ?? ""), sub: o.subscription ? { plan: o.subscription.plan, status: o.subscription.status, trialEndsAt: o.subscription.trialEndsAt, stripePriceId: o.subscription.stripePriceId, externalSubId: o.subscription.externalSubId, provider: o.subscription.provider } : null, customer: o.subscription?.externalCustomerId ?? null, subCreatedAt: o.subscription?.createdAt ?? o.createdAt, trialEndsAt: o.subscription?.trialEndsAt ?? null })),
+    ...orgs.map((o) => ({ orgId: o.id, createdAt: o.createdAt, state: signupState(o.subscription?.status ?? ""), sub: o.subscription ? { plan: o.subscription.plan, status: o.subscription.status, trialEndsAt: o.subscription.trialEndsAt, stripePriceId: o.subscription.stripePriceId, externalSubId: o.subscription.externalSubId, provider: o.subscription.provider } : null, customer: o.subscription?.externalCustomerId ?? null, subCreatedAt: o.subscription?.createdAt ?? o.createdAt, trialEndsAt: o.subscription?.trialEndsAt ?? null, canceledAt: o.subscription?.canceledAt ?? null })),
     ...payingAll.filter((p) => p.organization.createdAt.getTime() >= sinceMs && !orgs.some((o) => o.id === p.organizationId)).map(payRow),
   ];
   const beforeRows = payingAll.filter((p) => p.organization.createdAt.getTime() < sinceMs).map(payRow);
@@ -389,22 +392,21 @@ export async function investorReport({ refreshMeta = false }: { refreshMeta?: bo
   const before = { paying: beforeRows.length, mrrCents: beforeRows.reduce((a, r) => a + (values.get(r.orgId)?.monthlyCents ?? 0), 0) };
 
   const spend: SpendDay[] = entries.map((e) => ({ date: e.date, cents: e.cents }));
-  // THE PAGE IS THE CARD DAYS' (owner, 2026-10-14; whole days since 2026-10-24: "remove the money spent on the free
-  // trials with no card from the stats and keep it separately"): the whole is figured once — its curve filled by the
-  // daily budget — then cut in two (lib/investorModel splitApart): the days the no-card offer was up go apart WHOLE,
-  // with every signup they brought; the card days are the page. A first pass finds the card days' first day, which
-  // the visitor count starts from.
+  // THE PAGE IS THE CARD DAYS' (owner, 2026-10-14; whole days since 2026-10-24; shown nowhere since 2026-10-25: "remove
+  // the budget spent on the free trials with no card — don't show it anywhere, only what was with the card"): the
+  // whole is figured once — its curve filled by the daily budget — then cut in two (lib/investorModel splitApart): the
+  // days the no-card offer was up go out WHOLE, with every signup they brought; the card days are the page, and the
+  // no-card trials that pay now join its paying. A first pass finds the card days' first day (the visitor count
+  // starts from it) and which accounts are whose.
   const modelInput = { since, today, spend, paying, trials, lapsed, lapsedSignups, settings, visitors: null as number | null, cohorts: cohortInput };
   const whole = investorFigures(modelInput);
   const first = splitApart(modelInput, whole);
   const apartSet = new Set(first.days);
   const onCard = (r: (typeof rows)[number]) => cohortOf(r.orgId) === "card" && !apartSet.has(dayIn(r.createdAt));
 
-  // WHAT CAME IN: Stripe's payments from the accounts this page counts — the card days' (paying, or paid before they
-  // lapsed) and the accounts paying from before the start day — and, said apart, from the no-card days' accounts.
-  const wonCustomers = new Set(rows.filter((r) => onCard(r) && r.customer).map((r) => r.customer as string));
-  const apartCustomers = new Set(rows.filter((r) => !onCard(r) && r.customer).map((r) => r.customer as string));
-  const customers = new Set([...wonCustomers, ...apartCustomers, ...beforeRows.map((r) => r.customer).filter((c): c is string => !!c)]);
+  // WHAT CAME IN: Stripe's payments from every account of the period and the ones paying from before it — read once,
+  // for the money and for how each trial ended (who paid when).
+  const customers = new Set([...rows, ...beforeRows].map((r) => r.customer).filter((c): c is string => !!c));
   const [cardVisitors, startVisitors, paid] = await Promise.all([
     fetchInvestorVisitors(first.cardSince, TRAFFIC_TZ).catch(() => null),
     first.cardSince === since ? Promise.resolve(null) : fetchInvestorVisitors(since, TRAFFIC_TZ).catch(() => null),
@@ -412,21 +414,48 @@ export async function investorReport({ refreshMeta = false }: { refreshMeta?: bo
   ]);
   const visitors = cardVisitors ? cardVisitors.visitors : null;
   const firstAdDay = (startVisitors ?? cardVisitors)?.firstAdDay ?? null;
+
+  // HOW EACH TRIAL ENDED (owner, 2026-10-25: "only deduct who cancelled during the trial; if they converted, keep
+  // them; how many came back later"). Converted = a payment went through: within a day of the trial's end ("paid"),
+  // or later ("came-back" — a retry that went through, a card put in later, a return); one that left since still
+  // converted. Not converted = canceled before the end, or the end came and no payment ever went through. A card
+  // still being retried (PAST_DUE) waits in neither. Stripe not read: paying today = paid, the rest by status.
+  const firstPaid = new Map<string, string>();
+  if (paid.ok) for (const p of paid.payments) { const d = firstPaid.get(p.customer); if (!d || p.date < d) firstPaid.set(p.customer, p.date); }
+  const outcomeOf = (r: (typeof rows)[number]): EndedTrial => {
+    const base = { date: dayIn(r.createdAt), cohort: cohortOf(r.orgId), payingNow: r.state === "paying" };
+    const end = r.trialEndsAt ? dayIn(r.trialEndsAt) : null;
+    const first = r.customer ? firstPaid.get(r.customer) : undefined;
+    if (first) {
+      const after = end ? daysBetween(end, first) : 0;
+      return after >= 2 ? { ...base, outcome: "came-back", afterDays: after } : { ...base, outcome: "paid" };
+    }
+    if (base.payingNow) return { ...base, outcome: "paid" };
+    const status = (r.sub?.status ?? "").toUpperCase();
+    if (status === "PAST_DUE") return { ...base, outcome: "retrying" };
+    if (status === "CANCELED" && (!r.trialEndsAt || !r.canceledAt || r.canceledAt.getTime() <= r.trialEndsAt.getTime())) return { ...base, outcome: "canceled" };
+    return { ...base, outcome: "unpaid" };
+  };
+  const outcomes = rows.filter((r) => r.state === "paying" || r.state === "lapsed").map(outcomeOf);
+
+  // The money that came in, from the accounts the page counts: the card days' (paying, or paid before they lapsed),
+  // the no-card trials that pay now, and the ones paying from before the start day.
+  const wonCustomers = new Set(rows.filter((r) => onCard(r) && r.customer).map((r) => r.customer as string));
+  const countedCustomers = new Set([...wonCustomers, ...rows.filter((r) => !onCard(r) && r.state === "paying" && r.customer).map((r) => r.customer as string), ...beforeRows.map((r) => r.customer).filter((c): c is string => !!c)]);
   const sum = (only: (customer: string) => boolean) => (paid.ok ? paid.payments.filter((p) => only(p.customer)).reduce((a, p) => a + p.cents, 0) : 0);
   const collected = paid.ok
-    ? { read: true, error: null, cents: sum((c) => !apartCustomers.has(c)), invoices: paid.payments.filter((p) => !apartCustomers.has(p.customer)).length, wonCents: sum((c) => wonCustomers.has(c)) }
+    ? { read: true, error: null, cents: sum((c) => countedCustomers.has(c)), invoices: paid.payments.filter((p) => countedCustomers.has(p.customer)).length, wonCents: sum((c) => wonCustomers.has(c)) }
     : { read: false, error: paid.error, cents: 0, invoices: 0, wonCents: 0 };
 
-  const cut = splitApart({ ...modelInput, visitors }, whole);
+  const cut = splitApart({ ...modelInput, visitors, outcomes }, whole);
   const figures = cut.card;
   const cardSince = cut.cardSince;
-  const apart = { days: cut.days, spendCents: cut.spendCents, signups: cut.signups, figures: { ...cut.apart, curve: [] }, collectedCents: paid.ok ? sum((c) => apartCustomers.has(c)) : null };
   // The platform split: the card days only.
   const byPlatform = PLATFORMS.map((platform) => {
     const mine = entries.filter((e) => e.platform === platform && e.date >= cardSince && e.date <= today && !apartSet.has(e.date));
     return { platform, label: PLATFORM_LABEL[platform], cents: mine.reduce((a, e) => a + e.cents, 0), days: new Set(mine.map((e) => e.date)).size };
   }).filter((p) => p.cents > 0);
-  // Spend by period — the card days'; the daily rows of the last 30 days show every day, the apart ones marked.
+  // Spend by period and the daily rows of the last 30 days — the card days' only.
   const periods = spendPeriods(figures.curve, today);
   // Only the signups the figures count (a trial, a paying account, a lapsed trial, on a card day with a card) — the same rows as "Signed up".
   const counted = new Set(rows.filter((r) => (r.state === "trial" || r.state === "paying" || r.state === "lapsed") && onCard(r)).map((r) => r.orgId));
@@ -434,8 +463,8 @@ export async function investorReport({ refreshMeta = false }: { refreshMeta?: bo
   for (const o of orgs) { if (!counted.has(o.id)) continue; const d = dayIn(o.createdAt); signupsByDay.set(d, (signupsByDay.get(d) ?? 0) + 1); }
   const clicksByDay = new Map((insights?.days ?? []).map((d) => [d.date, d.clicks]));
   const from30 = addDays(today, -29);
-  const dailyRows = whole.curve.filter((p) => !p.projected && p.date >= from30 && p.date <= today).map((p) => ({
-    date: p.date, spendCents: p.spendDayCents, source: apartSet.has(p.date) ? ("apart" as const) : p.spendSource === "projected" ? ("none" as const) : p.spendSource, clicks: clicksByDay.has(p.date) ? (clicksByDay.get(p.date) ?? 0) : null, signups: signupsByDay.get(p.date) ?? 0,
+  const dailyRows = whole.curve.filter((p) => !p.projected && p.date >= from30 && p.date >= cardSince && p.date <= today && !apartSet.has(p.date)).map((p) => ({
+    date: p.date, spendCents: p.spendDayCents, source: p.spendSource === "projected" ? ("none" as const) : p.spendSource, clicks: clicksByDay.has(p.date) ? (clicksByDay.get(p.date) ?? 0) : null, signups: signupsByDay.get(p.date) ?? 0,
   }));
-  return { figures, settings, startDay: since, spend: { entries, byPlatform }, visitorsKnown: visitors !== null, payingUnpriced, before, firstAdDay, meta: { configured: metaAdsConfigured(), ...metaStatus }, periods, insights, apart, dailyRows, collected, launch: launchDay(settings.launchDate ?? since, today, settings.launchDate !== null), at: new Date().toISOString() };
+  return { figures, settings, startDay: since, spend: { entries, byPlatform }, visitorsKnown: visitors !== null, payingUnpriced, before, firstAdDay, meta: { configured: metaAdsConfigured(), ...metaStatus }, periods, insights, dailyRows, collected, launch: launchDay(settings.launchDate ?? since, today, settings.launchDate !== null), at: new Date().toISOString() };
 }

@@ -15,7 +15,7 @@
 // /admin/investors; the page opens on its own then. ?open= carries a word back
 // from an open link that could not open (expired, or not approved).
 import type { Metadata } from "next";
-import { investorLinkOpen, investorReport, readInvestorSettings } from "@/lib/investors";
+import { forReaders, investorLinkOpen, investorReport, readInvestorSettings } from "@/lib/investors";
 import { visitorForLink } from "@/lib/investorVisitors";
 import { INVESTING_KINDS, mayRead, statusOf } from "@/lib/investorGate";
 import { requirePlatformAdmin } from "@/lib/orgContext";
@@ -67,7 +67,8 @@ export default async function InvestorsPublicPage({ params, searchParams }: { pa
       </main>
     );
   }
-  const report = await investorReport();
+  // The reader's copy: the page's own figures, nothing that carries the no-card days' money (2026-10-25).
+  const report = forReaders(await investorReport());
   const lead = INVESTING_KINDS.has(visitor.kind);
   return (
     <main className={s.page}>
@@ -83,7 +84,7 @@ export default async function InvestorsPublicPage({ params, searchParams }: { pa
           <div>
             <div className={s.kicker}>JobFlex · Investors</div>
             <h1 className={s.h1}>Ads, trials and payback</h1>
-            <p className={s.sub}>Day {report.launch.day.toLocaleString("en-US")} since JobFlex launched on {longDate(report.launch.date)}. {report.figures.since !== report.startDay ? <>Figures with a card since {longDate(report.figures.since)}; the no-card days before it are kept apart below. Ads went live {longDate(report.startDay)}.</> : <>Live figures since {longDate(report.figures.since)}, the day the first campaign went live.</>} Read {new Date(report.at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}.</p>
+            <p className={s.sub}>Day {report.launch.day.toLocaleString("en-US")} since JobFlex launched on {longDate(report.launch.date)}. {report.figures.since !== report.startDay ? <>Live figures since {longDate(report.figures.since)}, from when every trial needed a card.</> : <>Live figures since {longDate(report.figures.since)}, the day the first campaign went live.</>} Read {new Date(report.at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}.</p>
           </div>
           <a className={s.pdf} href={`/api/investors/${token}/pdf`}>Download PDF</a>
         </header>
