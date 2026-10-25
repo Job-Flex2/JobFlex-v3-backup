@@ -82,7 +82,10 @@ export interface Prospect {
   trade: string | null;
   state: string | null;
   city: string | null;
-  source: "list" | "call-me";
+  source: "list" | "call-me" | "found";
+  /** Found online (2026-10-25, lib/outreach/hunt): the business's website, and the hunt that found it. */
+  website?: string | null;
+  huntId?: string | null;
   line: { type: LineType; carrier: string | null; at: string } | null;
   consent: Consent | null;
   dnc: { at: string; via: "call" | "admin" | "email" | "sms" } | null;

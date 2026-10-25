@@ -1,5 +1,7 @@
 // Admin · Outreach (owner, 2026-10-23: "make the AI desk call contractors and present JobFlex … per the list given").
 // The list, the line checks, the calls and the one email to the contractors the AI may not call — lib/outreach.
+// 2026-10-25: "Find contractors" — a trade in an area, so many a day, found online (lib/outreach/hunt + find) and put
+// on the list; a schedule that works the list every hour (api/cron/outreach).
 import type { Metadata } from "next";
 import { requirePlatformAdmin } from "@/lib/orgContext";
 import { outreachBoard } from "@/actions/outreach";
@@ -16,5 +18,5 @@ export default async function AdminOutreachPage() {
   await requirePlatformAdmin();
   const board = await outreachBoard();
   if (!board.ok) return null;
-  return <AdminOutreachContent rows={board.rows} readiness={board.readiness} funnel={board.funnel} />;
+  return <AdminOutreachContent rows={board.rows} readiness={board.readiness} funnel={board.funnel} hunts={board.hunts} settings={board.settings} places={board.places} />;
 }

@@ -30,6 +30,30 @@
 :global(.jf-blueprint .content) .testH { font-size: 12px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); margin-bottom: 8px; }
 :global(.jf-blueprint .content) .testRow { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 0.8fr) auto; gap: 8px; align-items: center; }
 
+/* Find contractors */
+:global(.jf-blueprint .content) .huntForm { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 92px auto auto; gap: 10px; align-items: end; margin-top: 4px; }
+:global(.jf-blueprint .content) .huntForm .field { margin-top: 0; }
+:global(.jf-blueprint .content) .huntForm select.in { appearance: auto; }
+:global(.jf-blueprint .content) .hunts { display: grid; gap: 10px; margin-top: 16px; }
+:global(.jf-blueprint .content) .hunt { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 12px 14px; border: 1.5px solid var(--hair); border-radius: var(--radius); background: #fff; }
+:global(.jf-blueprint .content) .huntMain { display: grid; gap: 3px; min-width: 0; flex: 1 1 320px; }
+:global(.jf-blueprint .content) .huntTitle { font-size: 14px; font-weight: 800; color: var(--ink); }
+:global(.jf-blueprint .content) .huntSub { font-size: 13px; line-height: 1.5; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .huntErr { color: var(--danger, #a83232); }
+:global(.jf-blueprint .content) .huntActs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* A switch */
+:global(.jf-blueprint .content) .toggle { display: inline-flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 4px; border: 0; background: none; cursor: pointer; color: var(--ink); font: inherit; }
+:global(.jf-blueprint .content) .toggle:disabled { opacity: 0.6; cursor: default; }
+:global(.jf-blueprint .content) .toggle:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 2px; border-radius: 6px; }
+:global(.jf-blueprint .content) .toggleBig { min-height: 48px; }
+:global(.jf-blueprint .content) .toggleText { font-size: 14px; font-weight: 700; white-space: nowrap; }
+:global(.jf-blueprint .content) .toggleBig .toggleText { font-size: 15px; font-weight: 800; }
+:global(.jf-blueprint .content) .switch { position: relative; width: 42px; height: 24px; flex: none; border-radius: 12px; background: var(--hair-strong, rgba(10, 10, 10, 0.28)); transition: background 0.15s ease; }
+:global(.jf-blueprint .content) .switchOn { background: var(--blueprint); }
+:global(.jf-blueprint .content) .knob { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); transition: transform 0.15s ease; }
+:global(.jf-blueprint .content) .switchOn .knob { transform: translateX(18px); }
+
 /* business · phone · line · next · last call */
 :global(.jf-blueprint .content) .cols { grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 0.9fr) 150px minmax(0, 1.2fr); }
 :global(.jf-blueprint .content) .cell { font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -47,6 +71,11 @@
 :global(.jf-blueprint .content .pmdl) .transcript { margin: 0; max-height: 280px; overflow: auto; white-space: pre-wrap; font: 12.5px/1.55 var(--font-mono, ui-monospace, monospace); color: var(--ink); }
 
 @media (max-width: 860px) {
+  :global(.jf-blueprint .content) .huntForm { grid-template-columns: 1fr 1fr; }
+  :global(.jf-blueprint .content) .huntForm .toggle,
+  :global(.jf-blueprint .content) .huntForm :global(.btn) { grid-column: 1 / -1; }
+  :global(.jf-blueprint .content) .huntActs { width: 100%; }
+  :global(.jf-blueprint .content) .toggleText { white-space: normal; }
   :global(.jf-blueprint .content) .testRow { grid-template-columns: 1fr; }
   :global(.jf-blueprint .content) .testRow :global(.btn),
   :global(.jf-blueprint .content) .acts :global(.btn) { width: 100%; justify-content: center; min-height: 44px; }

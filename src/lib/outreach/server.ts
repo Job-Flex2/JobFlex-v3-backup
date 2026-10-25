@@ -18,6 +18,7 @@ import { readOptOut, unsubscribeHeaders, unsubscribeUrl } from "@/lib/adminMail/
 import { fromLine } from "@/lib/adminMail/server";
 import { logServerError } from "@/lib/server-events";
 import {
+  type ListRow,
   OUTREACH_CONSENT_TEXT,
   callableNow,
   lineTypeOf,
@@ -162,6 +163,13 @@ function blank(row: Partial<Prospect>, source: Prospect["source"]): Prospect {
 /** A pasted list in: new contractors added, ones already on it filled in, ones already on JobFlex left out. */
 export async function importProspects(text: string): Promise<{ added: number; merged: number; skipped: number; onJobflex: number }> {
   const { rows, skipped } = parseProspectList(text);
+  const r = await importRows(rows, "list", {});
+  return { ...r, skipped };
+}
+
+/** Rows into the list: the same phone or email already there fills in what it lacked; a company already on JobFlex is
+ *  left out; the rest are new prospects of the given source (a pasted list, or found online by a hunt — 2026-10-25). */
+export async function importRows(rows: ReadonlyArray<ListRow & { website?: string | null }>, source: Prospect["source"], extra: { huntId?: string | null }): Promise<{ added: number; merged: number; onJobflex: number }> {
   const list = await listProspects();
   const byPhone = new Map(list.filter((p) => p.phone).map((p) => [p.phone!, p]));
   const byEmail = new Map(list.filter((p) => p.email).map((p) => [p.email!, p]));
@@ -183,17 +191,18 @@ export async function importProspects(text: string): Promise<{ added: number; me
       onJobflex++;
       continue;
     }
+    if (!r.phone && !r.email && !r.website) continue;
     const had = (r.phone && byPhone.get(r.phone)) || (r.email && byEmail.get(r.email)) || null;
     if (had) {
-      await writeProspect({ ...had, name: had.name || r.name, business: had.business || r.business, email: had.email ?? r.email, phone: had.phone ?? r.phone, trade: had.trade ?? r.trade, state: had.state ?? r.state, city: had.city ?? r.city });
+      await writeProspect({ ...had, name: had.name || r.name, business: had.business || r.business, email: had.email ?? r.email, phone: had.phone ?? r.phone, trade: had.trade ?? r.trade, state: had.state ?? r.state, website: had.website ?? r.website ?? null, city: had.city ?? r.city });
       merged++;
       continue;
     }
-    fresh.push(blank(r, "list"));
+    fresh.push({ ...blank(r, source), ...(r.website ? { website: r.website } : {}), ...(extra.huntId ? { huntId: extra.huntId } : {}) });
     added++;
   }
   if (fresh.length) await db.syncState.createMany({ data: fresh.map((p) => ({ key: `outreach:p:${p.id}`, cursor: JSON.stringify(p) })) });
-  return { added, merged, skipped, onJobflex };
+  return { added, merged, onJobflex };
 }
 
 /* ── The line check ──────────────────────────────────────────────────── */

@@ -6,6 +6,8 @@
 // plain email whose link lets them ask for the call themselves. Every row opens the contractor: their line, why they
 // are (or aren't) called, their consent as given, each call with its transcript, "don't call". A test call rings the
 // admin's own phone with the script a contractor hears.
+// 2026-10-25 "Find contractors": a trade in an area, so many a day — found online (Google's Places, their websites read
+// for an email) and put on the list, every morning when asked; "On a schedule" works the list every hour on its own.
 // Furniture: the partner-money kit (admin-influencers/admin-ui). The page is a server component: router.refresh().
 
 import { useImperativeHandle, useMemo, useRef, useState } from "react";
@@ -14,16 +16,24 @@ import { toast } from "@/components/ui/Toast";
 import { relative, shortDate } from "@/lib/format";
 import { LINE_WORDS, OUTCOME_WORDS, emailDue, type OutreachCall } from "@/lib/outreach/rules";
 import type { OutreachReadiness } from "@/lib/outreach/server";
+import type { OutreachSettings } from "@/lib/outreach/find";
+import { HUNT_TRADES, PER_DAY_CHOICES, huntStatusWords, huntWords } from "@/lib/outreach/hunt";
 import {
   allowOutreachUsCalls,
   callOutreachNext,
   callOutreachOne,
   checkOutreachLines,
+  createOutreachHunt,
   emailOutreach,
   importOutreachList,
   outreachTestCall,
   removeOutreach,
+  removeOutreachHunt,
+  runOutreachHunt,
   setOutreachDnc,
+  setOutreachHuntDaily,
+  setOutreachSchedule,
+  type HuntView,
   type OutreachRow,
 } from "@/actions/outreach";
 import { Chip, Empty, KpiStrip, Meta, Sheet, type Tone, actionError, cx, useMdl, useReveal } from "@/components/v3/admin-influencers/admin-ui";
@@ -52,12 +62,13 @@ const last = (r: OutreachRow): OutreachCall | null => r.calls[r.calls.length - 1
 const match = (r: OutreachRow, f: Filter) =>
   f === "all" ? true : f === "called" ? r.calls.length > 0 : f === "interested" ? !!r.interest && r.interest.level !== "cold" : f === "dnc" ? !!r.dnc : r.route.kind === f;
 
-export function AdminOutreachContent({ rows, readiness, funnel }: { rows: OutreachRow[]; readiness: OutreachReadiness; funnel: Funnel }) {
+export function AdminOutreachContent({ rows, readiness, funnel, hunts, settings, places }: { rows: OutreachRow[]; readiness: OutreachReadiness; funnel: Funnel; hunts: HuntView[]; settings: OutreachSettings; places: boolean }) {
   const router = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
   useReveal(rootRef);
   const [filter, setFilter] = useState<Filter>("all");
   const [list, setList] = useState("");
+  const [hunt, setHunt] = useState({ trade: "roofing", area: "", perDay: 10, daily: true });
   const [busy, setBusy] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [test, setTest] = useState({ phone: "", business: "Test Roofing", trade: "roofing" });
@@ -148,6 +159,95 @@ export function AdminOutreachContent({ rows, readiness, funnel }: { rows: Outrea
         </ol>
       </section>
 
+      <section className="card rv" data-outreach-hunts>
+        <div className="card-head">
+          <div className="card-titles">
+            <div className="card-title">Find contractors</div>
+            <div className="card-sub">Say the trade, the area and how many a day. JobFlex looks them up online, reads their websites for an email, leaves out anyone already on the list or on JobFlex, and puts the rest below — each pitched in the words of their trade. Every morning, if you like.</div>
+          </div>
+        </div>
+        {!places ? (
+          <p className={styles.said} data-outreach-hunt-missing>
+            The search needs JobFlex&rsquo;s Google key on this server (GOOGLE_MAPS_API_KEY) with the Places API (New) turned on.
+          </p>
+        ) : null}
+        <div className={styles.huntForm}>
+          <label className={styles.field}>
+            <span className={styles.lbl}>Trade</span>
+            <select className={styles.in} value={hunt.trade} onChange={(e) => setHunt({ ...hunt, trade: e.target.value })} data-outreach-hunt-trade>
+              {HUNT_TRADES.map((t) => (
+                <option key={t.key} value={t.key}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.field}>
+            <span className={styles.lbl}>Where</span>
+            <input className={styles.in} placeholder="Seattle, WA" value={hunt.area} onChange={(e) => setHunt({ ...hunt, area: e.target.value })} data-outreach-hunt-area />
+          </label>
+          <label className={styles.field}>
+            <span className={styles.lbl}>A day</span>
+            <select className={styles.in} value={hunt.perDay} onChange={(e) => setHunt({ ...hunt, perDay: Number(e.target.value) })} data-outreach-hunt-per-day>
+              {PER_DAY_CHOICES.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" role="switch" aria-checked={hunt.daily} className={styles.toggle} onClick={() => setHunt({ ...hunt, daily: !hunt.daily })} data-outreach-hunt-daily>
+            <span className={cx(styles.switch, hunt.daily && styles.switchOn)} aria-hidden="true">
+              <span className={styles.knob} />
+            </span>
+            <span className={styles.toggleText}>Every morning</span>
+          </button>
+          <button
+            type="button"
+            className={cx("btn btn-primary", busy === "hunt" && ui.btnBusy)}
+            disabled={!!busy || !places || hunt.area.trim().length < 2}
+            onClick={() =>
+              void run("hunt", () => createOutreachHunt(hunt), (r) => {
+                setHunt({ ...hunt, area: "" });
+                return r.words;
+              })
+            }
+            data-outreach-hunt-find
+          >
+            Find now
+          </button>
+        </div>
+        {hunts.length ? (
+          <div className={styles.hunts} data-outreach-hunt-list>
+            {hunts.map((h) => (
+              <div key={h.id} className={styles.hunt} data-outreach-hunt={h.id}>
+                <div className={styles.huntMain}>
+                  <div className={styles.huntTitle}>{huntWords(h)}</div>
+                  <div className={cx(styles.huntSub, h.lastError && styles.huntErr)} data-outreach-hunt-status>
+                    {huntStatusWords(h)}
+                    {h.lastRunAt ? ` Last run ${relative(h.lastRunAt)}.` : ""}
+                  </div>
+                </div>
+                <div className={styles.huntActs}>
+                  <button type="button" role="switch" aria-checked={h.daily} className={styles.toggle} disabled={!!busy} onClick={() => void run(`daily-${h.id}`, () => setOutreachHuntDaily(h.id, !h.daily), () => (h.daily ? "This hunt runs only when pressed now." : "This hunt runs every morning now."))} data-outreach-hunt-toggle>
+                    <span className={cx(styles.switch, h.daily && styles.switchOn)} aria-hidden="true">
+                      <span className={styles.knob} />
+                    </span>
+                    <span className={styles.toggleText}>Every morning</span>
+                  </button>
+                  <button type="button" className={cx("btn", ui.btnSm, busy === `run-${h.id}` && ui.btnBusy)} disabled={!!busy || !places} onClick={() => void run(`run-${h.id}`, () => runOutreachHunt(h.id), (r) => r.words)} data-outreach-hunt-run>
+                    Find now
+                  </button>
+                  <button type="button" className={cx("btn", ui.btnSm, ui.btnGhost, busy === `rm-${h.id}` && ui.btnBusy)} disabled={!!busy} onClick={() => void run(`rm-${h.id}`, () => removeOutreachHunt(h.id), () => "Hunt removed — the contractors it found stay on the list.")} data-outreach-hunt-remove>
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
       <section className="card rv">
         <div className="card-head">
           <div className="card-titles">
@@ -227,6 +327,28 @@ export function AdminOutreachContent({ rows, readiness, funnel }: { rows: Outrea
         </div>
       </section>
 
+      <section className="card rv" data-outreach-schedule-card>
+        <div className="card-head">
+          <div className="card-titles">
+            <div className="card-title">On a schedule</div>
+            <div className="card-sub">Every hour, on its own: the new numbers checked, the first email to those with one, then the AI desk calls the next {settings.callsPerRun} landlines whose turn it is — only in their calling hours, two calls at most, a cell phone only once they ask. The texts follow the same consent.</div>
+          </div>
+        </div>
+        <div className={styles.acts}>
+          <button type="button" role="switch" aria-checked={settings.autoWork} className={cx(styles.toggle, styles.toggleBig)} disabled={!!busy} onClick={() => void run("schedule", () => setOutreachSchedule(!settings.autoWork), (r) => (r.settings.autoWork ? "On — the list is worked every hour from now on." : "Off — nothing goes out until you press the buttons above."))} data-outreach-schedule>
+            <span className={cx(styles.switch, settings.autoWork && styles.switchOn)} aria-hidden="true">
+              <span className={styles.knob} />
+            </span>
+            <span className={styles.toggleText}>{settings.autoWork ? "Working the list every hour" : "Off — by hand only"}</span>
+          </button>
+        </div>
+        {settings.lastWork ? (
+          <p className={styles.from} data-outreach-schedule-last>
+            Last hour&rsquo;s work: <b>{settings.lastWork}</b>
+          </p>
+        ) : null}
+      </section>
+
       <section className="card rv">
         <div className={cx("card-head", ui.cardHead)}>
           <div className="card-titles">
@@ -243,7 +365,7 @@ export function AdminOutreachContent({ rows, readiness, funnel }: { rows: Outrea
           </div>
         </div>
         {shown.length === 0 ? (
-          <Empty>{rows.length === 0 ? "No contractors yet — paste a list above." : "None here."}</Empty>
+          <Empty>{rows.length === 0 ? "No contractors yet — find some above, or paste a list." : "None here."}</Empty>
         ) : (
           <div className={ui.tbl} role="table" aria-label="Contractors">
             <div className={cx(ui.tr, ui.th, styles.cols)} role="row">
@@ -259,7 +381,7 @@ export function AdminOutreachContent({ rows, readiness, funnel }: { rows: Outrea
                 <button key={r.id} type="button" className={cx(ui.tr, ui.trBtn, styles.cols)} onClick={() => sheetRef.current?.open(r.id)} data-outreach-row={r.id} aria-label={`Open ${r.business || r.name || r.phone}`}>
                   <span className={ui.tdWide}>
                     <span className={ui.tdName}>{r.business || r.name || "—"}</span>
-                    <span className={ui.tdSub}>{[r.name && r.business ? r.name : null, r.trade, r.state].filter(Boolean).join(" · ") || " "}</span>
+                    <span className={ui.tdSub}>{[r.name && r.business ? r.name : null, r.trade, r.source === "found" ? r.city : null, r.state, r.source === "found" ? "found online" : null].filter(Boolean).join(" · ") || " "}</span>
                   </span>
                   <span className={styles.cell}>
                     <span className={ui.tdLbl}>Phone</span>
@@ -372,6 +494,21 @@ function ProspectSheet({ handleRef, rows, onChanged }: { handleRef: React.RefObj
               <div className={ui.factL}>Emailed</div>
               <div className={ui.factV}>{r.emailedAt ? shortDate(r.emailedAt) : "—"}</div>
             </div>
+            {r.website || r.source === "found" ? (
+              <div className={ui.fact}>
+                <div className={ui.factL}>Website</div>
+                <div className={ui.factV}>
+                  {r.website ? (
+                    <a href={r.website} target="_blank" rel="noopener noreferrer" data-outreach-website>
+                      {r.website.replace(/^https?:\/\/(www\.)?/, "")}
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                  {r.source === "found" ? <Meta> · found online</Meta> : null}
+                </div>
+              </div>
+            ) : null}
           </div>
           <p className={styles.why} data-outreach-why>
             <b>{r.dnc ? "Never called again" : ROUTE[r.route.kind].label}:</b> {r.dnc ? `asked ${r.dnc.via === "email" ? "by unsubscribing" : r.dnc.via === "call" ? "on a call" : "— marked here"} ${relative(r.dnc.at)}` : r.route.why}
