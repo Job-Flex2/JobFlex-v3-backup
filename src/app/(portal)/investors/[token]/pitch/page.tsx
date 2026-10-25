@@ -1,12 +1,11 @@
 // THE PITCH DECK — /investors/<token>/pitch (owner, 2026-10-25: "one more page where the pitch deck for JobFlex —
 // who we are and what we're doing"). Behind the same door as the figures (../reader). Every number on it is the
 // Figures page's own reading (lib/investors, the readers' copy), the prices are the live plan catalogue, the
-// comparison is the landing page's researched table, the homeowner side is the Lead Center's own count
-// (lib/investorLeads), and the team, the raise and what is next are the owner's words from /admin/investors
+// comparison is the landing page's researched table (no Lead Center count — the homeowner side is not open yet), and
+// the team, the raise and what is next are the owner's words from /admin/investors
 // (lib/investorPitch) — a slide with no words does not show.
 import type { Metadata } from "next";
 import { forReaders, investorReport } from "@/lib/investors";
-import { readLeadMarket } from "@/lib/investorLeads";
 import { MAX_LEAD_PRICE_CENTS, MIN_LEAD_PRICE_CENTS } from "@/lib/leadCenter/purchase";
 import { DESK_PACK } from "@/lib/aiDesk/shared";
 import { getPlanCatalog } from "@/lib/planCatalogServer";
@@ -26,11 +25,10 @@ export default async function InvestorPitchPage({ params }: { params: Promise<{ 
   const door = await investorReader(token);
   if ("door" in door) return door.door;
   const visitor = door.visitor;
-  const [report, plans, pitch, leads] = await Promise.all([
+  const [report, plans, pitch] = await Promise.all([
     investorReport().then(forReaders),
     getPlanCatalog().catch(() => []),
     readInvestorPitch(),
-    readLeadMarket(),
   ]);
   const f = report.figures;
   const data: PitchData = {
@@ -47,7 +45,6 @@ export default async function InvestorPitchPage({ params }: { params: Promise<{ 
       costPerPayingCents: f.unit.costPerPayingCents, costPerSignupCents: f.unit.costPerSignupCents, paybackMonths: f.unit.paybackMonths,
       expectedPayers: f.expected.payers, expectedMrrCents: f.expected.mrrCents,
     },
-    leads,
     leadPrice: { minCents: MIN_LEAD_PRICE_CENTS, maxCents: MAX_LEAD_PRICE_CENTS },
     deskPack: { minutes: DESK_PACK.minutes, cents: DESK_PACK.cents },
     plans: plans
@@ -67,7 +64,7 @@ export default async function InvestorPitchPage({ params }: { params: Promise<{ 
         <InvestorTop token={token} visitor={visitor} page="pitch" />
         <header className={s.headWide}>
           <h1 className={s.h1Wide}>Pitch deck</h1>
-          <p className={s.subWide}>Who we are, what JobFlex is worth to a contractor, and how it earns. Arrow keys or a swipe turn it, F or Full screen gives it the whole screen; the traction and the homeowner leads are read live.</p>
+          <p className={s.subWide}>Who we are, what JobFlex is worth to a contractor, and how it earns. Arrow keys or a swipe turn it, F or Full screen gives it the whole screen; the traction is read live.</p>
         </header>
         <PitchDeck data={data} offer={<VcOfferButton key="offer" token={token} visitor={{ name: visitor.name, company: visitor.company, kind: visitor.kind, email: visitor.email, phone: visitor.phone }} lead={INVESTING_KINDS.has(visitor.kind)} />} />
       </div>
