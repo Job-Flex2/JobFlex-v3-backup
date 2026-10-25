@@ -47,6 +47,36 @@ export interface PayingAccount {
    *  With a card, paying"): counted as a paying account — its revenue from the start day on, in the run rate, the
    *  curve and the payback — but not as a signup of the period: the ads did not bring it. */
   preexisting?: boolean;
+  /** Started on a free trial with NO card and pays now (owner, 2026-10-25: "whoever signed up on a free trial with
+   *  no card and pays, add them to the paying"): counted as paying — the run rate, the curve, what came in — but
+   *  not as a signup of the card days, not in the trial-to-paid rate, not in the cost of a customer: the card
+   *  days' ads did not bring it. */
+  fromNoCard?: boolean;
+}
+/** HOW A TRIAL ENDED (owner, 2026-10-25: "only deduct who cancelled during the trial; if they converted, keep them;
+ *  show separately when the trial ended and they cancelled, or the payment failed, and how many came back later"). */
+export type TrialOutcome =
+  /** Paid when the trial ended (the first payment within a day of its end). */
+  | "paid"
+  /** Paid, but later: the trial ended without a payment and they paid days after (a retry that went through, a card
+   *  put in later, a come-back). Converted. */
+  | "came-back"
+  /** Canceled before the trial ended, never paid. */
+  | "canceled"
+  /** The trial ended and no payment ever went through (the card failed and was given up, or no card). */
+  | "unpaid"
+  /** The trial ended and the card is failing — still being retried: not counted either way until it settles. */
+  | "retrying";
+export const CONVERTED: ReadonlySet<TrialOutcome> = new Set(["paid", "came-back"]);
+export interface EndedTrial {
+  /** The day it signed up. */
+  date: string;
+  cohort?: TrialCohort;
+  outcome: TrialOutcome;
+  /** Paying today (a converted one may have left since). */
+  payingNow: boolean;
+  /** "came-back": days from the trial's end to the first payment. */
+  afterDays?: number;
 }
 export interface TrialAccount {
   createdAt: string;
@@ -85,6 +115,9 @@ export interface ModelInput {
   /** The day each lapsed trial signed up: a signup like any other, so the pace the measured rate is applied to
    *  counts the ones that will not stay too. Absent = not known (the pace then counts trials and paying). */
   lapsedSignups?: Array<{ date: string; cohort?: TrialCohort }>;
+  /** How each ended trial of the period ended — the paying ones and the lapsed ones, told apart (lib/investors reads
+   *  Stripe's payments for it). When given, the rate is read from it; absent = paying now ÷ paying + lapsed. */
+  outcomes?: EndedTrial[];
   settings: ModelSettings;
   /** The spend per day from tomorrow; absent = the last full week's pace. Set by the cohort cut (a cohort no
    *  new signup gets any more spends nothing forward). */
@@ -145,11 +178,27 @@ export interface InvestorFigures {
     preexisting: number; preexistingMrrCents: number;
     /** The ones the period brought (signed up since the start day), and their monthly list price. */
     won: number; wonMrrCents: number;
+    /** The ones that started on a free trial with no card, and their monthly list price. */
+    fromNoCard: number; fromNoCardMrrCents: number;
   };
   lapsed: number;
-  /** THE MEASURED RATE (2026-10-24): of the trials that have ended, the share paying today, and its 90% range
-   *  (Wilson) for that many trials. pct null = no trial has ended yet. */
+  /** THE MEASURED RATE (2026-10-24): of the trials that have ended, the share that converted (paid — on time or
+   *  later; a converted one that left since still converted), and its 90% range (Wilson) for that many trials.
+   *  pct null = no trial has ended yet. A card still being retried is in neither side until it settles. */
   rate: { paid: number; ended: number; pct: number | null; lowPct: number | null; highPct: number | null };
+  /** How the ended trials ended (2026-10-25) — the page shows only how many came back later (owner: "no breakdown,
+   *  just the count of how many came back later"); the rest is kept for the rate and the QA. null = not read. */
+  outcomes: {
+    paidAtEnd: number;
+    cameBack: number;
+    /** The middle number of days between a come-back's trial end and its first payment. */
+    cameBackDays: number | null;
+    /** Converted (either way), not paying today. */
+    leftAfterPaying: number;
+    canceled: number;
+    unpaid: number;
+    retrying: number;
+  } | null;
   /** The running trials at the measured rate: how many will pay (and the range), and what they add a month. */
   expected: { payers: number | null; payersLow: number | null; payersHigh: number | null; mrrCents: number | null; mrrWithPayingCents: number };
   unit: {
@@ -242,7 +291,8 @@ export function investorFigures(input: ModelInput): InvestorFigures {
   // Revenue earned IN the period: an account paying from before the start day earns from the start day.
   const revenueToDate = input.paying.reduce((x, p) => x + r0((p.monthlyCents * Math.max(0, daysBetween(p.startedAt > since ? p.startedAt : since, today) + 1)) / 30), 0);
   // The period's own signups: the ads did not bring an account that was paying before the start day.
-  const won = input.paying.filter((p) => !p.preexisting);
+  const won = input.paying.filter((p) => !p.preexisting && !p.fromNoCard);
+  const fromNoCard = input.paying.filter((p) => p.fromNoCard);
   const wonMrr = won.reduce((x, p) => x + p.monthlyCents, 0);
   const preexisting = input.paying.filter((p) => p.preexisting);
   const signups = trials.length + won.length + input.lapsed;
@@ -251,9 +301,14 @@ export function investorFigures(input: ModelInput): InvestorFigures {
 
   // ── THE MEASURED RATE: of the trials that have ended, the share paying today. Nothing ended = no rate, and
   // nothing is expected of the running trials (the curve then counts the paying accounts alone).
-  const ended = won.length + input.lapsed;
-  const share = ended > 0 ? won.length / ended : null;
-  const range = wilson(won.length, ended);
+  // Read from how each trial ended when that is known: converted = paid on time or later (one that left since still
+  // converted); a card still being retried is in neither side. Else: paying today ÷ paying + lapsed.
+  const oc = input.outcomes ?? null;
+  const count = (k: TrialOutcome) => (oc ?? []).filter((o) => o.outcome === k).length;
+  const converted = oc ? oc.filter((o) => CONVERTED.has(o.outcome)).length : won.length;
+  const ended = oc ? oc.filter((o) => o.outcome !== "retrying").length : won.length + input.lapsed;
+  const share = ended > 0 ? converted / ended : null;
+  const range = wilson(converted, ended);
   const pct = share ?? 0;
   const r1 = (n: number) => Math.round(n * 10) / 10;
   const expectedMrr = share === null ? null : r0(trialsMrr * share);
@@ -313,9 +368,12 @@ export function investorFigures(input: ModelInput): InvestorFigures {
     visitors: input.visitors,
     signups,
     trials: { count: trials.length, priced: priced.length, mrrCents: trialsMrr, avgMonthlyCents: avgTrialMonthly, lengthDays: trialDays },
-    paying: { count: input.paying.length, mrrCents: payingMrr, arrCents: payingMrr * 12, revenueToDateCents: revenueToDate, preexisting: preexisting.length, preexistingMrrCents: preexisting.reduce((x, p) => x + p.monthlyCents, 0), won: won.length, wonMrrCents: wonMrr },
+    paying: { count: input.paying.length, mrrCents: payingMrr, arrCents: payingMrr * 12, revenueToDateCents: revenueToDate, preexisting: preexisting.length, preexistingMrrCents: preexisting.reduce((x, p) => x + p.monthlyCents, 0), won: won.length, wonMrrCents: wonMrr, fromNoCard: fromNoCard.length, fromNoCardMrrCents: fromNoCard.reduce((x, p) => x + p.monthlyCents, 0) },
     lapsed: input.lapsed,
-    rate: { paid: won.length, ended, pct: share === null ? null : toPct(share), lowPct: range ? toPct(range.low) : null, highPct: range ? toPct(range.high) : null },
+    outcomes: oc
+      ? { paidAtEnd: count("paid"), cameBack: count("came-back"), cameBackDays: median(oc.filter((o) => o.outcome === "came-back" && typeof o.afterDays === "number").map((o) => o.afterDays as number)), leftAfterPaying: oc.filter((o) => CONVERTED.has(o.outcome) && !o.payingNow).length, canceled: count("canceled"), unpaid: count("unpaid"), retrying: count("retrying") }
+      : null,
+    rate: { paid: converted, ended, pct: share === null ? null : toPct(share), lowPct: range ? toPct(range.low) : null, highPct: range ? toPct(range.high) : null },
     expected: {
       payers: share === null ? null : r1(trials.length * share),
       payersLow: range ? Math.round(trials.length * range.low) : null,
@@ -425,8 +483,13 @@ export function splitApart(input: ModelInput, whole: InvestorFigures = investorF
       ...input,
       since: mine ? cardSince : input.since,
       spend: booked.filter((p) => apart.has(p.date) !== mine && p.spendDayCents > 0).map((p) => ({ date: p.date, cents: p.spendDayCents })),
-      // An account paying from before the start day took a card and came before any of this: the card side's.
-      paying: input.paying.filter((p) => (p.preexisting ? mine : keep(p.signedUpAt ?? p.startedAt, p.cohort))),
+      // An account paying from before the start day took a card and came before any of this: the card side's. One
+      // that came in on the no-card offer and pays now joins the card side's paying too, marked (owner, 2026-10-25).
+      paying: [
+        ...input.paying.filter((p) => (p.preexisting ? mine : keep(p.signedUpAt ?? p.startedAt, p.cohort))),
+        ...(mine ? input.paying.filter((p) => !p.preexisting && isApart(p.signedUpAt ?? p.startedAt, p.cohort)).map((p) => ({ ...p, fromNoCard: true })) : []),
+      ],
+      outcomes: input.outcomes?.filter((o) => keep(o.date, o.cohort)),
       trials: input.trials.filter((t) => keep(t.createdAt, t.cohort)),
       lapsed: lapsedSignups ? lapsedSignups.length : (c.lapsed[mine ? "card" : "nocard"] ?? 0),
       lapsedSignups,
@@ -501,7 +564,8 @@ export function standingSentence(f: InvestorFigures): string {
   const spent = f.spend.totalCents > 0 ? `${dollars(f.spend.totalCents)} on ads since ${shortDay(f.since)} brought ${plural(f.signups, "signup", "signups")} with a card.` : `No ad spend is booked since ${shortDay(f.since)}; ${plural(f.signups, "signup", "signups")} with a card.`;
   const r = f.rate;
   if (r.pct === null) return `${spent} No trial has ended yet, so there is no measured rate to predict with — ${plural(f.trials.count, "trial is", "trials are")} running now.`;
-  const rate = ` Of the ${plural(r.ended, "trial", "trials")} that have ended, ${r.paid} ${r.paid === 1 ? "is" : "are"} paying today — ${r.pct}%.`;
+  const back = f.outcomes && f.outcomes.cameBack > 0 ? ` (${f.outcomes.cameBack} of them came back after the trial had ended)` : "";
+  const rate = ` Of the ${plural(r.ended, "trial", "trials")} that have ended, ${r.paid} converted to paid${back} — ${r.pct}%.`;
   const ahead = f.trials.count === 0 || f.expected.payers === null
     ? " No trial is running now."
     : ` At that rate about ${Math.round(f.expected.payers)} of the ${plural(f.trials.count, "trial", "trials")} running now will pay too${f.expected.payersLow !== null && f.expected.payersHigh !== null && f.expected.payersLow !== f.expected.payersHigh ? ` (likely ${f.expected.payersLow}–${f.expected.payersHigh})` : ""}.`;
@@ -519,21 +583,6 @@ export function outlookSentence(f: InvestorFigures): string {
   }
   const why = f.rate.pct === null ? " Until a trial ends, only the accounts already paying are counted." : f.rate.pct === 0 ? " No trial that ended is paying yet, so the running trials add nothing." : "";
   return `At today's pace the ads do not pay for themselves within ${f.curve.length - f.daysLive} days: ${dollars(f.spend.perDayProjectedCents)} a day goes out against ${run} a month coming in.${why}`;
-}
-
-/** The kept-apart block's sentence (2026-10-24): what the no-card days cost and brought, against the card's. */
-export function apartSentence(a: { days: string[]; spendCents: number; figures: InvestorFigures }, card: InvestorFigures): string {
-  const f = a.figures;
-  const n = a.days.length;
-  if (n === 0 && f.signups === 0) return "";
-  const when = n === 1 ? `on ${shortDay(a.days[0])}` : `${n} days, ${shortDay(a.days[0])} – ${shortDay(a.days[n - 1])}`;
-  const head = n > 0 ? `While free trials needed no card (${when}), ${dollars(a.spendCents)} of ads brought ${plural(f.signups, "signup", "signups")}` : `${plural(f.signups, "trial with no card", "trials with no card")} came in on card days`;
-  const pays = f.paying.won === 0 ? "none of them pays today" : `${f.paying.won} ${f.paying.won === 1 ? "pays" : "pay"} today`;
-  const cost = f.unit.costPerPayingCents !== null && card.unit.costPerPayingCents !== null
-    ? ` — ${dollars(f.unit.costPerPayingCents)} per paying customer, against ${dollars(card.unit.costPerPayingCents)} with a card`
-    : f.paying.won === 0 && card.unit.costPerPayingCents !== null ? `; with a card a paying customer costs ${dollars(card.unit.costPerPayingCents)}` : "";
-  const rate = f.rate.pct !== null && card.rate.pct !== null ? ` Of their trials that ended, ${f.rate.pct}% stayed; with a card, ${card.rate.pct}%.` : "";
-  return `${head}; ${pays}${cost}.${rate} None of it is in the figures above.`;
 }
 
 /** Which day since the launch today is (owner, 2026-10-24: "add the days count after JobFlex launched"): the

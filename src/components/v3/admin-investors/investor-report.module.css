@@ -96,17 +96,7 @@
 .segGone { background: var(--rep-line); }
 .segExpected { background: var(--rep-amber); }
 .segRun { background: repeating-linear-gradient(135deg, rgba(184, 132, 32, .28) 0 4px, rgba(184, 132, 32, .1) 4px 8px); }
-/* Kept apart (2026-10-24): the no-card days against the card's, side by side — quiet, set off by an amber edge. */
-.apart { box-shadow: inset 4px 0 0 var(--rep-amber); }
-.apartLead { margin: 0 0 12px; max-width: 84ch; font-size: 14px; line-height: 1.5; color: var(--rep-soft); text-wrap: pretty; }
-.apartNote { margin: -4px 0 10px; font: 600 11px/1.45 var(--rep-mono); color: var(--rep-amber); }
-.cmp th { text-align: right; padding: 0 14px 8px 0; border-bottom: 2px solid var(--rep-ink); font: 700 10.5px var(--rep-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--rep-muted); }
-.cmp th:first-child { text-align: left; }
-.cmp td.num { vertical-align: top; }
-.cmp .cmpCard { color: var(--rep-blue); }
-.cmpNote { display: block; margin-top: 2px; font: 600 10.5px/1.35 var(--rep-mono); color: var(--rep-muted); white-space: normal; }
-.barApart { fill: var(--rep-amber); opacity: .35; }
-.swApart { border-color: var(--rep-amber); opacity: .6; }
+.segBack { background: var(--rep-green); opacity: .45; }
 
 /* The curve */
 .chartWrap { min-width: 0; }

@@ -3,7 +3,7 @@
 // what it expects of the running trials, the payback curve and its break-even
 // — on fixtures with hand-checked answers.
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/investor-model.check.ts
-import { addDays, apartDays, apartSentence, daysBetween, dollars, investorFigures, launchDay, noCardShareByDay, outlookSentence, splitApart, perDay, spendPeriods, standingSentence, wilson, type ModelInput } from "../../../src/lib/investorModel";
+import { addDays, apartDays, daysBetween, dollars, investorFigures, launchDay, noCardShareByDay, outlookSentence, splitApart, perDay, spendPeriods, standingSentence, wilson, type ModelInput } from "../../../src/lib/investorModel";
 
 let bad = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -108,7 +108,7 @@ check("…no cost per paying customer and no payback", noneStayed.unit.costPerPa
 
 console.log("── the sentences");
 const standing = standingSentence(f);
-check("what the ads bought, the measured rate, and what it says of the running trials", /^\$700 on ads since Sep 30 brought 7 signups with a card\./.test(standing) && /Of the 3 trials that have ended, 2 are paying today — 67%\./.test(standing) && /about 3 of the 4 trials running now will pay too \(likely 1–4\)\./.test(standing), standing);
+check("what the ads bought, the measured rate, and what it says of the running trials", /^\$700 on ads since Sep 30 brought 7 signups with a card\./.test(standing) && /Of the 3 trials that have ended, 2 converted to paid — 67%\./.test(standing) && /about 3 of the 4 trials running now will pay too \(likely 1–4\)\./.test(standing), standing);
 check("no 60%, no 'if every trial pays', no 'realistic' anywhere", !/realistic|every trial pays|60%/i.test(standing + outlookSentence(f)));
 check("the outlook names the pace, the measured share and the date", /\$100 a day on ads, 0\.5 signups a day, 67% of trials paying/.test(outlookSentence(f)) && /on [A-Z][a-z]+ \d+, 202\d\./.test(outlookSentence(f)), outlookSentence(f));
 const heavy = investorFigures({ ...base, forwardSpendCents: 100000 });
@@ -124,6 +124,26 @@ console.log("── days since launch");
 check("the launch day is day 1; Oct 5 → Oct 24 is day 20", launchDay("2026-10-24", "2026-10-24").day === 1 && launchDay("2026-10-05", "2026-10-24").day === 20);
 check("across a month and a year end: Sep 30 → Oct 6 is day 7, Dec 31 → Jan 1 is day 2", launchDay("2026-09-30", "2026-10-06").day === 7 && launchDay("2026-12-31", "2027-01-01").day === 2);
 check("a launch day still ahead reads as day 0, never negative; 'set' says whether the owner gave it", launchDay("2026-11-01", "2026-10-24").day === 0 && launchDay("2026-10-05", "2026-10-24", false).set === false);
+
+
+// ── HOW THE TRIALS ENDED (2026-10-25): converted = paid at the end or later; only who never paid counts against
+console.log("── how the trials ended");
+const ended: ModelInput = { ...base, outcomes: [
+  { date: "2026-10-01", outcome: "paid", payingNow: true },
+  { date: "2026-10-02", outcome: "came-back", payingNow: true, afterDays: 5 },
+  { date: "2026-10-02", outcome: "canceled", payingNow: false },
+  { date: "2026-10-03", outcome: "retrying", payingNow: false },
+] };
+const fe = investorFigures(ended);
+check("paid at the end + came back later = 2 converted; canceled = 1 not; the card still retried is in neither: 2 of 3 = 67%", fe.rate.paid === 2 && fe.rate.ended === 3 && fe.rate.pct === 67);
+check("the count of who came back later (1, after 5 days), and the rest kept for the QA", fe.outcomes?.cameBack === 1 && fe.outcomes?.cameBackDays === 5 && fe.outcomes?.paidAtEnd === 1 && fe.outcomes?.canceled === 1 && fe.outcomes?.retrying === 1 && fe.outcomes?.unpaid === 0);
+const left = investorFigures({ ...base, outcomes: [{ date: "2026-10-01", outcome: "paid", payingNow: false }, { date: "2026-10-02", outcome: "came-back", payingNow: false, afterDays: 9 }, { date: "2026-10-02", outcome: "unpaid", payingNow: false }] });
+check("a converted one that left since still converted (2 of 3); never paid counts against", left.rate.paid === 2 && left.rate.ended === 3 && left.outcomes?.leftAfterPaying === 2 && left.outcomes?.unpaid === 1);
+check("the lead says how many came back", /2 converted to paid \(1 of them came back after the trial had ended\) — 67%/.test(standingSentence(fe)), standingSentence(fe));
+check("no outcomes read: the rate falls back to paying ÷ paying + lapsed, and there is no count", f.outcomes === null && f.rate.paid === 2 && f.rate.ended === 3);
+const withOc: ModelInput = { ...base, outcomes: [{ date: "2026-10-05", cohort: "nocard", outcome: "paid", payingNow: true }, { date: "2026-10-02", cohort: "card", outcome: "came-back", payingNow: true, afterDays: 3 }, { date: "2026-10-02", cohort: "card", outcome: "canceled", payingNow: false }], cohorts: { lapsed: { card: 1, nocard: 0 }, signups: [{ date: "2026-10-02", cohort: "card" }, { date: "2026-10-05", cohort: "nocard" }], policy: [], current: "card" } };
+const cutOc = splitApart(withOc);
+check("each side reads its own outcomes: the card side 1 of 2 (1 came back), the no-card day's outcome stays out", cutOc.card.rate.paid === 1 && cutOc.card.rate.ended === 2 && cutOc.card.outcomes?.cameBack === 1 && cutOc.apart.rate.paid === 1 && cutOc.apart.rate.ended === 1);
 
 
 // ── THE TWO KINDS OF TRIAL (2026-10-13): a day's spend follows the switch where recorded, else who signed up
@@ -170,7 +190,9 @@ const whole = investorFigures(withCohorts);
 const cut = splitApart(withCohorts, whole);
 check("the no-card days Oct 5–6 go apart; the card days stay; the start day stays (they are not all first)", cut.days.join() === "2026-10-05,2026-10-06" && cut.cardSince === "2026-09-30" && cut.card.since === "2026-09-30");
 check("their WHOLE spend goes apart ($200) and the card days keep theirs ($500) — together the whole", cut.spendCents === 20000 && cut.apart.spend.totalCents === 20000 && cut.card.spend.totalCents === 50000 && cut.card.spend.totalCents + cut.spendCents === whole.spend.totalCents);
-check("each side counts its own accounts: card 1 trial, 1 paying, 1 lapsed; apart 3 trials, 1 paying", cut.card.trials.count === 1 && cut.card.paying.count === 1 && cut.card.lapsed === 1 && cut.apart.trials.count === 3 && cut.apart.paying.count === 1 && cut.apart.lapsed === 0);
+check("each side counts its own accounts: card 1 trial, 1 won, 1 lapsed; apart 3 trials, 1 paying", cut.card.trials.count === 1 && cut.card.paying.won === 1 && cut.card.lapsed === 1 && cut.apart.trials.count === 3 && cut.apart.paying.count === 1 && cut.apart.lapsed === 0);
+check("a no-card trial that pays now joins the card side's paying, marked (2026-10-25): 2 paying, 1 from no card, $79", cut.card.paying.count === 2 && cut.card.paying.fromNoCard === 1 && cut.card.paying.fromNoCardMrrCents === 7900 && cut.card.paying.mrrCents === 15800);
+check("…but not its signups, its rate, or the cost of a customer: $500 ÷ 1 won", cut.card.signups === 3 && cut.card.rate.paid === 1 && cut.card.unit.costPerPayingCents === 50000 && cut.card.unit.paybackMonths === Math.round((50000 / 7900) * 10) / 10);
 check("…the signups add up to the whole, and the apart ones are told by kind (4 no card, 0 card)", cut.card.signups + cut.apart.signups === whole.signups && cut.signups.nocard === 4 && cut.signups.card === 0);
 check("each side measures its own rate: card 1 of 2 = 50%, no card 1 of 1 = 100%", cut.card.rate.pct === 50 && cut.card.rate.ended === 2 && cut.apart.rate.pct === 100 && cut.apart.rate.ended === 1);
 check("the kind a new signup gets today keeps spending forward (no card here); the card side stands still", cut.apart.spend.perDayProjectedCents === whole.spend.perDayProjectedCents && cut.card.spend.perDayProjectedCents === 0 && cut.card.curve.filter((p) => p.projected).every((p) => p.spendCents === 50000));
@@ -186,9 +208,6 @@ const early: ModelInput = { ...withCohorts, cohorts: { ...withCohorts.cohorts!, 
 const cutEarly = splitApart(early);
 check("no-card days that all come first: the card figures count from the first card day (Oct 2)", cutEarly.days.join() === "2026-09-30,2026-10-01" && cutEarly.cardSince === "2026-10-02" && cutEarly.card.since === "2026-10-02" && cutEarly.card.daysLive === 5 && cutEarly.card.spend.totalCents === 50000 && cutEarly.card.curve[0].date === "2026-10-02");
 check("with no no-card days and no cohort block: nothing apart, the card side is the whole", (() => { const c = splitApart(base); return c.days.length === 0 && c.spendCents === 0 && c.card.spend.totalCents === investorFigures(base).spend.totalCents && c.card.trials.count === base.trials.length && c.apart.signups === 0; })());
-const sentence = apartSentence({ days: cut.days, spendCents: cut.spendCents, figures: cut.apart }, cut.card);
-check("the block's sentence: the days, what they cost, who pays, against the card", /^While free trials needed no card \(2 days, Oct 5 – Oct 6\), \$200 of ads brought 4 signups; 1 pays today — \$200 per paying customer, against \$500 with a card\. Of their trials that ended, 100% stayed; with a card, 50%\. None of it is in the figures above\.$/.test(sentence), sentence);
-check("…and nothing to say when nothing was kept apart", apartSentence({ days: [], spendCents: 0, figures: investorFigures({ ...base, paying: [], trials: [], lapsed: 0 }) }, f) === "");
 
 
 // ── PAYING FROM BEFORE THE START DAY (2026-10-13): counted as paying, in the revenue and the payback; not a signup
