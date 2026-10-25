@@ -12,3 +12,5 @@
 :global(.jf-blueprint .content) .bad { color: var(--danger, #a83232); font-weight: 700; }
 @media (max-width: 1100px) { :global(.jf-blueprint .content) .boxes { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 760px) { :global(.jf-blueprint .content) .opens .btn, :global(.jf-blueprint .content) .area { width: 100%; } :global(.jf-blueprint .content) .opens .btn { min-height: 44px; } }
+/* The raise's first draft (2026-10-25): said so, until it is saved. */
+.draft { font: 700 11.5px/1.45 var(--font-mono, ui-monospace, monospace); color: var(--accent, #1854a0); }

@@ -14,8 +14,22 @@ const BOXES: Array<{ key: "ask" | "team" | "roadmap"; label: string; hint: strin
   { key: "roadmap", label: "What's next", hint: "One item per line, in order. Empty: no roadmap slide.", example: "Payments inside the proposal for every trade\nSpanish for crews" },
 ];
 
+/** A FIRST DRAFT OF THE RAISE (owner, 2026-10-25: "write the raise — $1.5M for contractors joining JobFlex to use the
+ *  platform, $2.5M for the homeowners portal: advertising, projects to sell to the contractors, the lead generation
+ *  portal; make it smart, pre-fill it, make it attractive to investors"). It sits in the box while nothing is saved and
+ *  reaches the link only when the owner saves it. Only what the product does — no figures it cannot show. */
+export const RAISE_DRAFT = [
+  "Raising $4M seed to grow both sides of JobFlex",
+  "$1.5M — contractors: ads in the trades that convert best, AI-desk outreach and onboarding, to put more shops on JobFlex every month",
+  "$2.5M — homeowners: advertising that brings homeowners to the JobFlex portal with real projects — roofing, fencing, decks, HVAC, remodeling",
+  "Every homeowner project becomes a lead we sell to the contractors on JobFlex — a second revenue line on top of subscriptions",
+  "Each request arrives with the job's details and opens straight in our estimators — the contractor prices it and sends a proposal without retyping a thing",
+  "The two sides feed each other: more projects make JobFlex worth more to contractors; more contractors answer every homeowner faster",
+].join("\n");
+
 export function PitchWordsPanel({ initial, linkBase }: { initial: InvestorPitch; /** The live shared link, or null when it is off. */ linkBase: string | null }) {
-  const [words, setWords] = useState({ ask: initial.ask, team: initial.team, roadmap: initial.roadmap });
+  // Nothing saved for the raise yet: the box starts with the draft (not on the link until saved).
+  const [words, setWords] = useState({ ask: initial.ask || RAISE_DRAFT, team: initial.team, roadmap: initial.roadmap });
   const [saved, setSaved] = useState(initial);
   const [pending, setPending] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -54,7 +68,8 @@ export function PitchWordsPanel({ initial, linkBase }: { initial: InvestorPitch;
         {BOXES.map((b) => (
           <label key={b.key} className={p.box}>
             <span className={p.label}>{b.label}</span>
-            <textarea className={p.area} id={`pitch-${b.key}`} rows={6} maxLength={2000} value={words[b.key]} placeholder={b.example} onChange={(e) => setWords((w) => ({ ...w, [b.key]: e.target.value }))} data-pitch-box={b.key} />
+            <textarea className={p.area} id={`pitch-${b.key}`} rows={b.key === "ask" ? 10 : 6} maxLength={2000} value={words[b.key]} placeholder={b.example} onChange={(e) => setWords((w) => ({ ...w, [b.key]: e.target.value }))} data-pitch-box={b.key} />
+            {b.key === "ask" && !saved.ask && words.ask === RAISE_DRAFT ? <span className={p.draft} data-pitch-draft>A first draft, written for you — change anything, then save. It is not on the link until you save it.</span> : null}
             <span className={s.hint}>{b.hint}</span>
           </label>
         ))}
