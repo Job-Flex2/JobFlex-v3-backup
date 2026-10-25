@@ -3,14 +3,14 @@
 // screen… what we do, how we save time for the contractors, the value… the homeowners' portal — homeowners submit the
 // projects and we charge for the leads… evaluate JobFlex as an investor would and show what they'd want to see").
 // Built from what JobFlex already says about itself: the product's screens (tour-shots), the live figures the Figures
-// page reads (lib/investors — the same numbers, the same words), the homeowner side off the Lead Center
-// (lib/investorLeads), the plan catalogue's prices, the landing page's researched comparison, and outside facts quoted
+// page reads (lib/investors — the same numbers, the same words), the homeowner side as it is built — never a Lead
+// Center count (owner, 2026-10-25: "don't show any lead center numbers, we are not opened yet") — the plan catalogue's
+// prices, the landing page's researched comparison, and outside facts quoted
 // with their sources (pitch-facts). The two calculators say they are examples. The owner's own words fill what is
 // next, the team and the raise — a slide with no words does not show.
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import type { LeadMarket } from "@/lib/investorLeads";
 import { TOUR_SHOTS, tourSrc } from "./tour-shots";
 import { ALL_TRADE_SHOPS, HOURS_FACT, LEAD_PRICES, LEADER, MARKET_FACTS, type PitchSource } from "./pitch-facts";
 import { useSlides } from "./use-slides";
@@ -31,7 +31,6 @@ export interface PitchData {
     costPerPayingCents: number | null; costPerSignupCents: number | null; paybackMonths: number | null;
     expectedPayers: number | null; expectedMrrCents: number | null;
   };
-  leads: LeadMarket | null;
   leadPrice: { minCents: number; maxCents: number };
   deskPack: { minutes: number; cents: number };
   plans: Array<{ name: string; priceCents: number; yearlyPriceCents: number | null; trialDays: number; highlight: boolean; features: string[] }>;
@@ -99,7 +98,6 @@ type Slide = { id: string; kicker: string; tone?: "blue" | "ink"; body: ReactNod
 export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }) {
   const t = data.traction;
   const u = data.unit;
-  const L = data.leads;
   const [shop, setShop] = useState(SHOP_START);
   const [leadMonth, setLeadMonth] = useState(LEADS_START);
   // The plan the calculators and the market measure against: the one the catalogue marks, else the middle one.
@@ -113,11 +111,10 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
       body: (
         <div className={s.cover}>
           <h1 className={s.coverTitle}>You build.<br />We run the rest.</h1>
-          <p className={s.lede}>One app for a trade business, from the first call to the last payment — AI estimates from an address, proposals clients sign and pay on a phone, an AI front desk, the schedule, the crews and the money. And a free homeowner portal that turns projects into paid leads.</p>
+          <p className={s.lede}>One app for a trade business, from the first call to the last payment — AI estimates from an address, proposals clients sign and pay on a phone, an AI front desk, the schedule, the crews and the money. And a homeowner portal, built and ready to open, that turns projects into paid leads.</p>
           <div className={s.chips}>
             <span><b>Day {n(data.launch.day)}</b> since launch</span>
             <span><b>{n(t.paying)}</b> paying · {dollars(t.payingMrrCents)}/mo</span>
-            {L && L.requests > 0 ? <span><b>{n(L.requests)}</b> homeowner {L.requests === 1 ? "request" : "requests"}</span> : null}
             <span><b>6</b> estimators, one app</span>
           </div>
           <div className={s.coverFoot}>jobflex.app · launched {longDate(data.launch.date)} · figures read live</div>
@@ -214,7 +211,7 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
               ["client-proposal", "Sell", "A proposal link the client reads, signs and pays on a phone; change orders in writing."],
               ["calendar", "Schedule", "The calendar, dispatch by crew, and a crew page with no login."],
               ["financials", "Get paid", "A payment schedule on every job, invoices by card or bank, revenue against expenses."],
-              ["reviews", "Grow", "Reviews after the job, and homeowner requests that arrive as leads."],
+              ["reviews", "Grow", "Reviews after the job — and, once the homeowner portal opens, requests that arrive as leads."],
             ].map(([slug, h, p], i) => (
               <li key={slug}>
                 <Shot slug={slug} className={s.flowImg} sizes="(max-width: 860px) 92vw, 30vw" />
@@ -248,7 +245,7 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
     });
 
     out.push({
-      id: "homeowners", kicker: "The second engine · homeowners bring the work",
+      id: "homeowners", kicker: "The second engine · built, not open yet",
       body: (
         <div className={s.leadSlide}>
           <div>
@@ -263,16 +260,15 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
             <Shot slug="homeowner-portal" className={s.leadDesk} sizes="(max-width: 860px) 92vw, 34vw" />
             <Shot slug="home-dashboard" />
           </div>
-          <div className={s.leadLive} data-leads={L ? "read" : "unread"}>
-            {L ? (
-              <>
-                <div data-lead="requests"><b>{n(L.requests)}</b><span>homeowner requests{L.since ? ` since ${longDate(L.since)}` : ""}</span></div>
-                <div data-lead="last30"><b>{n(L.last30)}</b><span>in the last 30 days</span></div>
-                <div data-lead="accepted"><b>{n(L.accepted)}</b><span>accepted by a shop · of {n(L.offered)} {L.offered === 1 ? "offer" : "offers"}</span></div>
-                <div data-lead="paid"><b>{dollars(L.paid.cents)}</b><span>{L.paid.count ? `paid for ${n(L.paid.count)} ${L.paid.count === 1 ? "lead" : "leads"}` : "paid for leads so far"}</span></div>
-                {L.trades.length ? <p className={s.leadTrades}>Asked for most: {L.trades.map((x) => `${x.trade} ${n(x.count)}`).join(" · ")}</p> : null}
-              </>
-            ) : <p className={s.note}>The Lead Center could not be read just now.</p>}
+          <div className={s.leadReady} data-leads="not-open">
+            <b>Built — not open to homeowners yet</b>
+            <ul>
+              <li>The free portal and the homeowner&apos;s own page</li>
+              <li>The AI reads the trade and the scope</li>
+              <li>One shop at a time</li>
+              <li>Charged to the card on Accept</li>
+              <li>The lead lands in the CRM</li>
+            </ul>
           </div>
         </div>
       ),
@@ -296,7 +292,7 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
               <div className={s.modelHead}><i>2</i><b>AI desk minutes</b><span>Plans include minutes; more come in packs of {n(data.deskPack.minutes)} for {price(data.deskPack.cents)}.</span></div>
             </div>
             <div className={s.modelCol}>
-              <div className={s.modelHead}><i>3</i><b>Paid homeowner leads</b><span>Built and live: a priced lead is charged to the shop&apos;s card on Accept. Today JobFlex sets each lead&apos;s price by hand ({dollars(data.leadPrice.minCents)}–{dollars(data.leadPrice.maxCents)}); a lead with no price goes free.</span></div>
+              <div className={s.modelHead}><i>3</i><b>Paid homeowner leads</b><span>Built: a lead is charged to the shop&apos;s card on Accept, at the price JobFlex sets for it ({dollars(data.leadPrice.minCents)}–{dollars(data.leadPrice.maxCents)}). Not open to homeowners yet.</span></div>
               <table className={s.leadPrices}>
                 <tbody>
                   {LEAD_PRICES.map((x) => <tr key={x.name}><th scope="row">{x.name}</th><td><b>{x.price}</b><span>{x.how}</span></td></tr>)}
@@ -398,13 +394,13 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
             {[
               ["Do trials turn into customers?", t.ratePct === null ? "No trial has ended yet" : `${t.ratePct}% — ${t.ratePaid} of ${t.rateEnded} ended trials`, t.rateLowPct !== null && t.rateHighPct !== null ? `The 90% range is ${t.rateLowPct}–${t.rateHighPct}%; it narrows with every trial that ends.` : "Measured as each trial ends."],
               ["Does the ad money come back?", u.paybackMonths === null ? "Not yet measured" : `${money(u.costPerPayingCents)} a customer, back in ${Math.round(u.paybackMonths * 10) / 10} months`, "Spend ÷ the paying customers the ads brought, then months of their plan to repay it."],
-              ["Do homeowners bring work?", L ? `${n(L.requests)} requests, ${n(L.last30)} in 30 days` : "Not read", L && L.offered ? `${n(L.accepted)} of ${n(L.offered)} offers accepted by a shop.` : "Every request becomes a lead offered to one shop."],
-              ["Does a shop earn JobFlex more than its plan?", L ? `${dollars(L.paid.cents)} from paid leads` : "Not read", `Leads charged on Accept, plus AI desk minute packs (${price(data.deskPack.cents)} for ${n(data.deskPack.minutes)}).`],
+              ["Is the second engine ready?", "Built — not open yet", "The homeowner portal, the routing to one shop and the charge on Accept all work today; it is not open to homeowners yet."],
+              ["Does a shop earn JobFlex more than its plan?", "Two more lines, built", `AI desk minute packs (${price(data.deskPack.cents)} for ${n(data.deskPack.minutes)}), and homeowner leads charged on Accept once the portal opens.`],
             ].map(([q, a, why]) => (
               <div key={q} className={s.judgeRow}><b>{q}</b><strong>{a}</strong><span>{why}</span></div>
             ))}
           </div>
-          <p className={s.note}>Every answer above is read live, the moment this slide opens.</p>
+          <p className={s.note}>The trials and the ad payback are read live, the moment this slide opens.</p>
         </div>
       ),
     });
@@ -443,7 +439,7 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
             <h2 className={s.title}>How contractors find JobFlex</h2>
             <ul className={`${s.points} ${s.pointsBig}`}>
               <li><b>Trade-by-trade video ads.</b> Roof, fence, HVAC and deck films on Facebook and Instagram, each landing on its own trade&apos;s page.</li>
-              <li><b>Homeowner demand.</b> The free homeowner portal turns requests into leads for contractors on JobFlex.</li>
+              <li><b>Homeowner demand.</b> The homeowner portal is built — requests become leads for contractors on JobFlex. It is not open to homeowners yet.</li>
               <li><b>Outbound by the AI desk itself.</b> It calls contractors&apos; business lines to introduce JobFlex; a mobile number gets an email asking first.</li>
               <li><b>Try before paying.</b> A free trial on every plan; the Figures page measures trial to paid as it happens.</li>
             </ul>
@@ -499,7 +495,7 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
       ),
     });
     return out;
-  }, [data, offer, t, u, L, plan, shop, leadMonth]);
+  }, [data, offer, t, u, plan, shop, leadMonth]);
 
   const { index, move, playing, togglePlay, swipe } = useSlides(slides.length, 9000);
   const slide = slides[index];

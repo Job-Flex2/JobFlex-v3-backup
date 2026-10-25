@@ -152,12 +152,12 @@
 .leadShots { display: flex; align-items: flex-end; gap: 14px; min-width: 0; }
 .leadDesk { flex: 1; min-width: 0; height: min(44vh, 420px); max-height: none; }
 .leadShots .slideImg[data-kind="phone"] { height: min(44vh, 420px); flex: none; }
-.leadLive { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 2px solid var(--ink); }
-.leadLive > div { display: grid; gap: 4px; padding: 12px 16px; border-right: 1.5px solid var(--ink); }
-.leadLive > div:nth-child(4) { border-right: 0; }
-.leadLive b { font-size: clamp(26px, 2.6vw, 44px); font-weight: 900; letter-spacing: -.03em; line-height: 1; color: var(--blue); font-variant-numeric: tabular-nums; }
-.leadLive span { font-size: 13px; line-height: 1.4; color: var(--muted); }
-.leadTrades, .leadLive > .note { grid-column: 1 / -1; margin: 0; padding: 9px 16px; border-top: 1.5px solid var(--ink); font-size: 13px; color: var(--soft); }
+/* The homeowner side is built, not open yet (owner, 2026-10-25): what works today, never a Lead Center count. */
+.leadReady { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; padding: 12px 16px; border: 2px solid var(--ink); }
+.leadReady > b { font: 700 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--blue); }
+.leadReady ul { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px 20px; }
+.leadReady li { font-size: clamp(13px, 1vw, 15.5px); color: var(--soft); }
+.leadReady li::before { content: "✓ "; color: var(--good); font-weight: 800; }
 
 /* The business model: three lines of revenue. */
 .model { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: clamp(20px, 3vw, 56px); align-items: start; }
@@ -267,9 +267,6 @@
   .stage { height: auto; aspect-ratio: 16 / 10; }
   .split, .splitWide, .calc, .leadSlide, .model, .marketBand { grid-template-columns: minmax(0, 1fr); }
   .tiles, .flowShots { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .leadLive { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .leadLive > div:nth-child(2) { border-right: 0; }
-  .leadLive > div:nth-child(-n + 2) { border-bottom: 1.5px solid var(--ink); }
 }
 @media (max-width: 760px) {
   .chapters { width: 100%; }
