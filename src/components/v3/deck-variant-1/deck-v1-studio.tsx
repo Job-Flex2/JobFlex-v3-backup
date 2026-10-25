@@ -746,6 +746,37 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
   const [saveState, setSaveState] = React.useState<"idle" | "saving" | "saved" | "failed">("idle");
   const [savedAt, setSavedAt] = React.useState<string | null>(null);
   const [drafts, setDrafts] = React.useState<DeckDraftRow[] | null>(null);
+  // PICK UP WHERE YOU LEFT OFF (2026-10-24 — owner, going through the studio: a reload opened a fresh default deck
+  // and the work sat under Drafts where nobody looks). Opened plain — no draft, no proposal — the studio offers the
+  // draft last worked on, when it is less than two days old: one tap opens it, one dismisses it for this tab.
+  const [resume, setResume] = React.useState<DeckDraftRow | null>(null);
+  React.useEffect(() => {
+    if (opened || preview) return;
+    try {
+      if (sessionStorage.getItem("jf-deck-resume-off")) return;
+    } catch {
+      /* no storage: offer it anyway */
+    }
+    let gone = false;
+    void listDeckDrafts().then((res) => {
+      if (gone || !res.ok || !res.drafts.length) return;
+      const last = [...res.drafts].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
+      if (Date.now() - Date.parse(last.updatedAt) < 48 * 3600_000 && !dirty.current) setResume(last);
+    });
+    return () => {
+      gone = true;
+    };
+    // Once, when the studio opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const dismissResume = () => {
+    setResume(null);
+    try {
+      sessionStorage.setItem("jf-deck-resume-off", "1");
+    } catch {
+      /* fine */
+    }
+  };
   const [draftsOpen, setDraftsOpen] = React.useState(false);
   const [linked, setLinked] = React.useState<LinkedDeckProposal | null>(opened?.proposal ?? null);
   const linkedId = linked?.id ?? null;
@@ -1149,11 +1180,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
           {regional.decking.flatMap((id) => DECKING.filter((d) => d.id === id)).map((d) => boardOption(d, `most-${d.id}`))}
         </optgroup>
       ) : null}
-      {DECKING_FAMILY_ORDER.filter(woodFamily).map((fam) => (
-        <optgroup key={fam} label={DECKING_FAMILY_LABEL[fam]}>
-          {DECKING.filter((d) => d.family === fam && !d.brand).map((d) => boardOption(d))}
-        </optgroup>
-      ))}
+      {/* The makers' lines and the other man-made boards first (2026-10-24 — owner: "there is a lot of wood decking, add Trex, TimberTech and the other popular ones"), the wood after. */}
       {DECKING_BRAND_ORDER.map((b) => (
         <optgroup key={b} label={DECKING_BRAND_LABEL[b]}>
           {DECKING.filter((d) => d.brand === b).map((d) => boardOption(d))}
@@ -1161,6 +1188,11 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
       ))}
       {DECKING_FAMILY_ORDER.filter((fam) => !woodFamily(fam)).map((fam) => (
         <optgroup key={fam} label={fam === "aluminum" ? DECKING_FAMILY_LABEL[fam] : `${DECKING_FAMILY_LABEL[fam]} — any brand`}>
+          {DECKING.filter((d) => d.family === fam && !d.brand).map((d) => boardOption(d))}
+        </optgroup>
+      ))}
+      {DECKING_FAMILY_ORDER.filter(woodFamily).map((fam) => (
+        <optgroup key={fam} label={DECKING_FAMILY_LABEL[fam]}>
           {DECKING.filter((d) => d.family === fam && !d.brand).map((d) => boardOption(d))}
         </optgroup>
       ))}
@@ -3160,6 +3192,23 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
         </section>
       ) : null}
 
+      {resume && !draftId ? (
+        <div className="v1-resume" role="status" data-deck-resume={resume.id}>
+          <span className="v1-resume-text">
+            <b>Pick up where you left off?</b> {resume.title}
+            {resume.address ? ` · ${resume.address}` : ""} · {ago(resume.updatedAt)}
+            {resume.fromClient ? ` · from ${resume.fromClient}` : ""}
+          </span>
+          <span className="v1-resume-acts">
+            <button type="button" className="v1-btn v1-btn-primary v1-btn-sm" onClick={() => { setResume(null); void openDraft(resume.id); }} data-deck-resume-open>
+              Continue
+            </button>
+            <button type="button" className="v1-btn v1-btn-sm" onClick={dismissResume} data-deck-resume-dismiss>
+              Start fresh
+            </button>
+          </span>
+        </div>
+      ) : null}
       <div className="v1-work">
         <FieldScope.Provider value={rootScope}>
           <div className="v1-q" role="region" aria-label="Design the deck">

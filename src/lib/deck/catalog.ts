@@ -92,9 +92,23 @@ export type DeckingLaborClass = "wood" | "hardwood" | "composite" | "pvc" | "alu
 
 /** The makers whose own lines are on the list (2026-10-12): the brands contractors buy most, in the order of their
  *  share of composite and PVC decking. Any other brand goes in as a custom board. */
-export type DeckingBrand = "Trex" | "TimberTech" | "Fiberon" | "Deckorators" | "MoistureShield";
-export const DECKING_BRAND_ORDER: readonly DeckingBrand[] = ["Trex", "TimberTech", "Fiberon", "Deckorators", "MoistureShield"];
-export const DECKING_BRAND_LABEL: Record<DeckingBrand, string> = { Trex: "Trex", TimberTech: "TimberTech and AZEK", Fiberon: "Fiberon", Deckorators: "Deckorators", MoistureShield: "MoistureShield" };
+export type DeckingBrand = "Trex" | "TimberTech" | "Fiberon" | "Deckorators" | "MoistureShield" | "Veranda" | "Envision" | "DuraLife" | "Wolf" | "NewTechWood" | "Lumberock" | "Cali" | "Armadillo";
+export const DECKING_BRAND_ORDER: readonly DeckingBrand[] = ["Trex", "TimberTech", "Fiberon", "Deckorators", "MoistureShield", "Veranda", "Envision", "DuraLife", "Wolf", "NewTechWood", "Lumberock", "Cali", "Armadillo"];
+export const DECKING_BRAND_LABEL: Record<DeckingBrand, string> = {
+  Trex: "Trex",
+  TimberTech: "TimberTech and AZEK",
+  Fiberon: "Fiberon",
+  Deckorators: "Deckorators",
+  MoistureShield: "MoistureShield",
+  Veranda: "Veranda (Home Depot)",
+  Envision: "Envision",
+  DuraLife: "DuraLife",
+  Wolf: "Wolf Serenity",
+  NewTechWood: "NewTechWood",
+  Lumberock: "Lumberock",
+  Cali: "Cali Bamboo",
+  Armadillo: "Armadillo",
+};
 
 export interface DeckingProduct {
   id: string;
@@ -142,6 +156,14 @@ const TREX = "Trex installation guide: 16 in. on center, 12 in. at 45°; air mus
 const TIMBERTECH = "TimberTech composite guide: 16 in., 12 in. at 45°; joists doubled at butt seams";
 const AZEK = "TimberTech Advanced PVC guide: 16 in., 12 in. at 45°; solid blocking rows every 4–6 ft";
 const FIBERON = "Fiberon guide: 16 in., 12 in. at 45°; 1½ in. of open air under the joists";
+const VERANDA = "Veranda (made by Fiberon) guide: 16 in. on center, 12 in. at 45°; 1½ in. of open air under the joists";
+const ENVISION = "Envision guide: 16 in. on center, 12 in. at 45° — compression-moulded, no cap to peel";
+const DURALIFE = "DuraLife guide: 16 in. on center, 12 in. at 45° — a polypropylene core";
+const WOLF = "Wolf Serenity (PVC) guide: 16 in. on center, 12 in. at 45°; solid blocking rows every 6 ft";
+const NEWTECHWOOD = "NewTechWood guide: 16 in. on center, 12 in. at 45°";
+const LUMBEROCK = "Lumberock guide: 16 in. on center, 12 in. at 45° — sold for docks and ground contact";
+const CALI = "Cali Bamboo guide: 16 in. on center, 12 in. at 45°";
+const ARMADILLO = "Armadillo guide: 16 in. on center, 12 in. at 45°";
 const VISTA = "Deckorators Vista guide: 16 in., 12 in. at 45°; blocking every 4–6 ft, 2 in. of air under the joists";
 const SURESTONE = "Deckorators Surestone guide: 16 in., 12 in. at 45°; rated for ground contact";
 const MOISTURESHIELD = "MoistureShield guide: 16 in., 12 in. at 45°; rated for ground and water contact";
@@ -219,6 +241,18 @@ export const DECKING: readonly DeckingProduct[] = [
   { id: "deckorators-voyage", label: "Deckorators Voyage (mineral-based)", brand: "Deckorators", family: "mineral", ...capped, widthIn: 5.5, thickIn: 0.875, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: SURESTONE, color: "#8b5b40", labor: "composite", pricePerLf: 7.63 },
   // MoistureShield — rated for ground and water contact.
   { id: "moistureshield-vision", label: "MoistureShield Vision", brand: "MoistureShield", family: "composite", ...capped, widthIn: 5.4, thickIn: 1, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: MOISTURESHIELD, color: "#4b3a2f", labor: "composite", pricePerLf: 5.72 },
+  // THE OTHER MAKERS CONTRACTORS ASK FOR (2026-10-24 — owner: "add Trex, artificial materials, TimberTech and other most
+  // popular ones"): the box-store house brand, the compression-moulded and polypropylene-core composites, the PVC and
+  // mineral boards sold for docks, the bamboo composite. One or two lines each; the rest go in as a custom board.
+  { id: "veranda-composite", label: "Veranda Composite (Home Depot)", brand: "Veranda", family: "composite", ...capped, widthIn: 5.25, thickIn: 0.9, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: VERANDA, minClearanceIn: 1.5, color: "#6b5a4a", labor: "composite", pricePerLf: 2.9 },
+  { id: "envision-distinction", label: "Envision Distinction", brand: "Envision", family: "composite", ...capped, widthIn: 5.5, thickIn: 0.94, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: ENVISION, color: "#5a4639", labor: "composite", pricePerLf: 5.6 },
+  { id: "envision-expression", label: "Envision Expression", brand: "Envision", family: "composite", ...capped, widthIn: 5.5, thickIn: 0.94, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: ENVISION, color: "#7a5d47", labor: "composite", pricePerLf: 4.5 },
+  { id: "duralife-landscapes", label: "DuraLife Landscapes", brand: "DuraLife", family: "composite", ...capped, widthIn: 5.5, thickIn: 0.94, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: DURALIFE, color: "#8a6a4e", labor: "composite", pricePerLf: 4.7 },
+  { id: "wolf-serenity", label: "Wolf Serenity (PVC)", brand: "Wolf", family: "pvc", ...capped, widthIn: 5.5, thickIn: 1, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: WOLF, blockingRowsMaxFt: 6, color: "#a08a70", labor: "pvc", pricePerLf: 6.3 },
+  { id: "newtechwood-ultrashield", label: "NewTechWood UltraShield Naturale", brand: "NewTechWood", family: "composite", ...capped, widthIn: 5.5, thickIn: 0.94, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: NEWTECHWOOD, color: "#6d5341", labor: "composite", pricePerLf: 4.9 },
+  { id: "lumberock-mineral", label: "Lumberock (mineral-based)", brand: "Lumberock", family: "mineral", ...capped, widthIn: 5.5, thickIn: 1, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: LUMBEROCK, color: "#8b7a66", labor: "composite", pricePerLf: 6.1 },
+  { id: "calibamboo-truorganics", label: "Cali Bamboo TruOrganics", brand: "Cali", family: "composite", ...capped, widthIn: 5.5, thickIn: 0.94, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: CALI, color: "#5c4a3a", labor: "composite", pricePerLf: 5.9 },
+  { id: "armadillo-expression", label: "Armadillo Expression", brand: "Armadillo", family: "composite", ...capped, widthIn: 5.5, thickIn: 0.94, maxSpacingIn: { square: 16, diagonal: 12 }, source: "maker", sourceNote: ARMADILLO, color: "#7b6350", labor: "composite", pricePerLf: 4.6 },
 ];
 
 export function deckingProduct(id: string | null | undefined): DeckingProduct {
