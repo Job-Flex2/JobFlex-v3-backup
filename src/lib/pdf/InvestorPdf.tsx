@@ -6,7 +6,7 @@
 import * as React from "react";
 import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { InvestorReport } from "@/lib/investors";
-import { dollars, longDate, outlookSentence, standingSentence, type CurvePoint } from "@/lib/investorModel";
+import { apartSentence, dollars, longDate, outlookSentence, standingSentence, type CurvePoint } from "@/lib/investorModel";
 
 const s = StyleSheet.create({
   page: { padding: 40, fontFamily: "Helvetica", fontSize: 10, color: "#0a0a0a" },
@@ -47,6 +47,14 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
   const r = f.rate;
   const ex = f.expected;
   const got = report.collected;
+  const ap = report.apart;
+  const apartRows: Array<[string, string, string]> = [
+    ["Ad spend", dollars(ap.spendCents), dollars(f.spend.totalCents)],
+    ["Signed up", String(ap.figures.signups), String(f.signups)],
+    ["Stayed after the trial", pct(ap.figures.rate.pct), pct(r.pct)],
+    ["Paying today", String(ap.figures.paying.won), String(f.paying.won)],
+    ["Per paying customer", money(ap.figures.unit.costPerPayingCents), money(f.unit.costPerPayingCents)],
+  ];
   const read = new Date(report.at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
   const about = (v: number) => (Number.isInteger(v) ? String(v) : `about ${Math.round(v)}`);
   const range = r.lowPct !== null && r.highPct !== null ? `likely ${r.lowPct}–${r.highPct}%` : "";
@@ -71,7 +79,7 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
       <Page size="LETTER" style={s.page}>
         <Text style={s.kicker}>JobFlex · Investors</Text>
         <Text style={s.h1}>Ads, trials and payback</Text>
-        <Text style={s.sub}>Day {report.launch.day} since JobFlex launched on {longDate(report.launch.date)} · live figures since {longDate(f.since)}, the day the first campaign went live · read {read}</Text>
+        <Text style={s.sub}>Day {report.launch.day} since JobFlex launched on {longDate(report.launch.date)} · {f.since !== report.startDay ? `figures with a card since ${longDate(f.since)} (the no-card days before it are kept apart; ads went live ${longDate(report.startDay)})` : `live figures since ${longDate(f.since)}, the day the first campaign went live`} · read {read}</Text>
         <View style={s.lead}>
           <Text style={s.lbl}>Where the ads stand today</Text>
           <Text style={s.leadText}>{standingSentence(f)}</Text>
@@ -107,6 +115,16 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
             ))}
           </View>
         </View>
+        {(ap.days.length > 0 || ap.figures.signups > 0) && (
+          <View wrap={false}>
+            <Text style={s.h2}>Kept apart: free trials with no card</Text>
+            <Text style={s.li}>{apartSentence(ap, f)}</Text>
+            <View style={s.row}><Text style={[s.c1, { fontFamily: "Helvetica-Bold" }]}> </Text><Text style={s.c2}>No card</Text><Text style={s.c2}>With a card</Text></View>
+            {apartRows.map(([l, a, c]) => (
+              <View key={l} style={s.row}><Text style={s.c1}>{l}</Text><Text style={s.c2}>{a}</Text><Text style={s.c2}>{c}</Text></View>
+            ))}
+          </View>
+        )}
         <Text style={s.h2}>The ad spend by period{report.meta.lastPulledAt ? " (Meta's own figures)" : ""}</Text>
         {report.periods.map((p) => (
           <View key={p.key} style={s.row}><Text style={s.c1}>{p.label}</Text><Text style={s.c2}>{dollars(p.cents)}</Text><Text style={s.c3}>{p.days === 0 ? "nothing yet" : `${dollars(p.perDayCents)}/day over ${p.days} ${p.days === 1 ? "day" : "days"}`}</Text></View>
@@ -132,7 +150,7 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
         <Text style={s.li}>· Counting from {longDate(f.since)}, the day the first campaign went live — only what happened from that day on. Visitors are unique people on www.jobflex.app, bots and previews out.{report.before.paying > 0 ? ` ${report.before.paying} ${report.before.paying === 1 ? "account" : "accounts"} paying from before that day (${dollars(report.before.mrrCents)}/mo) ${report.before.paying === 1 ? "is" : "are"} counted as paying, not as signups of the period.` : ""}</Text>
         <Text style={s.li}>· Nothing here is a share we chose. &quot;Stay after the trial&quot; is measured: of the trials that have ended since the start day, the share paying today ({r.pct === null ? "none has ended yet" : `${r.paid} of ${r.ended}`}); a trial that ran out, was canceled, or whose payment failed counts as not staying. &quot;Likely&quot; is the 90% range for that many trials. The running trials are expected to pay at the measured rate.</Text>
         <Text style={s.li}>· Ad spend is {a.dailyBudgetCents !== null && a.dailyBudgetCents !== undefined && a.budgetFrom ? `the daily budget, ${dollars(a.dailyBudgetCents)} for all ads together, counted as spent every day since ${longDate(a.budgetFrom)}` : "what was booked per day"}; tomorrow on it runs at the last full week&apos;s pace, {dollars(f.spend.perDayProjectedCents)} a day. &quot;Collected so far&quot; is what Stripe took for subscriptions since the start day from the accounts counted here.</Text>
-        <Text style={s.li}>· {report.leftOut.signups > 0 ? `Left out on purpose: ${report.leftOut.signups} ${report.leftOut.signups === 1 ? "trial" : "trials"} that started with no card${report.leftOut.from ? ` (${report.leftOut.from === report.leftOut.to || !report.leftOut.to ? longDate(report.leftOut.from) : `${longDate(report.leftOut.from)} – ${longDate(report.leftOut.to)}`}, an experiment since ended)` : ""} and the ${dollars(report.leftOut.spendCents)} of ad spend over the ${report.leftOut.days} ${report.leftOut.days === 1 ? "day" : "days"} that brought them. ` : ""}Every trial counted here took a card at signup.</Text>
+        <Text style={s.li}>· {ap.days.length > 0 || ap.figures.signups > 0 ? `Kept apart on purpose: ${ap.days.length > 0 ? `the ${ap.days.length} ${ap.days.length === 1 ? "day" : "days"} free trials needed no card — the whole ${dollars(ap.spendCents)} of ad spend on them and every signup they brought (${ap.figures.signups})` : "the trials that started with no card"}; a no-card trial from any other day goes with them. ` : ""}Every figure here is from the days a trial needed a card, and the trials that took one.</Text>
         <Text style={s.li}>· A trial is worth its plan&apos;s monthly list price (a yearly plan as a twelfth, a custom plan by its pages). Discounts, taxes and churn are not modelled.</Text>
         <Text style={s.li}>· The curve: a paying account earns a thirtieth of its monthly price a day from the day it started paying, a running trial at the measured rate from the day it ends; new signups arrive at {f.unit.signupsPerDay}/day at {dollars(f.trials.avgMonthlyCents)}/mo and pay at the measured rate after a {f.trials.lengthDays}-day trial; spend continues at {dollars(f.spend.perDayProjectedCents)}/day for {a.horizonDays} days.</Text>
         </View>

@@ -3,7 +3,7 @@
 // what it expects of the running trials, the payback curve and its break-even
 // — on fixtures with hand-checked answers.
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/investor-model.check.ts
-import { addDays, cohortFigures, daysBetween, dollars, investorFigures, launchDay, noCardShareByDay, outlookSentence, perDay, spendPeriods, standingSentence, wilson, type ModelInput } from "../../../src/lib/investorModel";
+import { addDays, apartDays, apartSentence, daysBetween, dollars, investorFigures, launchDay, noCardShareByDay, outlookSentence, splitApart, perDay, spendPeriods, standingSentence, wilson, type ModelInput } from "../../../src/lib/investorModel";
 
 let bad = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -163,21 +163,32 @@ const withCohorts: ModelInput = {
     current: "nocard",
   },
 };
+// ── KEPT APART (2026-10-24): a day with any no-card share goes apart WHOLE, with every signup on it
+console.log("── kept apart");
+check("a day goes apart whole on any no-card share — the mixed Oct 4 too", [...apartDays(days, su, [])].sort().join() === "2026-10-03,2026-10-04,2026-10-05,2026-10-06");
 const whole = investorFigures(withCohorts);
-const card = cohortFigures(withCohorts, "card", whole);
-const nocard = cohortFigures(withCohorts, "nocard", whole);
-check("the two cohorts' spend adds up to the whole ($700: $500 card days, $200 no-card days)", card.attributedCents + nocard.attributedCents === whole.spend.totalCents && card.attributedCents === 50000 && nocard.attributedCents === 20000, `${card.attributedCents} + ${nocard.attributedCents}`);
-check("…over the days each fell on (Sep 30–Oct 4 card, Oct 5–6 no card)", card.attributedDays === 5 && nocard.attributedDays === 2 && card.firstDay === "2026-09-30" && nocard.firstDay === "2026-10-05");
-check("each cohort counts its own accounts", card.figures.trials.count === 1 && card.figures.paying.count === 1 && card.figures.lapsed === 1 && nocard.figures.trials.count === 3 && nocard.figures.paying.count === 1 && nocard.figures.lapsed === 0);
-check("…and its signups add up to the whole", card.signups + nocard.signups === whole.signups);
-check("each cohort measures its OWN rate: card 1 of 2 = 50%, no card 1 of 1 = 100%", card.figures.rate.pct === 50 && card.figures.rate.ended === 2 && nocard.figures.rate.pct === 100 && nocard.figures.rate.ended === 1);
-check("…and the lapsed signup's day stays with its cohort's pace", card.figures.unit.signupsPerDay > 0 && nocard.figures.curve[6].signups === 4);
-check("the kind a new signup gets today keeps spending forward; the other stands still", nocard.current && nocard.figures.spend.perDayProjectedCents === whole.spend.perDayProjectedCents && !card.current && card.figures.spend.perDayProjectedCents === 0);
-check("…so the card cohort's spend curve is flat past today", card.figures.curve.filter((p) => p.projected).every((p) => p.spendCents === card.attributedCents));
-check("visitors are not split", card.figures.visitors === null && nocard.figures.visitors === null && card.figures.unit.costPerVisitorCents === null);
-check("cost per signup is each cohort's own", card.figures.unit.costPerSignupCents === Math.round(50000 / card.signups) && nocard.figures.unit.costPerSignupCents === Math.round(20000 / nocard.signups));
-const plain = cohortFigures(base, "card");
-check("an input without the cohort block reads as all card, no spend split lost", plain.attributedCents === investorFigures(base).spend.totalCents && plain.figures.trials.count === base.trials.length);
+const cut = splitApart(withCohorts, whole);
+check("the no-card days Oct 5–6 go apart; the card days stay; the start day stays (they are not all first)", cut.days.join() === "2026-10-05,2026-10-06" && cut.cardSince === "2026-09-30" && cut.card.since === "2026-09-30");
+check("their WHOLE spend goes apart ($200) and the card days keep theirs ($500) — together the whole", cut.spendCents === 20000 && cut.apart.spend.totalCents === 20000 && cut.card.spend.totalCents === 50000 && cut.card.spend.totalCents + cut.spendCents === whole.spend.totalCents);
+check("each side counts its own accounts: card 1 trial, 1 paying, 1 lapsed; apart 3 trials, 1 paying", cut.card.trials.count === 1 && cut.card.paying.count === 1 && cut.card.lapsed === 1 && cut.apart.trials.count === 3 && cut.apart.paying.count === 1 && cut.apart.lapsed === 0);
+check("…the signups add up to the whole, and the apart ones are told by kind (4 no card, 0 card)", cut.card.signups + cut.apart.signups === whole.signups && cut.signups.nocard === 4 && cut.signups.card === 0);
+check("each side measures its own rate: card 1 of 2 = 50%, no card 1 of 1 = 100%", cut.card.rate.pct === 50 && cut.card.rate.ended === 2 && cut.apart.rate.pct === 100 && cut.apart.rate.ended === 1);
+check("the kind a new signup gets today keeps spending forward (no card here); the card side stands still", cut.apart.spend.perDayProjectedCents === whole.spend.perDayProjectedCents && cut.card.spend.perDayProjectedCents === 0 && cut.card.curve.filter((p) => p.projected).every((p) => p.spendCents === 50000));
+check("visitors stay with the card side only", cut.card.visitors === withCohorts.visitors && cut.apart.visitors === null);
+const anyway: ModelInput = { ...withCohorts, trials: [...withCohorts.trials, { createdAt: "2026-10-05", endsAt: "2026-10-12", monthlyCents: 9900, cohort: "card" }], cohorts: { ...withCohorts.cohorts!, signups: [...withCohorts.cohorts!.signups, { date: "2026-10-05", cohort: "card" }] } };
+const cutAnyway = splitApart(anyway);
+check("a card given anyway on a no-card day goes apart too — it came in under the no-card offer", cutAnyway.card.trials.count === 1 && cutAnyway.apart.trials.count === 4 && cutAnyway.signups.card === 1 && cutAnyway.signups.nocard === 4);
+const strayPolicy = [{ from: "2026-10-02", mode: "card" as const }, { from: "2026-10-05", mode: "nocard" as const }];
+const stray: ModelInput = { ...withCohorts, trials: [...withCohorts.trials, { createdAt: "2026-10-03", endsAt: "2026-10-10", monthlyCents: 4900, cohort: "nocard" }], cohorts: { ...withCohorts.cohorts!, policy: strayPolicy, signups: [...withCohorts.cohorts!.signups, { date: "2026-10-03", cohort: "nocard" }] } };
+const cutStray = splitApart(stray);
+check("a no-card trial on a card day (the switch said card) goes apart as an account; its day's spend stays", !cutStray.days.includes("2026-10-03") && cutStray.apart.trials.count === 4 && cutStray.card.spend.totalCents === 50000);
+const early: ModelInput = { ...withCohorts, cohorts: { ...withCohorts.cohorts!, signups: [{ date: "2026-09-30", cohort: "nocard" }, { date: "2026-10-01", cohort: "nocard" }, { date: "2026-10-02", cohort: "card" }, { date: "2026-10-04", cohort: "card" }] } };
+const cutEarly = splitApart(early);
+check("no-card days that all come first: the card figures count from the first card day (Oct 2)", cutEarly.days.join() === "2026-09-30,2026-10-01" && cutEarly.cardSince === "2026-10-02" && cutEarly.card.since === "2026-10-02" && cutEarly.card.daysLive === 5 && cutEarly.card.spend.totalCents === 50000 && cutEarly.card.curve[0].date === "2026-10-02");
+check("with no no-card days and no cohort block: nothing apart, the card side is the whole", (() => { const c = splitApart(base); return c.days.length === 0 && c.spendCents === 0 && c.card.spend.totalCents === investorFigures(base).spend.totalCents && c.card.trials.count === base.trials.length && c.apart.signups === 0; })());
+const sentence = apartSentence({ days: cut.days, spendCents: cut.spendCents, figures: cut.apart }, cut.card);
+check("the block's sentence: the days, what they cost, who pays, against the card", /^While free trials needed no card \(2 days, Oct 5 – Oct 6\), \$200 of ads brought 4 signups; 1 pays today — \$200 per paying customer, against \$500 with a card\. Of their trials that ended, 100% stayed; with a card, 50%\. None of it is in the figures above\.$/.test(sentence), sentence);
+check("…and nothing to say when nothing was kept apart", apartSentence({ days: [], spendCents: 0, figures: investorFigures({ ...base, paying: [], trials: [], lapsed: 0 }) }, f) === "");
 
 
 // ── PAYING FROM BEFORE THE START DAY (2026-10-13): counted as paying, in the revenue and the payback; not a signup
@@ -190,9 +201,8 @@ check("…its revenue counts from the start day only (7 days of $99 = $23.10)", 
 check("…it is not a signup, and does not move the pace, the cost per signup or the measured rate", fb.signups === f0.signups && fb.unit.signupsPerDay === f0.unit.signupsPerDay && fb.unit.costPerSignupCents === f0.unit.costPerSignupCents && fb.rate.pct === f0.rate.pct && fb.rate.ended === f0.rate.ended);
 check("…nor the cost per paying customer or the payback (the ads did not win it)", fb.unit.costPerPayingCents === f0.unit.costPerPayingCents && fb.unit.paybackMonths === f0.unit.paybackMonths && fb.paying.won === f0.paying.won);
 check("…but it pays into the curve from the first day", fb.curve[0].mrrCents === f0.curve[0].mrrCents + 9900 && fb.curve[0].paying === f0.curve[0].paying + 1);
-const cardB = cohortFigures({ ...withCohorts, paying: [...withCohorts.paying, { startedAt: "2026-09-01", monthlyCents: 9900, cohort: "card", preexisting: true }] }, "card");
-const nocardB = cohortFigures({ ...withCohorts, paying: [...withCohorts.paying, { startedAt: "2026-09-01", monthlyCents: 9900, cohort: "card", preexisting: true }] }, "nocard");
-check("it sits in the card cohort's paying, not in no card's, and not in either's signups", cardB.figures.paying.count === card.figures.paying.count + 1 && cardB.figures.paying.preexisting === 1 && cardB.signups === card.signups && nocardB.figures.paying.count === nocard.figures.paying.count);
+const cutB = splitApart({ ...withCohorts, paying: [...withCohorts.paying, { startedAt: "2026-09-01", monthlyCents: 9900, cohort: "card", preexisting: true }] });
+check("it sits on the card side's paying, not the apart side's, and in neither's signups", cutB.card.paying.count === cut.card.paying.count + 1 && cutB.card.paying.preexisting === 1 && cutB.card.signups === cut.card.signups && cutB.apart.paying.count === cut.apart.paying.count);
 
 console.log(bad === 0 ? "\nAll investor model checks passed." : `\n${bad} investor model check(s) FAILED.`);
 process.exit(bad === 0 ? 0 : 1);

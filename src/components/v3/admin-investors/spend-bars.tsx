@@ -1,11 +1,12 @@
 // THE LAST 30 DAYS OF SPEND (2026-10-08): one bar a day — Meta's own figure
 // or the hand-booked day in ink, a budget-filled day hatched lighter — and a
 // green mark for each signup that day. Plain SVG, no hooks: the same on the
-// admin page and the shared link.
+// admin page and the shared link. A day free trials needed no card (2026-10-24)
+// is drawn faint amber: its spend is kept apart from the figures.
 import { dollars } from "@/lib/investorModel";
 import s from "./investor-report.module.css";
 
-export interface SpendBarRow { date: string; spendCents: number; source: "booked" | "budget" | "none"; clicks: number | null; signups: number }
+export interface SpendBarRow { date: string; spendCents: number; source: "booked" | "budget" | "none" | "apart"; clicks: number | null; signups: number }
 
 const W = 760;
 const H = 180;
@@ -35,8 +36,8 @@ export function SpendBars({ rows }: { rows: SpendBarRow[] }) {
         <line x1={PAD.l} x2={W - PAD.r} y1={y(0)} y2={y(0)} className={s.base} />
         {rows.map((r, i) => (
           <g key={r.date}>
-            <title>{`${short(r.date)}: ${dollars(r.spendCents)}${r.source === "budget" ? " (budget)" : r.source === "none" ? " (nothing booked)" : ""}${r.clicks !== null ? ` · ${r.clicks} clicks` : ""}${r.signups ? ` · ${r.signups} signed up` : ""}`}</title>
-            <rect x={x(i)} y={y(r.spendCents)} width={bw} height={Math.max(0, y(0) - y(r.spendCents))} className={r.source === "budget" ? s.barBudget : s.bar} />
+            <title>{`${short(r.date)}: ${dollars(r.spendCents)}${r.source === "budget" ? " (budget)" : r.source === "none" ? " (nothing booked)" : r.source === "apart" ? " (no-card day, kept apart)" : ""}${r.clicks !== null ? ` · ${r.clicks} clicks` : ""}${r.signups ? ` · ${r.signups} signed up` : ""}`}</title>
+            <rect x={x(i)} y={y(r.spendCents)} width={bw} height={Math.max(0, y(0) - y(r.spendCents))} className={r.source === "budget" ? s.barBudget : r.source === "apart" ? s.barApart : s.bar} />
             {Array.from({ length: Math.min(r.signups, 6) }).map((_, k) => <circle key={k} cx={x(i) + bw / 2} cy={y(0) + 7 + k * 6} r={2.4} className={s.signupDot} />)}
           </g>
         ))}
@@ -45,7 +46,8 @@ export function SpendBars({ rows }: { rows: SpendBarRow[] }) {
       <figcaption className={s.legend}>
         <span><i className={s.swBar} />Spent that day</span>
         <span><i className={s.swBudget} />Budget, nothing read for the day</span>
-        <span><i className={s.swDot} />A signup that day</span>
+        <span><i className={s.swDot} />A signup with a card that day</span>
+        {rows.some((r) => r.source === "apart") && <span><i className={s.swApart} />No-card day, kept apart</span>}
       </figcaption>
     </figure>
   );

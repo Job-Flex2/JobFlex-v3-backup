@@ -337,14 +337,11 @@ export function investorFigures(input: ModelInput): InvestorFigures {
   };
 }
 
-/* ── THE TWO COHORTS (owner, 2026-10-13: "the statistics with all the signups with a card, and with no card: how
-   much budget was spent on each, and where we are now") ──────────────────────────────────────────────────────
-   A day's ad spend went to whichever kind of trial a visitor could start that day. Where the owner's switch is
-   recorded (lib/trialPolicyServer keeps its flips from 2026-10-13), the day follows the switch; before that, the
-   day follows who signed up on it — all no-card signups, the whole day; a mix, in proportion — and a day with
-   no signups follows the nearest day that had some (earlier first). Each cohort then gets its own figures on its
-   own trials, paying accounts, lapsed trials and attributed spend; only the cohort a new signup gets TODAY keeps
-   spending forward, the other's spend stands still, so each has its own break-even. Visitors cannot be split. */
+/* ── THE TWO KINDS OF TRIAL (owner, 2026-10-13): a day's ad spend went to whichever kind of trial a visitor could
+   start that day. Where the owner's switch is recorded (lib/trialPolicyServer keeps its flips from 2026-10-13), the
+   day follows the switch; before that, the day follows who signed up on it — all no-card signups, the whole day; a
+   mix, in proportion — and a day with no signups follows the nearest day that had some (earlier first). Since
+   2026-10-24 any share at all sends the whole day apart (splitApart below). */
 
 /** The share (0–1) of each day's spend that went to no-card trials. */
 export function noCardShareByDay(days: readonly string[], signups: ReadonlyArray<{ date: string; cohort: TrialCohort }>, policy: readonly PolicySpan[]): Map<string, number> {
@@ -383,55 +380,73 @@ export function noCardShareByDay(days: readonly string[], signups: ReadonlyArray
   return out;
 }
 
-export interface CohortFigures {
-  cohort: TrialCohort;
-  figures: InvestorFigures;
-  /** The ad spend attributed to this cohort, and over how many days any of it fell. */
-  attributedCents: number;
-  attributedDays: number;
-  firstDay: string | null;
-  lastDay: string | null;
-  /** New signups get this today: its spend keeps running forward. */
-  current: boolean;
-  signups: number;
+/* ── KEPT APART: THE NO-CARD DAYS (owner, 2026-10-24: "we had free trials with no card and it was not good — remove
+   that money spent from the stats and keep it separately, so we make better stats with the card on; make it smart").
+   A day goes apart WHOLE when free trials with no card were on offer at any time that day: the switch said so (a
+   flip to "card" counts from the next day, so the flip day itself is apart — lib/investors builds the spans), or,
+   before the switch was recorded, someone signed up with no card that day (a day with no signups follows the
+   nearest earlier day that had some). Every signup of an apart day goes with it — a card given anyway too: it came
+   in under the no-card offer — and so does a no-card trial that slipped in on a card day (as an account; its day's
+   spend stays). What is left is the page: the card days' spend and the card days' signups that took a card. When
+   the apart days all come before the first card day, the page counts from that day. Visitors are not split. */
+
+/** The days that go apart whole: any share of the day's spend went to no-card trials. */
+export function apartDays(days: readonly string[], signups: ReadonlyArray<{ date: string; cohort: TrialCohort }>, policy: readonly PolicySpan[]): Set<string> {
+  return new Set([...noCardShareByDay(days, signups, policy)].filter(([, share]) => share > 0).map(([d]) => d));
 }
 
-/** The figures for one cohort, cut from the whole: its accounts, its share of each day's spend. */
-export function cohortFigures(input: ModelInput, cohort: TrialCohort, whole: InvestorFigures = investorFigures(input), opts: { keepVisitors?: boolean } = {}): CohortFigures {
+export interface ApartCut {
+  /** The card days: the page's figures. */
+  card: InvestorFigures;
+  /** The no-card days and the no-card trials, kept apart: their own figures (no curve). */
+  apart: InvestorFigures;
+  /** The apart days in the period, in order, and their whole spend. */
+  days: string[];
+  spendCents: number;
+  /** The apart side's signups: with no card, and with a card given anyway. */
+  signups: { nocard: number; card: number };
+  /** The card figures' first day: the day after the apart days when they all come first, else the start day. */
+  cardSince: string;
+}
+
+/** The page cut in two: the card days, and the no-card days with everything they brought. */
+export function splitApart(input: ModelInput, whole: InvestorFigures = investorFigures(input)): ApartCut {
   const c = input.cohorts ?? { lapsed: { card: 0, nocard: 0 }, signups: [], policy: [], current: "card" as TrialCohort };
   const booked = whole.curve.filter((p) => !p.projected && p.date <= whole.today);
-  const share = noCardShareByDay(booked.map((p) => p.date), c.signups, c.policy);
-  const spend: SpendDay[] = [];
-  for (const p of booked) {
-    const sh = share.get(p.date) ?? 0;
-    const cents = Math.round(p.spendDayCents * (cohort === "nocard" ? sh : 1 - sh));
-    if (cents > 0) spend.push({ date: p.date, cents });
-  }
-  const current = c.current === cohort;
-  const mine: ModelInput = {
-    ...input,
-    spend,
-    paying: input.paying.filter((p) => (p.cohort ?? "card") === cohort),
-    trials: input.trials.filter((t) => (t.cohort ?? "card") === cohort),
-    lapsed: c.lapsed[cohort] ?? 0,
-    lapsedSignups: input.lapsedSignups?.filter((x) => (x.cohort ?? "card") === cohort),
-    // The whole's spend is already filled by the budget; from tomorrow only today's cohort spends.
-    settings: { ...input.settings, dailyBudgetCents: null, budgetFrom: null },
-    forwardSpendCents: current ? whole.spend.perDayProjectedCents : 0,
-    visitors: opts.keepVisitors ? input.visitors : null,
-    cohorts: undefined,
+  const apart = apartDays(booked.map((p) => p.date), c.signups, c.policy);
+  const days = booked.map((p) => p.date).filter((d) => apart.has(d));
+  const firstCard = booked.find((p) => !apart.has(p.date))?.date ?? null;
+  const cardSince = days.length > 0 && firstCard !== null && (days.at(-1) as string) < firstCard ? firstCard : input.since;
+  const isApart = (date: string, cohort?: TrialCohort) => apart.has(dayOf(date)) || (cohort ?? "card") === "nocard";
+  const side = (mine: boolean): ModelInput => {
+    const keep = (date: string, cohort?: TrialCohort) => isApart(date, cohort) === !mine;
+    const lapsedSignups = input.lapsedSignups?.filter((x) => keep(x.date, x.cohort));
+    return {
+      ...input,
+      since: mine ? cardSince : input.since,
+      spend: booked.filter((p) => apart.has(p.date) !== mine && p.spendDayCents > 0).map((p) => ({ date: p.date, cents: p.spendDayCents })),
+      // An account paying from before the start day took a card and came before any of this: the card side's.
+      paying: input.paying.filter((p) => (p.preexisting ? mine : keep(p.signedUpAt ?? p.startedAt, p.cohort))),
+      trials: input.trials.filter((t) => keep(t.createdAt, t.cohort)),
+      lapsed: lapsedSignups ? lapsedSignups.length : (c.lapsed[mine ? "card" : "nocard"] ?? 0),
+      lapsedSignups,
+      // The whole's spend is already filled by the budget; from tomorrow only the kind a new signup gets today spends.
+      settings: { ...input.settings, dailyBudgetCents: null, budgetFrom: null },
+      forwardSpendCents: (c.current === "card") === mine ? whole.spend.perDayProjectedCents : 0,
+      visitors: mine ? input.visitors : null,
+      cohorts: undefined,
+    };
   };
-  const figures = investorFigures(mine);
-  const dates = spend.map((d) => d.date);
+  const apartInput = side(false);
+  const nocardSignups = [...apartInput.trials.map((t) => t.cohort), ...apartInput.paying.map((p) => p.cohort), ...(apartInput.lapsedSignups ?? []).map((x) => x.cohort)].filter((k) => k === "nocard").length;
+  const apartFigures = investorFigures(apartInput);
   return {
-    cohort,
-    figures,
-    attributedCents: spend.reduce((x, d) => x + d.cents, 0),
-    attributedDays: dates.length,
-    firstDay: dates[0] ?? null,
-    lastDay: dates.at(-1) ?? null,
-    current,
-    signups: figures.signups,
+    card: investorFigures(side(true)),
+    apart: apartFigures,
+    days,
+    spendCents: days.reduce((x, d) => x + (booked.find((p) => p.date === d)?.spendDayCents ?? 0), 0),
+    signups: { nocard: nocardSignups, card: Math.max(0, apartFigures.signups - nocardSignups) },
+    cardSince,
   };
 }
 
@@ -504,6 +519,21 @@ export function outlookSentence(f: InvestorFigures): string {
   }
   const why = f.rate.pct === null ? " Until a trial ends, only the accounts already paying are counted." : f.rate.pct === 0 ? " No trial that ended is paying yet, so the running trials add nothing." : "";
   return `At today's pace the ads do not pay for themselves within ${f.curve.length - f.daysLive} days: ${dollars(f.spend.perDayProjectedCents)} a day goes out against ${run} a month coming in.${why}`;
+}
+
+/** The kept-apart block's sentence (2026-10-24): what the no-card days cost and brought, against the card's. */
+export function apartSentence(a: { days: string[]; spendCents: number; figures: InvestorFigures }, card: InvestorFigures): string {
+  const f = a.figures;
+  const n = a.days.length;
+  if (n === 0 && f.signups === 0) return "";
+  const when = n === 1 ? `on ${shortDay(a.days[0])}` : `${n} days, ${shortDay(a.days[0])} – ${shortDay(a.days[n - 1])}`;
+  const head = n > 0 ? `While free trials needed no card (${when}), ${dollars(a.spendCents)} of ads brought ${plural(f.signups, "signup", "signups")}` : `${plural(f.signups, "trial with no card", "trials with no card")} came in on card days`;
+  const pays = f.paying.won === 0 ? "none of them pays today" : `${f.paying.won} ${f.paying.won === 1 ? "pays" : "pay"} today`;
+  const cost = f.unit.costPerPayingCents !== null && card.unit.costPerPayingCents !== null
+    ? ` — ${dollars(f.unit.costPerPayingCents)} per paying customer, against ${dollars(card.unit.costPerPayingCents)} with a card`
+    : f.paying.won === 0 && card.unit.costPerPayingCents !== null ? `; with a card a paying customer costs ${dollars(card.unit.costPerPayingCents)}` : "";
+  const rate = f.rate.pct !== null && card.rate.pct !== null ? ` Of their trials that ended, ${f.rate.pct}% stayed; with a card, ${card.rate.pct}%.` : "";
+  return `${head}; ${pays}${cost}.${rate} None of it is in the figures above.`;
 }
 
 /** Which day since the launch today is (owner, 2026-10-24: "add the days count after JobFlex launched"): the
