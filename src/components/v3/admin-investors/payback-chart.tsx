@@ -5,7 +5,9 @@
 // Three views of the one day-by-day curve (lib/investorModel):
 //   · Spend vs revenue — dollars out against dollars in, added up from the start day;
 //   · Monthly run-rate — what a month brings at that day's accounts, against a month of ads;
-//   · Accounts — signed up, and paying (realistic, and if every trial pays).
+//   · Accounts — signed up, and paying.
+// Revenue and paying past today are at the MEASURED rate of trials that stay (2026-10-24) — one line each, no
+// "if every trial pays" beside it.
 // Over the next 30 / 90 / 180 days or the whole horizon. A hover or tap reads
 // one day; today, the break-even and the horizon's end are read out under it.
 // Plain SVG scaled to its box; the same component on the admin page and the
@@ -19,7 +21,7 @@ type View = "cash" | "mrr" | "accounts";
 const VIEWS: Array<{ key: View; label: string; hint: string }> = [
   { key: "cash", label: "Spend vs revenue", hint: "Dollars out against dollars in, added up from the start day. Where the blue line crosses the black one, the ads have paid for themselves." },
   { key: "mrr", label: "Monthly run-rate", hint: "What a month brings in at that day's accounts, against what a month of ads costs. Where blue crosses black, each month earns more than it spends." },
-  { key: "accounts", label: "Accounts", hint: "Signed up so far, and paying — realistic, and if every trial pays. Past today, at the recent signup pace." },
+  { key: "accounts", label: "Accounts", hint: "Signed up so far, and paying. Past today, at the last week's signup pace and the measured share that stays." },
 ];
 const SPANS: Array<{ days: number; label: string }> = [
   { days: 30, label: "30 days" },
@@ -53,7 +55,7 @@ const approx = (n: number) => (n === Math.round(n) ? `${n}` : `≈${Math.round(n
 
 interface Series { key: string; label: string; cls: string; pick: (p: CurvePoint, i: number) => number }
 
-export function PaybackChart({ curve, today, breakEven, horizonDays }: { curve: CurvePoint[]; today: string; breakEven: string | null; horizonDays: number }) {
+export function PaybackChart({ curve, today, breakEven, horizonDays, ratePct }: { curve: CurvePoint[]; today: string; breakEven: string | null; horizonDays: number; /** The measured share that stays; null = none measured yet. */ ratePct: number | null }) {
   const [view, setView] = useState<View>("cash");
   const [span, setSpan] = useState<number>(horizonDays > 90 ? 90 : 0);
   const [cur, setCur] = useState<number | null>(null);
@@ -65,23 +67,22 @@ export function PaybackChart({ curve, today, breakEven, horizonDays }: { curve: 
     const sum = curve.slice(from, i + 1).reduce((x, p) => x + p.spendDayCents, 0);
     return Math.round((sum / (i + 1 - from)) * 30);
   }), [curve]);
+  // "at 43% staying" — or, before any trial has ended, only the accounts already paying.
+  const rateWords = ratePct === null ? "paying accounts only" : `${ratePct}% of trials staying`;
   const series = useMemo<Record<View, Series[]>>(() => ({
     cash: [
       { key: "spend", label: "Ad spend", cls: s.lineSpend, pick: (p) => p.spendCents },
-      { key: "real", label: "Revenue, realistic", cls: s.lineReal, pick: (p) => p.realisticCents },
-      { key: "all", label: "Revenue if every trial pays", cls: s.lineAll, pick: (p) => p.allPayCents },
+      { key: "revenue", label: `Revenue · ${rateWords}`, cls: s.lineReal, pick: (p) => p.revenueCents },
     ],
     mrr: [
       { key: "pace", label: "Ad spend per month", cls: s.lineSpend, pick: (_p, i) => pace[i] ?? 0 },
-      { key: "mrrReal", label: "Monthly revenue, realistic", cls: s.lineReal, pick: (p) => p.mrrRealisticCents },
-      { key: "mrrAll", label: "Monthly revenue if every trial pays", cls: s.lineAll, pick: (p) => p.mrrAllPayCents },
+      { key: "mrr", label: `Monthly revenue · ${rateWords}`, cls: s.lineReal, pick: (p) => p.mrrCents },
     ],
     accounts: [
       { key: "signups", label: "Signed up", cls: s.lineSpend, pick: (p) => p.signups },
-      { key: "payReal", label: "Paying, realistic", cls: s.lineReal, pick: (p) => p.payingRealistic },
-      { key: "payAll", label: "Paying if every trial pays", cls: s.lineAll, pick: (p) => p.payingAllPay },
+      { key: "paying", label: `Paying · ${rateWords}`, cls: s.lineReal, pick: (p) => p.paying },
     ],
-  }), [pace]);
+  }), [pace, rateWords]);
 
   const todayIdxAll = curve.findIndex((p) => p.date === today);
   // The visible days: everything booked, then `span` days ahead (or the whole horizon).
@@ -103,7 +104,7 @@ export function PaybackChart({ curve, today, breakEven, horizonDays }: { curve: 
   const markIdx = view === "cash"
     ? (breakEven ? pts.findIndex((p) => p.date === breakEven) : -1)
     : view === "mrr"
-      ? pts.findIndex((p, i) => p.projected && (pace[i] ?? 0) > 0 && p.mrrRealisticCents >= (pace[i] ?? 0))
+      ? pts.findIndex((p, i) => p.projected && (pace[i] ?? 0) > 0 && p.mrrCents >= (pace[i] ?? 0))
       : -1;
   const markLabel = view === "cash" ? "break-even" : "pays monthly";
   const ticks = Array.from(new Set([0, 0.2, 0.4, 0.6, 0.8, 1].map((f) => Math.round(f * (n - 1)))));
@@ -132,11 +133,11 @@ export function PaybackChart({ curve, today, breakEven, horizonDays }: { curve: 
   const reading = (label: string, key: string, p: CurvePoint | undefined) => p ? (
     <div className={s.reading} data-reading={key} key={key}>
       <div className={s.readingHead}>{label} · {short(p.date)}</div>
-      <div className={s.readingBig}>{dollars(p.realisticCents)} <span>earned</span></div>
+      <div className={s.readingBig}>{dollars(p.revenueCents)} <span>earned</span></div>
       <div className={s.readingRows}>
         <span>{dollars(p.spendCents)} spent</span>
-        <span>{dollars(p.mrrRealisticCents)}/mo run-rate</span>
-        <span>{approx(p.payingRealistic)} paying · {approx(p.signups)} signed up</span>
+        <span>{dollars(p.mrrCents)}/mo run-rate</span>
+        <span>{approx(p.paying)} paying · {approx(p.signups)} signed up</span>
       </div>
     </div>
   ) : null;
@@ -202,14 +203,14 @@ export function PaybackChart({ curve, today, breakEven, horizonDays }: { curve: 
               <div className={s.tipDate}>{longDate(at.date)} <span className={s.tipTag}>{at.date === today ? "today" : at.projected ? "projected" : at.spendSource === "budget" ? "budget" : at.spendSource === "booked" ? "booked" : "no spend"}</span></div>
               {lines.map((l) => <div key={l.key} className={s.tipRow}><span>{l.label}</span><b>{fmt(l.pick(at, cur))}</b></div>)}
               {view === "cash" && <div className={s.tipRow}><span>That day&apos;s ads</span><b>{dollars(at.spendDayCents)}</b></div>}
-              {view !== "accounts" && <div className={`${s.tipRow} ${s.tipMuted}`}><span>{approx(at.payingRealistic)} paying · {approx(at.signups)} signed up</span></div>}
-              {view === "accounts" && <div className={`${s.tipRow} ${s.tipMuted}`}><span>{dollars(at.spendCents)} spent · {dollars(at.realisticCents)} earned</span></div>}
+              {view !== "accounts" && <div className={`${s.tipRow} ${s.tipMuted}`}><span>{approx(at.paying)} paying · {approx(at.signups)} signed up</span></div>}
+              {view === "accounts" && <div className={`${s.tipRow} ${s.tipMuted}`}><span>{dollars(at.spendCents)} spent · {dollars(at.revenueCents)} earned</span></div>}
             </div>
           )}
         </div>
         <figcaption className={s.legend}>
           {lines.map((l) => <span key={l.key}><i className={`${s.sw} ${l.cls}`} />{l.label}</span>)}
-          <span className={s.legendNote}>Shaded: projected. Revenue at list price.</span>
+          <span className={s.legendNote}>Shaded: projected at today&apos;s pace. Revenue at list price.</span>
         </figcaption>
       </figure>
       <div className={s.readings}>

@@ -3,8 +3,9 @@
 // ADMIN — INVESTORS, /admin/investors (2026-10-06). The report (shared with
 // the public link and the PDF) with the owner's controls between its numbers
 // and its chart: the daily ad budget (all ads together, spent every day),
-// days booked by hand or read from Meta, the start day and the assumptions,
-// and the shared link.
+// days booked by hand or read from Meta, the start day and how far the chart
+// looks, and the shared link. No assumptions to set (2026-10-24): the share of
+// trials that stay is measured, the forward spend is the last full week's.
 
 import { useState, type ReactNode } from "react";
 import { Copy, ExternalLink, FileDown, Link as LinkIcon, RefreshCw, Trash2 } from "lucide-react";
@@ -38,13 +39,12 @@ export function AdminInvestorsContent({ initial, origin, audience }: { initial: 
   const [to, setTo] = useState(todayLocal());
   const [perDay, setPerDay] = useState("");
   const [platform, setPlatform] = useState<SpendPlatform>("meta");
-  // The assumptions.
-  const [pct, setPct] = useState(a.realisticPct);
-  const [projPerDay, setProjPerDay] = useState(a.spendPerDayCents === null ? "" : String(a.spendPerDayCents / 100));
+  // The start day and how far the chart looks.
   const [horizon, setHorizon] = useState(a.horizonDays);
-  const [trialDays, setTrialDays] = useState(a.trialDays);
   const [sinceDate, setSinceDate] = useState(a.sinceDate ?? "");
   const sinceOrNull = sinceDate.trim() === "" ? null : sinceDate;
+  const [launchDate, setLaunchDate] = useState(a.launchDate ?? "");
+  const launchOrNull = launchDate.trim() === "" ? null : launchDate;
 
   const run = async (call: () => Promise<{ ok: true; report: InvestorReport } | { ok: false; error: string }>) => {
     setPending(true);
@@ -70,7 +70,7 @@ export function AdminInvestorsContent({ initial, origin, audience }: { initial: 
       setError("Copy did not work here — select the link and copy it.");
     }
   };
-  const assumptionsChanged = pct !== a.realisticPct || horizon !== a.horizonDays || trialDays !== a.trialDays || sinceOrNull !== a.sinceDate || (projPerDay.trim() === "" ? a.spendPerDayCents !== null : Math.round(Number(projPerDay) * 100) !== a.spendPerDayCents);
+  const countingChanged = horizon !== a.horizonDays || sinceOrNull !== a.sinceDate || launchOrNull !== a.launchDate;
   const booked = report.spend.entries;
   const bookedTotal = booked.filter((e) => e.date >= f.since && e.date <= f.today).reduce((x, e) => x + e.cents, 0);
 
@@ -140,14 +140,14 @@ export function AdminInvestorsContent({ initial, origin, audience }: { initial: 
         </details>
       </section>
 
-      {/* The assumptions. */}
-      <section className={s.panel} aria-label="Assumptions">
-        <h2 className={s.panelTitle}>Assumptions</h2>
+      {/* What is counted — nothing assumed (2026-10-24). */}
+      <section className={s.panel} aria-label="Counting">
+        <h2 className={s.panelTitle}>Counting</h2>
         <form
           className={s.form}
           onSubmit={(e) => {
             e.preventDefault();
-            void run(() => saveInvestorSettingsAction({ realisticPct: pct, spendPerDayDollars: projPerDay.trim() === "" ? null : Number(projPerDay), horizonDays: horizon, trialDays, sinceDate: sinceOrNull }));
+            void run(() => saveInvestorSettingsAction({ horizonDays: horizon, sinceDate: sinceOrNull, launchDate: launchOrNull }));
           }}
         >
           <label className={`${s.field} ${s.wide}`}>
@@ -165,16 +165,17 @@ export function AdminInvestorsContent({ initial, origin, audience }: { initial: 
               Signups, trials, paying accounts and spend before this day are left out.
             </small>
           </label>
-          <label className={`${s.field} ${s.wide}`}>
-            <span>Realistic share of trials that pay · <b>{pct}%</b></span>
-            <input className={s.range} type="range" min={0} max={100} step={5} value={pct} onChange={(e) => setPct(Number(e.target.value))} aria-label="Realistic share of trials that pay, percent" />
-            <small>By behaviour the model reads {f.trials.byBehaviourPct === null ? "—" : `${f.trials.byBehaviourPct}%`}{f.observed.pct !== null ? `; observed so far ${f.observed.pct}%` : ""}.</small>
+          <label className={s.field}>
+            <span>JobFlex launched on</span>
+            <input className={s.in} type="date" name="launchDate" value={launchDate} min="2020-01-01" max={todayLocal()} onChange={(e) => setLaunchDate(e.target.value)} />
+            <small>Today is day <b>{report.launch.day}</b>{report.launch.set ? "" : " — counted from the start day until a launch day is set"}.</small>
           </label>
-          <label className={s.field}><span>Ads per day from tomorrow, $</span><input className={s.in} type="number" inputMode="decimal" min={0} step="1" placeholder={`${f.spend.perDayProjectedCents / 100} (${a.dailyBudgetCents !== null && a.spendPerDayCents === null ? "the budget" : "recent pace"})`} value={projPerDay} onChange={(e) => setProjPerDay(e.target.value)} /></label>
-          <label className={s.field}><span>Horizon, days</span><input className={s.in} type="number" min={30} max={730} step={30} value={horizon} onChange={(e) => setHorizon(Number(e.target.value))} /></label>
-          <label className={s.field}><span>Trial length, days</span><input className={s.in} type="number" min={1} max={90} value={trialDays} onChange={(e) => setTrialDays(Number(e.target.value))} /></label>
-          <button type="submit" className="btn btn-primary" disabled={pending || !assumptionsChanged}>Apply</button>
+          <label className={s.field}><span>Chart looks ahead, days</span><input className={s.in} type="number" min={30} max={730} step={30} value={horizon} onChange={(e) => setHorizon(Number(e.target.value))} /></label>
+          <button type="submit" className="btn btn-primary" disabled={pending || !countingChanged}>Apply</button>
         </form>
+        <p className={s.hint} data-measured>
+          Nothing to assume: the share of trials that stay is measured — {f.rate.pct === null ? <>no trial has ended yet</> : <><b>{f.rate.pct}%</b>, {f.rate.paid} of the {f.rate.ended} trials that ended are paying</>} — and the running trials are expected to pay at that rate. Spend from tomorrow runs at the last full week&apos;s pace ({dollars(f.spend.perDayProjectedCents)} a day); a trial lasts {f.trials.lengthDays} days, as the running ones show.
+        </p>
       </section>
 
       {/* The shared link. */}
