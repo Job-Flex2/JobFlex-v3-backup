@@ -4,6 +4,7 @@
 // these are the hand-typed ad budget, the start day and the link.
 import { requirePlatformAdmin } from "@/lib/orgContext";
 import { addAdSpend, deleteAdSpend, investorReport, PLATFORMS, readInvestorSettings, rotateInvestorLink, saveInvestorSettings, type InvestorReport, type InvestorSettings, type SpendPlatform } from "@/lib/investors";
+import { saveInvestorPitch, type InvestorPitch } from "@/lib/investorPitch";
 
 type Result = { ok: true; report: InvestorReport } | { ok: false; error: string };
 
@@ -116,4 +117,17 @@ export async function decideInvestorReaderAction(input: Record<string, unknown> 
   const who = ("name" in me && me.name) || ("email" in me && me.email) || "an admin";
   const done = await decideVisitor(id, decision, token, String(who));
   return done ? { ok: true } : { ok: false, error: "That request is no longer on the list." };
+}
+
+/** The pitch deck's own words (2026-10-25): the team, the raise, what is next — shown on the link's Pitch deck; an
+ *  empty box keeps its slide hidden. */
+export async function saveInvestorPitchAction(input: Record<string, unknown> = {}): Promise<{ ok: true; pitch: InvestorPitch } | { ok: false; error: string }> {
+  const admin = await requirePlatformAdmin();
+  const words: Partial<Pick<InvestorPitch, "team" | "ask" | "roadmap">> = {};
+  for (const k of ["team", "ask", "roadmap"] as const) if (typeof input[k] === "string") words[k] = input[k] as string;
+  try {
+    return { ok: true, pitch: await saveInvestorPitch(words, admin.email ?? null) };
+  } catch {
+    return { ok: false, error: "The words could not be saved. Try again." };
+  }
 }

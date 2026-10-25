@@ -1,0 +1,14 @@
+/* The pitch deck's words panel on /admin/investors (2026-10-25): full width under the three controls. */
+:global(.jf-blueprint .content) .wide { grid-column: 1 / -1; }
+:global(.jf-blueprint .content) .head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+:global(.jf-blueprint .content) .opens { display: flex; gap: 8px; flex-wrap: wrap; }
+:global(.jf-blueprint .content) .boxes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+:global(.jf-blueprint .content) .box { display: grid; gap: 6px; align-content: start; min-width: 0; }
+:global(.jf-blueprint .content) .label { font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+:global(.jf-blueprint .content) .area { width: 100%; min-height: 132px; padding: 10px 12px; border: 1.5px solid var(--ink); border-radius: var(--radius); background: #fff; font: 14px/1.5 inherit; color: var(--ink); resize: vertical; }
+:global(.jf-blueprint .content) .area:focus-visible { outline: 3px solid var(--accent, #1854a0); outline-offset: 1px; }
+:global(.jf-blueprint .content) .area::placeholder { color: var(--muted-light, #999); }
+:global(.jf-blueprint .content) .ok { color: var(--success-dark, #2c6335); font-weight: 700; }
+:global(.jf-blueprint .content) .bad { color: var(--danger, #a83232); font-weight: 700; }
+@media (max-width: 1100px) { :global(.jf-blueprint .content) .boxes { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) { :global(.jf-blueprint .content) .opens .btn, :global(.jf-blueprint .content) .area { width: 100%; } :global(.jf-blueprint .content) .opens .btn { min-height: 44px; } }

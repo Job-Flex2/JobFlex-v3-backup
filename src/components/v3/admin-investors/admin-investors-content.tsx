@@ -22,7 +22,7 @@ const todayLocal = () => {
 };
 const when = (iso: string) => new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
 
-export function AdminInvestorsContent({ initial, origin, audience }: { initial: InvestorReport; origin: string; /** Who opened the link and their offers (2026-10-13), drawn by the page. */ audience?: ReactNode }) {
+export function AdminInvestorsContent({ initial, origin, audience, pitch }: { initial: InvestorReport; origin: string; /** Who opened the link and their offers (2026-10-13), drawn by the page. */ audience?: ReactNode; /** The pitch deck's own words (2026-10-25), drawn by the page under the controls. */ pitch?: ReactNode }) {
   const [report, setReport] = useState(initial);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -195,6 +195,8 @@ export function AdminInvestorsContent({ initial, origin, audience }: { initial: 
           <button type="button" className={s.iconBtn} aria-label="Read the figures again" disabled={pending} onClick={() => void run(async () => ({ ok: true as const, report: await getInvestorReport() }))}><RefreshCw size={14} className={pending ? s.spin : ""} aria-hidden="true" /></button>
         </div>
       </section>
+
+      {pitch}
     </div>
   );
 
