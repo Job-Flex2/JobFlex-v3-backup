@@ -75,8 +75,38 @@ export function AdminInvestorsContent({ initial, origin, audience, pitch }: { in
   const booked = report.spend.entries;
   const bookedTotal = booked.filter((e) => e.date >= f.since && e.date <= f.today).reduce((x, e) => x + e.cents, 0);
 
+  // SETTLED BY ITSELF (owner, 2026-10-25: "we don't need it — make it smart"): Meta reads the spend, the start day is
+  // the first ad visitor's, the launch day and the horizon were set once. One line says so; the two panels fold away
+  // and open by themselves only when something needs a hand — Meta not connected, or a start day that differs from
+  // the first ad visitor's.
+  const startIsFirstAd = !report.firstAdDay || report.firstAdDay === f.since;
+  const needsHand = !report.meta.configured || !startIsFirstAd;
+  const settled = (
+    <section className={s.panel} aria-label="Settled by itself" data-settled>
+      <div className={s.auto}>
+        <span data-settled-spend>
+          <b>Spend</b>{" "}
+          {report.meta.configured
+            ? <>read from Meta{report.meta.lastPulledAt ? <> · last read {when(report.meta.lastPulledAt)}, {report.meta.daysPulled} {report.meta.daysPulled === 1 ? "day" : "days"}</> : <> · not read yet</>}{report.meta.lastError ? <> · {report.meta.lastError}</> : null}</>
+            : <>not read — Meta isn&apos;t connected</>}
+          {f.spend.dailyBudgetCents !== null ? <> · plus a {dollars(f.spend.dailyBudgetCents)}/day budget on days with nothing read</> : null}
+        </span>
+        <span data-settled-since>
+          <b>Counting from</b> {longDate(f.since)}{startIsFirstAd ? <> — the first visitor from an ad</> : report.firstAdDay ? <> · the first ad visitor came {longDate(report.firstAdDay)} — <button type="button" className={s.textBtn} disabled={pending} onClick={() => void run(() => saveInvestorSettingsAction({ horizonDays: a.horizonDays, sinceDate: report.firstAdDay, launchDate: a.launchDate }))}>count from that day</button></> : null}
+        </span>
+        <span data-settled-launch><b>Day {report.launch.day}</b> since {longDate(report.launch.date)}{report.launch.set ? "" : " (the start day, until a launch day is set)"}</span>
+        <span data-settled-horizon><b>Chart</b> looks {a.horizonDays} days ahead</span>
+        {report.meta.configured && <button type="button" className={`btn btn-ghost ${s.autoBtn}`} disabled={pending} onClick={() => void run(() => pullMetaSpendAction())}>Read from Meta now</button>}
+      </div>
+    </section>
+  );
+
   const controls = (
     <div className={s.controls}>
+      {settled}
+      <details className={`${s.fold} ${s.adjust}`} open={needsHand || undefined} data-adjust>
+      <summary>Adjust by hand · the budget, booked days, the start day, the launch day, the horizon</summary>
+      <div className={s.adjustGrid}>
       {/* The ad budget. */}
       <section className={s.panel} aria-label="Ad spend">
         <h2 className={s.panelTitle}>Ad spend</h2>
@@ -178,6 +208,8 @@ export function AdminInvestorsContent({ initial, origin, audience, pitch }: { in
           Nothing to assume: the share of trials that stay is measured — {f.rate.pct === null ? <>no trial has ended yet</> : <><b>{f.rate.pct}%</b>, {f.rate.paid} of the {f.rate.ended} trials that ended are paying</>} — and the running trials are expected to pay at that rate. Spend from tomorrow runs at the last full week&apos;s pace ({dollars(f.spend.perDayProjectedCents)} a day); a trial lasts {f.trials.lengthDays} days, as the running ones show.
         </p>
       </section>
+      </div>
+      </details>
 
       {/* The shared link. */}
       <section className={s.panel} aria-label="Shared link">
