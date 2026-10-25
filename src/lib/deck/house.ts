@@ -525,9 +525,14 @@ function placeOpenings(openings: HouseOpening[], parts: WallPart[], partH: numbe
     const x1 = Math.min(o.xFt + o.widthFt / 2, p.x1 - 0.25);
     if (x1 - x0 < 0.75) continue;
     const top = partH[i] - 0.6;
-    const h = Math.min(o.heightFt, top - o.sillFt);
+    // A window that starts above the part's top stands over a lower part's roof — no window of this wall. One that
+    // starts inside the part but runs into the frieze (a transom just under the eave, read off a photo) is brought
+    // down to fit under it rather than left out (2026-10-25).
+    if (o.sillFt >= top) continue;
+    const sill = o.sillFt + o.heightFt > top ? Math.max(0, top - o.heightFt) : o.sillFt;
+    const h = Math.min(o.heightFt, top - sill);
     if (h < 0.75) continue;
-    const row = [r2((x0 + x1) / 2), p.depthFt, r2(x1 - x0), r2(h), r2(o.sillFt)];
+    const row = [r2((x0 + x1) / 2), p.depthFt, r2(x1 - x0), r2(h), r2(sill)];
     if (o.kind === "window") windows.push(row);
     else doors.push([...row, o.kind === "slider" ? 1 : 0]);
   }
