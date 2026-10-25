@@ -154,6 +154,11 @@ export interface CurvePoint {
   /** Accounts: paying (expected at the measured rate, fractional, once a trial is over), and signed up so far. */
   paying: number;
   signups: number;
+  /** What the trials (running and still to come) bring that day were EVERY one to convert — a month in, the running
+   *  total, accounts. Revenue is linear in the rate, so a what-if rate reads off these (whatIfPoint, 2026-10-25). */
+  trialsMrrAllCents: number;
+  trialsRevenueAllCents: number;
+  trialsPayingAll: number;
 }
 
 export interface InvestorFigures {
@@ -189,7 +194,7 @@ export interface InvestorFigures {
   /** THE MEASURED RATE (2026-10-24): of the trials that have ended, the share that converted to a paid plan (paid on
    *  time or later — one that left since still converted — or a first charge inside its two-week retry window), and
    *  its 90% range (Wilson) for that many trials. pct null = no trial has ended yet. */
-  rate: { paid: number; ended: number; pct: number | null; lowPct: number | null; highPct: number | null };
+  rate: { paid: number; ended: number; pct: number | null; lowPct: number | null; highPct: number | null; /** The exact share (0–1) the curve uses; null = none measured. */ share: number | null };
   /** How the ended trials ended (2026-10-25) — the page shows only how many came back later (owner: "no breakdown,
    *  just the count of how many came back later"); the rest is kept for the rate and the QA. null = not read. */
   outcomes: {
@@ -327,6 +332,7 @@ export function investorFigures(input: ModelInput): InvestorFigures {
   const curve: CurvePoint[] = [];
   let spendRun = 0;
   let revenueRun = 0;
+  let trialsRun = 0;
   const last = addDays(today, horizon);
   const futureCohorts: number[] = []; // monthly cents from each future day's signups, were every one to pay
   for (let d = since; d <= last; d = addDays(d, 1)) {
@@ -336,25 +342,31 @@ export function investorFigures(input: ModelInput): InvestorFigures {
     let mrrDay = 0;
     let payingDay = 0;
     for (const p of input.paying) if (dayOf(p.startedAt) <= d) { mrrDay += p.monthlyCents; payingDay += 1; }
-    // A running trial pays, at the measured rate, from its end.
+    // What the trials bring were every one to convert: a running trial from its end; signups still to come arrive at
+    // the last week's pace and pay after their trial. At the measured rate, that share of it.
+    let trialsMrr = 0;
+    let trialsPaying = 0;
     for (const t of trials) if (trialEnd(t) <= d) {
-      payingDay += pct;
-      if (t.monthlyCents !== null) mrrDay += t.monthlyCents * pct;
+      trialsPaying += 1;
+      if (t.monthlyCents !== null) trialsMrr += t.monthlyCents;
     }
     let signupsSoFar = signupDates.filter((x) => x <= d).length;
     if (projected) {
-      // Signups keep arriving at the last week's pace; each day's arrivals pay, at the measured rate, after their trial.
       futureCohorts.push(signupsPerDay * avgTrialMonthly);
       const payingCohorts = futureCohorts.length - trialDays;
-      for (let i = 0; i < payingCohorts; i++) mrrDay += futureCohorts[i] * pct;
-      if (payingCohorts > 0) payingDay += payingCohorts * signupsPerDay * pct;
+      for (let i = 0; i < payingCohorts; i++) trialsMrr += futureCohorts[i];
+      if (payingCohorts > 0) trialsPaying += payingCohorts * signupsPerDay;
       signupsSoFar += futureCohorts.length * signupsPerDay;
     }
+    mrrDay += trialsMrr * pct;
+    payingDay += trialsPaying * pct;
     revenueRun += mrrDay / 30;
+    trialsRun += trialsMrr / 30;
     curve.push({
       date: d, spendCents: r0(spendRun), revenueCents: r0(revenueRun), projected,
       spendDayCents: r0(spendDay), spendSource: projected ? "projected" : (spendSource.get(d) ?? "none"),
       mrrCents: r0(mrrDay), paying: r1(payingDay), signups: r1(signupsSoFar),
+      trialsMrrAllCents: r0(trialsMrr), trialsRevenueAllCents: r0(trialsRun), trialsPayingAll: r1(trialsPaying),
     });
   }
   const cross = totalSpend > 0 ? curve.find((p) => p.revenueCents >= p.spendCents && p.date >= today) ?? null : null;
@@ -379,7 +391,7 @@ export function investorFigures(input: ModelInput): InvestorFigures {
       ? { paidAtEnd: count("paid"), cameBack: count("came-back"), cameBackDays: median(oc.filter((o) => o.outcome === "came-back" && typeof o.afterDays === "number").map((o) => o.afterDays as number)), leftAfterPaying: oc.filter((o) => (o.outcome === "paid" || o.outcome === "came-back") && !o.payingNow).length, canceled: count("canceled"), unpaid: count("unpaid"), retrying: count("retrying") }
       : null,
     // From whole numbers: 23 of 40 is 57.5% and reads 58% (0.575 as a float rounds down to 57).
-    rate: { paid: converted, ended, pct: ended > 0 ? Math.round((converted * 100) / ended) : null, lowPct: range ? toPct(range.low) : null, highPct: range ? toPct(range.high) : null },
+    rate: { paid: converted, ended, share, pct: ended > 0 ? Math.round((converted * 100) / ended) : null, lowPct: range ? toPct(range.low) : null, highPct: range ? toPct(range.high) : null },
     expected: {
       payers: share === null ? null : r1(trials.length * share),
       payersLow: range ? Math.round(trials.length * range.low) : null,
@@ -601,7 +613,7 @@ export function runRateStory(curve: readonly CurvePoint[], today: string, days: 
   const fwd = w.to - w.todayIndex;
   if (fwd > 0) {
     const e = runRateReading(curve, pace, w.to);
-    const how = ratePct === null ? "counting only the accounts already paying" : `with ${ratePct}% of trials staying, as measured`;
+    const how = ratePct === null ? "counting only the accounts already paying" : `with ${ratePct}% of trials converting, as measured`;
     ahead = `In ${fwd} ${dayWord(fwd)}, at today's pace and ${how}: ${dollars(e.revenueCents)} a month in, ${dollars(e.adsCents)} a month of ads.`;
   }
   const c = payMonthlyDay(curve, pace, w.todayIndex);
@@ -611,6 +623,51 @@ export function runRateStory(curve: readonly CurvePoint[], today: string, days: 
       ? "Already today a month brings in more than its ads cost."
       : `From ${longDate(c.date)} — in ${c.inDays} ${dayWord(c.inDays)} — each month brings in more than its ads cost.`;
   return { now, past, ahead, cross };
+}
+
+/* ── WHAT IF MORE TRIALS CONVERTED (owner, 2026-10-25: "add a prediction line, dashed, so we can play with it — if the
+   conversion gets better, where we can be"). Revenue is linear in the rate, so any rate reads off the measured curve:
+   the trials' part at 100% (trialsMrrAllCents…) times the difference. Only what is still to come moves: the paying
+   accounts and every day up to today stay as they are. The slider starts at the measured rate — a what-if shows only
+   once someone moves it. */
+
+/** One day of the curve at another conversion rate (0–1), against the measured one. */
+export function whatIfPoint(p: CurvePoint, measured: number | null, at: number): { mrrCents: number; revenueCents: number; paying: number } {
+  const d = at - (measured ?? 0);
+  return { mrrCents: Math.round(p.mrrCents + d * p.trialsMrrAllCents), revenueCents: Math.round(p.revenueCents + d * p.trialsRevenueAllCents), paying: Math.round((p.paying + d * p.trialsPayingAll) * 10) / 10 };
+}
+
+/** The words for a what-if rate (whole %): where a month would be at the end of the view, the day a month would first
+ *  earn more than its ads, and the day the ads would pay for themselves — each against the measured rate. */
+export function whatIfStory(curve: readonly CurvePoint[], today: string, days: number | null, measured: number | null, atPct: number): string {
+  const at = Math.min(100, Math.max(0, atPct)) / 100;
+  const pace = monthlyPace(curve, today);
+  const w = runRateWindow(curve, today, days);
+  const measuredPct = measured === null ? null : Math.round(measured * 100);
+  const firstMonthly = (rate: number | null) => {
+    for (let i = w.todayIndex; i < curve.length; i++) if ((pace[i] ?? 0) > 0 && whatIfPoint(curve[i], measured, rate ?? measured ?? 0).mrrCents >= (pace[i] ?? 0)) return i;
+    return -1;
+  };
+  const firstEven = (rate: number | null) => {
+    for (let i = w.todayIndex; i < curve.length; i++) if (curve[i].spendCents > 0 && whatIfPoint(curve[i], measured, rate ?? measured ?? 0).revenueCents >= curve[i].spendCents) return i;
+    return -1;
+  };
+  // Where a month would be: at the end of the view, and never closer than 30 days ahead (a day or two shows nothing).
+  const e = Math.min(curve.length - 1, w.todayIndex + Math.max(30, w.to - w.todayIndex));
+  const mine = whatIfPoint(curve[e], measured, at).mrrCents;
+  const real = curve[e].mrrCents;
+  const diff = mine - real;
+  const head = `If ${atPct}% of trials converted${measuredPct === null ? "" : ` instead of ${measuredPct}%`}: in ${e - w.todayIndex} ${e - w.todayIndex === 1 ? "day" : "days"} a month would bring in ${dollars(mine)}${diff === 0 ? "" : ` (${dollars(Math.abs(diff))} ${diff > 0 ? "more" : "less"})`}`;
+  const sooner = (now: number, then: number, what: string, never: string) => {
+    if (then < 0) return `${never} within the next ${curve.length - 1 - w.todayIndex} days`;
+    const when = `${what} from ${longDate(curve[then].date)}`;
+    if (now < 0) return `${when} (not at all at ${measuredPct ?? 0}%)`;
+    const by = now - then;
+    return by === 0 ? `${when}, the same day` : `${when} — ${Math.abs(by)} ${Math.abs(by) === 1 ? "day" : "days"} ${by > 0 ? "sooner" : "later"}`;
+  };
+  const monthly = sooner(firstMonthly(null), firstMonthly(at), "each month would earn more than its ads", "no month would earn more than its ads");
+  const even = sooner(firstEven(null), firstEven(at), "the ads would have paid for themselves", "the ads would not pay for themselves");
+  return `${head}; ${monthly}; ${even}.`;
 }
 
 /** THE SPEND BY PERIOD (owner, 2026-10-08: "live spending per day, per week,

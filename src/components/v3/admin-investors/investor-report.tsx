@@ -134,7 +134,7 @@ export function InvestorReportView({ report, shared = false, between }: { report
 
       <section className={s.card}>
         <h2 className={s.h2}>Month by month: ads against revenue</h2>
-        <PaybackChart curve={f.curve} today={f.today} ratePct={r.pct} />
+        <PaybackChart curve={f.curve} today={f.today} ratePct={r.pct} share={r.share} />
       </section>
 
       {report.spend.byPlatform.length > 0 && (
