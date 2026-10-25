@@ -39,6 +39,8 @@ export function gradients(g: Gray): { gx: Float32Array; gy: Float32Array } {
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
+/** y on a line at x (fractions), the line given by its two ends. */
+const lineY = (l: { left: { x: number; y: number }; right: { x: number; y: number } }, x: number) => l.left.y + ((l.right.y - l.left.y) * (x - l.left.x)) / Math.max(1e-6, l.right.x - l.left.x);
 
 interface Field {
   w: number;
@@ -368,6 +370,149 @@ function insideLum(f: Field, b: Box): number {
   return meanLum(f, Math.round(X0 + bw * 0.2), Math.round(X1 - bw * 0.2), Math.round(T + bh * 0.2), Math.round(B - bh * 0.2)) ?? 0.5;
 }
 
+/**
+ * THE WINDOWS OFF THE PICTURE ITSELF (2026-10-25 — owner, the live review: "why is it still wrong, the windows are
+ * from the pic"). The vision model's boxes were too far off to snap: boxes over siding, a three-pane window as two, a
+ * box past the house's corner. The picture says where the windows are: inside the wall (between the read's eave and
+ * base, within its ends), what is not siding — lit glass at dusk, dark glass by day, white trim — grouped into blobs,
+ * bright and dark apart (a dark band must not glue bright frames together); a blob the size and shape of a window,
+ * solid or framed on three sides at least, not running into the eave's shadow, is a window. Boards and bands — a
+ * corner board or downspout covering most of the height, the soffit's shadow or a porch roof's edge covering most of
+ * the width — are cleared first. A box in a row of like boxes that took in a lamp beside it is cut to the row's width;
+ * a lone blob far smaller than the rest (a lamp, a vent) is dropped. Fractions out.
+ */
+export function findWindows(read: HouseRead, g: Gray, f: Field, opts: { diff?: number; edge?: number } = {}): Box[] {
+  if (!read.eave) return [];
+  const { w, h, data } = g;
+  const { gx, gy } = f;
+  const xL = Math.round(Math.min(read.base.left.x, read.base.right.x) * w), xR = Math.round(Math.max(read.base.left.x, read.base.right.x) * w);
+  const eaveAt = (x: number) => lineY(read.eave!, x / w) * h, baseAt = (x: number) => lineY(read.base, x / w) * h;
+  const H = baseAt((xL + xR) / 2) - eaveAt((xL + xR) / 2);
+  if (H < 40 || xR - xL < 40) return [];
+  // The top of the wall is the eave's own shadow band, found in the picture: the darkest run of rows within a quarter
+  // of the wall's height of the model's line (which sits a few per cent off, either way). Nothing above that band is a
+  // window — the roof, the sky beyond a corner — and a window just under it is not cut off.
+  const K = Math.round(H * 0.25);
+  const prof: number[] = [];
+  for (let k = -K; k <= K; k++) {
+    let s = 0;
+    let n = 0;
+    for (let x = xL; x < xR; x += 2) {
+      const y = Math.round(eaveAt(x)) + k;
+      if (y >= 0 && y < h) [s, n] = [s + data[y * w + x], n + 1];
+    }
+    prof.push(n ? s / n : 1);
+  }
+  const sm = prof.map((_, i) => {
+    let s = 0;
+    let n = 0;
+    for (let d = -2; d <= 2; d++) if (prof[i + d] !== undefined) [s, n] = [s + prof[i + d], n + 1];
+    return s / n;
+  });
+  let kMin = 0;
+  let vMin = Infinity;
+  sm.forEach((v, i) => {
+    if (v < vMin) [vMin, kMin] = [v, i - K];
+  });
+  const rowMed = [...sm].sort((p, q) => p - q)[Math.floor(sm.length / 2)];
+  const bandK = rowMed - vMin > 0.08 ? kMin : 0;
+  const topAt = (x: number) => eaveAt(x) + bandK + H * 0.015;
+  const inWall = (x: number, y: number) => x >= xL && x < xR && y >= topAt(x) && y < baseAt(x) + H * 0.02;
+  const sample: number[] = [];
+  for (let y = 0; y < h; y += 2) for (let x = xL; x < xR; x += 2) if (inWall(x, y)) sample.push(data[y * w + x]);
+  sample.sort((a, b) => a - b);
+  const med = sample[Math.floor(sample.length / 2)] ?? 0.5;
+  const diff = opts.diff ?? 0.16, edge = opts.edge ?? 0.1;
+  const out: Box[] = [];
+  // Bright and dark apart: a dark band (the soffit's shadow, a porch roof's underside) must not glue bright frames
+  // together, nor white trim the dark glass of two rooms.
+  for (const bright of [true, false]) {
+    const mask = new Uint8Array(w * h);
+    for (let y = 1; y < h - 1; y++) for (let x = xL; x < xR; x++) {
+      const i = y * w + x;
+      if (!inWall(x, y)) continue;
+      const d = data[i] - med;
+      const far = bright ? d > diff : d < -diff;
+      const edgy = gx[i] + gy[i] > edge && (bright ? d >= 0 : d < 0);
+      if (far || edgy) mask[i] = 1;
+    }
+    // What runs most of the wall is no window: a column (a corner board, a downspout) or a row (the eave's shadow, a
+    // porch roof's edge, a belt board) covered along more than half its length is cleared, two pixels either way.
+    const colN = new Int32Array(w), colAll = new Int32Array(w);
+    for (let x = xL; x < xR; x++) for (let y = 0; y < h; y++) if (inWall(x, y)) { colAll[x]++; if (mask[y * w + x]) colN[x]++; }
+    const clearCols = new Uint8Array(w);
+    for (let x = xL; x < xR; x++) if (colAll[x] && colN[x] / colAll[x] > 0.85) for (let k = -2; k <= 2; k++) clearCols[x + k] = 1;
+    const rowN = new Int32Array(h), rowAll = new Int32Array(h);
+    for (let y = 0; y < h; y++) for (let x = xL; x < xR; x++) if (inWall(x, y)) { rowAll[y]++; if (mask[y * w + x]) rowN[y]++; }
+    const clearRows = new Uint8Array(h);
+    for (let y = 0; y < h; y++) if (rowAll[y] && rowN[y] / rowAll[y] > 0.7) for (let k = -2; k <= 2; k++) if (y + k >= 0 && y + k < h) clearRows[y + k] = 1;
+    for (let y = 0; y < h; y++) for (let x = xL; x < xR; x++) if (clearCols[x] || clearRows[y]) mask[y * w + x] = 0;
+    const seen = new Uint8Array(w * h);
+    const stack: number[] = [];
+    for (let y = 0; y < h; y++) for (let x = xL; x < xR; x++) {
+      const i0 = y * w + x;
+      if (!mask[i0] || seen[i0]) continue;
+      const px: number[] = [];
+      let minX = x, maxX = x, minY = y, maxY = y;
+      stack.push(i0); seen[i0] = 1;
+      while (stack.length) {
+        const i = stack.pop()!; px.push(i);
+        const cx = i % w, cy = (i - cx) / w;
+        if (cx < minX) minX = cx; if (cx > maxX) maxX = cx; if (cy < minY) minY = cy; if (cy > maxY) maxY = cy;
+        for (const j of [i - 1, i + 1, i - w, i + w]) if (j >= 0 && j < w * h && mask[j] && !seen[j]) { seen[j] = 1; stack.push(j); }
+      }
+      const bw = maxX - minX + 1, bh = maxY - minY + 1;
+      if (bh < H * 0.05 || bw < (xR - xL) * 0.025 || bw / bh > 7 || bh / bw > 4) continue;
+      // No window is most of the wall: a stretch of wall that read dark or bright as a whole (a porch's shadow).
+      if (bw > (xR - xL) * 0.45 || bh > H * 0.75) continue;
+      // Along the eave or an end, a wide-and-low or tall-and-thin thing is the band or the board, not a window.
+      // Nothing a window: it never runs out of the top of the region (what does is the eave's band, the roof beyond a
+      // corner, the sky), nor out of its bottom (the ground, a patio).
+      if (minY <= topAt((minX + maxX) / 2) + 1 || maxY >= baseAt((minX + maxX) / 2) + H * 0.02 - 2) continue;
+      // At an end of the wall, a tall thin thing is the corner board, not a window.
+      if ((minX <= xL + 1 || maxX >= xR - 2) && bh > 2.5 * bw) continue;
+      const fill = px.length / (bw * bh);
+      const band = Math.max(3, Math.round(Math.min(bw, bh) * 0.12));
+      const cover = (sideOf: (cx: number, cy: number) => boolean, len: number, along: (cx: number, cy: number) => number) => { const hit = new Set<number>(); for (const i of px) { const cx = i % w, cy = (i - cx) / w; if (sideOf(cx, cy)) hit.add(along(cx, cy)); } return hit.size / len; };
+      const sides = [cover((cx) => cx < minX + band, bh, (_, cy) => cy), cover((cx) => cx > maxX - band, bh, (_, cy) => cy), cover((_, cy) => cy < minY + band, bw, (cx) => cx), cover((_, cy) => cy > maxY - band, bw, (cx) => cx)];
+      // Three sides plainly there and the fourth at least begun (a frame beside a corner board loses a side to the clearing).
+      const framed = sides.filter((c) => c >= 0.5).length >= 3 && sides.every((c) => c >= 0.15);
+      if (fill < 0.5 && !framed) continue;
+      out.push({ x0: minX / w, x1: (maxX + 1) / w, top: minY / h, bottom: (maxY + 1) / h });
+    }
+  }
+  // The same window found bright (its frame) and dark (its glass): the larger one stands.
+  out.sort((p, q) => (q.x1 - q.x0) * (q.bottom - q.top) - (p.x1 - p.x0) * (p.bottom - p.top));
+  let kept: Box[] = [];
+  for (const b of out) { const inside = kept.some((k) => b.x0 >= k.x0 - 0.004 && b.x1 <= k.x1 + 0.004 && b.top >= k.top - 0.004 && b.bottom <= k.bottom + 0.004); if (!inside) kept.push(b); }
+  // In a row of like windows, one much wider than the rest took in what stood beside it (a lamp, a post): cut to the
+  // row's width on the side the row is.
+  const rowOf = (b: Box) => kept.filter((k) => k !== b && Math.min(k.bottom, b.bottom) - Math.max(k.top, b.top) > 0.6 * Math.min(k.bottom - k.top, b.bottom - b.top));
+  kept = kept.map((b) => {
+    const row = rowOf(b).filter((k) => (k.x1 - k.x0) < (b.x1 - b.x0) / 1.4);
+    if (row.length < 2) return b;
+    // Only a row this box stands in — its nearest like box within a pane or so, not a row across the wall.
+    const near = Math.min(...row.map((k) => Math.max(0, Math.max(k.x0 - b.x1, b.x0 - k.x1))));
+    if (near > 1.5 * (row.map((k) => k.x1 - k.x0).sort((p, q) => p - q)[Math.floor(row.length / 2)])) return b;
+    const widths = row.map((k) => k.x1 - k.x0).sort((p, q) => p - q);
+    const wMed = widths[Math.floor(widths.length / 2)];
+    const rowCx = row.reduce((t, k) => t + (k.x0 + k.x1) / 2, 0) / row.length;
+    // The cut edge onto the frame's own line: the strongest standing edge within a few pixels of the row's width.
+    const ya = Math.round((b.top + (b.bottom - b.top) * 0.15) * h), yb = Math.round((b.bottom - (b.bottom - b.top) * 0.15) * h);
+    const settle = (xf: number) => { const x = Math.round(xf * w); let best = x, bv = -1; for (let d = -4; d <= 4; d++) { const v = colScore(f, x + d, ya, yb); if (v > bv) [best, bv] = [x + d, v]; } return best / w; };
+    return rowCx < (b.x0 + b.x1) / 2 ? { ...b, x1: settle(b.x0 + wMed) } : { ...b, x0: settle(b.x1 - wMed) };
+  });
+  // A lone blob far smaller than the rest (a lamp, a vent) is no window; small windows in a row of their like stay.
+  const areas = kept.map((k) => (k.x1 - k.x0) * (k.bottom - k.top)).sort((p, q) => p - q);
+  const aMed = areas[Math.floor(areas.length / 2)] ?? 0;
+  // Down at the base, a blob far wider and flatter than the windows is the ground or a patio seen past the model's line.
+  const widths = kept.map((k) => k.x1 - k.x0).sort((p, q) => p - q);
+  const wMedAll = widths[Math.floor(widths.length / 2)] ?? 0;
+  kept = kept.filter((b) => !(b.bottom * h >= baseAt(((b.x0 + b.x1) / 2) * w) - H * 0.1 && b.x1 - b.x0 > 2 * wMedAll && (b.bottom - b.top) * h < H * 0.2));
+  const like = (k: Box, b: Box) => Math.abs((k.x1 - k.x0) - (b.x1 - b.x0)) < 0.2 * (b.x1 - b.x0) && Math.abs((k.bottom - k.top) - (b.bottom - b.top)) < 0.3 * (b.bottom - b.top);
+  kept = kept.filter((b) => (b.x1 - b.x0) * (b.bottom - b.top) >= aMed * 0.35 || rowOf(b).some((k) => like(k, b)));
+  return kept;
+}
 /** A box's outline on the picture, in fractions. */
 const boxScore = (f: Field, b: Box) => outlineScore(f, Math.round(b.x0 * f.w), Math.round(b.x1 * f.w), Math.round(b.top * f.h), Math.round(b.bottom * f.h));
 
@@ -561,7 +706,7 @@ function growToFrame(f: Field, b: Box): Box {
  * The read moved onto the picture's edges: windows and doors (a row of windows split), the wall's corners, its base,
  * its eave and each step. Back come the read and how many lines moved.
  */
-export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: number; split: number } {
+export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: number; split: number; /** Windows read off the picture itself (findWindows), 0 when the model's boxes were lined up instead. */ found: number } {
   const { gx, gy } = gradients(g);
   const f: Field = { w: g.w, h: g.h, gx, gy, lum: g.data };
   let moved = 0;
@@ -575,8 +720,14 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
     return m && m.gain >= 1.1 ? moveBox(f, b, m) : b;
   };
   const windows: HouseRead["windows"] = [];
-  for (const w of read.windows) {
-    const box0 = growToFrame(f, snapBox(f, own(align({ x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill }))));
+  // The picture's own windows first (findWindows): where it shows three or more, they stand and the model's boxes are
+  // left aside; where it shows fewer (low glass against a dark wall, a photo of a different kind), the model's boxes
+  // are lined up as before.
+  const pixel = findWindows(read, g, f);
+  const found = pixel.length >= 3 ? pixel.length : 0;
+  const source = found ? pixel.map((b) => ({ x0: b.x0, x1: b.x1, head: b.top, sill: b.bottom })) : read.windows;
+  for (const w of source) {
+    const box0 = found ? growToFrame(f, { x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill }) : growToFrame(f, snapBox(f, own(align({ x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill }))));
     const parts = splitRow(f, box0);
     if (parts.length > 1) split += parts.length - 1;
     for (const p of parts) {
@@ -594,10 +745,13 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
   };
   for (let i = windows.length - 1; i >= 0; i--) if (windows.slice(0, i).some((o) => overlap(o, windows[i]) > 0.6)) windows.splice(i, 1);
   windows.sort((a, b) => a.x0 - b.x0 || a.head - b.head);
-  // The rows moved as rows and run on, then each window grown to its whole frame.
+  // The model's boxes: the rows moved as rows and run on, phantoms dropped; the picture's own windows stand as found
+  // (a blob solid or framed on three sides is a window — the model-minded tests would throw a pane beside a lamp out).
+  // Then each window grown to its whole frame.
   {
     const span = { x0: Math.min(read.base.left.x, read.base.right.x), x1: Math.max(read.base.left.x, read.base.right.x) };
-    const fitted = fitRows(f, windows.map((w) => ({ x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill })), span).map((b) => growToFrame(f, b));
+    const boxes = windows.map((w) => ({ x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill }));
+    const fitted = (found ? boxes : fitRows(f, boxes, span)).map((b) => growToFrame(f, b));
     windows.splice(0, windows.length, ...fitted.map((b) => ({ x0: b.x0, x1: b.x1, head: b.top, sill: b.bottom })));
     windows.sort((a, b) => a.x0 - b.x0 || a.head - b.head);
   }
@@ -669,5 +823,5 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
     if (!near(x, j.x)) moved++;
     return { ...j, x };
   });
-  return { read: { ...read, base: base2, eave: eave2, jogs, windows: windows.slice(0, 30), doors, door }, moved, split };
+  return { read: { ...read, base: base2, eave: eave2, jogs, windows: windows.slice(0, 30), doors, door }, moved, split, found };
 }
