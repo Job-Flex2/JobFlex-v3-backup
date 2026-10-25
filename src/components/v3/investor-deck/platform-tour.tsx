@@ -1,11 +1,12 @@
 "use client";
 // THE PLATFORM TOUR (owner, 2026-10-25): JobFlex's real screens one at a time, in the order a job lives — win the
 // work, estimate, sell, run the work, run the company — each with what it does in a sentence. Chapters jump, the strip
-// below picks any screen, Play walks through them.
-import { useEffect, useRef } from "react";
+// below picks any screen, Play walks through them, Full screen gives the screens the whole monitor.
+import { useEffect, useRef, type CSSProperties } from "react";
 import Image from "next/image";
 import { TOUR_CHAPTERS, TOUR_SHOTS, tourSrc } from "./tour-shots";
 import { useSlides } from "./use-slides";
+import { useFullscreen } from "./use-fullscreen";
 import s from "./investor-deck.module.css";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -16,6 +17,8 @@ export function PlatformTour() {
   const shot = TOUR_SHOTS[index];
   const chapter = TOUR_CHAPTERS.find((c) => c.key === shot.chapter)!;
   const strip = useRef<HTMLDivElement>(null);
+  const tour = useRef<HTMLElement>(null);
+  const full = useFullscreen(tour);
 
   // The neighbours load ahead, so the next screen is there when it is asked for.
   useEffect(() => {
@@ -28,7 +31,7 @@ export function PlatformTour() {
   }, [index]);
 
   return (
-    <section className={s.tour} data-tour aria-roledescription="slideshow" aria-label="The JobFlex platform">
+    <section className={s.tour} ref={tour} data-tour data-full={full.on || undefined} aria-roledescription="slideshow" aria-label="The JobFlex platform">
       <div className={s.chapters} role="tablist" aria-label="Chapters">
         {TOUR_CHAPTERS.map((c) => {
           const first = TOUR_SHOTS.findIndex((x) => x.chapter === c.key);
@@ -44,10 +47,10 @@ export function PlatformTour() {
       <div className={s.tourMain}>
         <figure className={s.stage} data-kind={shot.kind} {...swipe} aria-live="polite">
           {shot.kind === "desk" ? (
-            <div className={s.browser} key={shot.slug}>
+            <div className={s.browser} key={shot.slug} style={{ "--r": shot.w / shot.h } as CSSProperties}>
               <div className={s.browserBar} aria-hidden="true"><i /><i /><i /><span>jobflex.app</span></div>
               <div className={s.browserBody}>
-                <Image draggable={false} src={tourSrc(shot.slug)} alt={shot.title} width={shot.w} height={shot.h} sizes="(max-width: 860px) 100vw, 760px" className={s.shotImg} style={{ objectPosition: shot.focus ?? "top" }} loading="eager" />
+                <Image draggable={false} src={tourSrc(shot.slug)} alt={shot.title} width={shot.w} height={shot.h} sizes="(max-width: 960px) 100vw, 75vw" className={s.shotImg} loading="eager" />
               </div>
             </div>
           ) : (
@@ -66,6 +69,7 @@ export function PlatformTour() {
             <button type="button" className={s.ctl} onClick={() => move(index - 1)} disabled={index === 0} aria-label="Previous screen">←</button>
             <button type="button" className={`${s.ctl} ${s.ctlMain}`} onClick={() => move(index + 1)} disabled={index === total - 1} data-tour-next>Next →</button>
             <button type="button" className={s.ctl} onClick={togglePlay} aria-pressed={playing} data-tour-play>{playing ? "Pause" : "Play"}</button>
+            {full.able ? <button type="button" className={s.ctl} onClick={full.toggle} aria-pressed={full.on} data-tour-fullscreen>{full.on ? "Exit full screen" : "Full screen"}</button> : null}
           </div>
           <p className={s.hint}>The arrow keys work too — or swipe the screen. <a href={tourSrc(shot.slug)} target="_blank" rel="noreferrer" data-tour-full>Full size ↗</a></p>
         </div>
