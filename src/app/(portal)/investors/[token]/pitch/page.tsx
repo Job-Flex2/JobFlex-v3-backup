@@ -2,7 +2,8 @@
 // who we are and what we're doing"). Behind the same door as the figures (../reader). Every number on it is the
 // Figures page's own reading (lib/investors, the readers' copy), the prices are the live plan catalogue, the
 // comparison is the landing page's researched table (no Lead Center count — the homeowner side is not open yet), and
-// the team, the raise and what is next are the owner's words from /admin/investors
+// the raise and what is next are the owner's words from /admin/investors (the team is shared after a preliminary
+// offer, never on the link)
 // (lib/investorPitch) — a slide with no words does not show.
 import type { Metadata } from "next";
 import { forReaders, investorReport } from "@/lib/investors";
@@ -56,7 +57,8 @@ export default async function InvestorPitchPage({ params }: { params: Promise<{ 
       rows: COMPARE_ROWS.map((r) => ({ id: r.id, label: r.label, detail: r.detail, them: r.them })),
       caveats: CAVEAT_LABEL,
     },
-    words: { team: pitchLines(pitch.team), ask: pitchLines(pitch.ask), roadmap: pitchLines(pitch.roadmap) },
+    // No team: it is shared after a preliminary offer, never sent with the page (2026-10-25).
+    words: { ask: pitchLines(pitch.ask), roadmap: pitchLines(pitch.roadmap) },
   };
   return (
     <main className={`${s.page} ${s.pageWide}`}>

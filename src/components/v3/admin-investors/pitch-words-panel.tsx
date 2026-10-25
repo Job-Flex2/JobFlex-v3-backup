@@ -1,6 +1,7 @@
 "use client";
-// THE PITCH DECK'S OWN WORDS on /admin/investors (2026-10-25): the three slides only the owner can write — the team,
-// the raise, what is next. An empty box keeps its slide off the link's Pitch deck (lib/investorPitch).
+// THE PITCH DECK'S OWN WORDS on /admin/investors (2026-10-25): the slides only the owner can write — the raise and what
+// is next. An empty box keeps its slide off the link's Pitch deck (lib/investorPitch). No team box: the founders and
+// roles are shared after a preliminary offer, never on the link (owner, 2026-10-25).
 import { useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { saveInvestorPitchAction } from "@/actions/investors";
@@ -8,9 +9,8 @@ import type { InvestorPitch } from "@/lib/investorPitch";
 import s from "./admin-investors.module.css";
 import p from "./pitch-words.module.css";
 
-const BOXES: Array<{ key: "ask" | "team" | "roadmap"; label: string; hint: string; example: string }> = [
+const BOXES: Array<{ key: "ask" | "roadmap"; label: string; hint: string; example: string }> = [
   { key: "ask", label: "The raise", hint: "First line is the slide's headline; each line after it is one thing the money pays for. Empty: the slide says “We're raising — offers and first conversations welcome.”", example: "Raising $750K pre-seed\nPaid ads in the four trades that convert\nTwo engineers for the estimators\nSales: the AI desk outbound" },
-  { key: "team", label: "The team", hint: "One person per line: Name — role — a line about them. Empty: no team slide.", example: "Jane Doe — Founder, CEO — 12 years running a roofing company" },
   { key: "roadmap", label: "What's next", hint: "One item per line, in order. Empty: no roadmap slide.", example: "Payments inside the proposal for every trade\nSpanish for crews" },
 ];
 
@@ -29,11 +29,11 @@ export const RAISE_DRAFT = [
 
 export function PitchWordsPanel({ initial, linkBase }: { initial: InvestorPitch; /** The live shared link, or null when it is off. */ linkBase: string | null }) {
   // Nothing saved for the raise yet: the box starts with the draft (not on the link until saved).
-  const [words, setWords] = useState({ ask: initial.ask || RAISE_DRAFT, team: initial.team, roadmap: initial.roadmap });
+  const [words, setWords] = useState({ ask: initial.ask || RAISE_DRAFT, roadmap: initial.roadmap });
   const [saved, setSaved] = useState(initial);
   const [pending, setPending] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
-  const changed = words.ask !== saved.ask || words.team !== saved.team || words.roadmap !== saved.roadmap;
+  const changed = words.ask !== saved.ask || words.roadmap !== saved.roadmap;
 
   const save = async () => {
     setPending(true);
@@ -42,7 +42,7 @@ export function PitchWordsPanel({ initial, linkBase }: { initial: InvestorPitch;
       const r = await saveInvestorPitchAction(words);
       if (r.ok) {
         setSaved(r.pitch);
-        setWords({ ask: r.pitch.ask, team: r.pitch.team, roadmap: r.pitch.roadmap });
+        setWords({ ask: r.pitch.ask, roadmap: r.pitch.roadmap });
         setNote({ ok: true, text: "Saved — the Pitch deck shows it now." });
       } else setNote({ ok: false, text: r.error });
     } catch {
@@ -63,7 +63,7 @@ export function PitchWordsPanel({ initial, linkBase }: { initial: InvestorPitch;
           </div>
         ) : null}
       </div>
-      <p className={s.hint}>The investor link has three pages now: the figures, a <b>pitch deck</b> and a <b>platform tour</b> of 30 real screens. The deck builds itself from the product, these live figures, the plan prices, the comparison on the landing page and market facts with their sources; these three slides are yours to write.</p>
+      <p className={s.hint}>The investor link has three pages now: the figures, a <b>pitch deck</b> and a <b>platform tour</b> of 30 real screens. The deck builds itself from the product, these live figures, the plan prices, the comparison on the landing page and market facts with their sources; these two slides are yours to write. The founders and the team are not on the link: the deck tells investors that the founding team, the company structure and the cap table go to shortlisted investors after your review of their indicative offer.</p>
       <div className={p.boxes}>
         {BOXES.map((b) => (
           <label key={b.key} className={p.box}>
