@@ -11,6 +11,8 @@ import { toE164 } from "@/lib/phone";
 import { emailFirst, funnel, routeFor, callableNow, type Prospect } from "@/lib/outreach/rules";
 import { deleteProspect, listProspects, readProspect, updateProspect } from "@/lib/outreach/store";
 import { allowUsCalls, callNext, callProspect, checkLines, emailProspects, importProspects, outreachReadiness, readCallMeToken, requestCallMe, testCallToAdmin, type OutreachReadiness } from "@/lib/outreach/server";
+import { newHunt, runWords, type Hunt } from "@/lib/outreach/hunt";
+import { deleteHunt, listHunts, newHuntId, placesConfigured, readHunt, readSettings, runHunt, writeHunt, writeSettings, type HuntRun, type OutreachSettings } from "@/lib/outreach/find";
 
 type Fail = { ok: false; error: string };
 
@@ -34,17 +36,79 @@ export interface OutreachRow extends Prospect {
   seqWhy: string | null;
 }
 
-export async function outreachBoard(): Promise<{ ok: true; rows: OutreachRow[]; readiness: OutreachReadiness; funnel: ReturnType<typeof funnel> } | Fail> {
+export interface HuntView extends Omit<Hunt, "seen"> {
+  seenCount: number;
+}
+
+const view = (h: Hunt): HuntView => {
+  const { seen, ...rest } = h;
+  return { ...rest, seenCount: seen.length };
+};
+
+export async function outreachBoard(): Promise<{ ok: true; rows: OutreachRow[]; readiness: OutreachReadiness; funnel: ReturnType<typeof funnel>; hunts: HuntView[]; settings: OutreachSettings; places: boolean } | Fail> {
   const a = await admin();
   if (!a.ok) return a;
-  const [list, readiness] = await Promise.all([listProspects(), outreachReadiness()]);
+  const [list, readiness, hunts, settings] = await Promise.all([listProspects(), outreachReadiness(), listHunts(), readSettings()]);
   const now = new Date();
   const rows = list.map((p) => {
     const may = callableNow(p, now);
     const seq = emailFirst(p, now, readiness.emails);
     return { ...p, route: routeFor(p), waitWhy: may.ok ? null : may.why, seqWhy: seq.ok ? null : seq.why };
   });
-  return { ok: true, rows, readiness, funnel: funnel(list) };
+  return { ok: true, rows, readiness, funnel: funnel(list), hunts: hunts.map(view), settings, places: placesConfigured() };
+}
+
+/* ── Finding contractors (2026-10-25) ──────────────────────────────── */
+
+/** A new hunt — the trade, the area, how many a day, every morning or not — run at once. The same trade in the same
+ *  area again isn't a second hunt: the one there takes the new count and schedule and runs on from where it was. */
+export async function createOutreachHunt(input: { trade: string; area: string; perDay: number; daily: boolean }): Promise<{ ok: true; hunt: HuntView; run: HuntRun; words: string } | Fail> {
+  const a = await admin();
+  if (!a.ok) return a;
+  if (!placesConfigured()) return { ok: false, error: "JobFlex's Google key isn't set on this server (GOOGLE_MAPS_API_KEY) — the search needs it." };
+  const made = newHunt({ trade: String(input.trade ?? ""), area: String(input.area ?? ""), perDay: Number(input.perDay), daily: input.daily === true, by: a.email }, newHuntId());
+  if (!made.ok) return made;
+  const hunts = await listHunts();
+  const same = hunts.find((h) => h.trade === made.hunt.trade && h.area.toLowerCase() === made.hunt.area.toLowerCase());
+  if (!same && hunts.length >= 40) return { ok: false, error: "Forty hunts is plenty — remove one first." };
+  const hunt = same ? await writeHunt({ ...same, perDay: made.hunt.perDay, daily: made.hunt.daily, lastError: null }) : await writeHunt(made.hunt);
+  const run = await runHunt(hunt.id);
+  const after = (await readHunt(hunt.id)) ?? hunt;
+  return { ok: true, hunt: view(after), run, words: runWords(run, after) };
+}
+
+export async function runOutreachHunt(id: string): Promise<{ ok: true; run: HuntRun; words: string } | Fail> {
+  const a = await admin();
+  if (!a.ok) return a;
+  const h = await readHunt(String(id));
+  if (!h) return { ok: false, error: "That hunt is gone." };
+  const run = await runHunt(h.id);
+  return { ok: true, run, words: runWords(run, h) };
+}
+
+export async function setOutreachHuntDaily(id: string, daily: boolean): Promise<{ ok: true } | Fail> {
+  const a = await admin();
+  if (!a.ok) return a;
+  const h = await readHunt(String(id));
+  if (!h) return { ok: false, error: "That hunt is gone." };
+  await writeHunt({ ...h, daily: daily === true });
+  return { ok: true };
+}
+
+export async function removeOutreachHunt(id: string): Promise<{ ok: true } | Fail> {
+  const a = await admin();
+  if (!a.ok) return a;
+  await deleteHunt(String(id));
+  return { ok: true };
+}
+
+/** The schedule: every hour the list is worked on its own — lines checked, the first emails, the AI's calls in hours. */
+export async function setOutreachSchedule(on: boolean): Promise<{ ok: true; settings: OutreachSettings } | Fail> {
+  const a = await admin();
+  if (!a.ok) return a;
+  const s = await readSettings();
+  const settings = await writeSettings({ ...s, autoWork: on === true });
+  return { ok: true, settings };
 }
 
 export async function importOutreachList(text: string): Promise<{ ok: true; added: number; merged: number; skipped: number; onJobflex: number } | Fail> {
