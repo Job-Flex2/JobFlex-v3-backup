@@ -11,6 +11,8 @@ import { investorReport } from "@/lib/investors";
 import { AdminInvestorsContent } from "@/components/v3/admin-investors/admin-investors-content";
 import { InvestorAudience } from "@/components/v3/admin-investors/investor-audience";
 import { readInvestorOffers, readInvestorVisitors } from "@/lib/investorVisitors";
+import { readInvestorPitch } from "@/lib/investorPitch";
+import { PitchWordsPanel } from "@/components/v3/admin-investors/pitch-words-panel";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "JobFlex Admin · Investors" };
@@ -25,11 +27,15 @@ export default async function AdminInvestorsPage({ searchParams }: { searchParam
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "www.jobflex.app";
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   // Who opened the shared link and the offers sent from it (2026-10-13).
-  const [visitors, offers] = await Promise.all([readInvestorVisitors(), readInvestorOffers()]);
+  // …and the pitch deck's own words (2026-10-25).
+  const [visitors, offers, pitch] = await Promise.all([readInvestorVisitors(), readInvestorOffers(), readInvestorPitch()]);
+  const a = report.settings;
+  const linkBase = a.linkToken && a.linkEnabled ? `${proto}://${host}/investors/${a.linkToken}` : null;
   return (
     <AdminInvestorsContent
       initial={report}
       origin={`${proto}://${host}`}
+      pitch={<PitchWordsPanel initial={pitch} linkBase={linkBase} />}
       audience={<InvestorAudience visitors={visitors} offers={offers} linkMadeAt={report.settings.linkMadeAt} approveReaders={report.settings.approveReaders} review={typeof review === "string" ? review.slice(0, 40) : undefined} />}
     />
   );

@@ -12,3 +12,12 @@
 .vcBar { display: flex; align-items: center; justify-content: space-between; gap: 12px 18px; flex-wrap: wrap; padding: 12px 16px; border: 2px solid #1854a0; background: rgba(24, 84, 160, 0.06); }
 .vcWords { margin: 0; font-size: 14px; line-height: 1.45; color: var(--ink, #0a0a0a); }
 .vcWords a { color: #1854a0; }
+/* The three pages behind the link (2026-10-25): Figures · Pitch deck · Platform tour — one plate of segments, the
+   current one solid blueprint, like the Proposals filters. */
+.pages { display: flex; width: fit-content; max-width: 100%; border: 2px solid var(--ink, #0a0a0a); background: #fff; overflow-x: auto; }
+.pageTab { display: inline-flex; align-items: center; min-height: 40px; padding: 0 18px; border-right: 1.5px solid var(--ink, #0a0a0a); color: var(--ink, #0a0a0a); font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; text-decoration: none; white-space: nowrap; }
+.pageTab:last-child { border-right: 0; }
+.pageTab:hover { background: rgba(24, 84, 160, 0.08); }
+.pageTab[aria-current="page"] { background: #1854a0; color: #fff; }
+.pageTab:focus-visible { outline: 3px solid #1854a0; outline-offset: 2px; }
+@media (max-width: 760px) { .pages { width: 100%; } .pageTab { flex: 1; justify-content: center; min-height: 44px; padding: 0 10px; font-size: 11px; } }
