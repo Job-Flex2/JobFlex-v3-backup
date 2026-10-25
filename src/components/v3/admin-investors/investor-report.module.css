@@ -110,6 +110,18 @@
 .story p { margin: 0; text-wrap: pretty; }
 .storyNow { font-size: 15px; font-weight: 700; color: var(--rep-ink); }
 .storyCross { font-weight: 700; color: var(--rep-blue); }
+.storyWhatIf { font-weight: 600; color: var(--rep-ink); border-top: 1px dashed var(--rep-line); padding-top: 6px; margin-top: 2px !important; }
+.whatIf { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 12px; }
+.whatIfLabel { font: 700 12px var(--rep-mono); letter-spacing: .04em; color: var(--rep-ink); }
+.whatIfLabel b { color: var(--rep-blue); font-size: 14px; }
+.whatIfLabel span { color: var(--rep-muted); font-weight: 600; }
+.whatIfControl { display: flex; align-items: center; gap: 8px; flex: 1 1 260px; max-width: 440px; }
+.whatIfRange { flex: 1 1 auto; min-width: 0; accent-color: var(--rep-blue); min-height: 32px; }
+.whatIf .whatIfStep { appearance: none; flex: 0 0 auto; width: 44px; height: 44px; border: 1.5px solid var(--rep-ink); background: #fff; font: 800 20px/1 var(--rep-sans); color: var(--rep-ink); cursor: pointer; border-radius: 2px; }
+.whatIf .whatIfStep:disabled { opacity: .35; cursor: default; }
+.whatIf .whatIfReset { appearance: none; border: 1.5px solid var(--rep-ink); background: #fff; padding: 6px 10px; min-height: 34px; font: 700 10.5px var(--rep-mono); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+.lineWhatIf { fill: none; stroke: var(--rep-blue); stroke-width: 2.5; stroke-dasharray: 7 5; stroke-linejoin: round; opacity: .85; }
+.sw.lineWhatIf { border-top-style: dashed; border-color: var(--rep-blue); }
 .endLabel { font: 700 12px var(--rep-mono); fill: var(--rep-ink); }
 .endLabelRev { fill: var(--rep-blue); }
 .hintLine { margin: 0 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--rep-muted); max-width: 90ch; }

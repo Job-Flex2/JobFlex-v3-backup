@@ -6,9 +6,12 @@
 // the same ahead, or all of it. Above the chart, the plain words for what is shown (runRateStory); on the chart, each
 // line says its value where it ends; under it, the start of the view, today and its end, read out. A hover or tap reads
 // one day. Plain SVG scaled to its box; the same component on the admin page and the shared link.
+// WHAT IF (2026-10-25: "add a prediction line, dashed, so we can play — if the conversion gets better, where we can
+// be"): a slider for the share of trials that convert; past today a dashed line shows a month in at that share, with
+// its words. It starts at the measured share, so nothing shows until someone moves it.
 import { useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { CurvePoint } from "@/lib/investorModel";
-import { dollars, longDate, monthlyPace, payMonthlyDay, runRateReading, runRateStory, runRateWindow, type RunRateReading } from "@/lib/investorModel";
+import { dollars, longDate, monthlyPace, payMonthlyDay, runRateReading, runRateStory, runRateWindow, whatIfPoint, whatIfStory, type RunRateReading } from "@/lib/investorModel";
 import s from "./investor-report.module.css";
 
 const ZOOMS: Array<{ days: number | null; label: string }> = [
@@ -22,7 +25,7 @@ const ZOOMS: Array<{ days: number | null; label: string }> = [
 
 const W = 760;
 const H = 320;
-const PAD = { r: 92, t: 22, b: 40 };
+const PAD = { r: 124, t: 22, b: 40 };
 
 const niceMax = (v: number) => {
   if (v <= 0) return 100;
@@ -42,8 +45,10 @@ const compact = (cents: number) => {
 };
 const approx = (n: number) => (n === Math.round(n) ? `${n}` : `≈${Math.round(n)}`);
 
-export function PaybackChart({ curve, today, ratePct }: { curve: CurvePoint[]; today: string; /** The measured share that stays; null = none measured yet. */ ratePct: number | null }) {
+export function PaybackChart({ curve, today, ratePct, share }: { curve: CurvePoint[]; today: string; /** The measured share that converts, whole %; null = none measured yet. */ ratePct: number | null; /** The same, exact (0–1). */ share: number | null }) {
   const [zoom, setZoom] = useState<number | null>(30);
+  const [whatIf, setWhatIf] = useState<number>(ratePct ?? 50);
+  const moved = whatIf !== (ratePct ?? 50);
   const [cur, setCur] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -55,7 +60,7 @@ export function PaybackChart({ curve, today, ratePct }: { curve: CurvePoint[]; t
   const story = useMemo(() => runRateStory(curve, today, zoom, ratePct), [curve, today, zoom, ratePct]);
   const cross = payMonthlyDay(curve, pace, w.todayIndex);
 
-  const maxVal = niceMax(Math.max(1, ...pts.map((p, k) => Math.max(p.mrrCents, pace[at(k)] ?? 0))));
+  const maxVal = niceMax(Math.max(1, ...pts.map((p, k) => Math.max(p.mrrCents, pace[at(k)] ?? 0, moved ? whatIfPoint(p, share, whatIf / 100).mrrCents : 0))));
   const padL = 14 + 7.4 * Math.max(...[0.25, 0.5, 0.75, 1].map((f) => compact(f * maxVal).length));
   const plotW = W - padL - PAD.r;
   const plotH = H - PAD.t - PAD.b;
@@ -65,6 +70,10 @@ export function PaybackChart({ curve, today, ratePct }: { curve: CurvePoint[]; t
   const adsAt = (k: number) => pace[at(k)] ?? 0;
   const revAt = (k: number) => pts[k].mrrCents;
   const todayK = w.todayIndex - w.from;
+  // The dashed what-if: from today (or the view's start, when today is before it) to the end of the view.
+  const wiAt = (k: number) => whatIfPoint(pts[k], share, whatIf / 100).mrrCents;
+  const wiFrom = Math.max(0, todayK);
+  const wiPath = moved && wiFrom < n - 1 ? pts.slice(wiFrom).map((_, j) => `${j === 0 ? "M" : "L"}${x(wiFrom + j).toFixed(1)},${y(wiAt(wiFrom + j)).toFixed(1)}`).join(" ") : null;
   const crossK = cross && cross.index >= w.from && cross.index <= w.to ? cross.index - w.from : -1;
   const ticks = n <= 8 ? pts.map((_, k) => k) : Array.from(new Set([0, 0.2, 0.4, 0.6, 0.8, 1].map((f) => Math.round(f * (n - 1)))));
   // The two line-end labels, kept apart when the lines end close together.
@@ -123,6 +132,17 @@ export function PaybackChart({ curve, today, ratePct }: { curve: CurvePoint[]; t
         {story.past && <p data-story="past">{story.past}</p>}
         {story.ahead && <p data-story="ahead">{story.ahead}</p>}
         <p className={s.storyCross} data-story="cross">{story.cross}</p>
+        {moved && <p className={s.storyWhatIf} data-story="what-if">{whatIfStory(curve, today, zoom, share, whatIf)}</p>}
+      </div>
+      <div className={s.whatIf} data-what-if>
+        <label className={s.whatIfLabel} htmlFor="what-if-rate">What if more trials converted? <b>{whatIf}%</b>{ratePct !== null && <span> · measured {ratePct}%</span>}</label>
+        {/* A phone's slider moves only by its knob — the − and + step by 5 with a tap. */}
+        <div className={s.whatIfControl}>
+          <button type="button" className={s.whatIfStep} aria-label="5 points less" data-what-if-step="-5" disabled={whatIf <= 0} onClick={() => setWhatIf((v) => Math.max(0, v - 5))}>−</button>
+          <input id="what-if-rate" className={s.whatIfRange} type="range" min={0} max={100} step={1} value={whatIf} onChange={(e) => setWhatIf(Number(e.target.value))} aria-valuetext={`${whatIf}% of trials convert`} />
+          <button type="button" className={s.whatIfStep} aria-label="5 points more" data-what-if-step="5" disabled={whatIf >= 100} onClick={() => setWhatIf((v) => Math.min(100, v + 5))}>+</button>
+        </div>
+        {moved && <button type="button" className={s.whatIfReset} onClick={() => setWhatIf(ratePct ?? 50)}>Back to {ratePct ?? 50}%</button>}
       </div>
       <figure className={s.chart}>
         <div className={s.chartInner}>
@@ -154,6 +174,7 @@ export function PaybackChart({ curve, today, ratePct }: { curve: CurvePoint[]; t
                 <text x={x(todayK) + 5} y={PAD.t + 12} className={s.axisStrong}>today</text>
               </g>
             )}
+            {wiPath && <path d={wiPath} className={s.lineWhatIf} data-what-if-line />}
             <path d={line(revAt)} className={s.lineReal} />
             <path d={line(adsAt)} className={s.lineSpend} />
             {n === 1 && (
@@ -165,6 +186,7 @@ export function PaybackChart({ curve, today, ratePct }: { curve: CurvePoint[]; t
             {/* Each line says its value where it ends. */}
             <text x={x(n - 1) + 8} y={labAds + 4} className={s.endLabel} data-end="ads">{compact(adsAt(n - 1))} ads</text>
             <text x={x(n - 1) + 8} y={labRev + 4} className={`${s.endLabel} ${s.endLabelRev}`} data-end="revenue">{compact(revAt(n - 1))} in</text>
+            {wiPath && <text x={x(n - 1) + 8} y={Math.min(y(wiAt(n - 1)) + 4, labRev - 12, labAds - 12)} className={`${s.endLabel} ${s.endLabelRev}`} data-end="what-if">{compact(wiAt(n - 1))} at {whatIf}%</text>}
             {crossK >= 0 && (
               <g data-cross>
                 <circle cx={x(crossK)} cy={y(revAt(crossK))} r={5} className={s.mark} />
@@ -185,13 +207,15 @@ export function PaybackChart({ curve, today, ratePct }: { curve: CurvePoint[]; t
               <div className={s.tipRow}><span>A month in</span><b>{dollars(tip.revenueCents)}</b></div>
               <div className={s.tipRow}><span>A month of ads</span><b>{dollars(tip.adsCents)}</b></div>
               <div className={s.tipRow}><span>Revenue covers</span><b>{tip.coverPct === null ? "—" : `${tip.coverPct}%`}</b></div>
+              {moved && tip.projected && cur !== null && <div className={s.tipRow}><span>If {whatIf}% converted</span><b>{dollars(wiAt(cur))}</b></div>}
               <div className={`${s.tipRow} ${s.tipMuted}`}><span>{approx(tip.paying)} paying · {approx(tip.signups)} signed up</span></div>
             </div>
           )}
         </div>
         <figcaption className={s.legend}>
-          <span><i className={`${s.sw} ${s.lineReal}`} />A month in — the accounts paying{ratePct === null ? "" : `; after today, trials at ${ratePct}% staying`}</span>
+          <span><i className={`${s.sw} ${s.lineReal}`} />A month in — the accounts paying{ratePct === null ? "" : `; after today, trials at ${ratePct}% converting`}</span>
           <span><i className={`${s.sw} ${s.lineSpend}`} />A month of ads — the last 7 days&apos; spend × 30</span>
+          {moved && <span><i className={`${s.sw} ${s.lineWhatIf}`} />What if {whatIf}% converted</span>}
           <span className={s.legendNote}>Shaded: ahead, at today&apos;s pace. Today, still running, counts at least at last week&apos;s pace. List prices.</span>
         </figcaption>
       </figure>

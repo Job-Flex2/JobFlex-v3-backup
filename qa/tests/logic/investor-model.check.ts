@@ -3,7 +3,7 @@
 // what it expects of the running trials, the payback curve and its break-even
 // — on fixtures with hand-checked answers.
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/investor-model.check.ts
-import { addDays, apartDays, daysBetween, dollars, investorFigures, launchDay, monthlyPace, noCardShareByDay, outlookSentence, payMonthlyDay, runRateReading, runRateStory, runRateWindow, splitApart, perDay, spendPeriods, standingSentence, wilson, type ModelInput } from "../../../src/lib/investorModel";
+import { addDays, apartDays, daysBetween, dollars, investorFigures, launchDay, monthlyPace, whatIfPoint, whatIfStory, noCardShareByDay, outlookSentence, payMonthlyDay, runRateReading, runRateStory, runRateWindow, splitApart, perDay, spendPeriods, standingSentence, wilson, type ModelInput } from "../../../src/lib/investorModel";
 
 let bad = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -137,10 +137,24 @@ check("the day a month first earns more than its ads: the first day revenue ≥ 
 const st2 = runRateStory(f.curve, "2026-10-06", 2, 67);
 check("the words — today", st2.now === "Today a month brings in $158 against $3,000 of ads — revenue covers 5% of the ads.", st2.now);
 check("…the last 2 days: $79 → $158, +100%; the ads held", st2.past === "In the last 2 days, revenue per month grew $79 (+100%), from $79 to $158; a month of ads stayed at $3,000.", st2.past ?? "");
-check("…the next 2 days at today's pace and the measured 67%", st2.ahead === "In 2 days, at today's pace and with 67% of trials staying, as measured: $158 a month in, $3,000 a month of ads.", st2.ahead ?? "");
+check("…the next 2 days at today's pace and the measured 67%", st2.ahead === "In 2 days, at today's pace and with 67% of trials converting, as measured: $158 a month in, $3,000 a month of ads.", st2.ahead ?? "");
 check("…and the day each month first earns more than its ads (Dec 30, in 85 days)", pm?.date === "2026-12-30" && pm?.inDays === 85 && st2.cross === "From December 30, 2026 — in 85 days — each month brings in more than its ads cost.", st2.cross);
 check("one day: \"Since yesterday\"", (runRateStory(f.curve, "2026-10-06", 1, 67).past ?? "").startsWith("Since yesterday, revenue per month grew $79 (+100%), from $79 to $158"));
 check("no ads running: said so; a month that already earns more than its ads: said so", runRateStory(investorFigures({ ...base, spend: [] }).curve, "2026-10-06", 7, 67).now === "Today a month brings in $158, and no ads are running." && runRateStory(investorFigures({ ...base, spend: [{ date: "2026-10-06", cents: 100 }] }).curve, "2026-10-06", 7, 67).cross === "Already today a month brings in more than its ads cost.");
+
+console.log("── what if more trials converted");
+const measured = f.rate.share as number;
+check("the exact share is kept beside the whole % (2/3, 67%)", Math.abs(measured - 2 / 3) < 1e-9 && f.rate.pct === 67);
+check("at the measured share the what-if IS the solid line, every day", f.curve.every((p) => { const w = whatIfPoint(p, measured, measured); return w.mrrCents === p.mrrCents && w.revenueCents === p.revenueCents && w.paying === p.paying; }));
+const o11 = f.curve.find((p) => p.date === "2026-10-11")!;
+check("Oct 11, the first trial over: at 100% a month is $158 + $79 = $237; at 0%, the paying $158 alone", o11.trialsMrrAllCents === 7900 && whatIfPoint(o11, measured, 1).mrrCents === 23700 && whatIfPoint(o11, measured, 0).mrrCents === 15800 && whatIfPoint(o11, measured, 1).paying === 3);
+check("every day up to today stays as it was at any share — only what is still to come moves", f.curve.filter((p) => !p.projected).every((p) => whatIfPoint(p, measured, 1).mrrCents === p.mrrCents && whatIfPoint(p, measured, 0).revenueCents === p.revenueCents));
+check("more converting = more each day ahead (the horizon's end at 90% above the measured 67%)", whatIfPoint(f.curve.at(-1)!, measured, 0.9).mrrCents > f.curve.at(-1)!.mrrCents);
+const up = whatIfStory(f.curve, "2026-10-06", 30, measured, 90);
+check("the words at 90%: a month in 30 days, how much more, and both days sooner", /^If 90% of trials converted instead of 67%: in 30 days a month would bring in \$[\d,]+ \(\$[\d,]+ more\); each month would earn more than its ads from [A-Z][a-z]+ \d+, 202\d — \d+ days? sooner; the ads would have paid for themselves from [A-Z][a-z]+ \d+, 202\d — \d+ days? sooner\.$/.test(up), up);
+const down = whatIfStory(f.curve, "2026-10-06", 30, measured, 20);
+check("…and at 20%: less (no double minus), and later — or not within the horizon, said plainly", /\(\$[\d,]+ less\)/.test(down) && !/−\$/.test(down) && /(later|no month would earn more than its ads within the next|the ads would not pay for themselves within the next)/.test(down), down);
+check("a 1-day view still looks 30 days ahead for the what-if", /in 30 days a month would bring in/.test(whatIfStory(f.curve, "2026-10-06", 1, measured, 90)));
 
 console.log("── days since launch");
 check("the launch day is day 1; Oct 5 → Oct 24 is day 20", launchDay("2026-10-24", "2026-10-24").day === 1 && launchDay("2026-10-05", "2026-10-24").day === 20);
