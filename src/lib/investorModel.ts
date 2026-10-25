@@ -65,9 +65,13 @@ export type TrialOutcome =
   | "canceled"
   /** The trial ended and no payment ever went through (the card failed and was given up, or no card). */
   | "unpaid"
-  /** The trial ended and the card is failing — still being retried: not counted either way until it settles. */
+  /** The trial ended on a paid plan whose first charge is still being retried (up to RETRY_DAYS after the end):
+   *  CONVERTED (owner, 2026-10-25: "keep the card-failed ones as converted for 2 weeks; after 2 weeks not charged,
+   *  deduct it"). Past the window with no payment it reads "unpaid"; a payment after that, "came-back". */
   | "retrying";
-export const CONVERTED: ReadonlySet<TrialOutcome> = new Set(["paid", "came-back"]);
+/** How long a failing first charge still counts as converted: Stripe's default retry window, two weeks. */
+export const RETRY_DAYS = 14;
+export const CONVERTED: ReadonlySet<TrialOutcome> = new Set(["paid", "came-back", "retrying"]);
 export interface EndedTrial {
   /** The day it signed up. */
   date: string;
@@ -182,9 +186,9 @@ export interface InvestorFigures {
     fromNoCard: number; fromNoCardMrrCents: number;
   };
   lapsed: number;
-  /** THE MEASURED RATE (2026-10-24): of the trials that have ended, the share that converted (paid — on time or
-   *  later; a converted one that left since still converted), and its 90% range (Wilson) for that many trials.
-   *  pct null = no trial has ended yet. A card still being retried is in neither side until it settles. */
+  /** THE MEASURED RATE (2026-10-24): of the trials that have ended, the share that converted to a paid plan (paid on
+   *  time or later — one that left since still converted — or a first charge inside its two-week retry window), and
+   *  its 90% range (Wilson) for that many trials. pct null = no trial has ended yet. */
   rate: { paid: number; ended: number; pct: number | null; lowPct: number | null; highPct: number | null };
   /** How the ended trials ended (2026-10-25) — the page shows only how many came back later (owner: "no breakdown,
    *  just the count of how many came back later"); the rest is kept for the rate and the QA. null = not read. */
@@ -301,12 +305,13 @@ export function investorFigures(input: ModelInput): InvestorFigures {
 
   // ── THE MEASURED RATE: of the trials that have ended, the share paying today. Nothing ended = no rate, and
   // nothing is expected of the running trials (the curve then counts the paying accounts alone).
-  // Read from how each trial ended when that is known: converted = paid on time or later (one that left since still
-  // converted); a card still being retried is in neither side. Else: paying today ÷ paying + lapsed.
+  // Read from how each trial ended when that is known: converted = on a paid plan — paid on time or later (one that
+  // left since still converted), or a first charge still inside its two-week retry window. Else: paying today ÷
+  // paying + lapsed.
   const oc = input.outcomes ?? null;
   const count = (k: TrialOutcome) => (oc ?? []).filter((o) => o.outcome === k).length;
   const converted = oc ? oc.filter((o) => CONVERTED.has(o.outcome)).length : won.length;
-  const ended = oc ? oc.filter((o) => o.outcome !== "retrying").length : won.length + input.lapsed;
+  const ended = oc ? oc.length : won.length + input.lapsed;
   const share = ended > 0 ? converted / ended : null;
   const range = wilson(converted, ended);
   const pct = share ?? 0;
@@ -371,9 +376,10 @@ export function investorFigures(input: ModelInput): InvestorFigures {
     paying: { count: input.paying.length, mrrCents: payingMrr, arrCents: payingMrr * 12, revenueToDateCents: revenueToDate, preexisting: preexisting.length, preexistingMrrCents: preexisting.reduce((x, p) => x + p.monthlyCents, 0), won: won.length, wonMrrCents: wonMrr, fromNoCard: fromNoCard.length, fromNoCardMrrCents: fromNoCard.reduce((x, p) => x + p.monthlyCents, 0) },
     lapsed: input.lapsed,
     outcomes: oc
-      ? { paidAtEnd: count("paid"), cameBack: count("came-back"), cameBackDays: median(oc.filter((o) => o.outcome === "came-back" && typeof o.afterDays === "number").map((o) => o.afterDays as number)), leftAfterPaying: oc.filter((o) => CONVERTED.has(o.outcome) && !o.payingNow).length, canceled: count("canceled"), unpaid: count("unpaid"), retrying: count("retrying") }
+      ? { paidAtEnd: count("paid"), cameBack: count("came-back"), cameBackDays: median(oc.filter((o) => o.outcome === "came-back" && typeof o.afterDays === "number").map((o) => o.afterDays as number)), leftAfterPaying: oc.filter((o) => (o.outcome === "paid" || o.outcome === "came-back") && !o.payingNow).length, canceled: count("canceled"), unpaid: count("unpaid"), retrying: count("retrying") }
       : null,
-    rate: { paid: converted, ended, pct: share === null ? null : toPct(share), lowPct: range ? toPct(range.low) : null, highPct: range ? toPct(range.high) : null },
+    // From whole numbers: 23 of 40 is 57.5% and reads 58% (0.575 as a float rounds down to 57).
+    rate: { paid: converted, ended, pct: ended > 0 ? Math.round((converted * 100) / ended) : null, lowPct: range ? toPct(range.low) : null, highPct: range ? toPct(range.high) : null },
     expected: {
       payers: share === null ? null : r1(trials.length * share),
       payersLow: range ? Math.round(trials.length * range.low) : null,
@@ -513,6 +519,100 @@ export function splitApart(input: ModelInput, whole: InvestorFigures = investorF
   };
 }
 
+/* ── MONTH BY MONTH (owner, 2026-10-25: "keep only the monthly run-rate; an option to look at one day, 2 days, 7 days
+   …; make it super smart, more understandable"). One chart: what a month of ads costs at each day's pace (that day and
+   the six before it, × 30) against what a month brings in at that day's accounts. A window around today — that many
+   days back and the same ahead — and the plain words for it: where things stand today, how they moved, where they go,
+   and the day a month first earns more than its ads. Pure, so the page, the shared link and the PDF read the same. */
+
+/** A month of ads at each day's pace: that day's spend and the six days' before it, averaged, × 30. TODAY is still
+ *  running — Meta's figure for it is partial — so it counts at least at the last full week's pace (the first projected
+ *  day's), or the line would dip at "today" and for the week after it. */
+export function monthlyPace(curve: readonly CurvePoint[], today?: string): number[] {
+  const ti = today ? curve.findIndex((p) => p.date === today) : -1;
+  const week = ti >= 0 && curve[ti + 1]?.projected ? curve[ti + 1].spendDayCents : null;
+  const spendOf = (i: number) => (i === ti && week !== null ? Math.max(curve[i].spendDayCents, week) : curve[i].spendDayCents);
+  return curve.map((_, i) => {
+    const from = Math.max(0, i - 6);
+    let sum = 0;
+    for (let k = from; k <= i; k++) sum += spendOf(k);
+    return Math.round((sum / (i + 1 - from)) * 30);
+  });
+}
+
+/** The window: `days` back from today and the same ahead (null = from the start to the horizon), as curve indices. */
+export function runRateWindow(curve: readonly CurvePoint[], today: string, days: number | null): { from: number; to: number; todayIndex: number } {
+  const last = curve.length - 1;
+  const found = curve.findIndex((p) => p.date === today);
+  const ti = found >= 0 ? found : Math.max(0, curve.filter((p) => !p.projected).length - 1);
+  if (days === null) return { from: 0, to: last, todayIndex: ti };
+  return { from: Math.max(0, ti - days), to: Math.min(last, ti + days), todayIndex: ti };
+}
+
+export interface RunRateReading {
+  date: string;
+  /** What a month brings in at that day's accounts; what a month of ads costs at that day's pace. */
+  revenueCents: number;
+  adsCents: number;
+  /** Revenue as a share of the ads, %; null with no ads. */
+  coverPct: number | null;
+  paying: number;
+  signups: number;
+  projected: boolean;
+}
+
+export function runRateReading(curve: readonly CurvePoint[], pace: readonly number[], i: number): RunRateReading {
+  const p = curve[i];
+  const ads = pace[i] ?? 0;
+  return { date: p.date, revenueCents: p.mrrCents, adsCents: ads, coverPct: ads > 0 ? Math.round((p.mrrCents / ads) * 100) : null, paying: p.paying, signups: p.signups, projected: p.projected };
+}
+
+/** The first day from today on that a month brings in at least what a month of ads costs; null = not within the curve. */
+export function payMonthlyDay(curve: readonly CurvePoint[], pace: readonly number[], todayIndex: number): { index: number; date: string; inDays: number } | null {
+  for (let i = Math.max(0, todayIndex); i < curve.length; i++) {
+    if ((pace[i] ?? 0) > 0 && curve[i].mrrCents >= (pace[i] ?? 0)) return { index: i, date: curve[i].date, inDays: i - todayIndex };
+  }
+  return null;
+}
+
+const dayWord = (n: number) => (n === 1 ? "day" : "days");
+
+/** The plain words for a window: today; how it moved in the days shown before today; where it goes in the days shown
+ *  after; and the day a month first earns more than its ads. */
+export function runRateStory(curve: readonly CurvePoint[], today: string, days: number | null, ratePct: number | null): { now: string; past: string | null; ahead: string | null; cross: string } {
+  const pace = monthlyPace(curve, today);
+  const w = runRateWindow(curve, today, days);
+  const t = runRateReading(curve, pace, w.todayIndex);
+  const now = t.adsCents > 0
+    ? `Today a month brings in ${dollars(t.revenueCents)} against ${dollars(t.adsCents)} of ads — revenue covers ${t.coverPct}% of the ads.`
+    : `Today a month brings in ${dollars(t.revenueCents)}, and no ads are running.`;
+  let past: string | null = null;
+  const back = w.todayIndex - w.from;
+  if (back > 0) {
+    const a = runRateReading(curve, pace, w.from);
+    const d = t.revenueCents - a.revenueCents;
+    const pct = a.revenueCents > 0 ? ` (${d >= 0 ? "+" : "−"}${Math.abs(Math.round((d / a.revenueCents) * 100))}%)` : "";
+    const lead = back === 1 ? "Since yesterday" : `In the last ${back} ${dayWord(back)}`;
+    const moved = d === 0 ? `revenue per month held at ${dollars(t.revenueCents)}` : `revenue per month ${d > 0 ? "grew" : "fell"} ${dollars(Math.abs(d))}${pct}, from ${dollars(a.revenueCents)} to ${dollars(t.revenueCents)}`;
+    const ads = a.adsCents === t.adsCents ? `a month of ads stayed at ${dollars(t.adsCents)}` : `a month of ads went from ${dollars(a.adsCents)} to ${dollars(t.adsCents)}`;
+    past = `${lead}, ${moved}; ${ads}.`;
+  }
+  let ahead: string | null = null;
+  const fwd = w.to - w.todayIndex;
+  if (fwd > 0) {
+    const e = runRateReading(curve, pace, w.to);
+    const how = ratePct === null ? "counting only the accounts already paying" : `with ${ratePct}% of trials staying, as measured`;
+    ahead = `In ${fwd} ${dayWord(fwd)}, at today's pace and ${how}: ${dollars(e.revenueCents)} a month in, ${dollars(e.adsCents)} a month of ads.`;
+  }
+  const c = payMonthlyDay(curve, pace, w.todayIndex);
+  const cross = c === null
+    ? `At today's pace a month doesn't bring in more than its ads within the next ${curve.length - 1 - w.todayIndex} days.`
+    : c.inDays === 0
+      ? "Already today a month brings in more than its ads cost."
+      : `From ${longDate(c.date)} — in ${c.inDays} ${dayWord(c.inDays)} — each month brings in more than its ads cost.`;
+  return { now, past, ahead, cross };
+}
+
 /** THE SPEND BY PERIOD (owner, 2026-10-08: "live spending per day, per week,
  *  per month; show all the costs"): read off the curve's booked days, so a
  *  Meta figure, a hand-booked day and a budget-filled day all count. The
@@ -565,7 +665,7 @@ export function standingSentence(f: InvestorFigures): string {
   const r = f.rate;
   if (r.pct === null) return `${spent} No trial has ended yet, so there is no measured rate to predict with — ${plural(f.trials.count, "trial is", "trials are")} running now.`;
   const back = f.outcomes && f.outcomes.cameBack > 0 ? ` (${f.outcomes.cameBack} of them came back after the trial had ended)` : "";
-  const rate = ` Of the ${plural(r.ended, "trial", "trials")} that have ended, ${r.paid} converted to paid${back} — ${r.pct}%.`;
+  const rate = ` Of the ${plural(r.ended, "trial", "trials")} that have ended, ${r.paid} converted to a paid plan${back} — ${r.pct}%.`;
   const ahead = f.trials.count === 0 || f.expected.payers === null
     ? " No trial is running now."
     : ` At that rate about ${Math.round(f.expected.payers)} of the ${plural(f.trials.count, "trial", "trials")} running now will pay too${f.expected.payersLow !== null && f.expected.payersHigh !== null && f.expected.payersLow !== f.expected.payersHigh ? ` (likely ${f.expected.payersLow}–${f.expected.payersHigh})` : ""}.`;
@@ -576,7 +676,7 @@ export function standingSentence(f: InvestorFigures): string {
 export function outlookSentence(f: InvestorFigures): string {
   if (f.spend.totalCents === 0) return "With no ad spend booked there is nothing to earn back.";
   const run = dollars(f.expected.mrrWithPayingCents);
-  const share = f.rate.pct === null ? "" : `, ${f.rate.pct}% of trials paying`;
+  const share = f.rate.pct === null ? "" : `, ${f.rate.pct}% of trials converting`;
   if (f.breakEven.date && f.breakEven.daysFromToday !== null) {
     if (f.breakEven.daysFromToday <= 0) return `The ad spend to date (${dollars(f.spend.totalCents)}) is already covered by revenue at list price; monthly revenue runs at ${run}.`;
     return `At today's pace — ${dollars(f.spend.perDayProjectedCents)} a day on ads, ${f.unit.signupsPerDay} ${f.unit.signupsPerDay === 1 ? "signup" : "signups"} a day${share} — the ads pay for themselves in ${f.breakEven.daysFromToday} days, on ${longDate(f.breakEven.date)}.`;

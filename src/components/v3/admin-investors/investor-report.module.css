@@ -105,6 +105,13 @@
 .seg button { padding: 7px 11px; min-height: 34px; border: 0; border-right: 1px solid var(--rep-line); background: #fff; font: 700 10.5px var(--rep-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--rep-soft); cursor: pointer; }
 .seg button:last-child { border-right: 0; }
 .seg button[aria-pressed="true"] { background: var(--rep-ink); color: #fff; }
+/* Month by month (2026-10-25): the plain words over the chart, and each line's value where it ends. */
+.story { display: grid; gap: 4px; margin: 4px 0 12px; padding: 12px 14px; background: var(--rep-paper); border-left: 3px solid var(--rep-blue); font-size: 13.5px; line-height: 1.5; color: var(--rep-soft); max-width: 92ch; }
+.story p { margin: 0; text-wrap: pretty; }
+.storyNow { font-size: 15px; font-weight: 700; color: var(--rep-ink); }
+.storyCross { font-weight: 700; color: var(--rep-blue); }
+.endLabel { font: 700 12px var(--rep-mono); fill: var(--rep-ink); }
+.endLabelRev { fill: var(--rep-blue); }
 .hintLine { margin: 0 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--rep-muted); max-width: 90ch; }
 .chart { margin: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .chartInner { position: relative; }
