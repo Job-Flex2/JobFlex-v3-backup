@@ -13,6 +13,7 @@ import { addAdSpendAction, deleteAdSpendAction, getInvestorReport, investorLinkA
 import type { InvestorReport } from "@/lib/investors";
 import { dollars, longDate, PLATFORMS, PLATFORM_LABEL, type SpendPlatform } from "@/lib/investorModel";
 import { InvestorReportView } from "./investor-report";
+import { InvestorFilm } from "./investor-film";
 import shared from "@/components/v3/admin-overview/admin-shared.module.css";
 import s from "./admin-investors.module.css";
 
@@ -221,6 +222,8 @@ export function AdminInvestorsContent({ initial, origin, audience, pitch }: { in
       {error && <p className={`${shared.note} ${s.err}`} role="alert">{error}</p>}
 
       {audience}
+
+      <InvestorFilm deckHref={a.linkToken ? `/investors/${a.linkToken}/pitch` : null} tourHref={a.linkToken ? `/investors/${a.linkToken}/tour` : null} />
 
       <InvestorReportView report={report} between={controls} />
     </>

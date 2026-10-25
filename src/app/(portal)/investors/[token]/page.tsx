@@ -20,6 +20,7 @@
 import type { Metadata } from "next";
 import { forReaders, investorReport } from "@/lib/investors";
 import { InvestorReportView } from "@/components/v3/admin-investors/investor-report";
+import { InvestorFilm } from "@/components/v3/admin-investors/investor-film";
 import { longDate } from "@/lib/investorModel";
 import { InvestorTop, investorReader } from "./reader";
 import s from "./investors-public.module.css";
@@ -46,6 +47,7 @@ export default async function InvestorsPublicPage({ params, searchParams }: { pa
           </div>
           <a className={s.pdf} href={`/api/investors/${token}/pdf`}>Download PDF</a>
         </header>
+        <InvestorFilm deckHref={`/investors/${token}/pitch`} tourHref={`/investors/${token}/tour`} />
         <InvestorReportView report={report} shared />
       </div>
     </main>
