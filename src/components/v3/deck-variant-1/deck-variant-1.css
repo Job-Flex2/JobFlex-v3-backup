@@ -855,3 +855,9 @@
 /* The review's portal on the page (above the app's sidebar): only the studio's style scope, no layout of its own. */
 .jf-deck-v1.v1-hp-portal { display: block; padding: 0; gap: 0; }
 .jf-deck-v1.v1-hp-portal .v1-hp-scrim { z-index: 2000; }
+
+/* Pick up where you left off (2026-10-24): one line under the top bar, gone on a tap. */
+.jf-deck-v1 .v1-resume { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 10px; padding: 10px 14px; border: 1px solid var(--v1-line, #d9d4ca); border-left: 4px solid var(--v1-accent, #1854a0); border-radius: 10px; background: var(--v1-paper, #fff); font-size: 14px; }
+.jf-deck-v1 .v1-resume-text b { margin-right: 6px; }
+.jf-deck-v1 .v1-resume-acts { display: flex; gap: 8px; }
+@media (max-width: 768px) { .jf-deck-v1 .v1-resume { margin: 0 12px 10px; } }

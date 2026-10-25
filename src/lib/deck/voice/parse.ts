@@ -348,7 +348,7 @@ const SHOW_WITH = /^(?:show me|show|see|let me see|let's see|lemme see|i want to
 /* ------------------------------------------------------------------ */
 
 const LOOK_WORDS: ReadonlyArray<[RegExp, Look]> = [
-  [/\b(?:from (?:the )?(?:top|above)|top view|bird'?s?[- ]?eye|overhead(?: view)?|aerial|from up high|looking down|plan from above)\b/, "top"],
+  [/\b(?:from (?:the )?(?:top|above)|top view|(?:show (?:me )?|see )(?:the |it from the )?top|the top|top[- ]down|bird'?s?[- ]?eye|overhead(?: view)?|aerial|from up high|looking down|plan from above)\b/, "top"],
   [/\b(?:from (?:the )?(?:bottom|below|underneath|under)|under(?:neath)? the deck|underside|from beneath|worm'?s?[- ]?eye|looking up|bottom view|underneath|under it|below it)\b/, "under"],
   [/\b(?:from (?:the )?left(?: side)?|left side view|left view)\b/, "left"],
   [/\b(?:from (?:the )?right(?: side)?|right side view|right view|see the side|the side view|side view|from the side)\b/, "right"],
@@ -1431,6 +1431,9 @@ function readRelative(c: string, ctx: ParseContext): Read {
       return null;
     }
     case "rail": {
+      // "Make it two feet higher" after a rail was named is the DECK going up (a rail is only ever 36 or 42 in.; it is
+      // "taller", the deck is "higher") — unless the rail, the posts or "them" are said (2026-10-24, the studio walk).
+      if (/\b(?:higher|lower|raise|drop|up|down)\b/.test(c) && !/\b(?:taller|shorter|rails?|railings?|guards?|them|those|posts?)\b/.test(c)) return readRelative(c, { ...ctx, subject: "height" });
       const set: RailSet = {};
       const type = railType(c);
       if (type) set.type = type;

@@ -361,6 +361,11 @@ console.log("── commands read from what was said");
   const afterHeaters = base({ electrical: { fixtures: [{ id: "e1", kind: "heater", supply: "we", qty: 2, at: null, volts240: false, custom: null }], feedFt: 40, panelSide: "left", timer: false } });
   check("after heaters, \"add a fire pit\" is the fire pit — not another heater", cmdsOf("add a fire pit", afterHeaters, { subject: "fixture", fixture: "heater" }).every((x) => x.do !== "fixture"));
   check("after the stairs, \"make them wider\" widens the stairs", cmdsOf("make them wider", withStairs, { subject: "stairs" })[0]?.do === "stairs");
+  // 2026-10-24 (the studio walk): after "a cable rail", "make it two feet higher" raised the rail to… 36 in. A rail is
+  // only ever 36 or 42 in. and is "taller"; the deck is what goes "higher".
+  check("after a rail, \"make it two feet higher\" raises the DECK by 2 ft", (() => { const c = cmdsOf("make it two feet higher", d, { subject: "rail" })[0]; return c?.do === "height" && JSON.stringify((c as { in?: unknown }).in) === JSON.stringify({ by: 24 }); })());
+  check("after a rail, \"make them taller\" is still the rail", cmdsOf("make them taller", d, { subject: "rail" })[0]?.do === "rail");
+  check("after a rail, \"show me the top\" is the view", cmdsOf("show me the top", d, { subject: "rail" })[0]?.do === "view");
   check("after the stairs, \"make it 30 inches off the ground\" is the deck's height", cmdsOf("make it 30 inches off the ground", withStairs, { subject: "stairs" })[0]?.do === "height");
   check("a shop's taught phrase is understood", show(cmdsOf("my usual", d, { learned: { "my usual": [{ do: "size", width: { to: 16 }, depth: { to: 12 } }] } })) === show([{ do: "size", width: { to: 16 }, depth: { to: 12 } }]));
   check("what-if is read as a what-if", parseUtterance("what if it was 20 by 16", ctxOf(d)).whatIf?.show === false);

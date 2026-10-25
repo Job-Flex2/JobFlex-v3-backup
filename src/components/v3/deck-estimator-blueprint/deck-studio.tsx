@@ -1518,11 +1518,7 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
           {regional.decking.flatMap((id) => DECKING.filter((d) => d.id === id)).map((d) => boardOption(d, `most-${d.id}`))}
         </optgroup>
       ) : null}
-      {DECKING_FAMILY_ORDER.filter(woodFamily).map((fam) => (
-        <optgroup key={fam} label={DECKING_FAMILY_LABEL[fam]}>
-          {DECKING.filter((d) => d.family === fam && !d.brand).map((d) => boardOption(d))}
-        </optgroup>
-      ))}
+      {/* The makers' lines and the other man-made boards first (2026-10-24 — owner: "there is a lot of wood decking, add Trex, TimberTech and the other popular ones"), the wood after. */}
       {DECKING_BRAND_ORDER.map((b) => (
         <optgroup key={b} label={DECKING_BRAND_LABEL[b]}>
           {DECKING.filter((d) => d.brand === b).map((d) => boardOption(d))}
@@ -1530,6 +1526,11 @@ export function DeckStudio({ initialBook, homeState, initialAddress, clientId, a
       ))}
       {DECKING_FAMILY_ORDER.filter((fam) => !woodFamily(fam)).map((fam) => (
         <optgroup key={fam} label={fam === "aluminum" ? DECKING_FAMILY_LABEL[fam] : `${DECKING_FAMILY_LABEL[fam]} — any brand`}>
+          {DECKING.filter((d) => d.family === fam && !d.brand).map((d) => boardOption(d))}
+        </optgroup>
+      ))}
+      {DECKING_FAMILY_ORDER.filter(woodFamily).map((fam) => (
+        <optgroup key={fam} label={DECKING_FAMILY_LABEL[fam]}>
           {DECKING.filter((d) => d.family === fam && !d.brand).map((d) => boardOption(d))}
         </optgroup>
       ))}
