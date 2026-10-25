@@ -6,7 +6,7 @@
 // back whole, not head-to-rail; the eave isn't pulled onto the window heads. The sections: a bump-out between two stretches of the main wall is two steps, out
 // and back; one section is a flat wall whatever steps a model lists; a porch roof makes no section. Pure.
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/deck-photo-snap.check.ts
-import { snapRead, splitRow, gradients, type Gray } from "@/lib/deck/photoSnap";
+import { snapRead, splitRow, gradients, findWindows, type Gray } from "@/lib/deck/photoSnap";
 import { parseHouseRead, type HouseRead } from "@/lib/deck/houseRead";
 
 let bad = 0;
@@ -65,7 +65,7 @@ const off = (w: HouseRead["windows"][number]) => {
 const wrong = read0([...SINGLES.map(box).map(off), { x0: fx(400 + 26), x1: fx(624 + 26 + 30), head: fy(120 + 8 + 6), sill: fy(190 + 8 - 6) }]);
 check("the wrong read is far off (the live screenshot's kind of miss)", worst(wrong.windows, truth) === Infinity && wrong.windows.length === 4);
 const fixed = snapRead(wrong, g);
-check("lined up: the row split into its four, the siding it ran over left out — seven windows", fixed.read.windows.length === 7 && fixed.split >= 3, `${fixed.read.windows.length} windows, ${fixed.split} split`);
+check("lined up: the row's four and the three singles — seven windows, the siding the model's box ran over left out (the picture's own windows now, no split needed)", fixed.read.windows.length === 7, `${fixed.read.windows.length} windows, ${fixed.split} split`);
 check("every window back on its frame (within 4 px)", worst(fixed.read.windows, truth) <= 4, String(worst(fixed.read.windows, truth)));
 
 const sideBySide = sortW(fixed.read.windows).filter((w) => w.head < 0.4);
@@ -117,6 +117,21 @@ const phantom = snapRead(read0([...truth, box([20, 300, 58, 390])]), g);
 check("a box past the wall's end is dropped", phantom.read.windows.length === 7 && worst(phantom.read.windows, truth) <= 4, `${phantom.read.windows.length} windows`);
 const stillRight = snapRead(read0(truth), g);
 check("a read already right still stays (rows and growth change nothing)", worst(stillRight.read.windows, truth) <= 3, String(worst(stillRight.read.windows, truth)));
+
+console.log("— the windows off the picture itself (2026-10-25: 'why is it still wrong, the windows are from the pic') —");
+// With no model boxes at all, the picture's own windows: the row's four and the three singles, each on its frame.
+{
+  const { gx: wx, gy: wy } = gradients(g);
+  const found = findWindows(read0([]), g, { w: W, h: H, gx: wx, gy: wy, lum: g.data });
+  const asWins = found.map((b) => ({ x0: b.x0, x1: b.x1, head: b.top, sill: b.bottom }));
+  check("the picture alone gives the seven windows, each on its frame (within 4 px)", found.length === 7 && worst(asWins, truth) <= 4, `${found.length} found, worst ${worst(asWins, truth)}`);
+  const none = snapRead(read0([]), g);
+  check("a read with no windows at all comes back with the picture's seven", none.read.windows.length === 7 && none.found === 7 && worst(none.read.windows, truth) <= 4, `${none.read.windows.length} windows, found ${none.found}`);
+  const bad = snapRead(read0([box([100, 150, 180, 230]), box([700, 400, 760, 470]), ...truth.slice(0, 2).map((w) => ({ ...w, x0: w.x0 + 30 / W, x1: w.x1 + 30 / W }))]), g);
+  check("the model's boxes over siding and off their frames are left aside for the picture's own", bad.read.windows.length === 7 && worst(bad.read.windows, truth) <= 4, `${bad.read.windows.length} windows, worst ${worst(bad.read.windows, truth)}`);
+  const plain = snapRead(read0([box([150, 300, 205, 390])]), wall([[150, 300, 205, 390]]));
+  check("on a wall with one window the model's box is still lined up the old way (fewer than three found)", plain.found === 0 && plain.read.windows.length === 1 && worst(plain.read.windows, [box([150, 300, 205, 390])]) <= 4, `found ${plain.found}, worst ${worst(plain.read.windows, [box([150, 300, 205, 390])])}`);
+}
 
 console.log("— the steps from the wall's sections —");
 const base = { base: { left: { x: 0.05, y: 0.8 }, right: { x: 0.95, y: 0.8 } }, eave: { left: { x: 0.05, y: 0.3 }, right: { x: 0.95, y: 0.3 } }, storeys: 2, windows: [], doors: [] };
