@@ -6,7 +6,7 @@
 import * as React from "react";
 import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { InvestorReport } from "@/lib/investors";
-import { dollars, longDate, outlookSentence, standingSentence, type CurvePoint } from "@/lib/investorModel";
+import { dollars, longDate, monthlyPace, outlookSentence, payMonthlyDay, runRateReading, runRateStory, runRateWindow, standingSentence, type CurvePoint } from "@/lib/investorModel";
 
 const s = StyleSheet.create({
   page: { padding: 40, fontFamily: "Helvetica", fontSize: 10, color: "#0a0a0a" },
@@ -33,12 +33,15 @@ const s = StyleSheet.create({
 const money = (v: number | null) => (v === null ? "—" : dollars(v));
 const pct = (v: number | null, suffix = "%") => (v === null ? "—" : `${v}${suffix}`);
 
-/** The curve at a few milestones — today, the break-even, and every 30 days. */
-function milestones(curve: CurvePoint[], today: string, breakEven: string | null): CurvePoint[] {
-  const picks = new Set<string>([curve[0]?.date, today, breakEven ?? "", curve.at(-1)?.date ?? ""]);
-  const ti = curve.findIndex((p) => p.date === today);
-  for (let i = ti + 30; i < curve.length; i += 30) picks.add(curve[i].date);
-  return curve.filter((p) => picks.has(p.date));
+/** Month by month at a few days (2026-10-25): the first, a week back, today, a week and a month ahead, the day a
+ *  month first earns more than its ads, and every 30 days after — as curve indices. */
+function milestones(curve: CurvePoint[], today: string): number[] {
+  const pace = monthlyPace(curve, today);
+  const { todayIndex: ti } = runRateWindow(curve, today, null);
+  const cross = payMonthlyDay(curve, pace, ti);
+  const picks = new Set<number>([0, ti - 7, ti, ti + 7, ti + 30, cross?.index ?? -1]);
+  for (let i = ti + 60; i < curve.length; i += 30) picks.add(i);
+  return [...picks].filter((i) => i >= 0 && i < curve.length).sort((x, y) => x - y);
 }
 
 export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
@@ -112,14 +115,28 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
         {report.periods.map((p) => (
           <View key={p.key} style={s.row}><Text style={s.c1}>{p.label}</Text><Text style={s.c2}>{dollars(p.cents)}</Text><Text style={s.c3}>{p.days === 0 ? "nothing yet" : `${dollars(p.perDayCents)}/day over ${p.days} ${p.days === 1 ? "day" : "days"}`}</Text></View>
         ))}
-        <Text style={s.h2}>Ad spend against revenue, at list price</Text>
-        <View style={s.row}><Text style={[s.c1, { fontFamily: "Helvetica-Bold" }]}>Day</Text><Text style={s.c2}>Spend</Text><Text style={s.c2}>Revenue</Text><Text style={s.c2}>Monthly</Text></View>
-        {milestones(f.curve, f.today, f.breakEven.date).map((p) => (
-          <View key={p.date} style={[s.row, ...(p.date === f.breakEven.date ? [s.rowStrong] : [])]}>
-            <Text style={s.c1}>{longDate(p.date)}{p.date === f.today ? " · today" : p.date === f.breakEven.date ? " · break-even" : p.projected ? " · projected" : ""}</Text>
-            <Text style={s.c2}>{dollars(p.spendCents)}</Text><Text style={s.c2}>{dollars(p.revenueCents)}</Text><Text style={s.c2}>{dollars(p.mrrCents)}</Text>
-          </View>
-        ))}
+        <View wrap={false}>
+          <Text style={s.h2}>Month by month: ads against revenue, at list price</Text>
+          {(() => {
+            const st = runRateStory(f.curve, f.today, 30, r.pct);
+            return <Text style={s.li}>{[st.now, st.past, st.ahead, st.cross].filter(Boolean).join(" ")}</Text>;
+          })()}
+          <View style={s.row}><Text style={[s.c1, { fontFamily: "Helvetica-Bold" }]}>Day</Text><Text style={s.c2}>A month in</Text><Text style={s.c2}>A month of ads</Text><Text style={s.c2}>Covers</Text></View>
+          {(() => {
+            const pace = monthlyPace(f.curve, f.today);
+            const cross = payMonthlyDay(f.curve, pace, runRateWindow(f.curve, f.today, null).todayIndex);
+            return milestones(f.curve, f.today).map((i) => {
+              const m = runRateReading(f.curve, pace, i);
+              const isCross = cross?.index === i;
+              return (
+                <View key={m.date} style={[s.row, ...(isCross || m.date === f.today ? [s.rowStrong] : [])]}>
+                  <Text style={s.c1}>{longDate(m.date)}{m.date === f.today ? " · today" : isCross ? " · earns more than its ads" : m.projected ? " · ahead" : ""}</Text>
+                  <Text style={s.c2}>{dollars(m.revenueCents)}</Text><Text style={s.c2}>{dollars(m.adsCents)}</Text><Text style={s.c2}>{m.coverPct === null ? "—" : `${m.coverPct}%`}</Text>
+                </View>
+              );
+            });
+          })()}
+        </View>
         {report.spend.byPlatform.length > 0 && (
           <>
             <Text style={s.h2}>Where the ad money went</Text>
@@ -130,8 +147,8 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
         )}
         <View wrap={false}>
         <Text style={s.h2}>How these are figured</Text>
-        <Text style={s.li}>· Counting from {longDate(f.since)}, the day the first campaign went live — only what happened from that day on. Visitors are unique people on www.jobflex.app, bots and previews out.{report.before.paying > 0 ? ` ${report.before.paying} ${report.before.paying === 1 ? "account" : "accounts"} paying from before that day (${dollars(report.before.mrrCents)}/mo) ${report.before.paying === 1 ? "is" : "are"} counted as paying, not as signups of the period.` : ""}</Text>
-        <Text style={s.li}>· Nothing here is a share we chose. &quot;Trial to paid&quot; is measured on the trials that have ended ({r.pct === null ? "none has ended yet" : `${r.paid} of ${r.ended} converted`}): converted means a payment went through, when the trial ended or later (came back later); not converted means canceled during the trial, or no payment ever went through; a card still being retried is counted once it settles. &quot;Likely&quot; is the 90% range for that many trials. The running trials are expected to pay at the measured rate.</Text>
+        <Text style={s.li}>· Counting from {longDate(report.startDay)}, the day the first campaign went live{f.since !== report.startDay ? ` — the figures from ${longDate(f.since)}, from when every trial needed a card` : ""} — only what happened from that day on. Visitors are unique people on www.jobflex.app, bots and previews out.{report.before.paying > 0 ? ` ${report.before.paying} ${report.before.paying === 1 ? "account" : "accounts"} paying from before that day (${dollars(report.before.mrrCents)}/mo) ${report.before.paying === 1 ? "is" : "are"} counted as paying, not as signups of the period.` : ""}</Text>
+        <Text style={s.li}>· Nothing here is a share we chose. &quot;Trial to paid&quot; is measured on the trials that have ended ({r.pct === null ? "none has ended yet" : `${r.paid} of ${r.ended} converted`}): converted means the trial moved to a paid plan (one paid after its trial had ended counted as &quot;came back later&quot;); not converted means canceled during the trial, or not paid two weeks after it ended — and converted again if it pays later. &quot;Likely&quot; is the 90% range for that many trials. The running trials are expected to pay at the measured rate.</Text>
         <Text style={s.li}>· Ad spend is {a.dailyBudgetCents !== null && a.dailyBudgetCents !== undefined && a.budgetFrom ? `the daily budget, ${dollars(a.dailyBudgetCents)} for all ads together, counted as spent every day since ${longDate(a.budgetFrom)}` : "what was booked per day"}; tomorrow on it runs at the last full week&apos;s pace, {dollars(f.spend.perDayProjectedCents)} a day. &quot;Collected so far&quot; is what Stripe took for subscriptions since the start day from the accounts counted here.</Text>
         <Text style={s.li}>· {f.since !== report.startDay ? `Ad spend, visitors, signups and the trial-to-paid rate are counted from ${longDate(f.since)}, from when every trial needed a card. ` : "Every trial counted here took a card. "}{f.paying.fromNoCard > 0 ? `${f.paying.fromNoCard} paying ${f.paying.fromNoCard === 1 ? "customer" : "customers"} who started on an earlier free trial without a card ${f.paying.fromNoCard === 1 ? "is" : "are"} counted as paying — not as signups, in the rate, or in the cost of a customer.` : ""}</Text>
         <Text style={s.li}>· A trial is worth its plan&apos;s monthly list price (a yearly plan as a twelfth, a custom plan by its pages). Discounts, taxes and churn are not modelled.</Text>

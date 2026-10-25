@@ -3,7 +3,7 @@
 // what it expects of the running trials, the payback curve and its break-even
 // — on fixtures with hand-checked answers.
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/investor-model.check.ts
-import { addDays, apartDays, daysBetween, dollars, investorFigures, launchDay, noCardShareByDay, outlookSentence, splitApart, perDay, spendPeriods, standingSentence, wilson, type ModelInput } from "../../../src/lib/investorModel";
+import { addDays, apartDays, daysBetween, dollars, investorFigures, launchDay, monthlyPace, noCardShareByDay, outlookSentence, payMonthlyDay, runRateReading, runRateStory, runRateWindow, splitApart, perDay, spendPeriods, standingSentence, wilson, type ModelInput } from "../../../src/lib/investorModel";
 
 let bad = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -108,9 +108,9 @@ check("…no cost per paying customer and no payback", noneStayed.unit.costPerPa
 
 console.log("── the sentences");
 const standing = standingSentence(f);
-check("what the ads bought, the measured rate, and what it says of the running trials", /^\$700 on ads since Sep 30 brought 7 signups with a card\./.test(standing) && /Of the 3 trials that have ended, 2 converted to paid — 67%\./.test(standing) && /about 3 of the 4 trials running now will pay too \(likely 1–4\)\./.test(standing), standing);
+check("what the ads bought, the measured rate, and what it says of the running trials", /^\$700 on ads since Sep 30 brought 7 signups with a card\./.test(standing) && /Of the 3 trials that have ended, 2 converted to a paid plan — 67%\./.test(standing) && /about 3 of the 4 trials running now will pay too \(likely 1–4\)\./.test(standing), standing);
 check("no 60%, no 'if every trial pays', no 'realistic' anywhere", !/realistic|every trial pays|60%/i.test(standing + outlookSentence(f)));
-check("the outlook names the pace, the measured share and the date", /\$100 a day on ads, 0\.5 signups a day, 67% of trials paying/.test(outlookSentence(f)) && /on [A-Z][a-z]+ \d+, 202\d\./.test(outlookSentence(f)), outlookSentence(f));
+check("the outlook names the pace, the measured share and the date", /\$100 a day on ads, 0\.5 signups a day, 67% of trials converting/.test(outlookSentence(f)) && /on [A-Z][a-z]+ \d+, 202\d\./.test(outlookSentence(f)), outlookSentence(f));
 const heavy = investorFigures({ ...base, forwardSpendCents: 100000 });
 check("$1,000 a day with this revenue never breaks even in the horizon, and the sentence says so", !heavy.breakEven.withinHorizon && /do not pay for themselves/.test(outlookSentence(heavy)));
 const none = investorFigures({ ...base, spend: [] });
@@ -120,6 +120,28 @@ check("$5 of spend is already covered: the sentence says so", /already covered/.
 check("no visitors known → no per-visitor figures", investorFigures({ ...base, visitors: null }).unit.costPerVisitorCents === null && investorFigures({ ...base, visitors: 0 }).unit.visitorToSignupPct === null);
 check("dollars read as written", dollars(34220) === "$342" && dollars(158) === "$1.58" && dollars(0) === "$0");
 
+console.log("── month by month");
+const pace = monthlyPace(f.curve);
+check("a month of ads = the last 7 days' spend × 30: $3,000 on the first day, today and ahead", pace[0] === 300000 && pace[6] === 300000 && pace[40] === 300000);
+check("…and a young pace counts only the days there were (Sep 30 alone = $100 × 30)", monthlyPace(investorFigures({ ...base, spend: [{ date: "2026-09-30", cents: 10000 }] }).curve)[1] === 150000);
+const halfDay = investorFigures({ ...base, spend: base.spend.map((d) => (d.date === "2026-10-06" ? { ...d, cents: 1500 } : d)) });
+const halfPace = monthlyPace(halfDay.curve, "2026-10-06");
+check("today, half-read ($15 so far), counts at the week's pace — no dip at today or the week after", halfPace[6] === 300000 && halfPace[8] === 300000 && monthlyPace(halfDay.curve)[6] < 300000);
+check("…but a today that already spent more than the week's pace keeps its own figure", monthlyPace(investorFigures({ ...base, spend: base.spend.map((d) => (d.date === "2026-10-06" ? { ...d, cents: 17000 } : d)) }).curve, "2026-10-06")[6] === 330000);
+const w2 = runRateWindow(f.curve, "2026-10-06", 2);
+check("the window: 2 days back and 2 ahead of today (Oct 4 → Oct 8); 30 back clips to the first day; All is everything", w2.from === 4 && w2.to === 8 && w2.todayIndex === 6 && runRateWindow(f.curve, "2026-10-06", 30).from === 0 && runRateWindow(f.curve, "2026-10-06", null).to === f.curve.length - 1);
+const rd = runRateReading(f.curve, pace, 6);
+check("today read out: $158 a month in, $3,000 of ads, revenue covers 5%", rd.revenueCents === 15800 && rd.adsCents === 300000 && rd.coverPct === 5 && !rd.projected);
+const pm = payMonthlyDay(f.curve, pace, 6);
+check("the day a month first earns more than its ads: the first day revenue ≥ ads, the day before not", pm !== null && f.curve[pm.index].mrrCents >= pace[pm.index] && f.curve[pm.index - 1].mrrCents < pace[pm.index - 1] && pm.inDays === pm.index - 6, pm ? `${pm.date} in ${pm.inDays} days` : "none");
+const st2 = runRateStory(f.curve, "2026-10-06", 2, 67);
+check("the words — today", st2.now === "Today a month brings in $158 against $3,000 of ads — revenue covers 5% of the ads.", st2.now);
+check("…the last 2 days: $79 → $158, +100%; the ads held", st2.past === "In the last 2 days, revenue per month grew $79 (+100%), from $79 to $158; a month of ads stayed at $3,000.", st2.past ?? "");
+check("…the next 2 days at today's pace and the measured 67%", st2.ahead === "In 2 days, at today's pace and with 67% of trials staying, as measured: $158 a month in, $3,000 a month of ads.", st2.ahead ?? "");
+check("…and the day each month first earns more than its ads (Dec 30, in 85 days)", pm?.date === "2026-12-30" && pm?.inDays === 85 && st2.cross === "From December 30, 2026 — in 85 days — each month brings in more than its ads cost.", st2.cross);
+check("one day: \"Since yesterday\"", (runRateStory(f.curve, "2026-10-06", 1, 67).past ?? "").startsWith("Since yesterday, revenue per month grew $79 (+100%), from $79 to $158"));
+check("no ads running: said so; a month that already earns more than its ads: said so", runRateStory(investorFigures({ ...base, spend: [] }).curve, "2026-10-06", 7, 67).now === "Today a month brings in $158, and no ads are running." && runRateStory(investorFigures({ ...base, spend: [{ date: "2026-10-06", cents: 100 }] }).curve, "2026-10-06", 7, 67).cross === "Already today a month brings in more than its ads cost.");
+
 console.log("── days since launch");
 check("the launch day is day 1; Oct 5 → Oct 24 is day 20", launchDay("2026-10-24", "2026-10-24").day === 1 && launchDay("2026-10-05", "2026-10-24").day === 20);
 check("across a month and a year end: Sep 30 → Oct 6 is day 7, Dec 31 → Jan 1 is day 2", launchDay("2026-09-30", "2026-10-06").day === 7 && launchDay("2026-12-31", "2027-01-01").day === 2);
@@ -128,6 +150,7 @@ check("a launch day still ahead reads as day 0, never negative; 'set' says wheth
 
 // ── HOW THE TRIALS ENDED (2026-10-25): converted = paid at the end or later; only who never paid counts against
 console.log("── how the trials ended");
+check("23 of 40 is 57.5% and reads 58%, not the float's 57", investorFigures({ ...base, outcomes: [...Array.from({ length: 23 }, () => ({ date: "2026-10-01", outcome: "paid" as const, payingNow: true })), ...Array.from({ length: 17 }, () => ({ date: "2026-10-01", outcome: "canceled" as const, payingNow: false }))] }).rate.pct === 58);
 const ended: ModelInput = { ...base, outcomes: [
   { date: "2026-10-01", outcome: "paid", payingNow: true },
   { date: "2026-10-02", outcome: "came-back", payingNow: true, afterDays: 5 },
@@ -135,11 +158,12 @@ const ended: ModelInput = { ...base, outcomes: [
   { date: "2026-10-03", outcome: "retrying", payingNow: false },
 ] };
 const fe = investorFigures(ended);
-check("paid at the end + came back later = 2 converted; canceled = 1 not; the card still retried is in neither: 2 of 3 = 67%", fe.rate.paid === 2 && fe.rate.ended === 3 && fe.rate.pct === 67);
+check("paid at the end + came back later + a card inside its two-week retry window = 3 converted; canceled = 1 not: 3 of 4 = 75%", fe.rate.paid === 3 && fe.rate.ended === 4 && fe.rate.pct === 75);
 check("the count of who came back later (1, after 5 days), and the rest kept for the QA", fe.outcomes?.cameBack === 1 && fe.outcomes?.cameBackDays === 5 && fe.outcomes?.paidAtEnd === 1 && fe.outcomes?.canceled === 1 && fe.outcomes?.retrying === 1 && fe.outcomes?.unpaid === 0);
 const left = investorFigures({ ...base, outcomes: [{ date: "2026-10-01", outcome: "paid", payingNow: false }, { date: "2026-10-02", outcome: "came-back", payingNow: false, afterDays: 9 }, { date: "2026-10-02", outcome: "unpaid", payingNow: false }] });
 check("a converted one that left since still converted (2 of 3); never paid counts against", left.rate.paid === 2 && left.rate.ended === 3 && left.outcomes?.leftAfterPaying === 2 && left.outcomes?.unpaid === 1);
-check("the lead says how many came back", /2 converted to paid \(1 of them came back after the trial had ended\) — 67%/.test(standingSentence(fe)), standingSentence(fe));
+check("the lead says how many came back", /3 converted to a paid plan \(1 of them came back after the trial had ended\) — 75%/.test(standingSentence(fe)), standingSentence(fe));
+check("a card inside its retry window is not 'paid, then left' — it has not paid yet", fe.outcomes?.leftAfterPaying === 0);
 check("no outcomes read: the rate falls back to paying ÷ paying + lapsed, and there is no count", f.outcomes === null && f.rate.paid === 2 && f.rate.ended === 3);
 const withOc: ModelInput = { ...base, outcomes: [{ date: "2026-10-05", cohort: "nocard", outcome: "paid", payingNow: true }, { date: "2026-10-02", cohort: "card", outcome: "came-back", payingNow: true, afterDays: 3 }, { date: "2026-10-02", cohort: "card", outcome: "canceled", payingNow: false }], cohorts: { lapsed: { card: 1, nocard: 0 }, signups: [{ date: "2026-10-02", cohort: "card" }, { date: "2026-10-05", cohort: "nocard" }], policy: [], current: "card" } };
 const cutOc = splitApart(withOc);

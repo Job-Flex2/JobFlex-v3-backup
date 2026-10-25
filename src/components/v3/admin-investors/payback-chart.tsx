@@ -1,38 +1,28 @@
 "use client";
 
-// THE PAYBACK CHART (2026-10-06; interactive the same evening — owner: "show
-// better growth lines, interactive, understandable for current and future").
-// Three views of the one day-by-day curve (lib/investorModel):
-//   · Spend vs revenue — dollars out against dollars in, added up from the start day;
-//   · Monthly run-rate — what a month brings at that day's accounts, against a month of ads;
-//   · Accounts — signed up, and paying.
-// Revenue and paying past today are at the MEASURED rate of trials that stay (2026-10-24) — one line each, no
-// "if every trial pays" beside it.
-// Over the next 30 / 90 / 180 days or the whole horizon. A hover or tap reads
-// one day; today, the break-even and the horizon's end are read out under it.
-// Plain SVG scaled to its box; the same component on the admin page and the
-// shared link.
+// MONTH BY MONTH (2026-10-06; one view since 2026-10-25 — owner: "keep only the monthly run-rate; an option for one
+// day, 2 days, 7 days…; make it super smart, more understandable"). What a month of ads costs at each day's pace
+// against what a month brings in at that day's accounts (lib/investorModel). Zoom: that many days back from today and
+// the same ahead, or all of it. Above the chart, the plain words for what is shown (runRateStory); on the chart, each
+// line says its value where it ends; under it, the start of the view, today and its end, read out. A hover or tap reads
+// one day. Plain SVG scaled to its box; the same component on the admin page and the shared link.
 import { useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { CurvePoint } from "@/lib/investorModel";
-import { daysBetween, dollars, longDate } from "@/lib/investorModel";
+import { dollars, longDate, monthlyPace, payMonthlyDay, runRateReading, runRateStory, runRateWindow, type RunRateReading } from "@/lib/investorModel";
 import s from "./investor-report.module.css";
 
-type View = "cash" | "mrr" | "accounts";
-const VIEWS: Array<{ key: View; label: string; hint: string }> = [
-  { key: "cash", label: "Spend vs revenue", hint: "Dollars out against dollars in, added up from the start day. Where the blue line crosses the black one, the ads have paid for themselves." },
-  { key: "mrr", label: "Monthly run-rate", hint: "What a month brings in at that day's accounts, against what a month of ads costs. Where blue crosses black, each month earns more than it spends." },
-  { key: "accounts", label: "Accounts", hint: "Signed up so far, and paying. Past today, at the last week's signup pace and the measured share that stays." },
-];
-const SPANS: Array<{ days: number; label: string }> = [
+const ZOOMS: Array<{ days: number | null; label: string }> = [
+  { days: 1, label: "1 day" },
+  { days: 2, label: "2 days" },
+  { days: 7, label: "7 days" },
   { days: 30, label: "30 days" },
   { days: 90, label: "90 days" },
-  { days: 180, label: "180 days" },
-  { days: 0, label: "Horizon" },
+  { days: null, label: "All" },
 ];
 
 const W = 760;
 const H = 320;
-const PAD = { r: 18, t: 22, b: 40 };
+const PAD = { r: 92, t: 22, b: 40 };
 
 const niceMax = (v: number) => {
   if (v <= 0) return 100;
@@ -42,7 +32,7 @@ const niceMax = (v: number) => {
   return step * p;
 };
 const short = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
-/** "$1.2M", "$48k", "$650" — the axis. */
+/** "$1.2M", "$48k", "$650" — the axis and the line ends. */
 const compact = (cents: number) => {
   const d = cents / 100;
   const unit = (v: number, suffix: string) => `$${v >= 10 || Number.isInteger(v) ? Math.round(v) : v.toFixed(1)}${suffix}`;
@@ -50,110 +40,90 @@ const compact = (cents: number) => {
   if (d >= 1e3) return unit(d / 1e3, "k");
   return `$${Math.round(d)}`;
 };
-const count = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${Math.round(n)}`);
 const approx = (n: number) => (n === Math.round(n) ? `${n}` : `≈${Math.round(n)}`);
 
-interface Series { key: string; label: string; cls: string; pick: (p: CurvePoint, i: number) => number }
-
-export function PaybackChart({ curve, today, breakEven, horizonDays, ratePct }: { curve: CurvePoint[]; today: string; breakEven: string | null; horizonDays: number; /** The measured share that stays; null = none measured yet. */ ratePct: number | null }) {
-  const [view, setView] = useState<View>("cash");
-  const [span, setSpan] = useState<number>(horizonDays > 90 ? 90 : 0);
+export function PaybackChart({ curve, today, ratePct }: { curve: CurvePoint[]; today: string; /** The measured share that stays; null = none measured yet. */ ratePct: number | null }) {
+  const [zoom, setZoom] = useState<number | null>(30);
   const [cur, setCur] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  // A month of ads at that day's pace: the trailing week's spend, as a month.
-  const pace = useMemo(() => curve.map((_, i) => {
-    const from = Math.max(0, i - 6);
-    const sum = curve.slice(from, i + 1).reduce((x, p) => x + p.spendDayCents, 0);
-    return Math.round((sum / (i + 1 - from)) * 30);
-  }), [curve]);
-  // "at 43% staying" — or, before any trial has ended, only the accounts already paying.
-  const rateWords = ratePct === null ? "paying accounts only" : `${ratePct}% of trials staying`;
-  const series = useMemo<Record<View, Series[]>>(() => ({
-    cash: [
-      { key: "spend", label: "Ad spend", cls: s.lineSpend, pick: (p) => p.spendCents },
-      { key: "revenue", label: `Revenue · ${rateWords}`, cls: s.lineReal, pick: (p) => p.revenueCents },
-    ],
-    mrr: [
-      { key: "pace", label: "Ad spend per month", cls: s.lineSpend, pick: (_p, i) => pace[i] ?? 0 },
-      { key: "mrr", label: `Monthly revenue · ${rateWords}`, cls: s.lineReal, pick: (p) => p.mrrCents },
-    ],
-    accounts: [
-      { key: "signups", label: "Signed up", cls: s.lineSpend, pick: (p) => p.signups },
-      { key: "paying", label: `Paying · ${rateWords}`, cls: s.lineReal, pick: (p) => p.paying },
-    ],
-  }), [pace, rateWords]);
-
-  const todayIdxAll = curve.findIndex((p) => p.date === today);
-  // The visible days: everything booked, then `span` days ahead (or the whole horizon).
-  const cut = span === 0 ? -1 : curve.findIndex((p) => daysBetween(today, p.date) >= span);
-  const pts = cut === -1 ? curve : curve.slice(0, cut + 1);
+  const pace = useMemo(() => monthlyPace(curve, today), [curve, today]);
+  const w = runRateWindow(curve, today, zoom);
+  const pts = curve.slice(w.from, w.to + 1);
   const n = pts.length;
-  const money = view !== "accounts";
-  const lines = series[view];
-  const maxVal = niceMax(Math.max(1, ...pts.map((p, i) => Math.max(...lines.map((l) => l.pick(p, i))))));
-  const fmtAxis = money ? compact : count;
-  const padL = 14 + 7.4 * Math.max(...[0.25, 0.5, 0.75, 1].map((f) => fmtAxis(f * maxVal).length));
+  const at = (k: number) => w.from + k; // the curve's own index of the k-th point shown
+  const story = useMemo(() => runRateStory(curve, today, zoom, ratePct), [curve, today, zoom, ratePct]);
+  const cross = payMonthlyDay(curve, pace, w.todayIndex);
+
+  const maxVal = niceMax(Math.max(1, ...pts.map((p, k) => Math.max(p.mrrCents, pace[at(k)] ?? 0))));
+  const padL = 14 + 7.4 * Math.max(...[0.25, 0.5, 0.75, 1].map((f) => compact(f * maxVal).length));
   const plotW = W - padL - PAD.r;
   const plotH = H - PAD.t - PAD.b;
-  const x = (i: number) => padL + (n > 1 ? (i * plotW) / (n - 1) : 0);
+  const x = (k: number) => padL + (n > 1 ? (k * plotW) / (n - 1) : plotW / 2);
   const y = (v: number) => PAD.t + plotH - (v / maxVal) * plotH;
-  const path = (l: Series) => pts.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(l.pick(p, i)).toFixed(1)}`).join(" ");
-  const todayIdx = pts.findIndex((p) => p.date === today);
-  // The marker: cash — the break-even; run-rate — the first projected day a month earns more than it spends.
-  const markIdx = view === "cash"
-    ? (breakEven ? pts.findIndex((p) => p.date === breakEven) : -1)
-    : view === "mrr"
-      ? pts.findIndex((p, i) => p.projected && (pace[i] ?? 0) > 0 && p.mrrCents >= (pace[i] ?? 0))
-      : -1;
-  const markLabel = view === "cash" ? "break-even" : "pays monthly";
-  const ticks = Array.from(new Set([0, 0.2, 0.4, 0.6, 0.8, 1].map((f) => Math.round(f * (n - 1)))));
+  const line = (pick: (k: number) => number) => pts.map((_, k) => `${k === 0 ? "M" : "L"}${x(k).toFixed(1)},${y(pick(k)).toFixed(1)}`).join(" ");
+  const adsAt = (k: number) => pace[at(k)] ?? 0;
+  const revAt = (k: number) => pts[k].mrrCents;
+  const todayK = w.todayIndex - w.from;
+  const crossK = cross && cross.index >= w.from && cross.index <= w.to ? cross.index - w.from : -1;
+  const ticks = n <= 8 ? pts.map((_, k) => k) : Array.from(new Set([0, 0.2, 0.4, 0.6, 0.8, 1].map((f) => Math.round(f * (n - 1)))));
+  // The two line-end labels, kept apart when the lines end close together.
+  const endAds = y(adsAt(n - 1));
+  const endRev = y(revAt(n - 1));
+  const gap = 16;
+  const [labAds, labRev] = Math.abs(endAds - endRev) >= gap ? [endAds, endRev] : endAds <= endRev ? [endAds - gap / 2, endRev + gap / 2] : [endAds + gap / 2, endRev - gap / 2];
 
   const place = (clientX: number) => {
     const el = svgRef.current;
     if (!el || n < 2) return;
     const box = el.getBoundingClientRect();
     const px = ((clientX - box.left) / box.width) * W;
-    const i = Math.round(((px - padL) / plotW) * (n - 1));
-    setCur(Math.max(0, Math.min(n - 1, i)));
+    const k = Math.round(((px - padL) / plotW) * (n - 1));
+    setCur(Math.max(0, Math.min(n - 1, k)));
   };
   const onPointer = (e: ReactPointerEvent<SVGSVGElement>) => place(e.clientX);
   const onLeave = (e: ReactPointerEvent<SVGSVGElement>) => { if (e.pointerType === "mouse") setCur(null); };
   const onKey = (e: ReactKeyboardEvent<SVGSVGElement>) => {
     if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
       e.preventDefault();
-      setCur((c) => Math.max(0, Math.min(n - 1, (c ?? Math.max(0, todayIdx)) + (e.key === "ArrowLeft" ? -1 : 1))));
+      setCur((c) => Math.max(0, Math.min(n - 1, (c ?? Math.max(0, todayK)) + (e.key === "ArrowLeft" ? -1 : 1))));
     } else if (e.key === "Escape") setCur(null);
   };
-  const at = cur !== null && cur < n ? pts[cur] : null;
-  const tipLeft = at && cur !== null ? (x(cur) / W) * 100 : 0;
-  const fmt = (v: number) => (money ? dollars(v) : approx(v));
+  const tip = cur !== null && cur < n ? runRateReading(curve, pace, at(cur)) : null;
+  const tipLeft = cur !== null ? (x(cur) / W) * 100 : 0;
 
-  // The three days read out under the chart.
-  const reading = (label: string, key: string, p: CurvePoint | undefined) => p ? (
+  const reading = (label: string, key: string, r: RunRateReading) => (
     <div className={s.reading} data-reading={key} key={key}>
-      <div className={s.readingHead}>{label} · {short(p.date)}</div>
-      <div className={s.readingBig}>{dollars(p.revenueCents)} <span>earned</span></div>
+      <div className={s.readingHead}>{label} · {short(r.date)}{r.projected ? " · projected" : ""}</div>
+      <div className={s.readingBig}>{dollars(r.revenueCents)} <span>a month in</span></div>
       <div className={s.readingRows}>
-        <span>{dollars(p.spendCents)} spent</span>
-        <span>{dollars(p.mrrCents)}/mo run-rate</span>
-        <span>{approx(p.paying)} paying · {approx(p.signups)} signed up</span>
+        <span>{dollars(r.adsCents)} a month of ads</span>
+        <span>{r.coverPct === null ? "no ads running" : `revenue covers ${r.coverPct}% of the ads`}</span>
+        <span>{approx(r.paying)} paying · {approx(r.signups)} signed up</span>
       </div>
     </div>
-  ) : null;
-  const beAll = breakEven ? curve.find((p) => p.date === breakEven) : undefined;
+  );
+  const first = runRateReading(curve, pace, w.from);
+  const now = runRateReading(curve, pace, w.todayIndex);
+  const last = runRateReading(curve, pace, w.to);
+  const back = w.todayIndex - w.from;
+  const startLabel = back === 0 ? "" : w.from === 0 && (zoom === null || zoom > back) ? "First day" : `${back} ${back === 1 ? "day" : "days"} ago`;
+  const endLabel = w.to === w.todayIndex ? "" : `In ${w.to - w.todayIndex} ${w.to - w.todayIndex === 1 ? "day" : "days"}`;
 
   return (
-    <div className={s.chartWrap}>
+    <div className={s.chartWrap} data-runrate>
       <div className={s.chartBar}>
-        <div className={s.seg} role="group" aria-label="What to show">
-          {VIEWS.map((v) => <button key={v.key} type="button" aria-pressed={view === v.key} onClick={() => { setView(v.key); setCur(null); }}>{v.label}</button>)}
-        </div>
-        <div className={s.seg} role="group" aria-label="How far ahead">
-          {SPANS.filter((sp) => sp.days === 0 || sp.days < horizonDays).map((sp) => <button key={sp.days} type="button" aria-pressed={span === sp.days} onClick={() => { setSpan(sp.days); setCur(null); }}>{sp.label}</button>)}
+        <div className={s.seg} role="group" aria-label="How much to show around today">
+          {ZOOMS.map((z) => <button key={z.label} type="button" aria-pressed={zoom === z.days} data-zoom={z.days ?? "all"} onClick={() => { setZoom(z.days); setCur(null); }}>{z.label}</button>)}
         </div>
       </div>
-      <p className={s.hintLine}>{VIEWS.find((v) => v.key === view)?.hint} Hover or tap a day to read it.</p>
+      {/* The plain words for what is on screen. */}
+      <div className={s.story} data-runrate-story>
+        <p className={s.storyNow}>{story.now}</p>
+        {story.past && <p data-story="past">{story.past}</p>}
+        {story.ahead && <p data-story="ahead">{story.ahead}</p>}
+        <p className={s.storyCross} data-story="cross">{story.cross}</p>
+      </div>
       <figure className={s.chart}>
         <div className={s.chartInner}>
           <svg
@@ -161,7 +131,7 @@ export function PaybackChart({ curve, today, breakEven, horizonDays, ratePct }: 
             viewBox={`0 0 ${W} ${H}`}
             role="img"
             tabIndex={0}
-            aria-label={`${VIEWS.find((v) => v.key === view)?.label} from ${short(pts[0].date)} to ${short(pts[n - 1].date)}${markIdx >= 0 ? `; ${markLabel} ${short(pts[markIdx].date)}` : ""}. Arrow keys read day by day.`}
+            aria-label={`A month of ads against a month of revenue, ${short(pts[0].date)} to ${short(pts[n - 1].date)}. ${story.now} Arrow keys read day by day.`}
             onPointerMove={onPointer}
             onPointerDown={onPointer}
             onPointerLeave={onLeave}
@@ -170,53 +140,65 @@ export function PaybackChart({ curve, today, breakEven, horizonDays, ratePct }: 
             {[0.25, 0.5, 0.75, 1].map((f) => (
               <g key={f}>
                 <line x1={padL} x2={W - PAD.r} y1={y(f * maxVal)} y2={y(f * maxVal)} className={s.rule} />
-                <text x={padL - 8} y={y(f * maxVal) + 4} textAnchor="end" className={s.axis}>{fmtAxis(f * maxVal)}</text>
+                <text x={padL - 8} y={y(f * maxVal) + 4} textAnchor="end" className={s.axis}>{compact(f * maxVal)}</text>
               </g>
             ))}
-            {todayIdx >= 0 && todayIdx < n - 1 && <rect x={x(todayIdx)} y={PAD.t} width={x(n - 1) - x(todayIdx)} height={plotH} className={s.future} />}
+            {todayK >= 0 && todayK < n - 1 && <rect x={x(todayK)} y={PAD.t} width={x(n - 1) - x(todayK)} height={plotH} className={s.future} />}
             <line x1={padL} x2={W - PAD.r} y1={y(0)} y2={y(0)} className={s.base} />
-            {ticks.map((i) => (
-              <text key={i} x={x(i)} y={H - 14} textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"} className={s.axis}>{short(pts[i].date)}</text>
+            {ticks.map((k) => (
+              <text key={k} x={x(k)} y={H - 14} textAnchor={n > 1 && k === 0 ? "start" : n > 1 && k === n - 1 ? "end" : "middle"} className={s.axis}>{short(pts[k].date)}</text>
             ))}
-            {todayIdx >= 0 && (
+            {todayK >= 0 && todayK < n && (
               <g>
-                <line x1={x(todayIdx)} x2={x(todayIdx)} y1={PAD.t} y2={PAD.t + plotH} className={s.today} />
-                <text x={x(todayIdx) + 5} y={PAD.t + 12} className={s.axisStrong}>today</text>
+                <line x1={x(todayK)} x2={x(todayK)} y1={PAD.t} y2={PAD.t + plotH} className={s.today} />
+                <text x={x(todayK) + 5} y={PAD.t + 12} className={s.axisStrong}>today</text>
               </g>
             )}
-            {[...lines].reverse().map((l) => <path key={l.key} d={path(l)} className={l.cls} />)}
-            {markIdx >= 0 && (
+            <path d={line(revAt)} className={s.lineReal} />
+            <path d={line(adsAt)} className={s.lineSpend} />
+            {n === 1 && (
               <g>
-                <circle cx={x(markIdx)} cy={y(lines[1].pick(pts[markIdx], markIdx))} r={5} className={s.mark} />
-                <text x={x(markIdx) + (markIdx > n * 0.7 ? -9 : 9)} y={y(lines[1].pick(pts[markIdx], markIdx)) - 10} textAnchor={markIdx > n * 0.7 ? "end" : "start"} className={s.axisStrong}>{markLabel} · {short(pts[markIdx].date)}</text>
+                <circle cx={x(0)} cy={y(revAt(0))} r={4} className={`${s.dot} ${s.lineReal}`} />
+                <circle cx={x(0)} cy={y(adsAt(0))} r={4} className={`${s.dot} ${s.lineSpend}`} />
               </g>
             )}
-            {at && cur !== null && (
+            {/* Each line says its value where it ends. */}
+            <text x={x(n - 1) + 8} y={labAds + 4} className={s.endLabel} data-end="ads">{compact(adsAt(n - 1))} ads</text>
+            <text x={x(n - 1) + 8} y={labRev + 4} className={`${s.endLabel} ${s.endLabelRev}`} data-end="revenue">{compact(revAt(n - 1))} in</text>
+            {crossK >= 0 && (
+              <g data-cross>
+                <circle cx={x(crossK)} cy={y(revAt(crossK))} r={5} className={s.mark} />
+                <text x={x(crossK) + (crossK > n * 0.7 ? -9 : 9)} y={y(revAt(crossK)) - 10} textAnchor={crossK > n * 0.7 ? "end" : "start"} className={s.axisStrong}>earns more than its ads · {short(pts[crossK].date)}</text>
+              </g>
+            )}
+            {tip && cur !== null && (
               <g>
                 <line x1={x(cur)} x2={x(cur)} y1={PAD.t} y2={PAD.t + plotH} className={s.cursor} />
-                {lines.map((l) => <circle key={l.key} cx={x(cur)} cy={y(l.pick(at, cur))} r={4} className={`${s.dot} ${l.cls}`} />)}
+                <circle cx={x(cur)} cy={y(revAt(cur))} r={4} className={`${s.dot} ${s.lineReal}`} />
+                <circle cx={x(cur)} cy={y(adsAt(cur))} r={4} className={`${s.dot} ${s.lineSpend}`} />
               </g>
             )}
           </svg>
-          {at && cur !== null && (
+          {tip && cur !== null && (
             <div className={`${s.tip} ${tipLeft > 58 ? s.tipLeft : ""}`} style={{ left: `${tipLeft}%` }} data-tip>
-              <div className={s.tipDate}>{longDate(at.date)} <span className={s.tipTag}>{at.date === today ? "today" : at.projected ? "projected" : at.spendSource === "budget" ? "budget" : at.spendSource === "booked" ? "booked" : "no spend"}</span></div>
-              {lines.map((l) => <div key={l.key} className={s.tipRow}><span>{l.label}</span><b>{fmt(l.pick(at, cur))}</b></div>)}
-              {view === "cash" && <div className={s.tipRow}><span>That day&apos;s ads</span><b>{dollars(at.spendDayCents)}</b></div>}
-              {view !== "accounts" && <div className={`${s.tipRow} ${s.tipMuted}`}><span>{approx(at.paying)} paying · {approx(at.signups)} signed up</span></div>}
-              {view === "accounts" && <div className={`${s.tipRow} ${s.tipMuted}`}><span>{dollars(at.spendCents)} spent · {dollars(at.revenueCents)} earned</span></div>}
+              <div className={s.tipDate}>{longDate(tip.date)} <span className={s.tipTag}>{tip.date === today ? "today" : tip.projected ? "projected" : "real"}</span></div>
+              <div className={s.tipRow}><span>A month in</span><b>{dollars(tip.revenueCents)}</b></div>
+              <div className={s.tipRow}><span>A month of ads</span><b>{dollars(tip.adsCents)}</b></div>
+              <div className={s.tipRow}><span>Revenue covers</span><b>{tip.coverPct === null ? "—" : `${tip.coverPct}%`}</b></div>
+              <div className={`${s.tipRow} ${s.tipMuted}`}><span>{approx(tip.paying)} paying · {approx(tip.signups)} signed up</span></div>
             </div>
           )}
         </div>
         <figcaption className={s.legend}>
-          {lines.map((l) => <span key={l.key}><i className={`${s.sw} ${l.cls}`} />{l.label}</span>)}
-          <span className={s.legendNote}>Shaded: projected at today&apos;s pace. Revenue at list price.</span>
+          <span><i className={`${s.sw} ${s.lineReal}`} />A month in — the accounts paying{ratePct === null ? "" : `; after today, trials at ${ratePct}% staying`}</span>
+          <span><i className={`${s.sw} ${s.lineSpend}`} />A month of ads — the last 7 days&apos; spend × 30</span>
+          <span className={s.legendNote}>Shaded: ahead, at today&apos;s pace. Today, still running, counts at least at last week&apos;s pace. List prices.</span>
         </figcaption>
       </figure>
       <div className={s.readings}>
-        {reading("Today", "today", curve[todayIdxAll])}
-        {reading("Break-even", "break-even", beAll)}
-        {reading("End of horizon", "horizon", curve.at(-1))}
+        {startLabel && reading(startLabel, "start", first)}
+        {reading("Today", "today", now)}
+        {endLabel && reading(endLabel, "end", last)}
       </div>
     </div>
   );

@@ -21,7 +21,7 @@ import { signupState } from "@/lib/traffic-live";
 import { TRAFFIC_SINCE, TRAFFIC_SINCE_MS, TRAFFIC_TZ } from "@/lib/traffic-visitor";
 import { fetchInvestorVisitors } from "@/lib/traffic-server";
 import { valueSignups } from "@/lib/trialProjectionRead";
-import { investorFigures, splitApart, launchDay, daysBetween, PLATFORMS, PLATFORM_LABEL, spendPeriods, addDays, type InvestorFigures, type ModelSettings, type PolicySpan, type SpendDay, type SpendPlatform, type SpendPeriod, type TrialCohort, type EndedTrial } from "@/lib/investorModel";
+import { investorFigures, splitApart, launchDay, daysBetween, RETRY_DAYS, PLATFORMS, PLATFORM_LABEL, spendPeriods, addDays, type InvestorFigures, type ModelSettings, type PolicySpan, type SpendDay, type SpendPlatform, type SpendPeriod, type TrialCohort, type EndedTrial } from "@/lib/investorModel";
 import { cardlessKey } from "@/lib/trialState";
 import { readTrialPolicyHistory, signupTrialState } from "@/lib/trialPolicyServer";
 import { readSubscriptionPayments } from "@/lib/investorPayments";
@@ -416,10 +416,11 @@ export async function investorReport({ refreshMeta = false }: { refreshMeta?: bo
   const firstAdDay = (startVisitors ?? cardVisitors)?.firstAdDay ?? null;
 
   // HOW EACH TRIAL ENDED (owner, 2026-10-25: "only deduct who cancelled during the trial; if they converted, keep
-  // them; how many came back later"). Converted = a payment went through: within a day of the trial's end ("paid"),
-  // or later ("came-back" — a retry that went through, a card put in later, a return); one that left since still
-  // converted. Not converted = canceled before the end, or the end came and no payment ever went through. A card
-  // still being retried (PAST_DUE) waits in neither. Stripe not read: paying today = paid, the rest by status.
+  // them; how many came back later"; "keep the card-failed ones as converted for 2 weeks, then deduct"). Converted =
+  // a payment went through: within a day of the trial's end ("paid"), or later ("came-back" — a retry that went
+  // through, a card put in later, a return), one that left since still converted; or a first charge still failing
+  // inside its two-week retry window ("retrying"). Not converted = canceled before the end, or no payment two weeks
+  // after the end. Stripe not read: paying today = paid, the rest by status.
   const firstPaid = new Map<string, string>();
   if (paid.ok) for (const p of paid.payments) { const d = firstPaid.get(p.customer); if (!d || p.date < d) firstPaid.set(p.customer, p.date); }
   const outcomeOf = (r: (typeof rows)[number]): EndedTrial => {
@@ -432,7 +433,8 @@ export async function investorReport({ refreshMeta = false }: { refreshMeta?: bo
     }
     if (base.payingNow) return { ...base, outcome: "paid" };
     const status = (r.sub?.status ?? "").toUpperCase();
-    if (status === "PAST_DUE") return { ...base, outcome: "retrying" };
+    // A first charge still failing: converted inside the two-week retry window, never paid after it — until it pays.
+    if (status === "PAST_DUE") return r.trialEndsAt && Date.now() - r.trialEndsAt.getTime() > RETRY_DAYS * 86_400_000 ? { ...base, outcome: "unpaid" } : { ...base, outcome: "retrying" };
     if (status === "CANCELED" && (!r.trialEndsAt || !r.canceledAt || r.canceledAt.getTime() <= r.trialEndsAt.getTime())) return { ...base, outcome: "canceled" };
     return { ...base, outcome: "unpaid" };
   };
