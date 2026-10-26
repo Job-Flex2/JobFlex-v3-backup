@@ -52,6 +52,7 @@ import {
 } from "@/lib/deck/clientDesign";
 import { markClientLinkSeen, unseenClientReturns, withProposals } from "@/lib/deck/clientLinksServer";
 import { keepHousePhoto, readHouseImage, type DeckPhotoResult, type HousePhotoRead } from "@/lib/deck/housePhotoServer";
+import { readHouseDepthImage, type HouseDepthResult } from "@/lib/deck/houseDepth";
 import { isPrivateFileUnder } from "@/lib/media/privateStore";
 import { mediaHref } from "@/lib/media/signedLink";
 
@@ -400,6 +401,15 @@ export async function readClientHousePhoto(token: string, form: FormData): Promi
   const braked = (await brake(`deckclient-read:${token}`, 16, "photo reads")) ?? (await brake(`deckclient-read-ip:${await clientIp()}`, 40, "photo reads"));
   if (braked) return { ok: false, error: braked, configured: true };
   return readHouseImage(form, { organizationId: link.orgId });
+}
+
+/** The same depth map the studio reads (lib/deck/houseDepth) — one call a photo, on its own brake. */
+export async function readClientHouseDepth(token: string, form: FormData): Promise<HouseDepthResult> {
+  const link = await readLink(token);
+  if (!live(link)) return { ok: false, error: CLOSED, configured: true };
+  const braked = (await brake(`deckclient-depth:${token}`, 12, "depth reads")) ?? (await brake(`deckclient-depth-ip:${await clientIp()}`, 30, "depth reads"));
+  if (braked) return { ok: false, error: braked, configured: true };
+  return readHouseDepthImage(form, { organizationId: link.orgId });
 }
 
 /** A fresh read link for the client's own photo (never the contractor's — that is the shop's private file). */

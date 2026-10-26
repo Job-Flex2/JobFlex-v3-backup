@@ -7,9 +7,11 @@
 //
 // Three ways in — a photo from the computer or the phone, the phone's camera, a photo a client already put in their job
 // folder — one way through: the picture shrunk, its black bands cut, read by the vision model (actions readHousePhoto)
-// in two looks — the whole picture to find the wall, then the wall cut out and enlarged so each window reads at its
-// size, both on a faint grid of tenths drawn here so the model reads its fractions off it — straightened when it was
-// taken at an angle, its wall's colour and its roof's measured off its own pixels, saved; then "Here's what I see": the
+// in two looks — the whole picture to find the wall (and to say it IS a house: anything else is refused on the card,
+// 2026-10-26), then the wall cut out and enlarged so each window reads at its size, each in the picture's own pixels
+// (a GPT-6 model held to a schema; the grid of tenths once drawn here is gone) — straightened when it was taken at an
+// angle, its depth map read for which way each part of the wall stands (actions readHouseDepth), its wall's colour and
+// its roof's measured off its own pixels, saved; then "Here's what I see": the
 // picture with every line the read found, each one draggable, and the house that would be built, in words; "Build my
 // house" lays it over the design (lib/deck/houseFromPhoto). The photo stays beside the wall drawing to look back at —
 // never pasted on the wall in the 3D (owner, 2026-10-11).
@@ -43,7 +45,8 @@ import { colourZones, dominantColour, ftIn, houseFromPhoto, type PhotoHouse } fr
 import { snapRead, type Gray } from "@/lib/deck/photoSnap";
 import { SQUARE_ON_PCT, levelRead, photoObliqueness, wallStepsReport, type WallStepsReport, type WallStepsWhy } from "@/lib/deck/wallSteps";
 import { type WallJog, AUTO_STRAIGHTEN_PCT, applyHomography, autoRectify, obliqueness, transformRead } from "@/lib/deck/photoFit";
-import { deckClientPhotoData, deckClientPhotos, deckPhotoHref, readHousePhoto, uploadDeckPhoto, type ClientPhoto, type DeckPhotoResult, type HousePhotoRead } from "@/actions/deckEstimator";
+import { applyDepthVerdicts, type DepthRelief } from "@/lib/deck/houseDepthApply";
+import { deckClientPhotoData, deckClientPhotos, deckPhotoHref, readHouseDepth, readHousePhoto, uploadDeckPhoto, type ClientPhoto, type DeckPhotoResult, type HouseDepthResult, type HousePhotoRead } from "@/actions/deckEstimator";
 import { cropPhoto, shrinkPhoto, straightenPhoto, trimLetterbox } from "@/components/v3/deck-estimator-blueprint/deck-photo";
 import { NumberInput, Toggle, cx, feetText, parseFeet } from "./deck-v1-parts";
 
@@ -62,7 +65,9 @@ export interface HouseReview {
   /** The picture could not be read: the lines are a start to drag onto the wall. */
   byHand: string | null;
   /** How it was read: the looks taken, the model, the lines the picture's own edges moved. */
-  how?: { looks: number; model: string; snapped: number; split: number; /** The wall's steps measured off the photo's own pixels (lib/deck/wallSteps) — 0 when the photo didn't show them and the model's read stands. */ stepsFromPhoto?: number; /** Windows read off the picture itself (lib/deck/photoSnap findWindows), 0 when the model's boxes were lined up instead (2026-10-25). */ windowsFromPhoto?: number; /** Why the photo's pixels said nothing about the steps, and how many corners they found anyway (2026-10-24). */ stepsWhy?: WallStepsWhy; cornersFromPhoto?: number; /** The steps were read on the clean picture, before it was straightened (the warp, made from the model's leaning lines, loses the corners). */ stepsBeforeWarp?: boolean; /** The model's lines leaned this much, percent — enough to straighten — but the photo's own rows of windows ran parallel: kept square (2026-10-24). */ squareOn?: number } | null;
+  how?: { looks: number; model: string; snapped: number; split: number; /** The wall's steps measured off the photo's own pixels (lib/deck/wallSteps) — 0 when the photo didn't show them and the model's read stands. */ stepsFromPhoto?: number; /** Windows read off the picture itself (lib/deck/photoSnap findWindows), 0 when the model's boxes were lined up instead (2026-10-25). */ windowsFromPhoto?: number; /** Why the photo's pixels said nothing about the steps, and how many corners they found anyway (2026-10-24). */ stepsWhy?: WallStepsWhy; cornersFromPhoto?: number; /** The steps were read on the clean picture, before it was straightened (the warp, made from the model's leaning lines, loses the corners). */ stepsBeforeWarp?: boolean; /** The model's lines leaned this much, percent — enough to straighten — but the photo's own rows of windows ran parallel: kept square (2026-10-24). */ squareOn?: number; /** What the depth map did (2026-10-26): how many parts of the wall it set out or back, how many of those it turned round, how many raised or sunk parts it saw. */ depth?: { sections: number; flipped: number; relief: number } } | null;
+  /** The wall's relief the depth map found — a bay, a chimney, a recessed entry — as boxes in the picture's fractions, for the 3D's raised and sunk parts. */
+  relief?: DepthRelief[];
 }
 
 /**
@@ -72,13 +77,15 @@ export interface HouseReview {
  */
 export interface HousePhotoApi {
   read: (form: FormData) => Promise<HousePhotoRead>;
+  /** The depth map of the picture (2026-10-26): which way each part of the wall stands, and its relief. Absent = no depth pass. */
+  depth?: (form: FormData) => Promise<HouseDepthResult>;
   upload: (form: FormData) => Promise<DeckPhotoResult>;
   href: (url: string) => Promise<string | null>;
   clientPhotos?: typeof deckClientPhotos;
   clientPhotoData?: typeof deckClientPhotoData;
 }
 
-const STUDIO_API: HousePhotoApi = { read: readHousePhoto, upload: uploadDeckPhoto, href: deckPhotoHref, clientPhotos: deckClientPhotos, clientPhotoData: deckClientPhotoData };
+const STUDIO_API: HousePhotoApi = { read: readHousePhoto, depth: readHouseDepth, upload: uploadDeckPhoto, href: deckPhotoHref, clientPhotos: deckClientPhotos, clientPhotoData: deckClientPhotoData };
 
 export interface HousePhotoState {
   /** Who it is for: the card's words (the client's page has no clients' photos). */
@@ -157,50 +164,26 @@ async function measureColours(file: Blob, read: HouseRead): Promise<{ siding: st
   }
 }
 /**
- * The picture as the model sees it: enlarged to at least `minW` px wide for the close look (2048 at most on its long
- * side), with a faint grid of tenths and their labels along the top and the left edge — the model reads the fractions
- * off the grid instead of guessing them. The saved picture and the review never carry the grid.
+ * The picture as the model sees it (2026-10-26: no grid any more — a GPT-6 model reads positions in the picture's own
+ * pixels, and the picture's size goes with the form): enlarged to at least `minW` px wide for the close look, 2048 px
+ * at most on its long side (what the model takes whole). Back come the file and its size in pixels.
  */
-async function forTheModel(src: { file: File; w: number; h: number }, minW: number): Promise<File> {
+async function forTheModel(src: { file: File; w: number; h: number }, minW: number): Promise<{ file: File; w: number; h: number }> {
+  const k = Math.min(Math.max(1, minW / Math.max(1, src.w)), 2048 / Math.max(src.w, src.h, 1));
+  if (Math.abs(k - 1) < 1e-6 && src.file.type === "image/jpeg") return src;
   const { img, release } = await loadImg(src.file);
   try {
-    const k = Math.min(Math.max(1, minW / Math.max(1, src.w)), 2048 / Math.max(src.w, src.h, 1));
     const W = Math.max(16, Math.round(src.w * k));
     const H = Math.max(16, Math.round(src.h * k));
     const c = document.createElement("canvas");
     c.width = W;
     c.height = H;
     const g = c.getContext("2d");
-    if (!g) return src.file;
+    if (!g) return src;
     g.imageSmoothingQuality = "high";
     g.drawImage(img, 0, 0, W, H);
-    const line = Math.max(1, Math.round(Math.min(W, H) / 700));
-    const font = Math.max(11, Math.round(Math.min(W, H) / 45));
-    g.font = `700 ${font}px sans-serif`;
-    for (let i = 1; i < 10; i++) {
-      const x = Math.round((W * i) / 10);
-      const y = Math.round((H * i) / 10);
-      for (const [stroke, width] of [["rgba(0,0,0,0.35)", line + 2], ["rgba(255,255,255,0.55)", line]] as const) {
-        g.strokeStyle = stroke;
-        g.lineWidth = width;
-        g.beginPath();
-        g.moveTo(x, 0);
-        g.lineTo(x, H);
-        g.moveTo(0, y);
-        g.lineTo(W, y);
-        g.stroke();
-      }
-      const label = `0.${i}`;
-      g.lineWidth = 3;
-      g.strokeStyle = "rgba(0,0,0,0.75)";
-      g.fillStyle = "#ffffff";
-      g.strokeText(label, x + 3, font + 2);
-      g.fillText(label, x + 3, font + 2);
-      g.strokeText(label, 3, y - 4);
-      g.fillText(label, 3, y - 4);
-    }
     const blob = await new Promise<Blob | null>((resolve) => c.toBlob(resolve, "image/jpeg", 0.9));
-    return blob ? new File([blob], "house-grid.jpg", { type: "image/jpeg" }) : src.file;
+    return blob ? { file: new File([blob], "house.jpg", { type: "image/jpeg" }), w: W, h: H } : src;
   } finally {
     release();
   }
@@ -234,6 +217,12 @@ function stepDepthOf(read: HouseRead): number | null {
   return depths.length ? depths[Math.floor(depths.length / 2)] : null;
 }
 
+/** What the review says the depth map did. */
+function depthWords(d: { sections: number; flipped: number; relief: number }): string {
+  const steps = d.sections ? `the depth map set ${d.sections} ${d.sections === 1 ? "part" : "parts"} of the wall out or back${d.flipped ? ` (${d.flipped} turned round)` : ""}` : "the depth map agreed with the steps";
+  return `, ${steps}${d.relief ? `, ${d.relief} raised or sunk ${d.relief === 1 ? "part" : "parts"} seen on the wall` : ""}`;
+}
+
 /** What the review says when the photo's pixels didn't settle the wall's steps. */
 function stepsWhyWords(why: WallStepsWhy | undefined, corners: number): string {
   const found = corners ? `${corners} corner${corners === 1 ? "" : "s"} found` : "no corner found";
@@ -251,10 +240,13 @@ function stepsWhyWords(why: WallStepsWhy | undefined, corners: number): string {
   }
 }
 
-/** The form for one look: the gridded picture, and which look it is. */
+/** The form for one look: the picture at the model's size, that size in pixels (the model answers in them), and which look it is. */
 async function lookForm(src: { file: File; w: number; h: number }, look: "wide" | "close"): Promise<FormData> {
   const form = new FormData();
-  form.set("file", await forTheModel(src, look === "close" ? 1600 : 0));
+  const pic = await forTheModel(src, look === "close" ? 1600 : 0);
+  form.set("file", pic.file);
+  form.set("w", String(pic.w));
+  form.set("h", String(pic.h));
   form.set("look", look);
   return form;
 }
@@ -323,6 +315,12 @@ export function useHousePhoto({
       const clean = await trimLetterbox(small.file, small.w, small.h);
       setBusy("Finding the house's wall…");
       const res = await api.read(await lookForm(clean, "wide"));
+      // NOT A HOUSE (2026-10-26 — owner: "first we gotta make sure it's the house"): a room, a car, a plan drawing gets
+      // the model's word on the card, and nothing to drag lines onto.
+      if (!res.ok && res.reason === "not-a-house") {
+        setError(res.error);
+        return;
+      }
       let image: { file: File; w: number; h: number } = clean;
       let read: HouseRead = blankHouseRead();
       let straightened: number | null = null;
@@ -331,6 +329,8 @@ export function useHousePhoto({
       let how: HouseReview["how"] = null;
       let squareOn: number | null = null;
       let levelSlope: number | null = null;
+      let stepsFromPhoto = false;
+      let relief: DepthRelief[] | undefined;
       let gray0: Awaited<ReturnType<typeof grayOf>> = null;
       if (res.ok) {
         read = res.read;
@@ -392,6 +392,8 @@ export function useHousePhoto({
         if (levelSlope !== null && gray0 && image === clean) read = levelRead(read, levelSlope, gray0);
         // THEN THE PICTURE'S OWN EDGES (lib/deck/photoSnap): every box, corner and line moved onto the frame or the
         // corner it stands for — the model says roughly where, the pixels say exactly.
+        // The wall's parts as the model read them, in this picture's fractions — the depth map takes a step's size from them.
+        const modelSections = readSections(read);
         setBusy("Lining it up with the photo…");
         const gray = image === clean && gray0 ? gray0 : await grayOf(image.file).catch(() => null);
         if (gray) {
@@ -411,6 +413,7 @@ export function useHousePhoto({
           // them to tap out or back, not the model's guess at them, which has been the wrong way round.
           const steps = straightened !== null && earlyJogs ? earlyJogs : report.steps ? report.steps.jogs : earlyJogs;
           const beforeWarp = !!steps && steps === earlyJogs && straightened !== null;
+          stepsFromPhoto = !!steps;
           if (steps) read = { ...read, jogs: steps };
           else {
             const dividers = report.dividers.length ? report.dividers : early?.dividers.length ? carry(early.dividers) : [];
@@ -420,6 +423,26 @@ export function useHousePhoto({
           const corners = Math.max(report.corners.length, early?.corners.length ?? 0);
           how = { looks, model: res.model, snapped: snapped.moved, split: snapped.split, windowsFromPhoto: snapped.found, stepsFromPhoto: steps ? steps.length : 0, ...(why ? { stepsWhy: why, cornersFromPhoto: corners } : {}), ...(beforeWarp ? { stepsBeforeWarp: true } : {}), ...(squareOn !== null ? { squareOn } : {}) };
         } else how = { looks, model: res.model, snapped: 0, split: 0 };
+        // THE DEPTH MAP (2026-10-26 — owner: "changes in walls if a certain part comes out or goes deeper"): which way
+        // each part of the wall stands, read off a depth map of the picture (lib/deck/houseDepth) rather than guessed
+        // from the eave's shadow — the sign from the map, the size from the model's word (lib/deck/houseDepthApply);
+        // and the wall's relief — a bay, a chimney, a recessed entry — kept for the 3D.
+        if (api.depth) {
+          setBusy("Reading the wall's depth…");
+          const small = await shrinkPhoto(image.file, 1024).catch(() => null);
+          if (small) {
+            const df = new FormData();
+            df.set("file", small.file);
+            df.set("read", JSON.stringify(read));
+            const depth = await api.depth(df).catch(() => null);
+            if (depth?.ok) {
+              const applied = applyDepthVerdicts(read, depth.verdicts, { modelSections, stepsFromPhoto });
+              read = applied.read;
+              relief = depth.relief;
+              how = { ...(how ?? { looks, model: res.model, snapped: 0, split: 0 }), depth: { sections: applied.changed, flipped: applied.flipped, relief: depth.relief.length } };
+            }
+          }
+        }
       } else
         byHand = res.configured
           ? `${res.error} Drag the lines onto the wall, then add the windows and the door.`
@@ -451,6 +474,7 @@ export function useHousePhoto({
         straightened,
         byHand,
         how,
+        relief,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "The picture could not be read.");
@@ -815,7 +839,7 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
             <div>
               <h3 className="v1-h3">Here&rsquo;s what I see</h3>
               <span className="v1-meta">
-                {r.byHand ? "Marked by hand" : `Read off the photo${r.how ? ` in ${r.how.looks === 2 ? "two looks" : "one look"}${r.how.windowsFromPhoto ? `, its ${r.how.windowsFromPhoto} windows read off the picture` : r.how.snapped ? ", lined up with its edges" : ""}${r.how.stepsFromPhoto ? `, the wall's steps measured off the photo${r.how.stepsBeforeWarp ? " before it was straightened" : ""}` : r.how.stepsFromPhoto === 0 ? `, ${stepsWhyWords(r.how.stepsWhy, r.how.cornersFromPhoto ?? 0)}` : ""}${r.how.squareOn ? ", shot square-on — not straightened" : ""} (${r.how.model})` : ""}${r.straightened ? ` · straightened (the shot was ${r.straightened}% off square)` : ""}`} — drag any line that&rsquo;s off; tap a part
+                {r.byHand ? "Marked by hand" : `Read off the photo${r.how ? ` in ${r.how.looks === 2 ? "two looks" : "one look"}${r.how.windowsFromPhoto ? `, its ${r.how.windowsFromPhoto} windows read off the picture` : r.how.snapped ? ", lined up with its edges" : ""}${r.how.stepsFromPhoto ? `, the wall's steps measured off the photo${r.how.stepsBeforeWarp ? " before it was straightened" : ""}` : r.how.stepsFromPhoto === 0 ? `, ${stepsWhyWords(r.how.stepsWhy, r.how.cornersFromPhoto ?? 0)}` : ""}${r.how.squareOn ? ", shot square-on — not straightened" : ""}${r.how.depth ? depthWords(r.how.depth) : ""} (${r.how.model})` : ""}${r.straightened ? ` · straightened (the shot was ${r.straightened}% off square)` : ""}`} — drag any line that&rsquo;s off; tap a part
                 of the wall to set it out or back; tap a window, a door or a step to remove it.
               </span>
             </div>

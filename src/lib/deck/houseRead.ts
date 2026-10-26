@@ -14,7 +14,8 @@
 // into the 3D house is lib/deck/houseFromPhoto; the colours are measured off the picture's own pixels in the browser,
 // the model's guess only standing in when that fails.
 
-import { JOG_DEFAULT_FT, parseWallRead, type WallRead } from "./photoFit";
+import { z } from "zod";
+import { JOG_DEFAULT_FT, parseWallRead, type Pt, type WallRead } from "./photoFit";
 
 export type ReadDoorKind = "slider" | "hinged" | "french";
 export type ReadRoofKind = "hip" | "gable-side" | "gable-end" | "shed" | "flat";
@@ -28,6 +29,10 @@ export interface HouseRead extends WallRead {
   material: ReadMaterial | null;
   /** The model's guess at the colours, #rrggbb — the browser's measure of the pixels comes first. */
   colours: { siding: string | null; roof: string | null; trim: string | null };
+  /** The house's own silhouette in the picture (2026-10-26) — its roof and its walls down to the ground, nothing
+   *  standing in front of it: what the pixel passes may read as the house, the depth map's mask. Absent on an older
+   *  read, or one the model gave none for. */
+  outline?: Pt[];
 }
 
 const MAX_WINDOWS = 30;
@@ -129,6 +134,14 @@ export function parseHouseRead(raw: unknown): HouseRead | null {
   const matWord = typeof r.material === "string" ? r.material : "";
   const material = MATERIAL_WORDS.find(([re]) => re.test(matWord))?.[1] ?? null;
   const c = obj(r.colours ?? r.colors);
+  // The house's silhouette (2026-10-26): a polygon of at least three points, at most 32, kept only when given.
+  const outline = (Array.isArray(r.outline) ? r.outline : [])
+    .map((p) => {
+      const o = obj(p);
+      return typeof o.x === "number" && typeof o.y === "number" && Number.isFinite(o.x) && Number.isFinite(o.y) ? { x: r3(frac(o.x, 0)), y: r3(frac(o.y, 0)) } : null;
+    })
+    .filter((p): p is Pt => !!p)
+    .slice(0, 32);
   return {
     ...wall,
     windows: clearOfDoors,
@@ -136,6 +149,7 @@ export function parseHouseRead(raw: unknown): HouseRead | null {
     roof: { kind: roofKind, pitch },
     material,
     colours: { siding: hex(c.siding), roof: hex(c.roof), trim: hex(c.trim) },
+    ...(outline.length >= 3 ? { outline } : {}),
   };
 }
 
@@ -161,6 +175,14 @@ export function mapHouseRead(read: HouseRead, wallMap: (r: WallRead) => WallRead
     roof: read.roof,
     material: read.material,
     colours: read.colours,
+    ...(read.outline
+      ? {
+          outline: read.outline.map((p) => {
+            const q = pt(p);
+            return { x: r3(q.x), y: r3(q.y) };
+          }),
+        }
+      : {}),
   };
 }
 
@@ -430,6 +452,7 @@ export function readFromCrop(read: HouseRead, crop: ReadCrop): HouseRead {
     patio: read.patio ? { x0: X(read.patio.x0), x1: X(read.patio.x1) } : null,
     scaleLine: read.scaleLine ? { ...read.scaleLine, a: P(read.scaleLine.a), b: P(read.scaleLine.b) } : null,
     bars: { top: 0, bottom: 0 },
+    ...(read.outline ? { outline: read.outline.map(P) } : {}),
   };
 }
 
@@ -457,5 +480,128 @@ export function mergeLooks(wide: HouseRead, close: HouseRead | null): HouseRead 
     patio: close.patio ?? wide.patio,
     confidence: Math.min(1, Math.max(close.confidence, wide.confidence)),
     note: close.note ?? wide.note,
+    // The silhouette from the whole picture: the close look's is cut at the cut's edges.
+    ...(wide.outline ? { outline: wide.outline } : {}),
   };
+}
+
+/* ------------------------------------------------------------------ */
+/*  The read held to a schema, in the picture's own pixels (2026-10-26)   */
+/* ------------------------------------------------------------------ */
+//
+// The read moved to a GPT-6 model through the Responses API (lib/sdk/openaiVision runVisionStructured): the model is
+// held to this schema — every field present, every enum one of its values — and answers in the picture's PIXELS, which
+// is how it localizes best (absolute pixel boxes; a fraction or a 0–1000 grid cost it a good part of its accuracy in
+// published tests), so the grid of tenths the studio drew over the picture is gone. Two things the old read never
+// asked: WHAT the picture shows (`subject` — a room, a car or a plan drawing is refused before anything is built, owner
+// 2026-10-25: "first we gotta make sure it's the house"), and the house's own silhouette (`outline` — "and we can copy
+// only the house": the pixel passes and the depth map read inside it and nothing else). `fromStructured` turns the
+// answer into the fractions the rest of the pipeline reads (parseHouseRead checks it like any other read).
+
+const PX = z.object({ x: z.number(), y: z.number() });
+const SPAN = z.object({ x0: z.number(), x1: z.number() });
+
+export const SUBJECT_KINDS = ["house-exterior", "house-interior", "other-building", "not-a-building", "unclear"] as const;
+export type SubjectKind = (typeof SUBJECT_KINDS)[number];
+export const LOOK_PAST_KINDS = ["porch-roof", "awning", "old-deck", "stairs", "slab", "fence", "hedge", "tree", "vehicle", "neighbour", "other"] as const;
+
+/** What the model says the picture is, before anything is read off it. */
+export interface HouseSubject {
+  kind: SubjectKind;
+  confidence: number;
+  reason: string;
+}
+/** A thing standing in front of the wall the model was told to look past, and where it is (fractions of the picture). */
+export interface HouseLookPast {
+  kind: (typeof LOOK_PAST_KINDS)[number];
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+export const houseReadSchema = z.object({
+  subject: z.object({ kind: z.enum(SUBJECT_KINDS), confidence: z.number(), reason: z.string() }),
+  /** The picture's size as the model understood it — a check that it answered in pixels. */
+  image: z.object({ w: z.number(), h: z.number() }),
+  outline: z.array(PX).nullable(),
+  base: z.object({ left: PX, right: PX }).nullable(),
+  eave: z.object({ left: PX, right: PX }).nullable(),
+  storeys: z.number().nullable(),
+  sections: z.array(z.object({ x0: z.number(), x1: z.number(), outFt: z.number(), why: z.string() })),
+  doors: z.array(z.object({ x0: z.number(), x1: z.number(), bottom: z.number(), top: z.number(), kind: z.enum(["slider", "hinged", "french"]), ontoYard: z.boolean() })),
+  windows: z.array(z.object({ x0: z.number(), x1: z.number(), sill: z.number(), head: z.number() })),
+  patio: SPAN.nullable(),
+  roof: z.object({ kind: z.enum(["hip", "gable-side", "gable-end", "shed", "flat"]).nullable(), pitch: z.number().nullable() }),
+  material: z.enum(["lap", "brick", "stucco", "board-batten", "stone", "shingle"]).nullable(),
+  colours: z.object({ siding: z.string().nullable(), roof: z.string().nullable(), trim: z.string().nullable() }),
+  lookPast: z.array(z.object({ kind: z.enum(LOOK_PAST_KINDS), x0: z.number(), y0: z.number(), x1: z.number(), y1: z.number() })),
+  bars: z.object({ top: z.number(), bottom: z.number() }),
+  confidence: z.number(),
+  note: z.string().nullable(),
+});
+export type HouseReadStructured = z.infer<typeof houseReadSchema>;
+
+/** The prompt the structured read runs on: the same wall, the same rules the owner's photos taught, in pixels. */
+export const HOUSE_READ_PROMPT_PX = `You read one photo for a deck builder who will rebuild the house's wall as a simple 3D model. FIRST say what the photo shows (subject). THEN, if it is the outside of a house, read ONLY the house itself — its wall, its windows, its doors, its roof — and answer in the schema. If it is not, fill the rest with nulls and empty lists.
+COORDINATES: every coordinate is in PIXELS of the picture exactly as you were given it — x from 0 at the left edge to the picture's width at the right, y from 0 at the top edge to its height at the bottom; the size is stated in the message, repeat it in "image". Measure each position on the picture; do not guess from proportions. In a box x0 is the left edge and x1 the right (x0 < x1); a window's head is its top and its sill its bottom; a door's top and its bottom (threshold) likewise.
+SUBJECT: "house-exterior" when the picture shows the outside wall(s) of a house (a townhouse, a duplex, a garage attached to a house count) seen from the yard, the side or the street — a wall a deck could meet. "house-interior" for a room. "other-building" for a shop, a barn, a shed, a block of flats seen from afar. "not-a-building" for anything else — a person, a car, a plan drawing, a screenshot, a yard with no wall in it. "unclear" when you cannot tell. Confidence 0–1 and one short reason.
+OUTLINE: the house's own silhouette, a polygon of 6 to 20 points going round clockwise — along the roof's ridge and its edges, down the walls' corners to the ground and back: the HOUSE, not the trees in front of it, not a fence, not a neighbour's house, not an old deck, a porch roof or a car standing in front of the wall (the outline runs behind them, along the house). Where the house runs off the picture's edge, follow the edge. Null when there is no house.
+THE WALL: "base" is the house wall's bottom edge where the WALL meets the ground (or would meet it behind a patio, steps or a deck), at the house's left corner and at its right corner — the whole face of the house across every step in it. "eave" is the top of that wall above each corner: the underside of the MAIN roof's eave (on a two-storey house, the eave over the upper floor); null when hidden. "storeys": 1 or 2 storeys of wall between the base and that eave (count the rows of windows), null when unsure.
+SECTIONS: FIRST work out the wall's sections, left to right from its left corner to its right corner: a section is a stretch of the house's wall whose face is one flat plane. "outFt" is how far that section's face stands IN FRONT of the main wall (the main wall — the widest stretch — is 0; a bump-out or a bay is +2 to +4; a part set back is negative). "why" is the evidence you see for that section's plane: its own corner boards at both its ends, its own eave or roof edge in front of the main eave, a shadow down the wall at its side, its siding meeting the next section at a corner. A porch roof, a patio roof or an awning in front of the wall does NOT make a section: the wall under it and behind it is the main wall unless its OWN face steps. A lower roof over only the GROUND storey of part of a two-storey wall, with that part's upper-storey windows above it, is a porch roof or a lean-to — that stretch is NOT a bump-out unless its upper storey stands forward too (its own corner boards up both storeys, its own hip or gable in the main roof). One section when the wall is one flat face.
+DOORS: EVERY door in the wall, left to right, with its kind (slider, hinged, french); "ontoYard" true for the one door a deck would meet — the back door, the slider onto the yard — and false for every other (at most one true). A garage door is not a door here.
+WINDOWS: EVERY window in the wall, both storeys: the outside edges of its frame left and right, its sill and its head. Windows side by side are one entry PER window — count them. Not the doors.
+PATIO: a concrete patio or slab at the wall's base, its ends along the wall (only to know where a deck would go); null when none.
+ROOF: the MAIN roof of the house — hip (slopes on every side), gable-side (the ridge runs along this wall, triangles at the sides), gable-end (a triangle of wall faces the camera), shed, flat; pitch in inches of rise per foot when you can judge it (a usual house is 4 to 8), else null.
+MATERIAL: what most of the wall is clad in (lap = horizontal siding, vinyl or fiber cement). COLOURS: your best guess at the real colours as "#rrggbb" in plain daylight (not the sunset, not the shadow), null when you cannot say.
+LOOK PAST, NEVER READ AS THE WALL: a porch roof or a covered patio's roof standing out in front of the wall, its posts and beams, an awning, a pergola, an old deck and its railing, stairs, a slab, a fence, a hedge, trees, a neighbour's house, a car. None of them is a step in the wall, an edge of the wall or its eave: a porch roof's low edge is not the eave; its post is not a corner. Read the house wall behind them — and list each such thing in "lookPast" with the box it covers, so the builder can keep it out of the picture.
+BARS: black bands or a phone's status bar at the top and the bottom of the picture, in pixels of height; 0 when none. CONFIDENCE: how sure you are of the corners, the steps and the windows. NOTE: one short sentence a deck builder should know (a meter or a dryer vent on the wall, the ground sloping), else null.
+Rules: a standard exterior door is about 80 inches tall and a usual window about 3 to 4 ft wide — use them to judge sizes; never invent a door, a window or a step you cannot see.`;
+
+/** Said with the second look, on the wall cut out of the picture and enlarged. */
+export const HOUSE_ZOOM_NOTE_PX = "This picture is the house's wall cut out of a wider photo and enlarged: the wall fills most of it and the roof may be cut off at the top. It IS the outside of a house (subject house-exterior) unless it plainly is not. Read it the same way — the pixels are of THIS picture; the outline may follow the picture's edges where the house runs off them.";
+
+/**
+ * The structured answer as the read every other module knows — fractions of the picture — ready for parseHouseRead.
+ * The model answers in pixels of the `w` × `h` picture; one that answered in fractions anyway (no coordinate past 1.5)
+ * is read as such. The back door (`ontoYard`) becomes `door`; the steps are left to the sections.
+ */
+export function fromStructured(s: HouseReadStructured, w: number, h: number): Record<string, unknown> {
+  const seen: number[] = [];
+  if (s.base) seen.push(s.base.left.x, s.base.left.y, s.base.right.x, s.base.right.y);
+  for (const win of s.windows) seen.push(win.x0, win.x1, win.sill, win.head);
+  for (const d of s.doors) seen.push(d.x0, d.x1, d.bottom, d.top);
+  const px = seen.some((v) => Number.isFinite(v) && v > 1.5);
+  const X = (x: number) => (px ? x / Math.max(1, w) : x);
+  const Y = (y: number) => (px ? y / Math.max(1, h) : y);
+  const P = (p: { x: number; y: number }) => ({ x: X(p.x), y: Y(p.y) });
+  const back = s.doors.find((d) => d.ontoYard) ?? null;
+  return {
+    base: s.base ? { left: P(s.base.left), right: P(s.base.right) } : null,
+    eave: s.eave ? { left: P(s.eave.left), right: P(s.eave.right) } : null,
+    storeys: s.storeys,
+    sections: s.sections.map((x) => ({ x0: X(x.x0), x1: X(x.x1), outFt: x.outFt, why: x.why })),
+    door: back ? { x0: X(back.x0), x1: X(back.x1), bottom: Y(back.bottom), top: Y(back.top) } : null,
+    doors: s.doors.map((d) => ({ x0: X(d.x0), x1: X(d.x1), bottom: Y(d.bottom), top: Y(d.top), kind: d.kind })),
+    windows: s.windows.map((x) => ({ x0: X(x.x0), x1: X(x.x1), sill: Y(x.sill), head: Y(x.head) })),
+    patio: s.patio ? { x0: X(s.patio.x0), x1: X(s.patio.x1) } : null,
+    roof: s.roof,
+    material: s.material,
+    colours: s.colours,
+    bars: { top: Y(s.bars.top), bottom: Y(s.bars.bottom) },
+    confidence: s.confidence,
+    note: s.note,
+    outline: s.outline ? s.outline.map(P) : null,
+  };
+}
+
+/** What the model said to look past, in fractions of the picture (the same pixel-or-fraction reading as the rest). */
+export function lookPastOf(s: HouseReadStructured, w: number, h: number): HouseLookPast[] {
+  const px = s.lookPast.some((b) => b.x1 > 1.5 || b.y1 > 1.5) || s.windows.some((x) => x.x1 > 1.5) || (s.base ? s.base.right.x > 1.5 : false);
+  const X = (x: number) => clamp(px ? x / Math.max(1, w) : x, 0, 1);
+  const Y = (y: number) => clamp(px ? y / Math.max(1, h) : y, 0, 1);
+  return s.lookPast
+    .map((b) => ({ kind: b.kind, x0: r3(X(Math.min(b.x0, b.x1))), x1: r3(X(Math.max(b.x0, b.x1))), y0: r3(Y(Math.min(b.y0, b.y1))), y1: r3(Y(Math.max(b.y0, b.y1))) }))
+    .filter((b) => b.x1 - b.x0 > 0.01 && b.y1 - b.y0 > 0.01)
+    .slice(0, 12);
 }

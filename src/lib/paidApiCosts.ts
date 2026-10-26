@@ -28,7 +28,8 @@ export type PaidService =
   | "eagleview"
   | "serpapi"
   | "coolcalc"
-  | "twilio";
+  | "twilio"
+  | "fal";
 
 export const PAID_SERVICE_LABEL: Record<PaidService, string> = {
   openai: "OpenAI",
@@ -42,6 +43,7 @@ export const PAID_SERVICE_LABEL: Record<PaidService, string> = {
   serpapi: "SerpAPI",
   coolcalc: "Cool Calc",
   twilio: "Twilio",
+  fal: "fal.ai",
 };
 
 /** Cents per unit, by service and operation. A missing op costs nothing. */
@@ -71,10 +73,21 @@ export const UNIT_CENTS: Record<PaidService, Record<string, number>> = {
   serpapi: { search: 1.5 },
   coolcalc: { report: 1000 },
   twilio: { sms: 1.25, number: 115 },
+  // The house photo's depth map (2026-10-26, lib/deck/houseDepth): one Depth
+  // Anything v2 run on fal, billed by the compute second — a few seconds on a
+  // 1,024-px picture, a cent or so at list price.
+  fal: { depth: 1 },
 };
 
-/** OpenAI list prices, dollars per 1M tokens: [input, output]. */
+/** OpenAI list prices, dollars per 1M tokens: [input, output]. The GPT-6 line and the GPT-5.6 tiers read off
+ *  developers.openai.com/api/docs/models 2026-10-26 (5.6 Terra and Luna at their July price cut). */
 const OPENAI_PER_1M: Array<[RegExp, number, number]> = [
+  [/^gpt-6-astra/, 10, 50],
+  [/^gpt-6(\.\d+)?-sol/, 2, 10],
+  [/^gpt-6(\.\d+)?-luna/, 0.1, 0.5],
+  [/^gpt-5\.6-sol/, 5, 30],
+  [/^gpt-5\.6-terra/, 2, 12],
+  [/^gpt-5\.6-luna/, 0.2, 1.2],
   [/^gpt-4\.1-nano/, 0.1, 0.4],
   [/^gpt-4\.1-mini/, 0.4, 1.6],
   [/^gpt-4\.1/, 2, 8],

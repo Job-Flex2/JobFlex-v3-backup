@@ -32,6 +32,7 @@ import { runVisionJson } from "@/lib/sdk/openaiVision";
 import { friendlyAIError, isOpenAIEnabled } from "@/lib/sdk/openai";
 import { parseWallRead, WALL_READ_PROMPT, type WallRead } from "@/lib/deck/photoFit";
 import { keepHousePhoto, photoOf, readHouseImage, type DeckPhotoResult, type HousePhotoRead } from "@/lib/deck/housePhotoServer";
+import { readHouseDepthImage, type HouseDepthResult } from "@/lib/deck/houseDepth";
 import { foldersOrgMayRead, orgMayReadFolder } from "@/lib/home/files";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { sanitizeDeckRateBook, type DeckRateBook } from "@/lib/deck/rates";
@@ -88,6 +89,7 @@ export async function saveDeckRateBook(raw: unknown): Promise<{ ok: true; book: 
 /* ── The photo of the house (M2, 2026-10-10) ───────────────────────── */
 
 export type { DeckPhotoResult, HousePhotoRead } from "@/lib/deck/housePhotoServer";
+export type { HouseDepthResult } from "@/lib/deck/houseDepth";
 
 /**
  * A photo of the back of the house, kept in the PRIVATE file store under
@@ -141,6 +143,18 @@ export async function readHousePhoto(form: FormData): Promise<HousePhotoRead> {
   const g = await gate("design");
   if (!g.ok) return { ok: false, error: g.error, configured: true };
   return readHouseImage(form, { organizationId: g.organizationId });
+}
+
+/**
+ * THE WALL'S DEPTH OFF THE PHOTO (2026-10-26): a depth map of the picture (lib/deck/houseDepth, one Depth Anything run
+ * on fal) says which parts of the wall come out or step back against the main wall, and where a bay or a chimney
+ * stands on it. The form carries the picture and the read in its fractions; the studio applies the verdicts
+ * (lib/deck/houseDepthApply).
+ */
+export async function readHouseDepth(form: FormData): Promise<HouseDepthResult> {
+  const g = await gate("design");
+  if (!g.ok) return { ok: false, error: g.error, configured: true };
+  return readHouseDepthImage(form, { organizationId: g.organizationId });
 }
 
 export interface ClientPhoto {

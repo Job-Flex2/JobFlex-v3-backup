@@ -6,7 +6,8 @@
 // back of a house (and an old one unchanged); the deck slid and widened with the wall kept still; the review's hand
 // edits; the two looks (the wall cut out, read again, put back and merged); the colours off the pixels. Pure.
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/deck-house-photo.check.ts
-import { HOUSE_READ_PROMPT, mergeLooks, readFromCrop, wallCrop, parseHouseRead, mapHouseRead, moveHouseMark, addReadWindow, addReadDoor, addReadJog, removeReadWindow, removeReadDoor, removeReadJog, flipReadJog, blankHouseRead, readSections, setSectionOut, mainSection, type HouseRead } from "@/lib/deck/houseRead";
+import { HOUSE_READ_PROMPT, HOUSE_READ_PROMPT_PX, fromStructured, mergeLooks, readFromCrop, wallCrop, parseHouseRead, mapHouseRead, moveHouseMark, addReadWindow, addReadDoor, addReadJog, removeReadWindow, removeReadDoor, removeReadJog, flipReadJog, blankHouseRead, readSections, setSectionOut, mainSection, type HouseRead, type HouseReadStructured } from "@/lib/deck/houseRead";
+import { applyDepthVerdicts } from "@/lib/deck/houseDepthApply";
 import { houseFromPhoto, houseScale, dominantColour, colourZones, paintable } from "@/lib/deck/houseFromPhoto";
 import { defaultHouse, houseScene, normalizeHouse, slideDeck } from "@/lib/deck/house";
 import { defaultDeckDesign, type DeckShape } from "@/lib/deck/design";
@@ -69,6 +70,44 @@ const withDoor = parseHouseRead({ ...RAW, door: { x0: 0.6, x1: 0.77, bottom: 0.5
 check("the back door read only as `door` is among the doors, a sliding door by its width", withDoor.doors.length === 1 && withDoor.doors[0].kind === "slider", JSON.stringify(withDoor.doors));
 check("a window drawn over that door is dropped", withDoor.windows.length === UPPER.length, `${withDoor.windows.length} of ${UPPER.length}`);
 check("the prompt tells the model to look past what stands in front of the wall", /LOOK PAST/.test(HOUSE_READ_PROMPT) && /porch roof/.test(HOUSE_READ_PROMPT) && /grid/.test(HOUSE_READ_PROMPT));
+check("the pixel prompt (2026-10-26) asks what the picture is, the house's silhouette, and the same look-past rules", /PIXELS/.test(HOUSE_READ_PROMPT_PX) && /SUBJECT/.test(HOUSE_READ_PROMPT_PX) && /OUTLINE/.test(HOUSE_READ_PROMPT_PX) && /LOOK PAST/.test(HOUSE_READ_PROMPT_PX) && /porch roof/.test(HOUSE_READ_PROMPT_PX) && !/grid/.test(HOUSE_READ_PROMPT_PX));
+
+console.log("— the read held to a schema, in pixels (2026-10-26) —");
+// The same wall as the model answers it now: in pixels of the 736 × 840 picture, with what it is, its silhouette, its
+// sections (the steps come from them) and what stands in front of it.
+const toPx = (p: { x: number; y: number }) => ({ x: p.x * W, y: p.y * H });
+const S: HouseReadStructured = {
+  subject: { kind: "house-exterior", confidence: 0.9, reason: "the back wall of a two-storey house, from the yard" },
+  image: { w: W, h: H },
+  outline: [{ x: 0.02 * W, y: 0.1 * H }, { x: 0.5 * W, y: 0.02 * H }, { x: 0.98 * W, y: 0.1 * H }, { x: 0.98 * W, y: 0.63 * H }, { x: 0.02 * W, y: 0.63 * H }],
+  base: { left: toPx(RAW.base.left), right: toPx(RAW.base.right) },
+  eave: { left: toPx(RAW.eave.left), right: toPx(RAW.eave.right) },
+  storeys: 2,
+  sections: [{ x0: fx(25) * W, x1: fx(148) * W, outFt: 0, why: "corner boards at both ends" }, { x0: fx(148) * W, x1: fx(372) * W, outFt: 2, why: "its own eave in front of the main eave" }, { x0: fx(372) * W, x1: fx(597) * W, outFt: 0, why: "the main wall" }],
+  doors: [],
+  windows: RAW.windows.map((w) => ({ x0: w.x0 * W, x1: w.x1 * W, sill: w.sill * H, head: w.head * H })),
+  patio: { x0: RAW.patio.x0 * W, x1: RAW.patio.x1 * W },
+  roof: { kind: "hip", pitch: 5 },
+  material: "lap",
+  colours: { siding: "#7D7B76", roof: "#3c3d40", trim: null },
+  lookPast: [{ kind: "porch-roof", x0: 358, y0: 740 - 380, x1: 655, y1: 775 - 380 }],
+  bars: { top: 0, bottom: 0 },
+  confidence: 0.8,
+  note: null,
+};
+const pxRead = parseHouseRead(fromStructured(S, W, H))!;
+check("a pixel answer parses to the same fractions as the old read", !!pxRead && near(pxRead.base.left.x, read.base.left.x, 0.002) && near(pxRead.windows[3].sill, read.windows[3].sill, 0.002) && pxRead.windows.length === 14, pxRead ? `${pxRead.base.left.x} vs ${read.base.left.x}` : "no read");
+check("the sections become the steps: out 2 ft in the middle", readSections(pxRead).map((x) => x.outFt).join(",") === "0,2,0", JSON.stringify(readSections(pxRead)));
+check("the house's silhouette comes through, in fractions", pxRead.outline?.length === 5 && near(pxRead.outline[1].x, 0.5, 0.002), JSON.stringify(pxRead.outline));
+check("a model that answered in fractions anyway is read as such", near(parseHouseRead(fromStructured({ ...S, base: { left: RAW.base.left, right: RAW.base.right }, windows: RAW.windows }, W, H))!.base.right.x, read.base.right.x, 0.002));
+check("the silhouette rides through a crop and a merge", readFromCrop(pxRead, { x: 0.1, y: 0.1, w: 0.8, h: 0.8 }).outline![1].x === 0.5 && mergeLooks(pxRead, { ...pxRead, outline: undefined }).outline?.length === 5);
+const levelled = setSectionOut(pxRead, 1, 0);
+const byDepth = applyDepthVerdicts(levelled, [{ x0: fx(25), x1: fx(148), state: "level", shift: 0, sure: 1 }, { x0: fx(148), x1: fx(372), state: "out", shift: 0.05, sure: 1 }, { x0: fx(372), x1: fx(597), state: "level", shift: 0, sure: 1 }], { modelSections: readSections(pxRead) });
+check("the depth map sets a level part out, at the model's 2 ft", byDepth.changed === 1 && readSections(byDepth.read).map((x) => x.outFt).join(",") === "0,2,0", JSON.stringify(readSections(byDepth.read)));
+const turned = applyDepthVerdicts(pxRead, [{ x0: fx(148), x1: fx(372), state: "back", shift: -0.05, sure: 1 }], {});
+check("…and turns a part read the wrong way round", turned.flipped === 1 && readSections(turned.read)[1].outFt === -2, JSON.stringify(readSections(turned.read)));
+check("…but not against the photo's own eave shadows when it is unsure", applyDepthVerdicts(pxRead, [{ x0: fx(148), x1: fx(372), state: "back", shift: -0.02, sure: 0.4 }], { stepsFromPhoto: true }).flipped === 0);
+check("a verdict covering less than half a part says nothing about it", applyDepthVerdicts(levelled, [{ x0: fx(148), x1: fx(200), state: "out", shift: 0.05, sure: 1 }], {}).changed === 0);
 
 console.log("— the wall as its parts —");
 const secs = readSections(read);
@@ -92,7 +131,7 @@ check("a step added divides the wider part and changes nothing yet", divided.jog
 const moved = moveHouseMark(divided, "jog-0", { x: fx(148), y: read.base.left.y });
 const shaped = setSectionOut(moved, 1, 2);
 check("dragged to the corner and the middle set out: left and right on the main wall, the middle out 2 ft", readSections(shaped).map((x) => x.outFt).join(",") === "0,2,0", JSON.stringify(readSections(shaped)));
-check("the prompt says a lower roof over the ground storey of part of the wall is not a bump-out", /lean-to/.test(HOUSE_READ_PROMPT) && /GROUND storey/.test(HOUSE_READ_PROMPT));
+check("the prompt says a lower roof over the ground storey of part of the wall is not a bump-out", /lean-to/.test(HOUSE_READ_PROMPT) && /GROUND storey/.test(HOUSE_READ_PROMPT) && /lean-to/.test(HOUSE_READ_PROMPT_PX) && /GROUND storey/.test(HOUSE_READ_PROMPT_PX));
 const flatTwo = addReadJog(addReadJog({ ...read, jogs: [] }));
 check("a step added to a flat wall goes in its middle; a second splits the wider half, never on the first", flatTwo.jogs.length === 2 && Math.abs(flatTwo.jogs[0].x - flatTwo.jogs[1].x) > 0.1, JSON.stringify(flatTwo.jogs.map((j) => j.x)));
 check("half-foot steps, held to 8 ft either way", setSectionOut(read, 1, 12).jogs[0].depthFt === 8 && setSectionOut(read, 1, 2.3).jogs[0].depthFt === 2.5);

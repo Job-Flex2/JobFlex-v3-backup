@@ -9,7 +9,7 @@
 import * as React from "react";
 import type { DeckDesign } from "@/lib/deck/design";
 import type { DeckPatch } from "@/lib/deck/checks";
-import { clientHousePhotoHref, readClientHousePhoto, uploadClientHousePhoto } from "@/actions/deckClientDesign";
+import { clientHousePhotoHref, readClientHouseDepth, readClientHousePhoto, uploadClientHousePhoto } from "@/actions/deckClientDesign";
 import { HousePhotoCard, HousePhotoReview, useHousePhoto, type HousePhotoApi } from "@/components/v3/deck-variant-1/deck-v1-house-photo";
 import "@/components/v3/deck-variant-1/deck-variant-1.css";
 
@@ -17,6 +17,7 @@ export function ClientHousePhoto({ token, design, patch, onBuilt }: { token: str
   const api = React.useMemo<HousePhotoApi>(
     () => ({
       read: (form) => readClientHousePhoto(token, form),
+      depth: (form) => readClientHouseDepth(token, form),
       upload: (form) => uploadClientHousePhoto(token, form),
       href: (url) => clientHousePhotoHref(token, url),
     }),

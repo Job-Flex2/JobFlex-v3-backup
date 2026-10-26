@@ -52,6 +52,19 @@ const meteredFetch: typeof fetch = async (input, init) => {
           await notePaidCall("openai", "chat", u ? { cents: openAiChatCents(body.model ?? getOpenAIModel(), u.prompt_tokens ?? 0, u.completion_tokens ?? 0) } : {});
         })
         .catch(() => {});
+    } else if (/\/responses(\?|$)/.test(url) && (init?.method ?? "GET").toUpperCase() === "POST") {
+      // The Responses API (the house photo's structured read, 2026-10-26): its usage block names input and output
+      // tokens — the reasoning tokens are counted in the output. A GET of /responses/{id} is free and is not matched.
+      void res
+        .clone()
+        .json()
+        .then(async (body: { model?: string; usage?: { input_tokens?: number; output_tokens?: number } }) => {
+          const { notePaidCall } = await import("@/lib/trialMeter");
+          const { openAiChatCents } = await import("@/lib/paidApiCosts");
+          const u = body.usage;
+          await notePaidCall("openai", "chat", u ? { cents: openAiChatCents(body.model ?? getOpenAIModel(), u.input_tokens ?? 0, u.output_tokens ?? 0) } : {});
+        })
+        .catch(() => {});
     } else if (/\/audio\/transcriptions(\?|$)/.test(url)) {
       let bytes = 0;
       if (init?.body instanceof FormData) {
@@ -124,8 +137,39 @@ export async function resolveOpenAIModel(): Promise<string> {
   return modelCheck;
 }
 
-/** A reasoning model (gpt-5, the o-series) thinks before it answers and rejects a temperature. */
-export const isReasoningModelName = (model: string) => /^(gpt-5|o[1-9])/.test(model);
+/** A reasoning model (gpt-5, gpt-6, the o-series) thinks before it answers and rejects a temperature. */
+export const isReasoningModelName = (model: string) => /^(gpt-5|gpt-6|o[1-9])/.test(model);
+
+const modelChecks = new Map<string, Promise<boolean>>();
+
+/**
+ * WHETHER THIS KEY'S PROJECT MAY CALL `model` — asked once per model, then remembered (the same question
+ * resolveOpenAIModel asks of OPENAI_MODEL, for a feature that names a model of its own: the house photo's read,
+ * 2026-10-26). One free `models.retrieve`. Only model_not_found says no; an auth failure, a network blip or a rate
+ * limit says nothing about entitlement and the model is kept.
+ */
+export function ensureModel(model: string): Promise<boolean> {
+  const cached = modelChecks.get(model);
+  if (cached) return cached;
+  const check = (async () => {
+    if (!isOpenAIEnabled()) return false;
+    try {
+      await getOpenAI().models.retrieve(model);
+      return true;
+    } catch (err) {
+      const status = (err as { status?: number })?.status;
+      const code = (err as { code?: string })?.code;
+      if (code === "model_not_found" || status === 404 || status === 403) {
+        console.error(`[openai] model "${model}" is not available to this project (${status ?? "?"} ${code ?? "model_not_found"})`);
+        return false;
+      }
+      console.warn(`[openai] could not verify model "${model}" (${status ?? "no status"}): ${err instanceof Error ? err.message : String(err)} — keeping it`);
+      return true;
+    }
+  })();
+  modelChecks.set(model, check);
+  return check;
+}
 
 /**
  * The sampling options a call may send: none to a reasoning model (gpt-5,
