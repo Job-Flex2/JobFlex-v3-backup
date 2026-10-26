@@ -609,6 +609,20 @@ model PlatformLead {
   @@index([homeId])
 }
 
+// Where a homeowner request came from, when the page it was started on says
+// (2026-10-26): the public cost guides (/cost/<work>/<city>) send
+// "seo:<work>:<city>" through /homeowner. One row per PlatformLead; a request
+// with no source has none. No foreign key, like EmailLog — a write that fails
+// never costs the request (lib/leadCenter/intake).
+model LeadSource {
+  id             String   @id @default(cuid())
+  platformLeadId String   @unique
+  source         String
+  createdAt      DateTime @default(now())
+
+  @@index([source])
+}
+
 // ─────────────────────────────────────────────
 // The homeowner's home dashboard (2026-10-03)
 // ─────────────────────────────────────────────

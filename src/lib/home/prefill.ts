@@ -12,6 +12,8 @@ export type WizardPrefill = {
   planId: string | null;
   /** The plan's title and notes, as the first words of the description. */
   description: string;
+  /** Where the request was started, when a page says ("seo:<work>:<city>" from a cost guide) — kept with the lead. */
+  source?: string;
 };
 
 /** The browser's zone, for a new home's reminders; "" when it cannot say. */

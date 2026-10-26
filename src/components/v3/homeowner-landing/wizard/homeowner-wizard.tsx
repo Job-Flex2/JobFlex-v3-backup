@@ -337,6 +337,8 @@ export function HomeownerWizard({ uid, prefill = null }: { uid: string; prefill?
         // From the home dashboard: the request joins it, and fulfils the plan.
         homeKey: prefill?.homeKey,
         planId: prefill?.planId ?? undefined,
+        // Started on a cost guide (/cost): the guide, kept with the lead.
+        source: prefill?.source,
         // The browser's zone, for a new home's reminders.
         timezone: browserTimeZone() || undefined,
       });

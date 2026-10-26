@@ -1,0 +1,163 @@
+/* The cost guides (/cost, 2026-10-26) — Blueprint per DESIGN.md: drafting
+   paper, white cards in ink frames, uppercase headings, one blue action.
+   Built for the phone first; one desk query widens it. The page renders on
+   the server as one tree (search engines read it whole), so the desk layout
+   is a media query here rather than the dashboard's JS viewport switch. */
+
+.page { min-height: 100dvh; color: var(--ink); font: 15px/1.6 var(--font-sans); }
+.page :is(h1, h2, h3, p, ul, ol, dl, dd, figure) { margin: 0; }
+.page :is(h1, h2, h3, p, li, td, th, a) { overflow-wrap: anywhere; }
+.page a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.page a:hover { color: var(--accent-ink); }
+.page :is(a, button, input, label, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* ── Top bar and footer ── */
+.top { position: sticky; top: 0; z-index: 20; border-bottom: 2px solid var(--ink); background: var(--paper); }
+.topIn { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 1120px; min-height: 56px; margin: 0 auto; padding: 0 16px; }
+.page .brand { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; color: var(--ink); font-size: 20px; font-weight: 800; letter-spacing: -0.02em; text-decoration: none; --pmark-h: 22px; }
+.page .topLink { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink); font: 800 12px/1.2 var(--font-sans); letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; }
+.page .topLink:hover { color: var(--accent); }
+
+.main { display: grid; gap: 20px; max-width: 1120px; margin: 0 auto; padding: 16px 16px 40px; }
+
+.crumbs { display: flex; flex-wrap: wrap; gap: 4px 8px; color: var(--ink-muted); font: 500 11px/1.6 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; }
+.crumbs ol { display: contents; list-style: none; padding: 0; }
+.crumbs li { display: inline-flex; align-items: center; gap: 8px; }
+.crumbs li + li::before { content: "/"; color: var(--ink-faint, var(--ink-muted)); }
+.page .crumbs a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink-muted); text-decoration: none; }
+.page .crumbs a:hover { color: var(--accent); text-decoration: underline; }
+
+/* ── Head: title, answer, lede ── */
+.head { display: grid; gap: 16px; }
+.title { font-size: 30px; font-weight: 900; line-height: 1.05; letter-spacing: -0.03em; text-transform: uppercase; }
+.updated { color: var(--ink-muted); font: 500 11px/1.5 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.lede { display: grid; gap: 12px; color: var(--ink-soft); max-width: 68ch; }
+
+.annot { display: block; color: var(--ink-muted); font: 500 11px/1.5 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; }
+
+.answer { display: grid; gap: 4px; padding: 20px; border: 2px solid var(--ink); background: var(--paper-deep); }
+.answerAvg { font-size: 44px; font-weight: 900; line-height: 1.05; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.answerRange { font-size: 18px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.answerPer { color: var(--ink-soft); font-size: 15px; font-variant-numeric: tabular-nums; }
+.answerMeta { display: grid; gap: 6px; margin: 12px -20px 0; padding: 12px 20px 0; border-top: 1px solid var(--ink); color: var(--ink-soft); font-size: 13px; }
+.answerMeta b { color: var(--ink); font-weight: 700; }
+.page .jump { display: inline-flex; align-items: center; min-height: 44px; margin-top: 4px; font-weight: 700; }
+
+/* ── Cards ── */
+.card { min-width: 0; border: 2px solid var(--ink); background: var(--paper-deep); }
+.cardHead { padding: 14px 20px; border-bottom: 2px solid var(--ink); background: var(--paper); }
+.h2 { font-size: 17px; font-weight: 900; line-height: 1.25; letter-spacing: 0.01em; text-transform: uppercase; }
+.cardBody { display: grid; gap: 14px; padding: 20px; }
+.cardBody > p { color: var(--ink-soft); max-width: 72ch; }
+.small { color: var(--ink-muted); font-size: 13px; }
+
+/* ── Tables: two columns at every width — what, and what it costs ── */
+.table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.table th { padding: 0 0 8px; border-bottom: 1px solid var(--ink); color: var(--ink-muted); font: 500 11px/1.5 var(--font-mono); letter-spacing: 0.1em; text-align: left; text-transform: uppercase; }
+.table th:last-child, .table td:last-child { text-align: right; }
+.table td { padding: 12px 0; border-bottom: 1px solid var(--ink-line); vertical-align: top; }
+.table td + td { padding-left: 16px; }
+.table tr:last-child td { border-bottom: 0; }
+.rowName { display: block; font-weight: 700; }
+.rowNote { display: block; color: var(--ink-muted); font-size: 13px; }
+.rowCost { display: block; font-weight: 800; white-space: nowrap; }
+.rowRange { display: block; color: var(--ink-muted); font-size: 13px; white-space: nowrap; }
+.page .table a.rowName { display: flex; align-items: center; min-height: 44px; margin-block: -10px; font-weight: 700; }
+
+/* ── Calculator ── */
+.calc { display: grid; }
+.calcFields { display: grid; gap: 20px; padding: 20px; }
+.field { display: grid; gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.fieldLabel { padding: 0; color: var(--ink); font: 800 12px/1.4 var(--font-sans); letter-spacing: 0.08em; text-transform: uppercase; }
+.fieldNote { color: var(--ink-muted); font-size: 12.5px; }
+.stepper { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; max-width: 320px; border: 2px solid var(--ink); }
+.stepBtn { min-height: 46px; border: 0; background: var(--paper); color: var(--ink); font: 700 22px/1 var(--font-sans); cursor: pointer; transition: background-color 150ms var(--ease-out); }
+.stepBtn:first-child { border-right: 2px solid var(--ink); }
+.stepBtn:last-child { border-left: 2px solid var(--ink); }
+.stepBtn:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent-ink); }
+.stepBtn:disabled { color: var(--ink-muted); cursor: not-allowed; }
+.stepInput { min-width: 0; min-height: 46px; padding: 8px 12px; border: 0; background: var(--paper-deep); color: var(--ink); font: 700 16px/1.4 var(--font-sans); text-align: center; font-variant-numeric: tabular-nums; }
+.choices { display: grid; gap: 8px; }
+.choice { display: flex; align-items: flex-start; gap: 12px; min-height: 48px; padding: 12px 14px; border: 1.5px solid var(--ink); background: var(--paper-deep); cursor: pointer; transition: background-color 150ms var(--ease-out), border-color 150ms var(--ease-out); }
+.choice:hover { background: var(--paper); }
+.choice[data-on] { border-color: var(--accent); background: var(--accent-soft); }
+.choice input { flex: 0 0 auto; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); }
+.choice span { display: grid; min-width: 0; }
+.choice b { font-size: 14.5px; font-weight: 700; line-height: 1.35; }
+.choice small { color: var(--ink-muted); font-size: 12.5px; line-height: 1.4; }
+.calcResult { display: grid; gap: 4px; align-content: start; padding: 20px; border-top: 2px solid var(--ink); background: var(--paper); }
+.calcAvg { font-size: 40px; font-weight: 900; line-height: 1.1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.calcRange { font-size: 17px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.calcPer { color: var(--ink-soft); font-size: 14px; font-variant-numeric: tabular-nums; }
+.page .primary { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; margin-top: 12px; padding: 12px 18px; border: 1.5px solid var(--ink); border-radius: var(--r-sm); background: var(--accent); color: var(--paper-deep); font: 800 13px/1.3 var(--font-sans); letter-spacing: 0.06em; text-align: center; text-decoration: none; text-transform: uppercase; transition: background-color 150ms var(--ease-out); }
+.page .primary:hover { background: var(--accent-ink); color: var(--paper-deep); }
+.calcPro { margin-top: 10px; color: var(--ink-soft); font-size: 13.5px; }
+
+/* ── Homeowner call to action ── */
+.quotes { display: grid; gap: 12px; padding: 20px; border: 2px solid var(--ink); background: var(--paper-deep); }
+.quotes p { color: var(--ink-soft); max-width: 64ch; }
+
+/* ── Facts, questions, FAQ ── */
+.facts { display: grid; gap: 0; }
+.fact { display: grid; gap: 4px; padding: 14px 0; border-top: 1px solid var(--ink-line); }
+.fact:first-child { padding-top: 0; border-top: 0; }
+.fact h3, .faq h3 { font-size: 13px; font-weight: 850; line-height: 1.35; letter-spacing: 0.05em; text-transform: uppercase; }
+.fact p { color: var(--ink-soft); max-width: 72ch; }
+.asks { display: grid; gap: 8px; padding-left: 20px; color: var(--ink-soft); }
+.faq { display: grid; gap: 0; }
+.faqItem { display: grid; gap: 6px; padding: 16px 0; border-top: 1px solid var(--ink-line); }
+.faqItem:first-child { padding-top: 0; border-top: 0; }
+.faq h3 { font-size: 16px; letter-spacing: 0; text-transform: none; font-weight: 800; }
+.faqItem p { color: var(--ink-soft); max-width: 72ch; }
+
+/* ── Link lists ── */
+.links { display: grid; grid-template-columns: minmax(0, 1fr); list-style: none; padding: 0; }
+.links li { border-top: 1px solid var(--ink-line); }
+.links li:first-child { border-top: 0; }
+.page .links a { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 10px 0; color: var(--ink); font-weight: 650; text-decoration: none; }
+.page .links a:hover { color: var(--accent); }
+.links a span { color: var(--ink-muted); font-weight: 500; font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.method { display: grid; gap: 10px; color: var(--ink-soft); font-size: 14px; }
+.sources { display: grid; gap: 4px; padding-left: 18px; color: var(--ink-muted); font-size: 12.5px; }
+
+.foot { border-top: 2px solid var(--ink); background: var(--paper); }
+.footIn { display: grid; gap: 12px; max-width: 1120px; margin: 0 auto; padding: 24px 16px calc(24px + var(--safe-bottom, 0px)); }
+.footPro { font-weight: 700; }
+.footLinks { display: flex; flex-wrap: wrap; gap: 0 20px; color: var(--ink-muted); font-size: 13px; }
+.page .footLinks a, .footLinks button { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink-muted); }
+
+/* Two cards side by side on a desk, stacked with the page's gap on a phone (never touching frames). */
+.twoCol { display: grid; gap: 20px; }
+
+/* ── Index pages ── */
+.grid { display: grid; gap: 16px; }
+.states { display: grid; gap: 20px; }
+.state h2 { margin-bottom: 4px; }
+
+@media (min-width: 769px) {
+  .topIn, .footIn { padding-inline: 32px; }
+  .main { gap: 28px; padding: 28px 32px 56px; }
+  .head { grid-template-columns: minmax(0, 1fr) 380px; align-items: start; column-gap: 32px; }
+  .head > :not(.answer) { grid-column: 1; }
+  .answer { grid-column: 2; grid-row: 1 / span 4; padding: 24px; }
+  .answerMeta { margin-inline: -24px; padding-inline: 24px; }
+  .title { font-size: 40px; }
+  .cardHead { padding: 16px 24px; }
+  .h2 { font-size: 19px; }
+  .cardBody { padding: 24px; }
+  .calc { grid-template-columns: minmax(0, 1fr) 340px; }
+  .calcFields { padding: 24px; }
+  .calcResult { padding: 24px; border-top: 0; border-left: 2px solid var(--ink); }
+  .choices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quotes { grid-template-columns: minmax(0, 1fr) auto; align-items: center; padding: 24px; }
+  .quotes .primary { margin-top: 0; }
+  .twoCol { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+  .links.cols { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; }
+  .links.cols li:nth-child(2) { border-top: 0; }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stepBtn, .choice, .page .primary { transition: none; }
+}

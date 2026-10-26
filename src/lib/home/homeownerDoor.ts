@@ -47,8 +47,9 @@ export function homeownerDoorFor(trade: string | null | undefined): { key: strin
   return key ? { key, thing: THINGS[key], href: `/homeowner?project=${encodeURIComponent(key)}` } : null;
 }
 
-/** The first words of the homeowner's request when they came through the door: "I'm looking for a fence. ". */
-export function projectStarter(project: string | null | undefined): string {
+/** The first words of the homeowner's request when they came through the door: "I'm looking for a fence. " —
+ *  "… a fence in Dallas, TX. " when a cost guide names the city (the caller checks the place). */
+export function projectStarter(project: string | null | undefined, place?: string | null): string {
   const key = homeTradeKey(project);
-  return key ? `I'm looking for ${THINGS[key]}. ` : "";
+  return key ? `I'm looking for ${THINGS[key]}${place ? ` in ${place}` : ""}. ` : "";
 }

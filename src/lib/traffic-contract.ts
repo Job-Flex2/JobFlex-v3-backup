@@ -227,6 +227,13 @@ export const TRAFFIC_EVENTS = {
   // The plan cards drawn without a press (2026-10-19): `reason` returned (Stripe's back arrow, or Back) or
   // checkout_failed (the card page did not open). Fired by auth-register-blueprint/register-content.tsx.
   plansShown: "signup_plans_shown",
+  // THE COST GUIDES (2026-10-26, /cost/<work>/<city>): `seo_cost_view` once per
+  // guide load with `trade` and `city` (the slugs); `seo_cost_cta` per click on
+  // one of its calls to action — `which` is quotes_calc / quotes_block (the
+  // homeowner's request) or pro_calc / pro_footer / pro_inline (the
+  // contractor landing). Fired by components/seo-cost/cost-track.tsx.
+  seoCostView: "seo_cost_view",
+  seoCostCta: "seo_cost_cta",
 } as const;
 
 /** Events that come several per visit: the report's `raw` CTE leaves them out (lib/traffic-query). */
@@ -237,6 +244,7 @@ export const DETAIL_EVENTS: ReadonlySet<string> = new Set([
   TRAFFIC_EVENTS.signupAway,
   TRAFFIC_EVENTS.signupBack,
   TRAFFIC_EVENTS.signupLeave,
+  TRAFFIC_EVENTS.seoCostCta,
 ]);
 
 /** Signups read from the database by what the landing recorded on them. */

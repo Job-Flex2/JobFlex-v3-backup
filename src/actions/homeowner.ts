@@ -5,6 +5,7 @@ import { isValidTestKey } from "@/lib/leadCenter/testLeads";
 import { suggestIntakeQuestions, type IntakeQuestion } from "@/lib/ai/homeownerQuestions";
 import { enforceRateLimit, clientIp, rateLimitShared, MINUTE } from "@/lib/rateLimit";
 import { needsAddressFor, writeProfessionalScope } from "@/lib/leadScope";
+import { SEO_SOURCE_RE } from "@/lib/seo/links";
 
 const homeownerSchema = z.object({
   name: z.string().min(1),
@@ -26,6 +27,8 @@ const homeownerSchema = z.object({
   planId: z.string().max(60).optional(),
   /** The browser's time zone, for a new home's reminders. */
   timezone: z.string().max(80).optional(),
+  /** Started on a cost guide: "seo:<work>:<city>" (lib/seo/links). Anything else is dropped, never refused. */
+  source: z.string().max(120).optional().transform((v) => (v && SEO_SOURCE_RE.test(v) ? v : undefined)),
 });
 
 /**
@@ -71,9 +74,9 @@ async function submitHomeownerRequestInner(raw: unknown) {
   // A valid ?test=<key> (lib/leadCenter/testLeads) makes this a test lead; a
   // wrong or empty key is simply an ordinary request.
   const isTest = data.testKey ? await isValidTestKey(data.testKey) : false;
-  const { testKey: _testKey, homeKey, planId, timezone, ...intake } = data;
+  const { testKey: _testKey, homeKey, planId, timezone, source, ...intake } = data;
   void _testKey;
-  return createHomeownerLead(intake, { isTest, homeKey: homeKey ?? null, planId: planId ?? null, timezone: timezone ?? null });
+  return createHomeownerLead(intake, { isTest, homeKey: homeKey ?? null, planId: planId ?? null, timezone: timezone ?? null, source: source ?? null });
 }
 
 // ── Adaptive clarify questions ─────────────────────────────────────────────

@@ -82,6 +82,8 @@ export interface IntakeOptions {
   planId?: string | null;
   /** The browser's zone, kept on a new home for its reminders. */
   timezone?: string | null;
+  /** Where the request was started ("seo:<work>:<city>"), kept as a LeadSource row. */
+  source?: string | null;
 }
 
 export async function createHomeownerLead(data: HomeownerIntake, opts: IntakeOptions) {
@@ -145,6 +147,14 @@ export async function createHomeownerLead(data: HomeownerIntake, opts: IntakeOpt
       aiConfidence: detected?.confidence ?? null,
     },
   });
+
+  // Where it was started (2026-10-26, the cost guides): best-effort, like the
+  // rest after the two inserts — without the table the request still goes.
+  if (opts.source) {
+    await db.leadSource.create({ data: { platformLeadId: platformLead.id, source: opts.source } }).catch((err: unknown) => {
+      console.warn("[homeowner] lead source not kept — the request stands:", err);
+    });
+  }
 
   // THE HOME DASHBOARD (2026-10-03): the request joins the home that carries
   // this email, or makes it. Older requests with the email join too. The key
