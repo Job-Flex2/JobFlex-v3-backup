@@ -8,7 +8,7 @@
 //                     page lists it as "Your roof in <material · colour>" (lib/proposalPictures).
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
-import { NoOrgError, UnauthorizedError, requireEstimatorOrManager } from "@/lib/orgContext";
+import { NoOrgError, UnauthorizedError, requireEstimatorOrManager, requirePlatformAdmin } from "@/lib/orgContext";
 import { enforceRateLimit, HOUR, RateLimitError } from "@/lib/rateLimit";
 import { isBlobEnabled, uploadBlob } from "@/lib/sdk/blob";
 import { isOpenAIEnabled } from "@/lib/sdk/openai";
@@ -19,9 +19,15 @@ import { ROOF_FAMILIES, type RoofFamily } from "@/lib/roofPackage/catalog";
 
 type Fail = { ok: false; error: string };
 
+/** An estimator or manager of the org — and, while the visualizer is in preview (2026-10-25), a platform admin. */
 async function who(): Promise<{ ok: true; organizationId: string; userId: string } | Fail> {
   try {
     const { organizationId, user } = await requireEstimatorOrManager();
+    try {
+      await requirePlatformAdmin();
+    } catch {
+      return { ok: false, error: "The roof visualizer is in preview for JobFlex admins for now." };
+    }
     return { ok: true, organizationId, userId: user.id };
   } catch (err) {
     if (err instanceof UnauthorizedError || err instanceof NoOrgError) return { ok: false, error: "Sign in to an estimator's account first." };

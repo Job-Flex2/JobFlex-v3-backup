@@ -31,7 +31,10 @@ export function RoofEstimatorContent({
   initialAddress,
   proposalId,
   homeState = null,
+  roofLookPreview = false,
 }: {
+  /** The roof visualizer, in preview for platform admins only (2026-10-25). */
+  roofLookPreview?: boolean;
   /** A lead's address, typed into the search field on arrival (lib/estimateSeed). */
   initialAddress?: string;
   /** A saved roof proposal to open again and update (2026-10-13). */
@@ -67,7 +70,7 @@ export function RoofEstimatorContent({
         drawingEnabled && evEnabled ? (
           <RoofEstimatorBlueprintForm aiEnabled={aiEnabled} />
         ) : (
-          <RoofEstimatorDataForm aiEnabled={aiEnabled} evEnabled={evEnabled} measurementEnabled={measurementEnabled} initialAddress={initialAddress} proposalId={proposalId} homeState={homeState} />
+          <RoofEstimatorDataForm aiEnabled={aiEnabled} evEnabled={evEnabled} measurementEnabled={measurementEnabled} initialAddress={initialAddress} proposalId={proposalId} homeState={homeState} roofLookPreview={roofLookPreview} />
         )
       ) : (
         <div className="card rf-card">
