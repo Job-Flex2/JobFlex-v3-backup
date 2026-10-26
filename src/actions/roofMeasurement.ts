@@ -68,7 +68,7 @@ import { checkCompleteness } from "@/lib/roofRecon/completeness";
 import { lotMaskFromPair, ringWhollyOutsideLot, type LotMask } from "@/lib/roofDiagram/parcelMask";
 import { lotRingForPoint, ringWhollyOutsideLotRing } from "@/lib/lotRing";
 import { areaOf, type FootprintPoint } from "@/lib/roofRecon/footprint";
-import { foreignIndices, footprintRead, pickMainStructure, rowFigures } from "@/lib/roofDiagram/instantTotals";
+import { foreignIndices, footprintRead, pickMainStructureAt, rowFigures } from "@/lib/roofDiagram/instantTotals";
 import { toDTO, toSummary, type StoredProvenance } from "@/lib/roofDiagram/dto";
 import type { MeasurementProvenance, MeasurementSource, RoofMeasurementDTO, RoofMeasurementSummary } from "@/lib/roofDiagram/types";
 import { takeTrialCap } from "@/lib/trialMeter";
@@ -442,15 +442,29 @@ function applyRigid(ring: FootprintPoint[], t: Rigid2D): FootprintPoint[] {
  * `reconDeadlineMs` ≤ 0 skips the elevation pass and says so on the row; the
  * page's free retry runs it then.
  */
+function okLatLng(p: { lat?: unknown; lng?: unknown } | null | undefined): p is LatLng {
+  return !!p && typeof p.lat === "number" && typeof p.lng === "number" && Number.isFinite(p.lat) && Number.isFinite(p.lng) && Math.abs(p.lat) <= 90 && Math.abs(p.lng) <= 180;
+}
+
 async function witnessInstant(p: {
   instant: InstantRoofData;
   input: EvOrderInput;
   packs: PackReport;
   refreshSolar: boolean;
   reconDeadlineMs: number;
+  /** The pin an earlier pick was made at (a late pack's re-check keeps the same building). */
+  pickPin?: LatLng | null;
+  /** The pin is a building the contractor chose on the page ("Measure this building instead"). */
+  chosen?: boolean;
 }): Promise<Witnessed> {
   const { instant, input, packs } = p;
   const origin: LatLng | null = instant.lat != null && instant.lng != null ? { lat: instant.lat, lng: instant.lng } : null;
+  // WHICH BUILDING (2026-10-26, a contractor's ticket: "wrong building — the apartment building needs to be measured,
+  // not the garage"): the pin the contractor confirmed on the map before measuring — or a building they picked on the
+  // page ("Measure this one instead") — says which, not the vendor's point for the address, which can stand on the
+  // garage of a lot with several buildings.
+  const typed = { lat: input.lat, lng: input.lng };
+  const chosenPin: LatLng | null = p.pickPin ?? (okLatLng(typed) ? typed : null);
   const contours = instant.structures.map((st) => st.outline ?? []).filter((r) => r.length >= 3);
 
   const provenance: MeasurementProvenance = {};
@@ -511,9 +525,12 @@ async function witnessInstant(p: {
   // registration, coverage, measured pitch, completeness — are about ONE of
   // them. The rest are listed on the page with checkboxes.
   const veto = (provenance as Record<string, unknown>).parcelVeto as { foreignStructures?: string[] } | undefined;
-  const pick = pickMainStructure(instant.structures, {
+  // The contractor's pin first; one that stands on no building (a street-side geocode) gives way to the vendor's point.
+  const pick = pickMainStructureAt(instant.structures, {
+    pin: chosenPin,
+    vendor: origin,
+    chosen: p.chosen,
     foreign: foreignIndices(veto?.foreignStructures),
-    origin,
     // Either witness counts as knowing where the lot is.
     parcelKnown: lot != null || haveOutline,
   });
@@ -525,6 +542,7 @@ async function witnessInstant(p: {
       how: pick.how,
       others: others.length,
       othersSqft: Math.round(others.reduce((a, s) => a + (s.areaSqft ?? 0), 0)),
+      pin: chosenPin,
     };
   }
   // Which footprint the estimate will price on, recorded where it can be read
@@ -801,7 +819,8 @@ export async function collectPendingInstant(measurementId: string): Promise<
   let origin: LatLng | null = row.lat != null && row.lng != null ? { lat: row.lat, lng: row.lng } : null;
   if (witnessed) {
     try {
-      const w = await witnessInstant({ instant: merged, input, packs, refreshSolar: false, reconDeadlineMs: LATE_RECON_DEADLINE_MS });
+      const chose = storedProv.provenance.mainStructure;
+      const w = await witnessInstant({ instant: merged, input, packs, refreshSolar: false, reconDeadlineMs: LATE_RECON_DEADLINE_MS, pickPin: chose?.pin ?? null, chosen: chose?.how === "chosen" });
       provenance = { ...w.provenance, ...(storedProv.provenance.instantReuse ? { instantReuse: storedProv.provenance.instantReuse } : {}) };
       origin = w.origin ?? origin;
     } catch (err) {
@@ -941,7 +960,9 @@ function userFacingInstantError(err: unknown): string {
  */
 export async function measureRoofInstant(
   input: EvOrderInput,
-  opts?: { forceNewOrder?: boolean },
+  // `building`: a point on the building the contractor chose to measure on a lot with several — the stored order is
+  // reused (it is the same address), only which roof the report is about changes.
+  opts?: { forceNewOrder?: boolean; building?: LatLng },
 ): Promise<MeasureResult> {
   let organizationId: string;
   let userId: string;
@@ -1008,6 +1029,8 @@ export async function measureRoofInstant(
     packs,
     refreshSolar: opts?.forceNewOrder === true,
     reconDeadlineMs: deadlineAt - Date.now(),
+    pickPin: okLatLng(opts?.building) ? opts.building : null,
+    chosen: okLatLng(opts?.building),
   });
   if (reuse) provenance.instantReuse = reuse;
 

@@ -307,7 +307,15 @@ export interface MeasurementProvenance {
    * (lib/roofDiagram/instantTotals.pickMainStructure). `others` / `othersSqft`
    * are the rest, listed on the page with checkboxes.
    */
-  mainStructure?: { index: number; how: string; others: number; othersSqft: number };
+  mainStructure?: {
+    index: number;
+    how: string;
+    others: number;
+    othersSqft: number;
+    /** The pin the pick was made at (2026-10-26): the one the contractor confirmed on the map, or a building they
+     *  chose on the page — kept so a late pack's re-check picks the same building. null/absent = the vendor's point. */
+    pin?: { lat: number; lng: number } | null;
+  };
   /**
    * Which footprint the estimate prices on, and why (audit 2026-09-17).
    * `eagleview` = the reported `structure_footprint_sqft`; `outline` = the

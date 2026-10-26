@@ -68,6 +68,11 @@ import {
   estimateEdges,
   fasciaFeet,
   gutterFeet,
+  MANSARD_DEFAULT_HEIGHT_FT,
+  MANSARD_LABOR_FACTOR,
+  mansardDefaults,
+  mansardSqft,
+  mansardSystem,
   likeForLikeFamily,
   deckBoardOf,
   deckSheetOf,
@@ -1057,6 +1062,8 @@ function PackageLedger({
   // ── Which rows are open. The first one opens by default; the rest read
   //    from their summary line until the contractor needs them. ──
   const [open, setOpen] = React.useState<Record<string, boolean>>({ system: true });
+  // The mansard box ticked before a length is in (an outline with no perimeter opens it at 0 ft).
+  const [mansardOpen, setMansardOpen] = React.useState(false);
   const toggle = (id: string) => setOpen((o) => ({ ...o, [id]: !o[id] }));
   // ── end of the verbatim block ──
 
@@ -1182,6 +1189,41 @@ function PackageLedger({
     keys.filter((k): k is FlatRateKey => !!k).map((k) => (
       <Rate key={k} label={FLAT_RATE_DEFS[k].label} unit={FLAT_RATE_DEFS[k].unit} value={flatRate(F, k)} onChange={(v) => setFlatRate(k, v)} disabled={disabled} />
     ));
+
+  // ── The mansard sides (2026-10-26, a contractor's ticket: "the apartment has mansards on the sides as well that need
+  // to be shingled") — either kind of roof; an estimate saved before they existed has none, and opens on these. ──
+  const mFallback = mansardDefaults(lists.systems.find((x) => x.id === spec.systemId) ?? BUILTIN_LISTS.systems[0], lists);
+  const mFt = spec.mansardFt ?? 0;
+  const mH = spec.mansardHeightFt ?? MANSARD_DEFAULT_HEIGHT_FT;
+  const mOn = mansardOpen || mFt > 0;
+  const mSqft = mansardSqft({ mansardFt: mFt, mansardHeightFt: mH });
+  const fmt1 = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 1 });
+  const mName = spec.mansardName ?? mFallback.mansardName ?? "";
+  const mSystems = lists.systems.filter((x) => x.family !== "low-slope").map((x) => ({ id: x.id, label: x.label }));
+  const mSystemId = spec.mansardSystemId ?? mFallback.mansardSystemId ?? "";
+  const sumMansard = mSqft > 0
+    ? `${fmt1(mFt)} ft around × ${fmt1(mH)} ft up · ${fmt1(mSqft / 100)} squares · ${mName}`
+    : mOn ? "Enter how far they run and how tall they are" : "None";
+  const setMansard = (patch: Partial<RoofPackageSpec>) => {
+    setSpec((prev) => ({ ...prev, ...patch }));
+    setDirty(true);
+  };
+  const toggleMansard = (on: boolean) => {
+    setMansardOpen(on);
+    if (!on) return setMansard({ mansardFt: 0 });
+    setSpec((prev) => ({
+      ...prev,
+      mansardFt: (prev.mansardFt ?? 0) > 0 ? prev.mansardFt : Math.round(perimeterFt),
+      mansardHeightFt: prev.mansardHeightFt ?? MANSARD_DEFAULT_HEIGHT_FT,
+      mansardName: prev.mansardName ?? mFallback.mansardName,
+      mansardSystemId: prev.mansardSystemId ?? mFallback.mansardSystemId,
+      mansardMatPerSq: prev.mansardMatPerSq ?? mFallback.mansardMatPerSq,
+      mansardLaborPerSq: prev.mansardLaborPerSq ?? mFallback.mansardLaborPerSq,
+      mansardUnderPerSq: prev.mansardUnderPerSq ?? mFallback.mansardUnderPerSq,
+    }));
+    setDirty(true);
+  };
+  const mansardTotal = [...pkg.materials, ...pkg.labor].filter((l) => /mansard/i.test(l.name)).reduce((a, l) => a + l.quantity * l.unitPrice, 0);
 
   // ── Commercial ──
   const C = spec.commercial;
@@ -2022,6 +2064,57 @@ function PackageLedger({
             </>
           )}
 
+          {/* MANSARD SIDES — either kind of roof */}
+          <Section
+            id="mansard"
+            title="Mansard sides"
+            summary={sumMansard}
+            chip={mSqft > 0 ? <Stamp>mansard</Stamp> : undefined}
+            open={!!open.mansard}
+            onToggle={() => toggle("mansard")}
+            rates={
+              mOn ? (
+                <>
+                  <Rate label="Shingle" unit="$/sq" value={spec.mansardMatPerSq ?? mFallback.mansardMatPerSq ?? 0} onChange={(v) => setMansard({ mansardMatPerSq: v })} disabled={disabled} />
+                  <Rate label="Install" unit="$/sq" value={spec.mansardLaborPerSq ?? mFallback.mansardLaborPerSq ?? 0} onChange={(v) => setMansard({ mansardLaborPerSq: v })} disabled={disabled} />
+                  <Rate label="Underlayment" unit="$/sq" value={spec.mansardUnderPerSq ?? mFallback.mansardUnderPerSq ?? 0} onChange={(v) => setMansard({ mansardUnderPerSq: v })} disabled={disabled} />
+                </>
+              ) : undefined
+            }
+            ratesLabel={mOn ? `Your rates · ${mName} on the mansard` : undefined}
+          >
+            <Group
+              note={
+                <p className="rbd-note" data-mansard-note>
+                  {mOn
+                    ? `The steep, almost upright shingled walls below the roof's edge — an aerial measurement does not see them, so they are priced from what you enter. Around: only the sides that have one${perimeterFt > 0 ? ` (it starts at the roof's whole outline, ${fmt(Math.round(perimeterFt))} ft)` : ""}. Up the face: measured along the slope, bottom edge to top. Install is the near-vertical rate — ${MANSARD_LABOR_FACTOR}× the roof's — for the staging.${spec.tearOffLayers > 0 ? " The old shingles come off with the roof's tear-off." : ""}`
+                    : "Tick this when the building has mansards — the shingled walls under the roof's edge, common on apartment buildings with a flat top."}
+                </p>
+              }
+            >
+              <Check label="Shingle mansard sides" checked={mOn} onChange={toggleMansard} disabled={disabled} />
+              {mOn && (
+                <>
+                  <Num label="Around" unit="ft" aria="Mansard length around the building, ft" value={mFt} onChange={(v) => setMansard({ mansardFt: v })} disabled={disabled} />
+                  <Num label="Up the face" unit="ft" aria="Mansard height up the face, ft" value={mH} onChange={(v) => setMansard({ mansardHeightFt: v })} disabled={disabled} />
+                  {mSystems.length > 0 && (
+                    <Sel
+                      label="Shingle"
+                      value={mSystems.some((x) => x.id === mSystemId) ? mSystemId : mSystems[0].id}
+                      options={mSystems}
+                      onChange={(id) => {
+                        const row = lists.systems.find((x) => x.id === id);
+                        if (row) setMansard(mansardSystem(row));
+                      }}
+                      disabled={disabled}
+                      wide
+                    />
+                  )}
+                </>
+              )}
+            </Group>
+          </Section>
+
           {/* COMMERCIAL JOB — either kind of roof */}
           <Section
             id="commercial"
@@ -2174,6 +2267,12 @@ function PackageLedger({
                 <dt>Labor</dt>
                 <dd>{money(total - materialsTotal)}</dd>
               </div>
+              {mansardTotal > 0 && (
+                <div className="rbd-sum-r" data-sum-mansard>
+                  <dt>Of it, mansard sides</dt>
+                  <dd>{money(mansardTotal)}</dd>
+                </div>
+              )}
             </dl>
           )}
           <div className="rbd-sum-acts">
