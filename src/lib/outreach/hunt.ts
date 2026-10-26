@@ -36,6 +36,11 @@ export interface Hunt {
   phraseIndex: number;
   /** Every phrase walked to its end — Google knows no more of this trade here; the next run starts over for new ones. */
   exhausted: boolean;
+  /** A WHOLE STATE (owner, 2026-10-26: "all contractors in California"): its biggest cities, walked in turn — each phrase
+   *  across every city before the next phrase, so the state fills in evenly. Absent for a city or an area. */
+  cities?: string[] | null;
+  /** Which of `cities` the run is on. */
+  cityIndex?: number;
   /** Places already taken (or passed over), newest last, capped. */
   seen: string[];
   createdAt: string;
@@ -65,8 +70,84 @@ export const HUNT_TRADES: readonly HuntTrade[] = [
   { key: "gutters", label: "Gutters", phrases: ["gutter contractors", "gutter installation company"] },
   { key: "windows", label: "Windows and doors", phrases: ["window and door contractors", "window replacement company", "door installation"] },
   { key: "flooring", label: "Flooring", phrases: ["flooring contractors", "flooring company", "tile contractor", "hardwood floor installer"] },
-  { key: "any", label: "Any contractor", phrases: ["contractors", "home improvement contractors", "general contractors", "roofing contractors", "HVAC contractors", "plumbers", "electricians", "landscapers"] },
+  // Every kind of contractor JobFlex is for (owner, 2026-10-26: "all contractors related to us — we are their construction
+  // platform"): the general words first, then each trade in turn.
+  {
+    key: "any",
+    label: "Any contractor (every trade)",
+    phrases: ["contractors", "home improvement contractors", "general contractors", "remodeling contractors", "roofing contractors", "HVAC contractors", "plumbers", "electricians", "landscapers", "fence contractors", "deck builders", "painting contractors", "concrete contractors", "siding contractors", "gutter contractors", "window and door contractors", "flooring contractors"],
+  },
 ];
+
+/** A whole state's search ground: its biggest cities and metros, the largest first (a text search answers ~60 places per
+ *  phrase, so a state is asked city by city — "contractors in Fresno, CA" — not as one place). */
+export const STATE_CITIES: Record<string, { name: string; cities: readonly string[] }> = {
+  AL: { name: "Alabama", cities: ["Birmingham", "Huntsville", "Montgomery", "Mobile", "Tuscaloosa", "Hoover", "Auburn", "Dothan"] },
+  AK: { name: "Alaska", cities: ["Anchorage", "Fairbanks", "Juneau", "Wasilla"] },
+  AZ: { name: "Arizona", cities: ["Phoenix", "Tucson", "Mesa", "Chandler", "Scottsdale", "Gilbert", "Glendale", "Tempe", "Peoria", "Surprise", "Flagstaff", "Prescott", "Yuma"] },
+  AR: { name: "Arkansas", cities: ["Little Rock", "Fayetteville", "Fort Smith", "Springdale", "Rogers", "Bentonville", "Jonesboro", "Conway"] },
+  CA: {
+    name: "California",
+    cities: [
+      "Los Angeles", "San Diego", "San Jose", "San Francisco", "Fresno", "Sacramento", "Long Beach", "Oakland", "Bakersfield", "Anaheim",
+      "Riverside", "Santa Ana", "Irvine", "Stockton", "Chula Vista", "Fremont", "San Bernardino", "Modesto", "Santa Rosa", "Oxnard",
+      "Fontana", "Moreno Valley", "Huntington Beach", "Glendale", "Santa Clarita", "Ontario", "Rancho Cucamonga", "Temecula", "Visalia",
+      "Santa Barbara", "Salinas", "Palm Springs", "San Luis Obispo", "Redding", "Chico",
+    ],
+  },
+  CO: { name: "Colorado", cities: ["Denver", "Colorado Springs", "Aurora", "Fort Collins", "Lakewood", "Boulder", "Pueblo", "Greeley", "Longmont", "Loveland", "Castle Rock", "Grand Junction"] },
+  CT: { name: "Connecticut", cities: ["Bridgeport", "New Haven", "Hartford", "Stamford", "Waterbury", "Norwalk", "Danbury", "New Britain"] },
+  DE: { name: "Delaware", cities: ["Wilmington", "Dover", "Newark", "Middletown"] },
+  DC: { name: "Washington, DC", cities: ["Washington"] },
+  FL: {
+    name: "Florida",
+    cities: ["Jacksonville", "Miami", "Tampa", "Orlando", "St. Petersburg", "Fort Lauderdale", "Tallahassee", "Cape Coral", "Port St. Lucie", "Sarasota", "Fort Myers", "Gainesville", "Pensacola", "West Palm Beach", "Naples", "Daytona Beach", "Lakeland", "Ocala"],
+  },
+  GA: { name: "Georgia", cities: ["Atlanta", "Augusta", "Columbus", "Savannah", "Athens", "Macon", "Marietta", "Alpharetta", "Roswell", "Valdosta"] },
+  HI: { name: "Hawaii", cities: ["Honolulu", "Hilo", "Kailua-Kona", "Kahului"] },
+  ID: { name: "Idaho", cities: ["Boise", "Meridian", "Nampa", "Idaho Falls", "Pocatello", "Coeur d'Alene", "Twin Falls"] },
+  IL: { name: "Illinois", cities: ["Chicago", "Aurora", "Naperville", "Joliet", "Rockford", "Springfield", "Peoria", "Elgin", "Champaign", "Schaumburg"] },
+  IN: { name: "Indiana", cities: ["Indianapolis", "Fort Wayne", "Evansville", "South Bend", "Carmel", "Fishers", "Bloomington", "Lafayette"] },
+  IA: { name: "Iowa", cities: ["Des Moines", "Cedar Rapids", "Davenport", "Sioux City", "Iowa City", "Waterloo", "Ames", "Council Bluffs"] },
+  KS: { name: "Kansas", cities: ["Wichita", "Overland Park", "Kansas City", "Olathe", "Topeka", "Lawrence", "Manhattan"] },
+  KY: { name: "Kentucky", cities: ["Louisville", "Lexington", "Bowling Green", "Owensboro", "Covington", "Richmond"] },
+  LA: { name: "Louisiana", cities: ["New Orleans", "Baton Rouge", "Shreveport", "Lafayette", "Lake Charles", "Monroe", "Kenner"] },
+  ME: { name: "Maine", cities: ["Portland", "Lewiston", "Bangor", "Augusta"] },
+  MD: { name: "Maryland", cities: ["Baltimore", "Columbia", "Germantown", "Silver Spring", "Frederick", "Rockville", "Annapolis", "Hagerstown"] },
+  MA: { name: "Massachusetts", cities: ["Boston", "Worcester", "Springfield", "Cambridge", "Lowell", "Brockton", "Quincy", "New Bedford", "Plymouth"] },
+  MI: { name: "Michigan", cities: ["Detroit", "Grand Rapids", "Warren", "Sterling Heights", "Ann Arbor", "Lansing", "Flint", "Kalamazoo", "Troy", "Traverse City"] },
+  MN: { name: "Minnesota", cities: ["Minneapolis", "Saint Paul", "Rochester", "Duluth", "Bloomington", "Brooklyn Park", "St. Cloud", "Mankato"] },
+  MS: { name: "Mississippi", cities: ["Jackson", "Gulfport", "Southaven", "Hattiesburg", "Biloxi", "Tupelo"] },
+  MO: { name: "Missouri", cities: ["Kansas City", "St. Louis", "Springfield", "Columbia", "Independence", "Lee's Summit", "O'Fallon", "Joplin"] },
+  MT: { name: "Montana", cities: ["Billings", "Missoula", "Great Falls", "Bozeman", "Butte", "Helena", "Kalispell"] },
+  NE: { name: "Nebraska", cities: ["Omaha", "Lincoln", "Bellevue", "Grand Island", "Kearney"] },
+  NV: { name: "Nevada", cities: ["Las Vegas", "Henderson", "Reno", "North Las Vegas", "Sparks", "Carson City"] },
+  NH: { name: "New Hampshire", cities: ["Manchester", "Nashua", "Concord", "Dover", "Portsmouth"] },
+  NJ: { name: "New Jersey", cities: ["Newark", "Jersey City", "Paterson", "Elizabeth", "Trenton", "Edison", "Toms River", "Cherry Hill", "Morristown", "Princeton"] },
+  NM: { name: "New Mexico", cities: ["Albuquerque", "Las Cruces", "Rio Rancho", "Santa Fe", "Roswell", "Farmington"] },
+  NY: { name: "New York", cities: ["New York", "Buffalo", "Rochester", "Yonkers", "Syracuse", "Albany", "Long Island", "White Plains", "Poughkeepsie", "Ithaca"] },
+  NC: { name: "North Carolina", cities: ["Charlotte", "Raleigh", "Greensboro", "Durham", "Winston-Salem", "Fayetteville", "Cary", "Wilmington", "Asheville", "High Point"] },
+  ND: { name: "North Dakota", cities: ["Fargo", "Bismarck", "Grand Forks", "Minot"] },
+  OH: { name: "Ohio", cities: ["Columbus", "Cleveland", "Cincinnati", "Toledo", "Akron", "Dayton", "Canton", "Youngstown", "Mansfield"] },
+  OK: { name: "Oklahoma", cities: ["Oklahoma City", "Tulsa", "Norman", "Broken Arrow", "Edmond", "Lawton"] },
+  OR: { name: "Oregon", cities: ["Portland", "Salem", "Eugene", "Gresham", "Hillsboro", "Bend", "Beaverton", "Medford"] },
+  PA: { name: "Pennsylvania", cities: ["Philadelphia", "Pittsburgh", "Allentown", "Erie", "Reading", "Scranton", "Lancaster", "Harrisburg", "State College", "Bethlehem"] },
+  RI: { name: "Rhode Island", cities: ["Providence", "Warwick", "Cranston", "Pawtucket", "Newport"] },
+  SC: { name: "South Carolina", cities: ["Charleston", "Columbia", "Greenville", "North Charleston", "Myrtle Beach", "Rock Hill", "Spartanburg", "Hilton Head Island"] },
+  SD: { name: "South Dakota", cities: ["Sioux Falls", "Rapid City", "Aberdeen", "Brookings"] },
+  TN: { name: "Tennessee", cities: ["Nashville", "Memphis", "Knoxville", "Chattanooga", "Clarksville", "Murfreesboro", "Franklin", "Jackson", "Johnson City"] },
+  TX: {
+    name: "Texas",
+    cities: ["Houston", "San Antonio", "Dallas", "Austin", "Fort Worth", "El Paso", "Arlington", "Corpus Christi", "Plano", "Lubbock", "Laredo", "Irving", "Frisco", "McKinney", "Amarillo", "Waco", "Midland", "Tyler", "Killeen", "The Woodlands"],
+  },
+  UT: { name: "Utah", cities: ["Salt Lake City", "West Valley City", "Provo", "West Jordan", "Orem", "Sandy", "Ogden", "St. George", "Lehi", "Logan"] },
+  VT: { name: "Vermont", cities: ["Burlington", "South Burlington", "Rutland", "Montpelier"] },
+  VA: { name: "Virginia", cities: ["Virginia Beach", "Norfolk", "Chesapeake", "Richmond", "Arlington", "Newport News", "Alexandria", "Roanoke", "Lynchburg", "Charlottesville", "Fredericksburg"] },
+  WA: { name: "Washington", cities: ["Seattle", "Spokane", "Tacoma", "Vancouver", "Bellevue", "Kent", "Everett", "Renton", "Yakima", "Olympia", "Bellingham", "Kennewick"] },
+  WV: { name: "West Virginia", cities: ["Charleston", "Huntington", "Morgantown", "Parkersburg", "Wheeling"] },
+  WI: { name: "Wisconsin", cities: ["Milwaukee", "Madison", "Green Bay", "Kenosha", "Racine", "Appleton", "Waukesha", "Eau Claire", "Oshkosh"] },
+  WY: { name: "Wyoming", cities: ["Cheyenne", "Casper", "Laramie", "Gillette", "Rock Springs"] },
+};
 
 export const PER_DAY_CHOICES: readonly number[] = [5, 10, 20, 50];
 export const MAX_PER_DAY = 100;
@@ -79,9 +160,13 @@ export function huntTrade(key: string | null | undefined): HuntTrade | null {
   return HUNT_TRADES.find((t) => t.key === key) ?? null;
 }
 
-/** The area as typed, tidied, and the state it names when it names one ("Seattle, WA", "Seattle Washington"). */
-export function parseArea(raw: string): { area: string; state: string | null } {
+/** The area as typed, tidied, and the state it names when it names one ("Seattle, WA", "Seattle Washington"); a state on
+ *  its own ("California", "CA", "all of Texas") is the WHOLE STATE — its biggest cities, by name. */
+export function parseArea(raw: string): { area: string; state: string | null; wholeState: boolean } {
   const area = raw.replace(/\s+/g, " ").trim().slice(0, 80);
+  const bare = area.replace(/^(all of|the whole|whole|statewide|state of)\s+/i, "").replace(/\s+(state|statewide)$/i, "").replace(/[.,]+$/, "").trim();
+  const whole = stateCode(bare);
+  if (whole && STATE_CITIES[whole]) return { area: STATE_CITIES[whole].name, state: whole, wholeState: true };
   const parts = area.split(/[,\s]+/).filter(Boolean);
   let state: string | null = null;
   // The last word or two: "WA", "Washington", "New York".
@@ -93,7 +178,7 @@ export function parseArea(raw: string): { area: string; state: string | null } {
       break;
     }
   }
-  return { area, state };
+  return { area, state, wholeState: false };
 }
 
 /** The trade's search phrases, the plainest first. */
@@ -101,24 +186,55 @@ export function huntPhrases(trade: string): readonly string[] {
   return (huntTrade(trade) ?? HUNT_TRADES[HUNT_TRADES.length - 1]).phrases;
 }
 
-/** What Google is asked for: "roofing contractors in Seattle, WA" — the phrase the hunt is on. */
-export function huntQuery(h: Pick<Hunt, "trade" | "area"> & { phraseIndex?: number }): string {
+/** What Google is asked for: "roofing contractors in Seattle, WA" — the phrase the hunt is on; for a whole state, in
+ *  the city it is on ("contractors in Fresno, CA"). */
+export function huntQuery(h: Pick<Hunt, "trade" | "area"> & { phraseIndex?: number; cities?: readonly string[] | null; cityIndex?: number; state?: string | null }): string {
   const phrases = huntPhrases(h.trade);
   const i = Math.min(Math.max(0, h.phraseIndex ?? 0), phrases.length - 1);
+  if (h.cities?.length) {
+    const c = Math.min(Math.max(0, h.cityIndex ?? 0), h.cities.length - 1);
+    return `${phrases[i]} in ${h.cities[c]}${h.state ? `, ${h.state}` : ""}`;
+  }
   return `${phrases[i]} in ${h.area}`;
+}
+
+/** Where a run goes once a phrase has run dry where it is: a whole state takes the same phrase to its next city, then
+ *  the next phrase from its first city; an area takes the next phrase. Null past the last — Google knows no more. */
+export function nextSpot(at: { phrase: number; city: number }, phrases: number, cities: number): { phrase: number; city: number } | null {
+  if (cities > 0 && at.city + 1 < cities) return { phrase: at.phrase, city: at.city + 1 };
+  if (at.phrase + 1 < phrases) return { phrase: at.phrase + 1, city: 0 };
+  return null;
 }
 
 /** A new hunt from the form; null with the reason when the form is wrong. */
 export function newHunt(input: { trade: string; area: string; perDay: number; daily: boolean; by?: string | null }, id: string, now = new Date()): { ok: true; hunt: Hunt } | { ok: false; error: string } {
   const trade = huntTrade(input.trade);
   if (!trade) return { ok: false, error: "Pick a trade." };
-  const { area, state } = parseArea(input.area ?? "");
+  const { area, state, wholeState } = parseArea(input.area ?? "");
   if (area.length < 2) return { ok: false, error: "Say where: a city and state, or an area." };
   const perDay = Math.round(Number(input.perDay));
   if (!Number.isFinite(perDay) || perDay < 1 || perDay > MAX_PER_DAY) return { ok: false, error: `How many a day: 1 to ${MAX_PER_DAY}.` };
   return {
     ok: true,
-    hunt: { id, trade: trade.key, area, perDay, daily: !!input.daily, state, lastRunAt: null, lastFound: 0, totalFound: 0, lastError: null, pageToken: null, phraseIndex: 0, exhausted: false, seen: [], createdAt: now.toISOString(), by: input.by ?? null },
+    hunt: {
+      id,
+      trade: trade.key,
+      area,
+      perDay,
+      daily: !!input.daily,
+      state,
+      lastRunAt: null,
+      lastFound: 0,
+      totalFound: 0,
+      lastError: null,
+      pageToken: null,
+      phraseIndex: 0,
+      exhausted: false,
+      ...(wholeState && state ? { cities: [...STATE_CITIES[state].cities], cityIndex: 0 } : {}),
+      seen: [],
+      createdAt: now.toISOString(),
+      by: input.by ?? null,
+    },
   };
 }
 
@@ -272,16 +388,22 @@ export function rememberSeen(seen: readonly string[], ids: readonly string[]): s
 }
 
 /** The line under a hunt on the page. */
-export function huntWords(h: Pick<Hunt, "trade" | "area" | "perDay" | "daily">): string {
+export function huntWords(h: Pick<Hunt, "trade" | "area" | "perDay" | "daily"> & { cities?: readonly string[] | null }): string {
   const t = huntTrade(h.trade)?.label ?? h.trade;
-  return `${t} · ${h.area} · ${h.perDay} a day · ${h.daily ? "every morning" : "when pressed"}`;
+  const where = h.cities?.length ? `${h.area} — the whole state, ${h.cities.length} cities` : h.area;
+  return `${t} · ${where} · ${h.perDay} a day · ${h.daily ? "every morning" : "when pressed"}`;
 }
 
 /** How the last run went, in a line. */
-export function huntStatusWords(h: Pick<Hunt, "lastError" | "lastRunAt" | "daily" | "lastFound" | "totalFound" | "exhausted">): string {
+export function huntStatusWords(h: Pick<Hunt, "lastError" | "lastRunAt" | "daily" | "lastFound" | "totalFound" | "exhausted"> & { cities?: readonly string[] | null; cityIndex?: number }): string {
   if (h.lastError) return `Didn't run: ${h.lastError}`;
   if (!h.lastRunAt) return h.daily ? "Runs tomorrow morning — or press Find now." : "Not run yet.";
   const found = `${h.lastFound} new last time, ${h.totalFound} in all`;
+  if (h.cities?.length) {
+    if (h.exhausted) return `${found}. Every city walked — the next run starts over for newcomers.`;
+    const c = Math.min(Math.max(0, h.cityIndex ?? 0), h.cities.length - 1);
+    return `${found}. Next: ${h.cities[c]} (city ${c + 1} of ${h.cities.length}).`;
+  }
   if (h.exhausted) return `${found}. Google has no more of this trade here — the next run looks for newcomers; widen the area or add another area for more.`;
   return found + ".";
 }
