@@ -318,7 +318,7 @@ function shotDateLabel(v: string | undefined): string | null {
   return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
-export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, measurementEnabled = false, initialAddress, proposalId, homeState = null }: { aiEnabled?: boolean; evEnabled?: boolean; measurementEnabled?: boolean; initialAddress?: string; proposalId?: string; homeState?: string | null } = {}) {
+export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, measurementEnabled = false, initialAddress, proposalId, homeState = null, roofLookPreview = false }: { aiEnabled?: boolean; evEnabled?: boolean; measurementEnabled?: boolean; initialAddress?: string; proposalId?: string; homeState?: string | null; /** The roof visualizer, in preview for platform admins only (2026-10-25). */ roofLookPreview?: boolean } = {}) {
   const router = useRouter();
 
   // ── Screen ──
@@ -2477,7 +2477,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
               </div>
             </div>
             )}
-            {measurement && (
+            {measurement && roofLookPreview && (
               <RoofLook
                 measurementId={savedId && savedId !== "unsaved" ? savedId : null}
                 rings={roofRings(measurement.instant ?? null)}
