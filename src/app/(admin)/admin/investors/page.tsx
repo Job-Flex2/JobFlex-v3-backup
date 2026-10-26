@@ -17,9 +17,10 @@ import { PitchWordsPanel } from "@/components/v3/admin-investors/pitch-words-pan
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "JobFlex Admin · Investors" };
 
-export default async function AdminInvestorsPage({ searchParams }: { searchParams: Promise<{ review?: string }> }) {
+export default async function AdminInvestorsPage({ searchParams }: { searchParams: Promise<{ review?: string; adjust?: string }> }) {
   // ?review=<id>: a request a text or an email pointed to (2026-10-20) — brought into view.
-  const { review } = await searchParams;
+  // ?adjust=1: the hand controls for the spend and the counting (2026-10-25) — otherwise the page keeps them out of sight.
+  const { review, adjust } = await searchParams;
   await requirePlatformAdmin();
   const report = await investorReport({ refreshMeta: true });
   // The shared link is printed with this deployment's own host.
@@ -35,6 +36,7 @@ export default async function AdminInvestorsPage({ searchParams }: { searchParam
     <AdminInvestorsContent
       initial={report}
       origin={`${proto}://${host}`}
+      adjust={adjust === "1"}
       pitch={<PitchWordsPanel initial={pitch} linkBase={linkBase} />}
       audience={<InvestorAudience visitors={visitors} offers={offers} linkMadeAt={report.settings.linkMadeAt} approveReaders={report.settings.approveReaders} review={typeof review === "string" ? review.slice(0, 40) : undefined} />}
     />

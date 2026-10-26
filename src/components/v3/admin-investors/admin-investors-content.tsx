@@ -23,7 +23,7 @@ const todayLocal = () => {
 };
 const when = (iso: string) => new Date(iso).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
 
-export function AdminInvestorsContent({ initial, origin, audience, pitch }: { initial: InvestorReport; origin: string; /** Who opened the link and their offers (2026-10-13), drawn by the page. */ audience?: ReactNode; /** The pitch deck's own words (2026-10-25), drawn by the page under the controls. */ pitch?: ReactNode }) {
+export function AdminInvestorsContent({ initial, origin, audience, pitch, adjust = false }: { initial: InvestorReport; origin: string; /** Who opened the link and their offers (2026-10-13), drawn by the page. */ audience?: ReactNode; /** The pitch deck's own words (2026-10-25), drawn by the page under the controls. */ pitch?: ReactNode; /** ?adjust=1 — the hand controls (budget, booked days, start/launch day, horizon), otherwise out of sight (owner, 2026-10-25: "remove this"). */ adjust?: boolean }) {
   const [report, setReport] = useState(initial);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -79,8 +79,7 @@ export function AdminInvestorsContent({ initial, origin, audience, pitch }: { in
   // the first ad visitor's, the launch day and the horizon were set once. One line says so; the two panels fold away
   // and open by themselves only when something needs a hand — Meta not connected, or a start day that differs from
   // the first ad visitor's.
-  const startIsFirstAd = !report.firstAdDay || report.firstAdDay === f.since;
-  const needsHand = !report.meta.configured || !startIsFirstAd;
+  const startIsFirstAd = !report.firstAdDay || report.firstAdDay === report.startDay;
   const settled = (
     <section className={s.panel} aria-label="Settled by itself" data-settled>
       <div className={s.auto}>
@@ -92,7 +91,7 @@ export function AdminInvestorsContent({ initial, origin, audience, pitch }: { in
           {f.spend.dailyBudgetCents !== null ? <> · plus a {dollars(f.spend.dailyBudgetCents)}/day budget on days with nothing read</> : null}
         </span>
         <span data-settled-since>
-          <b>Counting from</b> {longDate(f.since)}{startIsFirstAd ? <> — the first visitor from an ad</> : report.firstAdDay ? <> · the first ad visitor came {longDate(report.firstAdDay)} — <button type="button" className={s.textBtn} disabled={pending} onClick={() => void run(() => saveInvestorSettingsAction({ horizonDays: a.horizonDays, sinceDate: report.firstAdDay, launchDate: a.launchDate }))}>count from that day</button></> : null}
+          <b>Counting from</b> {longDate(report.startDay)}{startIsFirstAd ? <> — the first visitor from an ad</> : report.firstAdDay ? <> · the first ad visitor came {longDate(report.firstAdDay)} — <button type="button" className={s.textBtn} disabled={pending} onClick={() => void run(() => saveInvestorSettingsAction({ horizonDays: a.horizonDays, sinceDate: report.firstAdDay, launchDate: a.launchDate }))}>count from that day</button></> : null}
         </span>
         <span data-settled-launch><b>Day {report.launch.day}</b> since {longDate(report.launch.date)}{report.launch.set ? "" : " (the start day, until a launch day is set)"}</span>
         <span data-settled-horizon><b>Chart</b> looks {a.horizonDays} days ahead</span>
@@ -104,7 +103,7 @@ export function AdminInvestorsContent({ initial, origin, audience, pitch }: { in
   const controls = (
     <div className={s.controls}>
       {settled}
-      <details className={`${s.fold} ${s.adjust}`} open={needsHand || undefined} data-adjust>
+      {adjust && <details className={`${s.fold} ${s.adjust}`} open data-adjust>
       <summary>Adjust by hand · the budget, booked days, the start day, the launch day, the horizon</summary>
       <div className={s.adjustGrid}>
       {/* The ad budget. */}
@@ -209,7 +208,7 @@ export function AdminInvestorsContent({ initial, origin, audience, pitch }: { in
         </p>
       </section>
       </div>
-      </details>
+      </details>}
 
       {/* The shared link. */}
       <section className={s.panel} aria-label="Shared link">
