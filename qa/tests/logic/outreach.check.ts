@@ -7,7 +7,7 @@
 // and its subject passes the spam words; the call token's kind. Pure.
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/outreach.check.ts
 process.env.VOICE_SERVER_SECRET = process.env.VOICE_SERVER_SECRET || "qa-secret";
-import { ALL_ZONES, EMAIL_LEAD_MS, MAX_CALLS, OUTREACH_CONSENT_TEXT, callableNow, consentCoversTexts, emailDue, emailFirst, funnel, parseProspectList, routeFor, stateCode, textDue, tradeKey, twilioWords, withinCallingHours, type Prospect } from "@/lib/outreach/rules";
+import { ALL_ZONES, EMAIL_LEAD_MS, MAX_CALLS, OUTREACH_CONSENT_TEXT, callableNow, consentCoversTexts, emailDue, emailFirst, funnel, parseProspectList, routeFor, scheduleWords, stateCode, textDue, textableNow, tradeKey, twilioWords, withinCallingHours, type Prospect } from "@/lib/outreach/rules";
 import { outreachGreeting, outreachInstructions, outreachText, outreachTools, outreachVoicemail, tradePitch, tradeWords } from "@/lib/outreach/script";
 import { outreachLetter } from "@/lib/outreach/letter";
 import { spammySubject } from "@/lib/adminMail/compose";
@@ -79,8 +79,11 @@ check("Twilio's geo-permission refusal is said as the setting to turn on", /Geo 
 console.log("— the script —");
 const facts = { plans: [{ name: "Starter", price: "$45" }, { name: "Professional", price: "$95" }, { name: "Advanced", price: "$199" }], trialDays: 7, canTransfer: false, site: "jobflex.app" };
 const ins = outreachInstructions(ll, facts, mon10);
-check("the greeting: JobFlex's virtual assistant, the call recorded, asks for the owner by name", /virtual assistant/.test(outreachGreeting(ll)) && /recorded/.test(outreachGreeting(ll)) && /Is this Dana at Summit Roofing\?/.test(outreachGreeting(ll)), outreachGreeting(ll));
-check("…and for one who asked: says they asked", /you asked on our website/.test(outreachGreeting(justAsked)));
+check("the greeting opens with JobFlex calling (2026-10-25), says it is JobFlex's AI receptionist heard live, the call recorded, asks for the owner by name", /^Hi, this is JobFlex calling\./.test(outreachGreeting(ll)) && /AI receptionist JobFlex makes for contractors/.test(outreachGreeting(ll)) && /hearing it live/.test(outreachGreeting(ll)) && /recorded/.test(outreachGreeting(ll)) && /Is this Dana at Summit Roofing\?/.test(outreachGreeting(ll)), outreachGreeting(ll));
+check("…never 'virtual assistant' — not in the greeting, the voicemail or as what it calls itself", !/virtual assistant/i.test(outreachGreeting(ll) + outreachGreeting(justAsked) + outreachVoicemail(ll, "+12065550100", "jobflex.app")) && /Never call yourself a virtual assistant/.test(outreachInstructions(ll, facts, mon10)) && /never pretend to be a person/.test(outreachInstructions(ll, facts, mon10)));
+check("…short enough to say in one breath (under 40 words)", outreachGreeting(ll).split(/\s+/).length < 40 && outreachGreeting(justAsked).split(/\s+/).length < 40, `${outreachGreeting(ll).split(/\s+/).length} / ${outreachGreeting(justAsked).split(/\s+/).length} words`);
+check("the first question is the trade's own sharp one, and the pitch comes back in their words", ins.includes(tradeWords("roofing").ask) && /in THEIR words/.test(ins) && Object.values(["roofing", "hvac", "fencing", "decks", null]).every((t) => tradeWords(t as string | null).ask.endsWith("?")));
+check("…and for one who asked: JobFlex calling, says they asked to hear the AI receptionist — and that's who is talking", /^Hi Dana, this is JobFlex calling — you asked on our website to hear our AI receptionist, and that's me, live\. This call is recorded\./.test(outreachGreeting(justAsked)), outreachGreeting(justAsked));
 check("the thank-you, in the trade's words", ins.includes("Thank them") && ins.includes(tradeWords("roofing").help));
 check("the prices are the live plans, the lowest first said; the trial's days", ins.includes("Starter $45 a month, Professional $95 a month, Advanced $199 a month") && ins.includes("starting at $45 a month") && ins.includes("7-day free trial"));
 check("without the plans in hand it sends them to the pricing page, inventing nothing", /jobflex\.app\/pricing/.test(outreachInstructions(ll, { ...facts, plans: [] }, mon10)) && !/\$\d/.test(outreachInstructions(ll, { ...facts, plans: [] }, mon10)));
@@ -88,7 +91,7 @@ check("the stop rule, the machine rule, the no-invention rule", /do_not_call at 
 check("a list contractor is told apart from one who asked (take no the first time)", /did not ask for this call/.test(ins) && /asked for this call/.test(outreachInstructions(justAsked, facts, mon10)));
 check("the tools: email, note, don't call, end — and a transfer only when a person can take it", outreachTools(false).map((t) => t.name).join() === "email_trial_link,note_interest,do_not_call,end_call" && outreachTools(true).some((t) => t.name === "transfer_call") && /transfer_call/.test(outreachInstructions(ll, { ...facts, canTransfer: true }, mon10)));
 const vm = outreachVoicemail(ll, "+12065550100", "jobflex.app");
-check("the voicemail: who called, the number back, how to stop", /virtual assistant from JobFlex/.test(vm) && /206-555-0100/.test(vm) && /take you off our list/.test(vm) && /jobflex dot app/.test(vm), vm);
+check("the voicemail: JobFlex calling first, from its AI receptionist, the number back, how to stop", /^Hi Dana, this is JobFlex calling for Summit Roofing — JobFlex makes software for contractors, and this message is from our AI receptionist\./.test(vm) && /206-555-0100/.test(vm) && /take you off our list/.test(vm) && /jobflex dot app/.test(vm), vm);
 
 console.log("— the letter —");
 const L = outreachLetter({ p: ll, sender: "Dmitriy", callMeUrl: "https://jobflex.app/call-me/abc.def", siteUrl: "https://jobflex.app/", unsubscribeUrl: "https://jobflex.app/api/email/unsubscribe?o=prospect_x&t=y", postal: "PO Box 1, Seattle, WA 98101" });
@@ -134,6 +137,19 @@ check("a desk call's token has no kind (it stays the company's desk)", verifyCal
 console.log("— the figures —");
 const f = funnel([ll, P({ id: "b", line: line("mobile") }), P({ id: "c" }), justAsked, P({ id: "d", dnc: { at, via: "email" } })]);
 check("landlines, email-only, unchecked, asked, don't call", f.total === 5 && f.landlines === 1 && f.emailOnly === 1 && f.unchecked === 1 && f.asked === 1 && f.dnc === 1, JSON.stringify(f));
+
+console.log("— the schedule's channels (2026-10-25) —");
+const night = new Date("2026-10-27T05:30:00Z"); // 10:30 pm Pacific
+const okText = P({ id: "t1", state: "WA", line: line("mobile"), consent: justAsked.consent });
+check("a text may go to one who agreed to calls AND texts, on a cell, in their daytime", textableNow(okText, mon10));
+check("…not at night on their clock, not to a landline, not without consent, not after STOP, not twice", !textableNow(okText, night) && !textableNow(P({ id: "t2", state: "WA", line: line("landline"), consent: justAsked.consent }), mon10) && !textableNow(P({ id: "t3", state: "WA", line: line("mobile") }), mon10) && !textableNow({ ...okText, dnc: { at, via: "sms" } }, mon10) && !textableNow({ ...okText, textedAt: "2026-10-26T16:00:00.000Z" }, mon10));
+const per = { emails: 20, calls: 5, texts: 20 };
+check("texts only, emails off: says only the ones who already agreed get texts", /^Texts only\. /.test(scheduleWords({ email: false, calls: false, texts: true }, per)) && /With emails off, only the contractors who already agreed get texts/.test(scheduleWords({ email: false, calls: false, texts: true }, per)), scheduleWords({ email: false, calls: false, texts: true }, per));
+check("calls only: no 'two days after their email'; all three: the email first and texts growing as they answer", /^Calls only\. /.test(scheduleWords({ email: false, calls: true, texts: false }, per)) && !/two days after/.test(scheduleWords({ email: false, calls: true, texts: false }, per)) && /two days after their email/.test(scheduleWords({ email: true, calls: true, texts: true }, per)) && /texts grow as they answer/.test(scheduleWords({ email: true, calls: true, texts: true }, per)));
+check("nothing on: says so", /^Nothing is sent/.test(scheduleWords({ email: false, calls: false, texts: false }, per)));
+check("a calls-only schedule calls a landline with an email at once — no email to wait for", emailFirst(P({ id: "e1", line: line("landline") }), mon10, false).ok && !emailFirst(P({ id: "e2", line: line("landline") }), mon10, true).ok);
+const tNo = outreachText({ p: { name: "Dana Lee", trade: "roofing" }, answered: false, noCall: true, link: "https://jobflex.app/t/x", trialDays: 7 });
+check("the text with no call before it: JobFlex named, the trade's line, the link, STOP — plain letters, two segments at most", /^Hi Dana, JobFlex here - thanks for asking about the AI desk\./.test(tNo) && /Reply STOP to opt out\./.test(tNo) && tNo.length <= 306 && /^[\x20-\x7E]+$/.test(tNo), tNo);
 
 console.log(bad ? `\n${bad} FAILED` : "\nALL PASS");
 process.exit(bad ? 1 : 0);
