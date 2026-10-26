@@ -54,7 +54,7 @@ import { EstimateLinesTable, type EditableLine } from "./estimate-lines-table";
 import { estimateEdges, likeForLikeFamily, ringPerimeterFt, type MeasuredFootage, type RoofFacts, type RoofPackage, type RoofPackageSpec } from "@/lib/roofPackage/takeoff";
 import { evOrderRoof, evPriceRoof, evReportFootages, evReportStatus, evRoofModel } from "@/actions/eagleview";
 import { isMapsBrowserEnabled, loadMapsLibrary } from "@/lib/googleMaps";
-import { displayedPitchLabel, footprintRead, foreignIndices, instantTotalsOf, mainStructureOf, otherStructuresOf, pitchFamilyShares } from "@/lib/roofDiagram/instantTotals";
+import { displayedPitchLabel, footprintRead, foreignIndices, instantTotalsOf, mainStructureOf, otherStructuresOf, pitchFamilyShares, pointOnRing } from "@/lib/roofDiagram/instantTotals";
 import { AERIAL } from "@/lib/vendorLabels";
 import { familyOfMaterial, WASTE_OPTIONS } from "@/lib/roofPackage/catalog";
 import { isFlatRoof } from "@/lib/roofPackage/flatRule";
@@ -949,7 +949,10 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // `target` is the address to measure when it is not the intake's — the
   // report's own retry buttons pass the open measurement's address (review
   // 2026-09-17: on a row opened from Recent they measured nothing at all).
-  async function runInstant(forceNewOrder = false, target?: OrderInput) {
+  // `building` is a point on the roof the contractor chose from the lot's
+  // list ("Measure this building instead", 2026-10-26) — same address, same
+  // stored order, only which building the report is about changes.
+  async function runInstant(forceNewOrder = false, target?: OrderInput, building?: { lat: number; lng: number }) {
     if (busy || addressLoading || !evEnabled) return;
     const input = target ?? orderInput();
     if (!input.address) {
@@ -979,7 +982,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     setPanel("measuring");
     const stop = runProgress();
     try {
-      const res = await measureRoofInstant(input, forceNewOrder ? { forceNewOrder } : undefined);
+      const res = await measureRoofInstant(input, forceNewOrder || building ? { ...(forceNewOrder ? { forceNewOrder } : {}), ...(building ? { building } : {}) } : undefined);
       // DEBUG (2026-09-08, owner's call — on until told otherwise): the whole
       // EagleView story for this click, in the browser console.
       console.info(
@@ -2383,8 +2386,8 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                         ? `Main structure ${structure.areaSqft != null ? num(structure.areaSqft) + " sq ft" : "— no area"}${footprint.sqft != null ? ` · footprint ${num(footprint.sqft)} sq ft${footprint.source === "outline" ? " (outline)" : ""}` : ""}`
                         : `${measurement.instant?.structures.length ?? 0} on the property`}
                     </div>
-                    {structure && (mainPick.how === "nearest-pin" || mainPick.how === "area+parcel" || mainPick.how === "at-pin") && (
-                      <div className="rf-pick">{mainPick.how === "at-pin" ? "Picked as the building at the address pin" : mainPick.how === "nearest-pin" ? "Picked as nearest the pin" : "Picked as largest on the parcel"}</div>
+                    {structure && (mainPick.how === "nearest-pin" || mainPick.how === "area+parcel" || mainPick.how === "at-pin" || mainPick.how === "chosen") && (
+                      <div className="rf-pick" data-rf-pick={mainPick.how}>{mainPick.how === "chosen" ? "The building you chose to measure" : mainPick.how === "at-pin" ? "Picked as the building at the address pin" : mainPick.how === "nearest-pin" ? "Picked as nearest the pin" : "Picked as largest on the parcel"}</div>
                     )}
                   </div>
                   {otherStructures.length > 0 && (() => {
@@ -2411,7 +2414,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                           </div>
                         )}
                         <div className="rf-note">
-                          Select a building to include it in your estimate{mapOn ? " — “Show on map” points to it" : ""}.
+                          Select a building to include it in your estimate{mapOn ? " — “Show on map” points to it" : ""}. Measured the wrong one? “Measure this one” makes that building the roof — no new charge.
                         </div>
                         {otherStructures.map((o, k) => {
                           const { s, i } = o;
@@ -2445,6 +2448,21 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                                   {mapOn && (s.outline?.length ?? 0) >= 3 ? (
                                     <button type="button" className={"rf-locate" + (focusBuilding === i ? " is-on" : "")} onClick={() => showOnMap(i)} aria-label={`Show Building ${k + 1} on the map`} data-rf-locate={k + 1}>
                                       Show on map
+                                    </button>
+                                  ) : null}
+                                  {!o.offLot && evEnabled && (s.outline?.length ?? 0) >= 3 ? (
+                                    // The wrong building measured (a contractor's ticket, 2026-10-26: "the apartment building
+                                    // needs to be measured, not the garage"): this one becomes the roof the report and the
+                                    // estimate are about. The address's stored order answers it, so it is not billed again.
+                                    <button
+                                      type="button"
+                                      className="rf-locate rf-measure-this"
+                                      disabled={busy}
+                                      onClick={() => void runInstant(false, reportInput(), pointOnRing(s.outline!))}
+                                      aria-label={`Measure Building ${k + 1} instead`}
+                                      data-rf-measure-this={k + 1}
+                                    >
+                                      Measure this one
                                     </button>
                                   ) : null}
                                   {o.offLot && <span className="rf-attach-note">outside the lot</span>}

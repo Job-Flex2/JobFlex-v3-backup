@@ -32,8 +32,9 @@ export function instantTotalsOf(structures: readonly InstantStructure[]): Instan
   };
 }
 
-/** "at-pin": the address pin stands on this building's outline (2026-10-16). */
-export type MainStructureHow = "single" | "at-pin" | "area+parcel" | "nearest-pin" | "area" | "none";
+/** "at-pin": the address pin stands on this building's outline (2026-10-16). "chosen": the contractor picked this
+ *  building on the page (2026-10-26) — recorded by the server, never computed here. */
+export type MainStructureHow = "single" | "at-pin" | "chosen" | "area+parcel" | "nearest-pin" | "area" | "none";
 
 export interface MainStructurePick {
   /** Index into `structures`, or null when there are none. */
@@ -44,6 +45,32 @@ export interface MainStructurePick {
 function centroid(ring: ReadonlyArray<{ lat: number; lng: number }>): { lat: number; lng: number } {
   const n = ring.length;
   return { lat: ring.reduce((a, p) => a + p.lat, 0) / n, lng: ring.reduce((a, p) => a + p.lng, 0) / n };
+}
+
+/**
+ * A point that stands on the building — its centroid when that is inside, else the middle of the widest stretch of the
+ * outline along the centroid's latitude (an L- or U-shaped roof's centroid can fall in its yard). What "Measure this
+ * building instead" sends, so the at-pin rule finds this building and no other.
+ */
+export function pointOnRing(ring: ReadonlyArray<{ lat: number; lng: number }>): { lat: number; lng: number } {
+  const c = centroid(ring);
+  if (pointInRing(c, ring)) return c;
+  const xs: number[] = [];
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i];
+    const b = ring[j];
+    if (a.lat > c.lat !== b.lat > c.lat) xs.push(((b.lng - a.lng) * (c.lat - a.lat)) / (b.lat - a.lat) + a.lng);
+  }
+  xs.sort((a, b) => a - b);
+  let best: { lat: number; lng: number } = c;
+  let width = -1;
+  for (let k = 0; k + 1 < xs.length; k += 2) {
+    if (xs[k + 1] - xs[k] > width) {
+      width = xs[k + 1] - xs[k];
+      best = { lat: c.lat, lng: (xs[k] + xs[k + 1]) / 2 };
+    }
+  }
+  return best;
 }
 
 /** Whether a point stands inside a lat/lng ring (ray casting — a building is small enough to be flat). */
@@ -139,6 +166,24 @@ export function pickMainStructure(
     }
   }
   return { index: byArea(pool), how: "area" };
+}
+
+/**
+ * The pick the server records (2026-10-26, a contractor's ticket: "wrong building — the apartment building needs to be
+ * measured, not the garage"): at the contractor's pin — the address they confirmed, or a building they chose on the
+ * page ("chosen") — when it stands on a building; else at the vendor's point for the address, which can stand on the
+ * garage of a lot with several buildings.
+ */
+export function pickMainStructureAt(
+  structures: readonly InstantStructure[],
+  opts: { pin?: { lat: number; lng: number } | null; vendor?: { lat: number; lng: number } | null; chosen?: boolean; foreign?: readonly number[]; parcelKnown: boolean },
+): MainStructurePick {
+  const at = (origin: { lat: number; lng: number } | null) => pickMainStructure(structures, { foreign: opts.foreign, origin, parcelKnown: opts.parcelKnown });
+  const pin = opts.pin ?? null;
+  const vendor = opts.vendor ?? null;
+  const pick = at(pin ?? vendor);
+  if (pin && pick.how !== "at-pin" && vendor) return at(vendor);
+  return opts.chosen && pin && pick.how === "at-pin" ? { ...pick, how: "chosen" } : pick;
 }
 
 /** `provenance.parcelVeto.foreignStructures` ("s3") → indices (3). */
