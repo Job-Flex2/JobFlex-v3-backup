@@ -73,7 +73,7 @@ export type PortalPicture = {
    *  deck-scene (2026-10-04): the Deck Studio's deck, the same way.
    *  deck-photo (2026-10-10): the contractor's photo of the house with the
    *  deck's elevation drawn over it where they placed it (`overlay`). */
-  kind: "fence-3d" | "fence-scene" | "fence-plan" | "roof-photo" | "deck-scene" | "deck-photo";
+  kind: "fence-3d" | "fence-scene" | "fence-plan" | "roof-photo" | "roof-look" | "deck-scene" | "deck-photo";
   src: string;
   alt: string;
   caption: string;

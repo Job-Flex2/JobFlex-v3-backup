@@ -25,6 +25,9 @@ import type { InstantRoofData, InstantStructure } from "@/lib/eagleview";
 import { toast } from "@/components/ui/Toast";
 import type { EstimateLine } from "@/components/estimator/EstimatorBreakdown";
 import type { MeasurementSource, RoofMeasurementDTO, RoofMeasurementSummary } from "@/lib/roofDiagram/types";
+import { roofRings } from "@/lib/roofPictures";
+import type { RoofFamily } from "@/lib/roofPackage/catalog";
+import { RoofLook } from "./roof-look";
 import {
   collectPendingInstant,
   getMeasurementOrtho,
@@ -368,6 +371,8 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   const [satPhoto, setSatPhoto] = React.useState<string | null>(null);
   const [satErr, setSatErr] = React.useState<string | null>(null);
   const [orthoPhoto, setOrthoPhoto] = React.useState<string | null>(null);
+  // The roof visualizer (2026-10-25) starts on the estimate's own roof type once a package is applied.
+  const [lookFamily, setLookFamily] = React.useState<RoofFamily | null>(null);
   const [orthoErr, setOrthoErr] = React.useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = React.useState(false);
   // Live satellite map. `mapDown` flips once when the JS SDK refuses to load —
@@ -1284,6 +1289,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     });
   }
   function applyPackage(pkg: RoofPackage, spec: RoofPackageSpec, quiet = false) {
+    setLookFamily(spec.systemFamily);
     lastSpecRef.current = spec;
     if (!pitchForEstimate) {
       toast.error("Enter the roof pitch first");
@@ -2470,6 +2476,15 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                 </div>}
               </div>
             </div>
+            )}
+            {measurement && (
+              <RoofLook
+                measurementId={savedId && savedId !== "unsaved" ? savedId : null}
+                rings={roofRings(measurement.instant ?? null)}
+                pin={measurement.lat != null && measurement.lng != null ? { lat: measurement.lat, lng: measurement.lng } : null}
+                orthoBbox={(measurement.instant?.imagery ?? []).find((im) => im.view === "ortho" && im.masked === false && !!im.token && !!im.bbox)?.bbox ?? null}
+                family={lookFamily}
+              />
             )}
 
             <BuildEstimateCardSwitch
