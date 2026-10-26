@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { logServerError } from "@/lib/server-events";
 import { listProspects } from "./store";
 import { checkLines, callNext, emailProspects, importRows, outreachReadiness, textNext } from "./server";
-import { contactPages, emailFromHtml, huntDue, huntPhrases, huntQuery, placeToRow, placesErrorWords, rememberSeen, type FoundPlace, type FoundRow, type Hunt } from "./hunt";
+import { contactPages, emailFromHtml, huntDue, huntPhrases, huntQuery, nextSpot, placeToRow, placesErrorWords, rememberSeen, type FoundPlace, type FoundRow, type Hunt } from "./hunt";
 
 const HUNT_PREFIX = "outreach:hunt:";
 const SETTINGS_KEY = "outreach:settings";
@@ -185,12 +185,14 @@ export async function runHunt(id: string): Promise<HuntRun> {
     const taken: string[] = [];
     // Where the last run left off: its page of its phrase; a hunt that ran dry starts over for newcomers.
     const phrases = huntPhrases(hunt.trade);
+    const cities = hunt.cities?.length ? hunt.cities : null;
     let phrase = hunt.exhausted ? 0 : Math.min(hunt.phraseIndex, phrases.length - 1);
+    let city = hunt.exhausted || !cities ? 0 : Math.min(Math.max(0, hunt.cityIndex ?? 0), cities.length - 1);
     let token = hunt.exhausted ? null : hunt.pageToken;
     let exhausted = false;
     let pages = 0;
     while (rows.length < hunt.perDay && pages < MAX_PAGES) {
-      const page = await searchPlaces(huntQuery({ ...hunt, phraseIndex: phrase }), token);
+      const page = await searchPlaces(huntQuery({ ...hunt, phraseIndex: phrase, cityIndex: city }), token);
       pages++;
       for (const p of page.places) {
         if (rows.length >= hunt.perDay) break;
@@ -205,9 +207,12 @@ export async function runHunt(id: string): Promise<HuntRun> {
       }
       token = page.nextPage;
       if (!token) {
-        // This phrase has run dry — on to the next one; past the last, Google knows no more of this trade here.
-        if (phrase + 1 < phrases.length) {
-          phrase++;
+        // This phrase has run dry here — a whole state takes it to its next city, then the next phrase from the first
+        // city; an area takes the next phrase. Past the last, Google knows no more of this trade here.
+        const next = nextSpot({ phrase, city }, phrases.length, cities?.length ?? 0);
+        if (next) {
+          phrase = next.phrase;
+          city = next.city;
           continue;
         }
         exhausted = true;
@@ -230,7 +235,7 @@ export async function runHunt(id: string): Promise<HuntRun> {
     out.added = imported.added;
     out.merged = imported.merged;
     out.onJobflex = imported.onJobflex;
-    await writeHunt({ ...hunt, seen: rememberSeen(hunt.seen, taken), pageToken: exhausted ? null : token, phraseIndex: exhausted ? 0 : phrase, exhausted, lastRunAt: now, lastFound: imported.added, totalFound: hunt.totalFound + imported.added, lastError: null });
+    await writeHunt({ ...hunt, seen: rememberSeen(hunt.seen, taken), pageToken: exhausted ? null : token, phraseIndex: exhausted ? 0 : phrase, ...(cities ? { cityIndex: exhausted ? 0 : city } : {}), exhausted, lastRunAt: now, lastFound: imported.added, totalFound: hunt.totalFound + imported.added, lastError: null });
   } catch (err) {
     out.error = err instanceof Error ? err.message : "The search didn't work.";
     logServerError("outreach-hunt", err, { kind: "action" });

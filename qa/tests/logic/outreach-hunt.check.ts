@@ -4,7 +4,7 @@
 // email out of a website (a mailto, text, "(at)…(dot)", the site's own domain first, no-reply and file names never);
 // when a daily hunt is due on its area's clock; what is remembered; the words on the page. Pure.
 //   npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/outreach-hunt.check.ts
-import { HUNT_HOUR, HUNT_TRADES, SEEN_CAP, cityState, contactPages, emailFromHtml, huntDue, huntPhrases, huntQuery, huntStatusWords, huntWords, localClock, newHunt, parseArea, placeToRow, placesErrorWords, rememberSeen, rowsToList, runWords, tidyUrl, type FoundPlace, type Hunt } from "@/lib/outreach/hunt";
+import { HUNT_HOUR, HUNT_TRADES, SEEN_CAP, STATE_CITIES, nextSpot, cityState, contactPages, emailFromHtml, huntDue, huntPhrases, huntQuery, huntStatusWords, huntWords, localClock, newHunt, parseArea, placeToRow, placesErrorWords, rememberSeen, rowsToList, runWords, tidyUrl, type FoundPlace, type Hunt } from "@/lib/outreach/hunt";
 import { parseProspectList, tradeKey } from "@/lib/outreach/rules";
 import { tradePitch } from "@/lib/outreach/script";
 
@@ -67,6 +67,19 @@ check("its state: not run / ran / ran dry / failed", /Runs tomorrow morning/.tes
 const run = { found: 12, added: 10, merged: 1, onJobflex: 1, withEmail: 7, pages: 1, error: null };
 check("what a run says", /Added 10 roofing contractors in Seattle, WA, 7 with an email; 1 already on the list filled in; 1 already on JobFlex left out\./.test(runWords(run, H)) && /No new roofing contractors in Seattle, WA/.test(runWords({ ...run, added: 0, merged: 0, onJobflex: 0 }, H)) && runWords({ ...run, error: "Boom" }, H) === "Boom" && /Added 1 roofing contractor in/.test(runWords({ ...run, added: 1 }, H)));
 check("Google's refusals in plain words", /Places API \(New\) isn't turned on/.test(placesErrorWords(403, "Places API (New) has not been used in project 123 before or it is disabled.")) && /quota/.test(placesErrorWords(429, null)) && /refused the key/.test(placesErrorWords(403, "The provided API key is invalid.")) && /answered 500/.test(placesErrorWords(500, null)));
+
+// A WHOLE STATE (owner, 2026-10-26: "all contractors related to us, in California").
+const ca = parseArea("California");
+check("a state on its own is the whole state — 'California', 'CA', 'all of California', 'California state'", ca.wholeState && ca.state === "CA" && ca.area === "California" && ["CA", "all of California", "California state", " california "].every((x) => parseArea(x).wholeState && parseArea(x).state === "CA"));
+check("…a city with its state is not ('Fresno, CA', 'Seattle Washington')", !parseArea("Fresno, CA").wholeState && parseArea("Fresno, CA").state === "CA" && !parseArea("Seattle Washington").wholeState);
+const whole = newHunt({ trade: "any", area: "California", perDay: 50, daily: true }, "w1", new Date("2026-10-26T16:00:00Z"));
+check("a whole-state hunt: California's cities, the biggest first, starting at the first", whole.ok && whole.hunt.state === "CA" && whole.hunt.cities?.[0] === "Los Angeles" && whole.hunt.cities.length === STATE_CITIES.CA.cities.length && whole.hunt.cityIndex === 0, whole.ok ? JSON.stringify(whole.hunt.cities?.slice(0, 3)) : whole.error);
+check("…Google is asked city by city: 'contractors in Los Angeles, CA', then 'contractors in San Diego, CA'", whole.ok && huntQuery(whole.hunt) === "contractors in Los Angeles, CA" && huntQuery({ ...whole.hunt, cityIndex: 1 }) === "contractors in San Diego, CA", whole.ok ? huntQuery(whole.hunt) : "");
+check("…the same phrase across every city, then the next phrase from the first city, then done", JSON.stringify(nextSpot({ phrase: 0, city: 0 }, 3, 2)) === '{"phrase":0,"city":1}' && JSON.stringify(nextSpot({ phrase: 0, city: 1 }, 3, 2)) === '{"phrase":1,"city":0}' && nextSpot({ phrase: 2, city: 1 }, 3, 2) === null);
+check("…an area walks its phrases as before", JSON.stringify(nextSpot({ phrase: 0, city: 0 }, 3, 0)) === '{"phrase":1,"city":0}' && nextSpot({ phrase: 2, city: 0 }, 3, 0) === null);
+check("…its line says the whole state and where the next run goes", whole.ok && /California — the whole state, \d+ cities/.test(huntWords(whole.hunt)) && /Next: San Diego \(city 2 of \d+\)/.test(huntStatusWords({ ...whole.hunt, lastRunAt: "2026-10-26T16:00:00Z", lastFound: 50, totalFound: 50, cityIndex: 1 })));
+check("every state and DC has its cities, each with a name", ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"].every((c) => STATE_CITIES[c]?.cities.length >= 1 && STATE_CITIES[c].name.length > 1 && new Set(STATE_CITIES[c].cities).size === STATE_CITIES[c].cities.length));
+check("'any contractor' asks for every trade JobFlex is for — fences, decks, painting, concrete, siding, gutters, windows, flooring too", ["fence", "deck", "painting", "concrete", "siding", "gutter", "window", "flooring", "roofing", "HVAC", "plumbers", "electricians"].every((w) => huntPhrases("any").some((p) => p.includes(w))));
 
 console.log(bad ? `\n${bad} FAILED` : "\nALL PASS");
 process.exit(bad ? 1 : 0);

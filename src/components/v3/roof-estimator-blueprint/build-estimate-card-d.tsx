@@ -70,6 +70,8 @@ import {
   gutterFeet,
   MANSARD_DEFAULT_HEIGHT_FT,
   MANSARD_LABOR_FACTOR,
+  isMansardShape,
+  mansardAssumed,
   mansardDefaults,
   mansardSqft,
   mansardSystem,
@@ -1201,9 +1203,37 @@ function PackageLedger({
   const mName = spec.mansardName ?? mFallback.mansardName ?? "";
   const mSystems = lists.systems.filter((x) => x.family !== "low-slope").map((x) => ({ id: x.id, label: x.label }));
   const mSystemId = spec.mansardSystemId ?? mFallback.mansardSystemId ?? "";
+  // Not ticked, the section still says what they would be (owner, 2026-10-26: "mansard not calculated — calculate there,
+  // or at least assume"): round the roof's outline, one storey up the face, and what that costs on this estimate.
+  const mAssume = mansardAssumed(facts, spec);
+  const mAssumed = mOn && spec.mansardBasis === "assumed";
+  const mansardIfAssumed = React.useMemo(() => {
+    const a = mansardAssumed(facts, live);
+    if (!a || (live.mansardFt ?? 0) > 0) return null;
+    // The contractor's own mansard shingle and rates when they set them before; the roof's shingle otherwise.
+    const fb = mansardDefaults(lists.systems.find((x) => x.id === live.systemId) ?? BUILTIN_LISTS.systems[0], lists);
+    const p = buildRoofPackage(
+      {
+        ...live,
+        mansardName: live.mansardName ?? fb.mansardName,
+        mansardMatPerSq: live.mansardMatPerSq ?? fb.mansardMatPerSq,
+        mansardLaborPerSq: live.mansardLaborPerSq ?? fb.mansardLaborPerSq,
+        mansardUnderPerSq: live.mansardUnderPerSq ?? fb.mansardUnderPerSq,
+        mansardFt: a.ft,
+        mansardHeightFt: a.heightFt,
+        mansardBasis: "assumed",
+      },
+      facts,
+    );
+    return [...p.materials, ...p.labor].filter((l) => /mansard/i.test(l.name)).reduce((t, l) => t + l.quantity * l.unitPrice, 0);
+  }, [live, facts, lists]);
   const sumMansard = mSqft > 0
-    ? `${fmt1(mFt)} ft around × ${fmt1(mH)} ft up · ${fmt1(mSqft / 100)} squares · ${mName}`
-    : mOn ? "Enter how far they run and how tall they are" : "None";
+    ? `${fmt1(mFt)} ft around × ${fmt1(mH)} ft up · ${fmt1(mSqft / 100)} squares · ${mName}${mAssumed ? " · assumed" : ""}`
+    : mOn
+      ? "Enter how far they run and how tall they are"
+      : mAssume && mansardIfAssumed != null
+        ? `Not in the price · if it has them: about ${fmt1(mAssume.ft)} ft around × ${mAssume.heightFt} ft up = ${fmt1((mAssume.ft * mAssume.heightFt) / 100)} squares, ${money(mansardIfAssumed)}`
+        : "None";
   const setMansard = (patch: Partial<RoofPackageSpec>) => {
     setSpec((prev) => ({ ...prev, ...patch }));
     setDirty(true);
@@ -1213,8 +1243,9 @@ function PackageLedger({
     if (!on) return setMansard({ mansardFt: 0 });
     setSpec((prev) => ({
       ...prev,
-      mansardFt: (prev.mansardFt ?? 0) > 0 ? prev.mansardFt : Math.round(perimeterFt),
-      mansardHeightFt: prev.mansardHeightFt ?? MANSARD_DEFAULT_HEIGHT_FT,
+      mansardFt: (prev.mansardFt ?? 0) > 0 ? prev.mansardFt : mAssume?.ft ?? 0,
+      mansardBasis: (prev.mansardFt ?? 0) > 0 ? prev.mansardBasis : mAssume ? "assumed" : "entered",
+      mansardHeightFt: (prev.mansardFt ?? 0) > 0 ? prev.mansardHeightFt ?? MANSARD_DEFAULT_HEIGHT_FT : mAssume?.heightFt ?? MANSARD_DEFAULT_HEIGHT_FT,
       mansardName: prev.mansardName ?? mFallback.mansardName,
       mansardSystemId: prev.mansardSystemId ?? mFallback.mansardSystemId,
       mansardMatPerSq: prev.mansardMatPerSq ?? mFallback.mansardMatPerSq,
@@ -2069,7 +2100,7 @@ function PackageLedger({
             id="mansard"
             title="Mansard sides"
             summary={sumMansard}
-            chip={mSqft > 0 ? <Stamp>mansard</Stamp> : undefined}
+            chip={mSqft > 0 ? <Stamp>{mAssumed ? "assumed" : "mansard"}</Stamp> : undefined}
             open={!!open.mansard}
             onToggle={() => toggle("mansard")}
             rates={
@@ -2087,16 +2118,18 @@ function PackageLedger({
               note={
                 <p className="rbd-note" data-mansard-note>
                   {mOn
-                    ? `The steep, almost upright shingled walls below the roof's edge — an aerial measurement does not see them, so they are priced from what you enter. Around: only the sides that have one${perimeterFt > 0 ? ` (it starts at the roof's whole outline, ${fmt(Math.round(perimeterFt))} ft)` : ""}. Up the face: measured along the slope, bottom edge to top. Install is the near-vertical rate — ${MANSARD_LABOR_FACTOR}× the roof's — for the staging.${spec.tearOffLayers > 0 ? " The old shingles come off with the roof's tear-off." : ""}`
-                    : "Tick this when the building has mansards — the shingled walls under the roof's edge, common on apartment buildings with a flat top."}
+                    ? `${mAssumed ? `Assumed${isMansardShape(facts) ? " — the aerial data calls this a mansard roof" : ""}: all the way round the roof's outline and one storey up the face, priced in. Change Around and Up the face to what is there; until you do, the estimate says it was assumed. ` : ""}The steep, almost upright shingled walls below the roof's edge — an aerial measurement does not see them. Around: only the sides that have one${mAssume ? ` (the roof's whole outline is ${fmt(mAssume.ft)} ft)` : ""}. Up the face: measured along the slope, bottom edge to top. Install is the near-vertical rate — ${MANSARD_LABOR_FACTOR}× the roof's — for the staging.${spec.tearOffLayers > 0 ? " The old shingles come off with the roof's tear-off." : ""}`
+                    : mAssume && mansardIfAssumed != null
+                      ? `Not in the price. If the building has mansards — the steep shingled walls under the roof's edge, common on apartment buildings with a flat top — they would be about ${fmt(mAssume.ft)} ft around (the roof's outline) × ${mAssume.heightFt} ft up the face (one storey): ${fmt1((mAssume.ft * mAssume.heightFt) / 100)} squares, about ${money(mansardIfAssumed)} with ${mName}. Tick to add them, then set the run and the height to what is there.`
+                      : "Tick this when the building has mansards — the shingled walls under the roof's edge, common on apartment buildings with a flat top."}
                 </p>
               }
             >
               <Check label="Shingle mansard sides" checked={mOn} onChange={toggleMansard} disabled={disabled} />
               {mOn && (
                 <>
-                  <Num label="Around" unit="ft" aria="Mansard length around the building, ft" value={mFt} onChange={(v) => setMansard({ mansardFt: v })} disabled={disabled} />
-                  <Num label="Up the face" unit="ft" aria="Mansard height up the face, ft" value={mH} onChange={(v) => setMansard({ mansardHeightFt: v })} disabled={disabled} />
+                  <Num label="Around" unit="ft" aria="Mansard length around the building, ft" value={mFt} onChange={(v) => setMansard({ mansardFt: v, mansardBasis: "entered" })} disabled={disabled} />
+                  <Num label="Up the face" unit="ft" aria="Mansard height up the face, ft" value={mH} onChange={(v) => setMansard({ mansardHeightFt: v, mansardBasis: "entered" })} disabled={disabled} />
                   {mSystems.length > 0 && (
                     <Sel
                       label="Shingle"
