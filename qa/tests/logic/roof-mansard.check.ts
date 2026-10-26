@@ -12,6 +12,8 @@ import {
   MANSARD_LABOR_FACTOR,
   buildRoofPackage,
   defaultSpec,
+  isMansardShape,
+  mansardAssumed,
   mansardSqft,
   mansardSystem,
   withSystem,
@@ -112,6 +114,25 @@ const commercial = { ...flat, commercial: { ...flat.commercial, on: true } };
 const big = { ...flatFacts, squares: 320 };
 const cInstall = mansardOf(commercial, big).find((l) => l.name.startsWith("Install ·"));
 check("priced as commercial on a big deck: the deck's productivity discount does not touch the mansard's upright lay", !!cInstall && cInstall.unitPrice >= (flat.mansardLaborPerSq ?? 0), `${cInstall?.unitPrice} vs ${flat.mansardLaborPerSq}`);
+
+// ── assumed when nobody measured them (owner, 2026-10-26: "mansard not calculated — calculate there, or at least assume") ──
+check("assumed: round the roof's outline, one storey up the face", JSON.stringify(mansardAssumed(f)) === JSON.stringify({ ft: 300, heightFt: 8 }));
+check("…no outline: round the edges the estimate runs; then a square of the footprint; nothing → none",
+  mansardAssumed(facts({ perimeterFt: null }), { eaveFt: 140, rakeFt: 96 })?.ft === 236 &&
+  mansardAssumed(facts({ perimeterFt: null }), { eaveFt: 0, rakeFt: 0 })?.ft === Math.round(4 * Math.sqrt(3600) * 1.05) &&
+  mansardAssumed(facts({ perimeterFt: null, footprintSqft: null }), null) === null);
+check("a hip roof opens without them (most roofs have none)", !isMansardShape(f) && base.mansardFt === 0 && base.mansardBasis === undefined);
+const mf = facts({ shape: "Mansard", storeys: 3 });
+const ms0 = defaultSpec(mf, BUILTIN_LISTS);
+check("the aerial data calls the roof a mansard: it opens with the sides assumed in", isMansardShape(mf) && ms0.mansardFt === 300 && ms0.mansardHeightFt === 8 && ms0.mansardBasis === "assumed");
+const mp = buildRoofPackage(ms0, mf);
+const mLines = [...mp.materials, ...mp.labor].filter((l) => /mansard/i.test(l.name));
+check("…priced, its lines marked estimated, the assumption saying so", mLines.length >= 6 && mLines.every((l) => l.basis === "estimated") && mp.assumptions.some((a) => /ASSUMED, not measured/.test(a) && /confirm the run and the height on site/.test(a)));
+const typed = buildRoofPackage({ ...m, mansardBasis: "entered" }, f);
+check("typed by the contractor: entered, and said so", [...typed.materials, ...typed.labor].filter((l) => /mansard/i.test(l.name)).every((l) => l.basis === "entered") && typed.assumptions.some((a) => /entered by the contractor/.test(a)));
+const scopes = [...mp.scope, ...typed.scope].filter((x) => /mansard/i.test(x));
+check("the client's scope says what is done, never how sure it is — assumed or typed", scopes.length === 2 && !scopes.some((x) => /estimat|confirm|photo|check|%|×|contractor|markup|productivity|assum/i.test(x)), scopes.join(" | "));
+check("a switch to a flat top keeps it marked assumed", withSystem(ms0, tpo, { ...mf, pitchFamilies: [{ pitch12: 0.25, share: 1 }] }, BUILTIN_LISTS).mansardBasis === "assumed");
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);
