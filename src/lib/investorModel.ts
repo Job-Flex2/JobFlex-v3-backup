@@ -629,7 +629,8 @@ export function runRateStory(curve: readonly CurvePoint[], today: string, days: 
       // The multiple leads (owner, 2026-10-25, chose: "3.3× growth + cost per lead"): true, and it reads strong.
       const x = Math.round((t.revenueCents / Math.max(1, a.revenueCents)) * 10) / 10;
       past = a.revenueCents > 0
-        ? `${since}, monthly revenue grew ${x}× — from ${dollars(a.revenueCents)} to ${dollars(t.revenueCents)}; new customers added ${dollars(d)} a month. ${ads[0].toUpperCase()}${ads.slice(1)}.`
+        // The total only (owner, 2026-10-26: "don't show the 782 — make it the total"): the multiple carries the start.
+        ? `${since}, monthly revenue grew ${x}×, to ${dollars(t.revenueCents)}. ${ads[0].toUpperCase()}${ads.slice(1)}.`
         : `${since}, revenue per month grew from $0 to ${dollars(t.revenueCents)}; ${ads}.`;
     }
   }
