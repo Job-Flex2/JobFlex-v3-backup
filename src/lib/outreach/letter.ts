@@ -27,7 +27,8 @@ export function outreachLetter(input: { p: Pick<Prospect, "name" | "business" | 
     who ? `Hi ${who},` : "Hi,",
     `I'm ${input.sender}, from JobFlex — we make software for contractors. First, thank you for what you do: people count on ${t.who} for ${t.help}, and that matters.`,
     `We built an AI desk that answers a contractor's phone in their own company's name, books visits onto their calendar and texts them what came in — so the call that comes in while you're up on a job isn't lost to the next company on the list.`,
-    tradePitch(p.trade).email,
+    // The offer (owner, 2026-10-26: "they need JobFlex to grow the business faster and save time with our tools").
+    `JobFlex is built to help ${biz} grow faster and save time. ${tradePitch(p.trade).email}`,
     `The quickest way to see it is to hear it: tap the link below and it will call you in about half a minute and answer the way it would for ${biz}.`,
   ];
   const linkLabel = "Have the AI desk call me";

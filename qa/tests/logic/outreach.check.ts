@@ -149,7 +149,13 @@ check("calls only: no 'two days after their email'; all three: the email first a
 check("nothing on: says so", /^Nothing is sent/.test(scheduleWords({ email: false, calls: false, texts: false }, per)));
 check("a calls-only schedule calls a landline with an email at once — no email to wait for", emailFirst(P({ id: "e1", line: line("landline") }), mon10, false).ok && !emailFirst(P({ id: "e2", line: line("landline") }), mon10, true).ok);
 const tNo = outreachText({ p: { name: "Dana Lee", trade: "roofing" }, answered: false, noCall: true, link: "https://jobflex.app/t/x", trialDays: 7 });
-check("the text with no call before it: JobFlex named, the trade's line, the link, STOP — plain letters, two segments at most", /^Hi Dana, JobFlex here - thanks for asking about the AI desk\./.test(tNo) && /Reply STOP to opt out\./.test(tNo) && tNo.length <= 306 && /^[\x20-\x7E]+$/.test(tNo), tNo);
+check("the text with no call before it: JobFlex named, why it comes, the trade's line, the link, STOP — plain letters, two segments at most", /^Hi Dana, JobFlex here, as you asked on our site\./.test(tNo) && tNo.includes(tradePitch("roofing").sms) && /Reply STOP to opt out\./.test(tNo) && tNo.length <= 306 && /^[\x20-\x7E]+$/.test(tNo), tNo);
+
+// THE OFFER (owner, 2026-10-26: "offer them that they need JobFlex to grow the business faster and save time with our tools").
+const real = (t: string) => `https://jobflex.app/auth/register?utm_source=jobflex-call&utm_medium=sms&utm_campaign=${t}`;
+check("every trade's text makes the offer — grow faster, save time — with its tools, after a call and on the schedule (a short first name, the real link)", ["roofing", "fencing", "hvac", "decks", "plumbing"].every((t) => [true, false].every((noCall) => { const x = outreachText({ p: { name: "Mike Carter", trade: t }, answered: !noCall, noCall, link: real(t), trialDays: 7 }); return /Grow your .*business faster and save time/.test(x) && x.includes(tradePitch(t).sms) && x.length <= 306; })));
+check("a name too long for the tools: the bare offer stays", (() => { const x = outreachText({ p: { name: "Christopher-Alexander", trade: "roofing" }, answered: false, noCall: true, link: real("roofing"), trialDays: 7 }); return x.includes(tradePitch("roofing").grow) && x.length <= 306 && /Reply STOP to opt out\.$/.test(x); })());
+check("the email makes the offer too, in the business's name", /JobFlex is built to help Acme Roofing grow faster and save time\./.test(outreachLetter({ p: { ...ll, business: "Acme Roofing" }, sender: "D", callMeUrl: "u", siteUrl: "s", unsubscribeUrl: "x", postal: "p" }).text));
 
 console.log(bad ? `\n${bad} FAILED` : "\nALL PASS");
 process.exit(bad ? 1 : 0);
