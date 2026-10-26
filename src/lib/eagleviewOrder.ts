@@ -176,6 +176,12 @@ const ROOF_AREA = PD_PACK.ROOF_AREA;
 export const ORDER_COLLECT_BUDGET_MS = 75_000;
 /** Pause between rounds of asking each placed order in turn. */
 export const COLLECT_ROUND_MS = 2_000;
+/**
+ * An order still `pending` this long after it was placed is closed as failed
+ * and taken off the spend count (lib/instantOrderExpiry). EagleView answers in
+ * seconds; ten minutes is an order that is not coming (owner, 2026-10-26).
+ */
+export const PENDING_EXPIRE_MS = 10 * 60_000;
 
 /** A placed, ledgered order the collect loop is waiting on. */
 export interface PlacedOrder {
@@ -304,6 +310,14 @@ export async function orderPacksFor(
     if (!landed) throw new Error(`Property Data request failed for the roof area (order ${areaOrder.requestId})`);
     parts.push(landed.instant);
     have.add(ROOF_AREA);
+    // No roof in the area answer — an address EagleView could not place, or a
+    // place with no structure: the other packs would describe nothing, and
+    // every one of them is a paid order (2026-10-26, ticket 8KETUL: five more
+    // packs were placed on "Invalid address" and never arrived).
+    if (!hasRoof(landed.instant)) {
+      const all = opts.base ? [opts.base, landed.instant] : [landed.instant];
+      return { instant: mergeInstantResults(all), report: packReport(have, denied, failed) };
+    }
   }
 
   // ── 2. the rest: placed now, collected by the page ──

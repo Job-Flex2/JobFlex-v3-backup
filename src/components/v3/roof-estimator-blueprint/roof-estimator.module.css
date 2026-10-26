@@ -2134,3 +2134,23 @@
 .bp :global(.content .rf-structures .rf-attach) { min-height: 44px; color: var(--ink); }
 
 .bp :global(.content .rf-structures .rf-attach.is-off) { opacity: 1; }
+
+/* The buildings in the estimate, numbered (2026-10-26, ticket 8KETUL): the main one first, "Building 1 of N",
+   a MAIN stamp; each other row a tick, its number when ticked, and "Make main" — a quiet ink-framed button. A
+   building picked on the map (or asked for) carries a blueprint bar on its left. */
+.bp :global(.content .rf-structures .rf-main-row dt) { align-items: center; }
+.bp :global(.content .rf-structures .rf-main-name) { display: inline-flex; align-items: center; gap: 9px; min-height: var(--roof-touch-h); font-weight: 700; color: var(--ink); }
+.bp :global(.content .rf-structures .rf-main-tag) { display: inline-flex; align-items: center; height: 22px; padding: 0 7px; border: 1.5px solid var(--blueprint); border-radius: var(--radius); background: var(--accent-soft); font-size: 10.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--blueprint); }
+.bp :global(.content .rf-structures .rf-swatch.is-empty) { background: #fff; }
+.bp :global(.content .rf-structures .rf-main-name .rf-swatch) { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--ink); flex: 0 0 auto; }
+.bp :global(.content .rf-structures .rf-make-main) { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border: 1.5px solid var(--ink); border-radius: var(--radius); background: #fff; font-family: var(--font-sans); font-size: 13px; font-weight: 700; color: var(--ink); cursor: pointer; transition: background-color 0.12s var(--ease-out, ease-out); }
+.bp :global(.content .rf-structures .rf-make-main:hover:not(:disabled)) { background: var(--accent-soft); color: var(--blueprint); border-color: var(--blueprint); }
+.bp :global(.content .rf-structures .rf-make-main:focus-visible) { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+.bp :global(.content .rf-structures .rf-make-main:disabled) { border-color: var(--hair-soft); color: var(--muted); cursor: default; }
+.bp :global(.content .rf-structures .rf-make-main[aria-busy]) { border-color: var(--blueprint); color: var(--blueprint); }
+.bp :global(.content .rf-structures .rf-details-row.is-focus) { box-shadow: inset 3px 0 0 var(--blueprint); padding-left: 10px; }
+.bp :global(.content .rf-typed-hint) { margin-top: 8px; color: var(--ink); font-weight: 600; }
+@media (max-width: 768px) {
+  .bp :global(.content .rf-structures .rf-make-main),
+  .bp :global(.content .rf-structures .rf-locate) { min-height: var(--roof-touch-h); }
+}

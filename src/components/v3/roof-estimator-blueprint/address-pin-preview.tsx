@@ -10,8 +10,13 @@
 //
 // Renders nothing without the browser key, and retires itself for the session
 // if the SDK refuses to load — the intake works exactly as before either way.
-// Free-typed addresses have no point to show; the parent only mounts this for
-// a picked suggestion.
+//
+// THE PERSON'S PIN (2026-10-26, ticket 8KETUL: an apartment complex measured
+// at its garage). With `onMove` the pin can be dragged — or the map tapped —
+// onto the building to measure; the parent sends that point with the order and
+// it decides which building is main. While the pin is held the page does not
+// scroll under the finger. A typed-out address gets its point from the
+// server's geocoder (the data form), so the map shows for it too.
 
 import * as React from "react";
 import { isMapsBrowserEnabled, loadMapsLibrary } from "@/lib/googleMaps";
@@ -23,22 +28,81 @@ const PIN_ZOOM = 20;
 // Minimal structural types for the JS SDK — the repo carries no
 // @types/google.maps; same approach as the report viewer and lead-map.tsx.
 // Classic Marker on purpose: AdvancedMarkerElement needs a Map ID.
+type MapEvent = { latLng?: { lat(): number; lng(): number } };
+type Listener = { remove(): void };
 interface PinMap {
   setCenter(c: { lat: number; lng: number }): void;
   setZoom(z: number): void;
+  addListener?(ev: string, fn: (e: MapEvent) => void): Listener;
 }
 interface PinMarker {
   setPosition(c: { lat: number; lng: number }): void;
   setTitle(t: string): void;
+  setDraggable?(d: boolean): void;
+  addListener?(ev: string, fn: (e: MapEvent) => void): Listener;
 }
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type G = any;
 
-export function AddressPinPreview({ lat, lng, label, scanning = false }: { lat: number; lng: number; label: string; /** On the measuring screen (2026-10-13): a sweep over the map, no "wrong house?" note. */ scanning?: boolean }) {
+const pointOf = (e: MapEvent) => (e.latLng ? { lat: e.latLng.lat(), lng: e.latLng.lng() } : null);
+
+export function AddressPinPreview({
+  lat,
+  lng,
+  label,
+  scanning = false,
+  onMove,
+  moved = false,
+}: {
+  lat: number;
+  lng: number;
+  label: string;
+  /** On the measuring screen (2026-10-13): a sweep over the map, no "wrong house?" note. */
+  scanning?: boolean;
+  /** The pin can be dragged (or the map tapped) onto the building to measure; called with the new point. */
+  onMove?: (p: { lat: number; lng: number }) => void;
+  /** The pin stands where the person put it, not where the address resolved. */
+  moved?: boolean;
+}) {
   const hostRef = React.useRef<HTMLDivElement | null>(null);
-  const builtRef = React.useRef<{ host: HTMLDivElement; map: PinMap; marker: PinMarker } | null>(null);
+  const builtRef = React.useRef<{ host: HTMLDivElement; map: PinMap; marker: PinMarker; listeners: Listener[] } | null>(null);
   const [down, setDown] = React.useState(false);
   const enabled = isMapsBrowserEnabled();
+  const movable = !!onMove && !scanning;
+  // The latest handler, so the listeners (made once, with the map) call this render's.
+  const moveRef = React.useRef(onMove);
+  React.useEffect(() => {
+    moveRef.current = movable ? onMove : undefined;
+  });
+  // The page stays still while the pin is held: a finger dragging the pin must not scroll the page under it. The
+  // dashboard scrolls inside its shell, not the document, so every scrolling box above the map is held.
+  const heldRef = React.useRef<Array<{ el: HTMLElement; overflow: string; touch: string }> | null>(null);
+  const hold = React.useCallback((on: boolean) => {
+    if (on && !heldRef.current) {
+      const boxes: HTMLElement[] = [document.documentElement];
+      for (let el = hostRef.current?.parentElement ?? null; el; el = el.parentElement) {
+        if (/(auto|scroll)/.test(getComputedStyle(el).overflowY)) boxes.push(el);
+      }
+      heldRef.current = boxes.map((el) => ({ el, overflow: el.style.overflow, touch: el.style.touchAction }));
+      for (const { el } of heldRef.current) {
+        el.style.overflow = "hidden";
+        el.style.touchAction = "none";
+      }
+    } else if (!on && heldRef.current) {
+      for (const h of heldRef.current) {
+        h.el.style.overflow = h.overflow;
+        h.el.style.touchAction = h.touch;
+      }
+      heldRef.current = null;
+    }
+  }, []);
+  React.useEffect(
+    () => () => {
+      hold(false);
+      for (const l of builtRef.current?.listeners ?? []) l.remove();
+    },
+    [hold],
+  );
 
   React.useEffect(() => {
     if (!enabled || down) return;
@@ -54,11 +118,14 @@ export function AddressPinPreview({ lat, lng, label, scanning = false }: { lat: 
         if (cancelled || !host) return;
         const center = { lat, lng };
         if (builtRef.current?.host === host) {
-          // Same mount, new pick: recentre and move the pin.
-          builtRef.current.map.setCenter(center);
-          builtRef.current.map.setZoom(PIN_ZOOM);
+          // Same mount, new point: move the pin — and recentre, unless the person just put it there.
+          if (!moved) {
+            builtRef.current.map.setCenter(center);
+            builtRef.current.map.setZoom(PIN_ZOOM);
+          }
           builtRef.current.marker.setPosition(center);
           builtRef.current.marker.setTitle(label);
+          builtRef.current.marker.setDraggable?.(movable);
         } else {
           const map = new maps.Map(host, {
             center,
@@ -74,8 +141,31 @@ export function AddressPinPreview({ lat, lng, label, scanning = false }: { lat: 
             position: center,
             title: label,
             icon: blueprintPinIcon(maps.Point),
+            draggable: movable,
           }) as PinMarker;
-          builtRef.current = { host, map, marker };
+          const listeners: Listener[] = [];
+          if (marker.addListener) {
+            listeners.push(marker.addListener("dragstart", () => hold(true)));
+            listeners.push(
+              marker.addListener("dragend", (e) => {
+                hold(false);
+                const p = pointOf(e);
+                if (p) moveRef.current?.(p);
+              }),
+            );
+          }
+          // A tap on the map puts the pin there — on a phone the quickest way to point at a building.
+          if (map.addListener) {
+            listeners.push(
+              map.addListener("click", (e) => {
+                const p = pointOf(e);
+                if (!p || !moveRef.current) return;
+                marker.setPosition(p);
+                moveRef.current(p);
+              }),
+            );
+          }
+          builtRef.current = { host, map, marker, listeners };
         }
       } catch {
         if (!cancelled) setDown(true);
@@ -84,12 +174,12 @@ export function AddressPinPreview({ lat, lng, label, scanning = false }: { lat: 
     return () => {
       cancelled = true;
     };
-  }, [enabled, down, lat, lng, label]);
+  }, [enabled, down, lat, lng, label, movable, moved, hold]);
 
   if (!enabled || down) return null;
 
   return (
-    <div className={"rf-pin" + (scanning ? " is-scanning" : "")}>
+    <div className={"rf-pin" + (scanning ? " is-scanning" : "")} data-rf-pin={movable ? "movable" : undefined}>
       <div ref={hostRef} className="rf-pin-map" aria-label={`Map preview with a pin on ${label}`} />
       {scanning ? (
         // The scan is the app's own blueprint theatre: an opaque veil over
@@ -103,7 +193,23 @@ export function AddressPinPreview({ lat, lng, label, scanning = false }: { lat: 
         </span>
       ) : null}
       {scanning ? <span className="rf-pin-sweep" aria-hidden="true" /> : null}
-      {scanning ? null : (
+      {scanning ? null : movable ? (
+        <>
+          <p className="rf-pin-caption">Measure the building under the pin</p>
+          <p className="rf-note rf-pin-note">
+            {moved ? (
+              <>
+                Pin moved from <b>{label}</b>.
+              </>
+            ) : (
+              <>
+                The pin marks <b>{label}</b>.
+              </>
+            )}{" "}
+            Drag it, or tap the map, to put it on another building. Wrong house? Pick the address again.
+          </p>
+        </>
+      ) : (
         <p className="rf-note rf-pin-note">
           The pin marks <b>{label}</b> — the roof the measurement will read. Wrong house? Pick the address
           again.
@@ -120,6 +226,13 @@ export function AddressPinPreview({ lat, lng, label, scanning = false }: { lat: 
           border-radius: var(--radius);
           overflow: hidden;
           background: var(--paper-deep);
+        }
+        .jf-blueprint .content .rf-pin-caption {
+          margin: 10px 0 0;
+          font-size: 15px;
+          font-weight: 800;
+          line-height: 1.3;
+          color: var(--ink);
         }
         .jf-blueprint .content .rf-pin-note {
           margin-top: 8px;

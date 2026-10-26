@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { rateLimitShared, ipFromRequest, HOUR } from "@/lib/rateLimit";
 import type { InstantRoofData } from "@/lib/eagleview";
 import { loadRoofPicture } from "@/lib/roofPictureFetch";
+import { roofSubject } from "@/lib/roofSubject";
 import { roofFactsLine, roofStandInSvg, type RoofFrame } from "@/lib/roofPictures";
 
 export const runtime = "nodejs";
@@ -29,16 +30,19 @@ export async function GET(req: Request, ctx: { params: Promise<{ publicId: strin
     link = null;
   }
   if (!link) return new Response("Not found", { status: 404 });
-  const row = await db.roofMeasurement.findUnique({ where: { id: link.roofMeasurementId }, select: { address: true, city: true, state: true, zip: true, lat: true, lng: true, instantJson: true, areaSqft: true, squares: true, predominantPitch: true, facetCount: true, createdAt: true } });
+  const row = await db.roofMeasurement.findUnique({ where: { id: link.roofMeasurementId }, select: { address: true, city: true, state: true, zip: true, lat: true, lng: true, instantJson: true, provenanceJson: true, areaSqft: true, squares: true, predominantPitch: true, facetCount: true, createdAt: true } });
   if (!row) return new Response("Not found", { status: 404 });
-  let instant: InstantRoofData | null = null;
-  try { instant = row.instantJson ? (JSON.parse(row.instantJson) as InstantRoofData) : null; } catch { instant = null; }
+  let parsed: InstantRoofData | null = null;
+  try { parsed = row.instantJson ? (JSON.parse(row.instantJson) as InstantRoofData) : null; } catch { parsed = null; }
+  // The same building(s) the proposal page put the pin on (lib/roofSubject).
+  const subject = roofSubject(row, parsed);
+  const instant = subject.instant;
   const asked = new URL(req.url).searchParams.get("f");
   if (asked !== "standin") {
-    const shot = await loadRoofPicture({ ...row, instant }, FRAMES.find((k) => k === asked));
+    const shot = await loadRoofPicture({ ...row, lat: subject.lat, lng: subject.lng, instant }, FRAMES.find((k) => k === asked));
     if (shot.frame) return new Response(new Uint8Array(shot.bytes), { headers: { "Content-Type": shot.contentType, "Cache-Control": "public, max-age=86400, s-maxage=86400" } });
     if (!shot.frames) return new Response("Not found", { status: 404 });
   }
-  const facts = roofFactsLine({ areaSqft: row.areaSqft, squares: row.squares, pitch: row.predominantPitch, facetCount: row.facetCount, measuredOn: row.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) });
+  const facts = roofFactsLine({ areaSqft: subject.areaSqft, squares: subject.squares, pitch: row.predominantPitch, facetCount: subject.facetCount, measuredOn: row.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) });
   return new Response(roofStandInSvg(facts), { headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=600" } });
 }

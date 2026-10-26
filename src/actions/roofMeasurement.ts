@@ -30,6 +30,7 @@ import {
   pollInstantResult,
   submitInstantOrder,
   fetchPropertyImage,
+  instantAddressNotFound,
   mergeInstantResults,
   PD_DIAGRAM_PACKS,
   eagleViewIdentity,
@@ -46,6 +47,7 @@ import {
   hasRoof,
   ORDER_COLLECT_BUDGET_MS,
   orderPacksFor,
+  PENDING_EXPIRE_MS,
   packReport,
   packsFromContent,
   rowPacks,
@@ -56,7 +58,8 @@ import {
 import { markPacks, readEntitlements } from "@/lib/eagleviewEntitlements";
 import { getBuildingInsights, isSolarEnabled, SOLAR_CALL_BUDGET_MS, SolarUnavailableError, type SolarFailureKind } from "@/lib/solar";
 import { estimateSolarRoof, type SolarRoofEstimate } from "@/lib/roofSolarEstimate";
-import { geocode } from "@/lib/maps";
+import { geocode, geocodePlace } from "@/lib/maps";
+import { EXPIRED_ORDER_ERROR, expireStaleInstantOrders } from "@/lib/instantOrderExpiry";
 import { enforceRateLimit, HOUR, RateLimitError } from "@/lib/rateLimit";
 import { roofMeasurementProvider } from "@/lib/roofMeasurementProvider";
 import { buildReconModel, ReconUnavailableError, type ReconBuild } from "@/lib/roofReconBuild";
@@ -68,7 +71,7 @@ import { checkCompleteness } from "@/lib/roofRecon/completeness";
 import { lotMaskFromPair, ringWhollyOutsideLot, type LotMask } from "@/lib/roofDiagram/parcelMask";
 import { lotRingForPoint, ringWhollyOutsideLotRing } from "@/lib/lotRing";
 import { areaOf, type FootprintPoint } from "@/lib/roofRecon/footprint";
-import { foreignIndices, footprintRead, pickMainStructure, rowFigures } from "@/lib/roofDiagram/instantTotals";
+import { foreignIndices, footprintRead, includedIndicesOf, mainStructureOf, pickMainStructure, rowFigures, userPinOf } from "@/lib/roofDiagram/instantTotals";
 import { toDTO, toSummary, type StoredProvenance } from "@/lib/roofDiagram/dto";
 import type { MeasurementProvenance, MeasurementSource, RoofMeasurementDTO, RoofMeasurementSummary } from "@/lib/roofDiagram/types";
 import { takeTrialCap } from "@/lib/trialMeter";
@@ -101,8 +104,28 @@ type MeasureResult =
       providerAccessDenied?: boolean;
       /** The company's daily ceiling on paid orders (lib/paidCaps): nothing was ordered. */
       capped?: boolean;
+      /** EagleView could not place the address ("Invalid address") — the person picks it again; nothing more is ordered. */
+      addressNotFound?: boolean;
+      /** The last area order never arrived and was closed (lib/instantOrderExpiry): only a new, billed lookup measures it. */
+      expired?: boolean;
       debug?: Record<string, unknown>;
     };
+
+/**
+ * What the page sends to measure: the address, and the pin the person saw on
+ * the map before ordering — `lat`/`lng` and `userPin` alike (2026-10-26). The
+ * pin decides which building is main (pickMainStructure "user-pin").
+ */
+type RoofOrderInput = EvOrderInput & { userPin?: LatLng | null };
+
+/** A pin worth believing: two finite numbers on Earth, not EagleView's "nowhere" (0, 0). */
+function cleanPin(p: unknown): LatLng | null {
+  const v = p as { lat?: unknown; lng?: unknown } | null | undefined;
+  if (!v || typeof v.lat !== "number" || typeof v.lng !== "number") return null;
+  if (!Number.isFinite(v.lat) || !Number.isFinite(v.lng) || Math.abs(v.lat) > 90 || Math.abs(v.lng) > 180) return null;
+  if (v.lat === 0 && v.lng === 0) return null;
+  return { lat: v.lat, lng: v.lng };
+}
 
 interface LatLng {
   lat: number;
@@ -122,8 +145,8 @@ const ACTION_BUDGET_MS = 250_000;
 const RECON_FLOOR_MS = 20_000;
 /** How long a plain click waits for an AREA order an earlier click left processing; detail orders are asked once and left to the page. */
 const PENDING_COLLECT_BUDGET_MS = 45_000;
-/** An area order the provider has not delivered in this long no longer blocks a new, billed lookup. */
-const STALE_PENDING_MS = 15 * 60_000;
+/** An area order the provider has not delivered in this long no longer blocks a new, billed lookup — it is closed (lib/instantOrderExpiry). */
+const STALE_PENDING_MS = PENDING_EXPIRE_MS;
 /** How long the page's background collect asks about pending orders per call. */
 const BACKGROUND_COLLECT_BUDGET_MS = 12_000;
 /** The elevation pass re-run when a late pack changes the roof's outline or pitch. */
@@ -230,8 +253,9 @@ async function completeOrdersFor(organizationId: string, addressKey: string): Pr
   return { parts: parsed.map((p) => p.instant), have, requestId: parsed[0]?.instant.requestId ?? null };
 }
 
-/** Orders for the address that were placed but not collected yet, oldest first. */
+/** Orders for the address that were placed but not collected yet, oldest first — once the company's orders that never arrived are closed. */
 async function pendingOrdersFor(organizationId: string, addressKey: string, input: EvOrderInput): Promise<Array<PlacedOrder & { placedAt: Date }>> {
+  await expireStaleInstantOrders({ organizationId }).catch((err) => console.warn("[roofMeasurement] stale orders not closed:", errorMessage(err, String(err))));
   const rows = await db.instantOrder.findMany({ where: { organizationId, addressKey, status: "pending" }, orderBy: { createdAt: "asc" } });
   const completeAddress = instantCompleteAddress(input);
   return rows.map((r) => ({ requestId: r.requestId, packs: rowPacks(r.packs) as PdPack[], completeAddress, placedAt: r.createdAt }));
@@ -256,6 +280,22 @@ class RoofCapError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "RoofCapError";
+  }
+}
+
+/** EagleView could not place the address at all ("Invalid address", EVPD-10101). Nothing more is ordered for it. */
+class AddressNotFoundError extends Error {
+  constructor() {
+    super("Address not found — pick it from the suggestions");
+    this.name = "AddressNotFoundError";
+  }
+}
+
+/** The last area order for the address never arrived and was closed (lib/instantOrderExpiry); a plain click does not buy over it. */
+class ExpiredOrderError extends Error {
+  constructor(requestId: string) {
+    super(`The last measurement ordered for this address never arrived (order ${requestId}) and was closed. Order a new lookup to measure it — billed.`);
+    this.name = "ExpiredOrderError";
   }
 }
 
@@ -358,6 +398,7 @@ async function obtainInstant(input: EvOrderInput, organizationId: string, forceN
     // 2a. complete orders in the ledger (and what was just collected), merged
     if (parts.length && have.includes(PD_PACK.ROOF_AREA)) {
       const instant = mergeInstantResults(parts);
+      if (instantAddressNotFound(instant)) throw new AddressNotFoundError();
       if (!hasRoof(instant)) throw new NoRoofError(instant.requestId);
       const first = recovered.find((r) => r.packs.includes(PD_PACK.ROOF_AREA)) ?? recovered[0];
       return {
@@ -396,6 +437,22 @@ async function obtainInstant(input: EvOrderInput, organizationId: string, forceN
     }
   }
 
+  // EagleView already said it cannot place this address: the same words would
+  // be refused again, and a re-measure would buy the detail packs on nothing.
+  if (parts.length && instantAddressNotFound(mergeInstantResults(parts))) throw new AddressNotFoundError();
+
+  // An area order that never arrived was closed (lib/instantOrderExpiry): a
+  // plain click does not place a new paid one over it — that is the explicit
+  // re-measure, as it was while the order sat pending.
+  if (keyed && !forceNewOrder && !have.includes(PD_PACK.ROOF_AREA)) {
+    const expired = await db.instantOrder.findFirst({
+      where: { organizationId, addressKey, status: "failed", error: { startsWith: EXPIRED_ORDER_ERROR }, createdAt: { gte: new Date(Date.now() - 24 * 3_600_000) } },
+      orderBy: { createdAt: "desc" },
+      select: { requestId: true, packs: true },
+    });
+    if (expired && rowPacks(expired.packs).includes(PD_PACK.ROOF_AREA)) throw new ExpiredOrderError(expired.requestId);
+  }
+
   // 3. buy — every pack the address lacks, placed up front and collected
   // together. A re-measure on an address that has every pack is the one case
   // that orders everything again.
@@ -412,6 +469,7 @@ async function obtainInstant(input: EvOrderInput, organizationId: string, forceN
   // once it lands and left to the page, and the elevation pass keeps its floor.
   const collectBudgetMs = Math.max(15_000, Math.min(ORDER_COLLECT_BUDGET_MS, deadlineAt - Date.now() - RECON_FLOOR_MS - 30_000));
   const { instant, report } = await orderPacksFor(input, deps, { skip, base, collectBudgetMs });
+  if (instantAddressNotFound(instant)) throw new AddressNotFoundError();
   if (!hasRoof(instant)) throw new NoRoofError(instant.requestId);
   const pendingNow = [...new Set([...(report.pending ?? []), ...stillPending.filter((p) => !report.have.includes(p))])];
   return { instant, packs: packReport(report.have, report.denied, report.failed, report.unknown ?? [], pendingNow) };
@@ -441,6 +499,15 @@ function applyRigid(ring: FootprintPoint[], t: Rigid2D): FootprintPoint[] {
  *
  * `reconDeadlineMs` ≤ 0 skips the elevation pass and says so on the row; the
  * page's free retry runs it then.
+ *
+ * THE PERSON'S WORD ON THE BUILDING (2026-10-26, ticket 8KETUL). `userPin` is
+ * the pin they saw (and may have moved) on the map before ordering; it picks
+ * the main structure ahead of EagleView's own point. `forceMain` is "Make
+ * main" — the building they chose after the order; `lot` hands in the lot
+ * check a saved row already made, so a re-pick asks EagleView for nothing
+ * (the parcel mask is read off EagleView imagery). Every path writes the same
+ * keys — `userPin`, `mainStructure`, `included` — so a row reads the same
+ * whichever wrote it.
  */
 async function witnessInstant(p: {
   instant: InstantRoofData;
@@ -448,9 +515,13 @@ async function witnessInstant(p: {
   packs: PackReport;
   refreshSolar: boolean;
   reconDeadlineMs: number;
+  userPin?: LatLng | null;
+  forceMain?: number | null;
+  included?: readonly number[];
+  lot?: { parcelSource: MeasurementProvenance["parcelSource"]; parcelVeto: unknown } | null;
 }): Promise<Witnessed> {
   const { instant, input, packs } = p;
-  const origin: LatLng | null = instant.lat != null && instant.lng != null ? { lat: instant.lat, lng: instant.lng } : null;
+  const origin: LatLng | null = cleanPin({ lat: instant.lat, lng: instant.lng });
   const contours = instant.structures.map((st) => st.outline ?? []).filter((r) => r.length >= 3);
 
   const provenance: MeasurementProvenance = {};
@@ -467,18 +538,26 @@ async function witnessInstant(p: {
   // witness may veto, and each only ever vetoes a structure EVERY vertex of
   // which falls outside the lot: keeping a neighbour's shed is a visible
   // mistake, dropping a real roof is an expensive one.
-  const lot = await lotMaskFor(instant, origin);
-  const lotRing = origin
-    ? await lotRingForPoint(origin.lat, origin.lng)
-    : { ring: [] as { lat: number; lng: number }[], source: "none" as const };
-  provenance.parcelSource = lotRing.source;
+  const known = p.lot ?? null;
+  const lot = known ? null : await lotMaskFor(instant, origin);
+  const lotRing = known
+    ? { ring: [] as { lat: number; lng: number }[], source: known.parcelSource ?? ("none" as const) }
+    : origin
+      ? await lotRingForPoint(origin.lat, origin.lng)
+      : { ring: [] as { lat: number; lng: number }[], source: "none" as const };
+  provenance.parcelSource = lotRing.source as MeasurementProvenance["parcelSource"];
   const haveOutline = lotRing.ring.length >= 3;
-  console.log(
-    `[roofMeasurement] lot boundary: ${lotRing.source}` +
-      (haveOutline ? ` (${lotRing.ring.length} points)` : " — no outline") +
-      `, imagery mask: ${lot ? "yes" : "no"}`,
-  );
-  if (origin && (lot || haveOutline)) {
+  if (known) {
+    // The saved row's own verdict, as it was made: no lot is looked up again.
+    if (known.parcelVeto) (provenance as Record<string, unknown>).parcelVeto = known.parcelVeto;
+  } else {
+    console.log(
+      `[roofMeasurement] lot boundary: ${lotRing.source}` +
+        (haveOutline ? ` (${lotRing.ring.length} points)` : " — no outline") +
+        `, imagery mask: ${lot ? "yes" : "no"}`,
+    );
+  }
+  if (!known && origin && (lot || haveOutline)) {
     const foreign: string[] = [];
     let byMask = 0;
     let byOutline = 0;
@@ -511,12 +590,19 @@ async function witnessInstant(p: {
   // registration, coverage, measured pitch, completeness — are about ONE of
   // them. The rest are listed on the page with checkboxes.
   const veto = (provenance as Record<string, unknown>).parcelVeto as { foreignStructures?: string[] } | undefined;
-  const pick = pickMainStructure(instant.structures, {
-    foreign: foreignIndices(veto?.foreignStructures),
-    origin,
-    // Either witness counts as knowing where the lot is.
-    parcelKnown: lot != null || haveOutline,
-  });
+  const userPin = cleanPin(p.userPin);
+  const pick =
+    p.forceMain != null && instant.structures[p.forceMain]
+      ? { index: p.forceMain, how: "chosen" as const }
+      : pickMainStructure(instant.structures, {
+          foreign: foreignIndices(veto?.foreignStructures),
+          origin,
+          // Either witness counts as knowing where the lot is (a saved row's veto says it was known).
+          parcelKnown: lot != null || haveOutline || !!veto,
+          userPin,
+        });
+  provenance.userPin = userPin;
+  provenance.included = includedIndicesOf({ included: p.included ?? [] }, instant.structures.length, pick.index);
   const mainSt = pick.index != null ? instant.structures[pick.index] : null;
   if (pick.index != null) {
     const others = instant.structures.filter((_, i) => i !== pick.index);
@@ -801,7 +887,20 @@ export async function collectPendingInstant(measurementId: string): Promise<
   let origin: LatLng | null = row.lat != null && row.lng != null ? { lat: row.lat, lng: row.lng } : null;
   if (witnessed) {
     try {
-      const w = await witnessInstant({ instant: merged, input, packs, refreshSolar: false, reconDeadlineMs: LATE_RECON_DEADLINE_MS });
+      // The person's word survives a late pack: their pin, their "Make main", their ticks.
+      const was = storedProv.provenance as Record<string, unknown>;
+      const chosen = storedProv.provenance.mainStructure?.how === "chosen" ? storedProv.provenance.mainStructure.index : null;
+      const userPin = userPinOf(was);
+      const w = await witnessInstant({
+        instant: merged,
+        input: userPin ? { ...input, lat: userPin.lat, lng: userPin.lng } : input,
+        packs,
+        refreshSolar: false,
+        reconDeadlineMs: LATE_RECON_DEADLINE_MS,
+        userPin,
+        forceMain: chosen,
+        included: includedIndicesOf(was, merged.structures.length, null),
+      });
       provenance = { ...w.provenance, ...(storedProv.provenance.instantReuse ? { instantReuse: storedProv.provenance.instantReuse } : {}) };
       origin = w.origin ?? origin;
     } catch (err) {
@@ -940,7 +1039,7 @@ function userFacingInstantError(err: unknown): string {
  * Чертёж не строится.
  */
 export async function measureRoofInstant(
-  input: EvOrderInput,
+  input: RoofOrderInput,
   opts?: { forceNewOrder?: boolean },
 ): Promise<MeasureResult> {
   let organizationId: string;
@@ -979,6 +1078,16 @@ export async function measureRoofInstant(
       await trial.refund();
       return { ok: false, error: err.message, capped: true };
     }
+    // Nothing was measured: the address goes back to the person (no Google
+    // fallback — it would measure whatever Google makes of the same words).
+    if (err instanceof AddressNotFoundError) {
+      await trial.refund();
+      return { ok: false, error: err.message, addressNotFound: true };
+    }
+    if (err instanceof ExpiredOrderError) {
+      await trial.refund();
+      return { ok: false, error: err.message, expired: true, canReorder: true };
+    }
     const debug = { ...eagleViewIdentity(), stage: "instant order", error: errorMessage(err, String(err)) };
     console.warn("[roofMeasurement] instant failed", debug);
     // Only submission/auth refusals are safe to refund or switch providers.
@@ -1008,6 +1117,8 @@ export async function measureRoofInstant(
     packs,
     refreshSolar: opts?.forceNewOrder === true,
     reconDeadlineMs: deadlineAt - Date.now(),
+    userPin: cleanPin(input.userPin),
+    included: [],
   });
   if (reuse) provenance.instantReuse = reuse;
 
@@ -1143,7 +1254,7 @@ async function solarMeasure(input: EvOrderInput, organizationId: string, userId:
 }
 
 /** One UI action; the active engine is controlled on the server. */
-export async function measureRoof(input: EvOrderInput): Promise<MeasureResult> {
+export async function measureRoof(input: RoofOrderInput): Promise<MeasureResult> {
   // Authenticate before deciding on any provider, including fallback paths.
   const { organizationId, user } = await requireEstimatorOrManager();
   await requirePage(organizationId, "roof-estimator");
@@ -1212,6 +1323,164 @@ export async function getRoofMeasurement(id: string): Promise<RoofMeasurementDTO
   await requirePage(ctx.organizationId, "roof-estimator");
   const row = await db.roofMeasurement.findFirst({ where: { id, organizationId: ctx.organizationId } });
   return row ? toDTO(row) : null;
+}
+
+/** A saved row's stored answer and provenance, read once for the "the person decides" actions below. */
+function readSaved(row: { instantJson: string | null; provenanceJson: string | null }): { instant: InstantRoofData | null; stored: StoredProvenance } {
+  let instant: InstantRoofData | null = null;
+  try {
+    instant = row.instantJson ? (JSON.parse(row.instantJson) as InstantRoofData) : null;
+  } catch {
+    instant = null;
+  }
+  let stored: StoredProvenance = { calibration: null, provenance: {} as MeasurementProvenance };
+  try {
+    const parsed = row.provenanceJson ? (JSON.parse(row.provenanceJson) as Partial<StoredProvenance>) : null;
+    if (parsed && typeof parsed === "object") stored = { calibration: parsed.calibration ?? null, provenance: (parsed.provenance ?? {}) as MeasurementProvenance };
+  } catch {
+    /* unreadable provenance — the action starts it again from what is known */
+  }
+  return { instant, stored };
+}
+
+/**
+ * "Make main" (2026-10-26, ticket 8KETUL: EagleView's point for an apartment
+ * complex stood on its garage, and the contractor could tick other buildings in
+ * but never take the garage out). The chosen building becomes the one the
+ * figures, the hero and the estimate are about; the measurement is worked out
+ * again from what the row already holds — the stored answer, the saved lot
+ * check, the cached elevation tile — the same witnesses a re-measure of the
+ * address runs (measureRoofInstant's reuse path), and nothing is asked of
+ * EagleView. The building that was main joins the list unticked; the other
+ * ticks stay. Every key a new measurement writes is written here too.
+ */
+export async function setMainStructure(
+  measurementId: string,
+  structureIndex: number,
+): Promise<{ ok: true; measurement: RoofMeasurementDTO } | { ok: false; error: string }> {
+  let organizationId: string;
+  try {
+    organizationId = (await requireEstimatorOrManager()).organizationId;
+    await requirePage(organizationId, "roof-estimator");
+    await enforceRateLimit(`roof-main:${organizationId}`, 60, HOUR, "building changes");
+  } catch (err) {
+    return { ok: false, error: errorMessage(err, "Not authorised") };
+  }
+  if (typeof measurementId !== "string" || !Number.isInteger(structureIndex) || structureIndex < 0) return { ok: false, error: "Pick a building from the list." };
+  const row = await db.roofMeasurement.findFirst({ where: { id: measurementId, organizationId } });
+  if (!row) return { ok: false, error: "Measurement not found" };
+  if (row.source === "solar") return { ok: false, error: "This estimate is of one building." };
+  const { instant, stored } = readSaved(row);
+  if (!instant?.structures?.[structureIndex]) return { ok: false, error: "That building is not in this measurement." };
+  const prov = stored.provenance;
+  const was = mainStructureOf({ structures: instant.structures, provenance: prov as Record<string, unknown>, origin: { lat: row.lat, lng: row.lng } }).index;
+  if (was === structureIndex && prov.mainStructure?.how === "chosen") return { ok: true, measurement: toDTO(row) };
+
+  const userPin = userPinOf(prov as Record<string, unknown>);
+  const input: EvOrderInput = {
+    address: row.address ?? "",
+    city: row.city ?? "",
+    state: row.state ?? "",
+    zip: row.zip ?? "",
+    // The tile the row was measured on was fetched around the person's pin when there was one.
+    lat: userPin?.lat ?? row.lat ?? undefined,
+    lng: userPin?.lng ?? row.lng ?? undefined,
+  };
+  const evident = packsFromContent(instant);
+  const packs = prov.instantPacks ?? packReport(evident.have, [], [], evident.unknown);
+  let provenance: MeasurementProvenance;
+  try {
+    const w = await witnessInstant({
+      instant,
+      input,
+      packs,
+      refreshSolar: false,
+      reconDeadlineMs: LATE_RECON_DEADLINE_MS,
+      userPin,
+      forceMain: structureIndex,
+      included: includedIndicesOf(prov as Record<string, unknown>, instant.structures.length, structureIndex),
+      lot: { parcelSource: prov.parcelSource, parcelVeto: (prov as Record<string, unknown>).parcelVeto ?? null },
+    });
+    provenance = { ...w.provenance, ...(prov.instantReuse ? { instantReuse: prov.instantReuse } : {}) };
+  } catch (err) {
+    console.warn("[roofMeasurement] make-main witnesses failed:", errorMessage(err, String(err)));
+    return { ok: false, error: "The building could not be switched. Try again." };
+  }
+  const fig = rowFigures({
+    instant,
+    provenance: provenance as unknown as Record<string, unknown>,
+    columns: { areaSqft: row.areaSqft, squares: row.squares, lat: row.lat, lng: row.lng },
+  });
+  const next: StoredProvenance = { calibration: stored.calibration, provenance };
+  const updated = await db.roofMeasurement.update({
+    where: { id: row.id },
+    data: {
+      areaSqft: fig.areaSqft,
+      squares: fig.squares,
+      predominantPitch: fig.predominantPitch,
+      facetCount: fig.facetCount,
+      provenanceJson: JSON.stringify(next),
+    },
+  });
+  return { ok: true, measurement: toDTO(updated) };
+}
+
+/**
+ * The buildings ticked into the estimate, kept on the row (2026-10-26) so a
+ * measurement opened again — from Recent, a proposal, another device — shows
+ * the same ones. Indices into the stored answer; the main one and anything
+ * that is not a building of this answer are dropped. Nothing is recomputed:
+ * the row's figures are the main building's.
+ */
+export async function saveIncludedStructures(
+  measurementId: string,
+  indices: number[],
+): Promise<{ ok: true; included: number[] } | { ok: false; error: string }> {
+  let organizationId: string;
+  try {
+    organizationId = (await requireEstimatorOrManager()).organizationId;
+    await requirePage(organizationId, "roof-estimator");
+    await enforceRateLimit(`roof-included:${organizationId}`, 600, HOUR, "changes to the buildings");
+  } catch (err) {
+    return { ok: false, error: errorMessage(err, "Not authorised") };
+  }
+  if (typeof measurementId !== "string" || !Array.isArray(indices) || indices.length > 500) return { ok: false, error: "Nothing to save." };
+  const row = await db.roofMeasurement.findFirst({ where: { id: measurementId, organizationId } });
+  if (!row) return { ok: false, error: "Measurement not found" };
+  const { instant, stored } = readSaved(row);
+  const n = instant?.structures?.length ?? 0;
+  const main = instant ? mainStructureOf({ structures: instant.structures, provenance: stored.provenance as Record<string, unknown>, origin: { lat: row.lat, lng: row.lng } }).index : null;
+  const included = includedIndicesOf({ included: indices }, n, main);
+  const next: StoredProvenance = { calibration: stored.calibration, provenance: { ...stored.provenance, included } };
+  await db.roofMeasurement.update({ where: { id: row.id }, data: { provenanceJson: JSON.stringify(next) } });
+  return { ok: true, included };
+}
+
+/**
+ * Where a typed address is, for the pin on the intake map (2026-10-26): a
+ * picked suggestion carries its own point; an address typed out in full gets
+ * one from the server's geocoder, so the person sees — and can move — the pin
+ * before anything is ordered. One Geocoding call; nothing is ordered.
+ */
+export async function locateRoofAddress(input: {
+  address: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+}): Promise<{ ok: true; lat: number; lng: number; formatted: string } | { ok: false; error: string }> {
+  try {
+    const { organizationId } = await requireEstimatorOrManager();
+    await requirePage(organizationId, "roof-estimator");
+    await enforceRateLimit(`roof-locate:${organizationId}`, 120, HOUR, "address lookups");
+  } catch (err) {
+    return { ok: false, error: errorMessage(err, "Not authorised") };
+  }
+  const parts = [input?.address, input?.city, input?.state, input?.zip].map((v) => (typeof v === "string" ? v.trim().slice(0, 200) : "")).filter(Boolean);
+  if (!parts[0] || !/\d/.test(parts[0])) return { ok: false, error: "Type the street number and name." };
+  const hit = await geocodePlace(parts.join(", "));
+  const pin = cleanPin(hit);
+  if (!hit || !pin) return { ok: false, error: "Address not found — pick it from the suggestions" };
+  return { ok: true, lat: pin.lat, lng: pin.lng, formatted: hit.formatted ?? parts.join(", ") };
 }
 
 /**

@@ -33,6 +33,8 @@ export interface RoofPlan {
   factsKey: string | null;
   /** Other structures on the parcel ticked into the figures. */
   extra: number[];
+  /** The main building the figures were about (2026-10-26); null on plans kept before "Make main". */
+  mainIndex: number | null;
   /** The pitch typed when the measurement had none. */
   pitchEntered: string | null;
   /** The contractor's notes on where the numbers came from — never the client's. */
@@ -60,6 +62,7 @@ export function readRoofPlan(raw: unknown): RoofPlan | null {
     spec,
     factsKey: str(r.factsKey),
     extra: Array.isArray(r.extra) ? r.extra.filter((n): n is number => Number.isInteger(n) && n >= 0).slice(0, 50) : [],
+    mainIndex: typeof r.mainIndex === "number" && Number.isInteger(r.mainIndex) && r.mainIndex >= 0 ? r.mainIndex : null,
     pitchEntered: str(r.pitchEntered),
     assumptions: Array.isArray(r.assumptions) ? r.assumptions.filter((a): a is string => typeof a === "string").slice(0, 60) : [],
     address: str(r.address),

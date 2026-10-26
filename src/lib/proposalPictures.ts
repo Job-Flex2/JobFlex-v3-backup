@@ -37,6 +37,7 @@ import { DECK_PLAN_EVENT, parseDeckPlan } from "@/lib/deck/convertSchema";
 import { deckElevation, defaultPlacement, elevationOverlay } from "@/lib/deck/elevation";
 import { roofFactsLine, roofPinOnFrame, roofPinPoint, type RoofFacts } from "@/lib/roofPictures";
 import { loadRoofPicture, subjectPin } from "@/lib/roofPictureFetch";
+import { roofSubject } from "@/lib/roofSubject";
 import type { PortalPicture } from "@/components/v3/mobile-proposal-client/portal-view";
 
 const measuredOn = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -99,17 +100,20 @@ export async function proposalPictures(p: { id: string; publicId: string; trade?
   try {
     const link = await db.proposalSitePhoto.findUnique({ where: { proposalId: p.id }, select: { roofMeasurementId: true } });
     const row = link
-      ? await db.roofMeasurement.findUnique({ where: { id: link.roofMeasurementId }, select: { address: true, city: true, state: true, zip: true, lat: true, lng: true, instantJson: true, areaSqft: true, squares: true, predominantPitch: true, facetCount: true, createdAt: true } })
+      ? await db.roofMeasurement.findUnique({ where: { id: link.roofMeasurementId }, select: { address: true, city: true, state: true, zip: true, lat: true, lng: true, instantJson: true, provenanceJson: true, areaSqft: true, squares: true, predominantPitch: true, facetCount: true, createdAt: true } })
       : null;
     if (row) {
-      let instant: InstantRoofData | null = null;
-      try { instant = row.instantJson ? (JSON.parse(row.instantJson) as InstantRoofData) : null; } catch { instant = null; }
-      const facts: RoofFacts = { areaSqft: row.areaSqft, squares: row.squares, pitch: row.predominantPitch, facetCount: row.facetCount, measuredOn: measuredOn(row.createdAt) };
+      let parsed: InstantRoofData | null = null;
+      try { parsed = row.instantJson ? (JSON.parse(row.instantJson) as InstantRoofData) : null; } catch { parsed = null; }
+      // The building(s) the estimate is about, not every building on the lot (lib/roofSubject).
+      const subject = roofSubject(row, parsed);
+      const instant = subject.instant;
+      const facts: RoofFacts = { areaSqft: subject.areaSqft, squares: subject.squares, pitch: row.predominantPitch, facetCount: subject.facetCount, measuredOn: measuredOn(row.createdAt) };
       const factsLine = roofFactsLine(facts);
-      const shot = await loadRoofPicture({ ...row, instant });
+      const shot = await loadRoofPicture({ ...row, lat: subject.lat, lng: subject.lng, instant });
       const frame = shot.frame;
       if (frame) {
-        out.push({ kind: "roof-photo", src: `${base}/roof-photo?f=${frame.kind}`, alt: "Your roof from the air, a pin on the house", caption: frame.kind === "ortho" ? "Your roof, as measured from the air" : "Your roof, from the air", facts: factsLine || null, overlay: null, pin: roofPinOnFrame(roofPinPoint(instant, subjectPin(row)), frame) });
+        out.push({ kind: "roof-photo", src: `${base}/roof-photo?f=${frame.kind}`, alt: "Your roof from the air, a pin on the house", caption: frame.kind === "ortho" ? "Your roof, as measured from the air" : "Your roof, from the air", facts: factsLine || null, overlay: null, pin: roofPinOnFrame(roofPinPoint(instant, subjectPin(subject)), frame) });
       } else if (shot.frames) {
         out.push({ kind: "roof-photo", src: `${base}/roof-photo?f=standin`, alt: "Your roof", caption: "Your roof", facts: factsLine || null, overlay: null, pin: null });
       }
