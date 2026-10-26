@@ -1188,7 +1188,7 @@ export function ManualBlueprintContent({ data }: { data: ManualBuilderData }) {
             DISABLED rather than hidden while a write is in flight, and the
             reason travels in `title` and in the masthead chip. On a phone
             View is its eye alone; the label stays for screen readers. */}
-        <div className={styles.barActions}>
+        <div className={styles.barActions} data-tour="proposal-send">
           <Btn
             icon="eye"
             onClick={() => void viewProposal()}

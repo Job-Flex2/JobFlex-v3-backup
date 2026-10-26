@@ -82,6 +82,8 @@ import {
 } from "@/components/v3/dashboard-blueprint/blueprint-data";
 import { NotificationBell } from "@/components/v3/blueprint-shell/notification-bell";
 import { Who } from "@/components/v3/who/who";
+import { TourChip } from "@/components/v3/onboarding-tour/tour-chip";
+import { TourShowMe } from "@/components/v3/onboarding-tour/tour-show-me";
 
 const prefersReducedMotion = () =>
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -248,7 +250,7 @@ export function MobileDashboard({ data: seed, notice, sample = false }: { data?:
   useEffect(() => {
     if (seed) return;
     let alive = true;
-    getDashboardData()
+    getDashboardData({ showTour: new URLSearchParams(window.location.search).get("tour") === "show" })
       .then((res) => {
         if (!alive) return;
         if (res.ok) {
@@ -854,6 +856,7 @@ function DashboardView({ data, notice, sample }: { data: DashboardData; notice?:
           className={styles.tbarBtn}
           type="button"
           aria-label="Open navigation"
+          data-tour="nav-menu"
           aria-expanded={navOpen}
           onClick={() => setNavOpen(true)}
         >
@@ -980,6 +983,8 @@ function DashboardView({ data, notice, sample }: { data: DashboardData; notice?:
                 {data.firstRun.label}
                 <Icon id="i-arrow" />
               </Link>
+              {/* The first-estimate tour, step by step (components/v3/onboarding-tour). */}
+              <TourShowMe className={styles.firstRunHow} />
             </div>
           ) : null}
 
@@ -1428,6 +1433,9 @@ function DashboardView({ data, notice, sample }: { data: DashboardData; notice?:
           </button>
         </div>
 
+        {/* The first-estimate tour, paused or under way (components/v3/onboarding-tour) — at the head of
+            the drawer, where the trial ribbon's dock never covers it. */}
+        <TourChip onPick={() => setNavOpen(false)} />
         <nav className={styles.sbScroll} ref={navScrollRef}>
           <div className={styles.sbIndicator} ref={indicatorRef} />
           {navSections.map((sec) => (
@@ -1457,6 +1465,7 @@ function DashboardView({ data, notice, sample }: { data: DashboardData; notice?:
                     key={item.label}
                     className={cls + (item.locked ? ` ${styles.sbLockd}` : "") + (item.tool ? ` ${styles.sbTool}` : "") + (item.tool && item.soon && !item.locked ? ` ${styles.sbToolSoon}` : "")}
                     data-tone={item.tool?.tone}
+                    data-tour={`nav:${item.href}`}
                     href={item.href as Route}
                     aria-current={isActive ? "page" : undefined}
                     onClick={() => setNavOpen(false)}
@@ -1526,6 +1535,7 @@ function DashboardView({ data, notice, sample }: { data: DashboardData; notice?:
             </div>
           ))}
         </nav>
+
 
         {/* The footer printed the donor's demo identity — the literal strings
             "Ivan" / "Owner" — to every signed-in user, and neither control went

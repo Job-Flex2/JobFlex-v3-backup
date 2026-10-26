@@ -1279,6 +1279,7 @@ function PackageLedger({
     <button
       type="button"
       className="rbd-btn rbd-btn--primary"
+      data-tour="roof-convert"
       disabled={disabled || converting || needsPitch}
       aria-busy={converting || undefined}
       onClick={() => onConvert(pkg, live)}
@@ -1344,7 +1345,7 @@ function PackageLedger({
       <div className="rbd-main">
         {lead && <div className={"rbd-lead" + (needsPitch ? " is-needed" : "")}>{lead}</div>}
 
-        <div className="rbd-secs">
+        <div className="rbd-secs" data-tour="roof-package">
           {/* ROOF SYSTEM */}
           <Section
             id="system"
@@ -2275,7 +2276,7 @@ function PackageLedger({
 
       {/* ESTIMATE — the HVAC summary rail: the answer and the two ways out. */}
       <div className="rbd-side">
-        <aside className="rbd-sum" aria-label="Estimate">
+        <aside className="rbd-sum" aria-label="Estimate" data-tour="roof-price">
           <h3 className="rbd-sum-k">Estimate</h3>
           <div className="rbd-sum-total">
             <span className="rbd-sum-l">{spec.commercial.on ? "Total · commercial" : "Total"}</span>
@@ -2369,7 +2370,7 @@ export default function BuildEstimateCardD({
       </p>
     </div>
   ) : pitchEntry ? (
-    <div className="rbd-pitch">
+    <div className="rbd-pitch" data-tour="roof-pitch">
       <span className="rbd-lbl">Pitch</span>
       <div className="rbd-pitch-row">
         <div className="rbd-pitch-sel">

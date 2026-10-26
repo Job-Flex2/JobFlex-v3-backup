@@ -750,7 +750,7 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
   };
 
   const ledger = (
-    <section className={cx("card")}>
+    <section className={cx("card")} data-tour="smart-lines">
       <div className={cx("sp-h")}>
         <div className={cx("sp-h-txt")}>
           <h2 className={cx("sp-t")}>Line items</h2>
@@ -865,6 +865,7 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
                 <div className={cx("est-h")}>{INTAKE.steps.brief.h}</div>
                 <div className={cx("est-hint")}>{INTAKE.steps.brief.hint}</div>
                 <textarea
+                  data-tour="smart-brief"
                   id={briefId}
                   className={cx("est-area")}
                   aria-label={INTAKE.steps.brief.h}
@@ -1027,6 +1028,7 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
             </span>
             <button
               className={cx("btn", "btn-primary")}
+              data-tour="smart-generate"
               type="button"
               disabled={!canGenerate}
               onClick={() => void generate()}
@@ -1075,6 +1077,7 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
           </button>
           <button
             className={cx("btn", "btn-primary")}
+            data-tour="smart-convert"
             type="button"
             disabled={Boolean(saveBusy) || lines.length === 0}
             onClick={saveAsProposal}
@@ -1117,7 +1120,7 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
           </section>
         </div>
 
-        <div className={cx("sp-rail")}>
+        <div className={cx("sp-rail")} data-tour="smart-price">
           {/* SUMMARY */}
           <section className={cx("card")}>
             <div className={cx("sp-h")}>
@@ -1236,6 +1239,7 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
               where the eye lands after reading the total (owner, 2026-09-02). */}
           <button
             className={cx("btn", "btn-primary", "sp-convert")}
+            data-tour="smart-convert"
             type="button"
             disabled={Boolean(saveBusy) || lines.length === 0}
             onClick={saveAsProposal}

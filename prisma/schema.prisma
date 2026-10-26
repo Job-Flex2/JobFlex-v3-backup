@@ -2641,6 +2641,31 @@ model ApiSpendDaily {
   @@index([day])
 }
 
+// The in-app guide to a person's first estimate (2026-10-26, owner-approved
+// model) — one row per person × organization × tour. `tour` is "first_estimate"
+// (the estimator the landing sold: roof / fence / hvac / smart / deck / manual
+// in `path`) or "next_steps" (send it, follow-ups, payments). `step` is the
+// index of the step the person is on in lib/onboarding/tour-paths; `status` is
+// "active" | "paused" | "completed" | "skipped". No relation to User or
+// Organization, like ApiSpendDaily: a deleted account's rows are inert.
+// Written by actions/onboarding, read by lib/onboarding/progress.
+model OnboardingProgress {
+  id             String    @id @default(cuid())
+  userId         String
+  organizationId String
+  tour           String
+  path           String
+  step           Int       @default(0)
+  status         String    @default("active")
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+  skippedAt      DateTime?
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([userId, organizationId, tour])
+  @@index([organizationId])
+}
+
 // Persistent price-lookup cache for the estimator. Keyed on a normalized query
 // (see normalizeSearchQuery) + location so a repeated lookup reuses a prior
 // fetch when the price source (SerpAPI) is down. productsJson is a JSON-encoded

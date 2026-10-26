@@ -63,7 +63,7 @@ export function FenceEstimatorContent({ initialAddress }: { initialAddress?: str
 
       {/* TOP BAR */}
       <div className="fs-bar">
-        <label className="fs-search">
+        <label className="fs-search" data-tour="fence-address">
           <svg className="ic">
             <use href="#i-pin" />
           </svg>
@@ -83,7 +83,7 @@ export function FenceEstimatorContent({ initialAddress }: { initialAddress?: str
           {/* Two faces, swapped by `.is-done` (set once the fence is laid, cleared
               on reset / a new property): the button then RESTS on the done face
               and shows the offer again only under the pointer. */}
-          <button className="btn btn-ghost btn--sm" type="button" id="fenceBtn" disabled>
+          <button className="btn btn-ghost btn--sm" type="button" id="fenceBtn" data-tour="fence-lay" disabled>
             <span className="fb-idle">
               <svg className="ic">
                 <use href="#i-pen" />
@@ -214,7 +214,7 @@ export function FenceEstimatorContent({ initialAddress }: { initialAddress?: str
               module mounts the live surface only once an address resolves, and
               swaps this copy for the "no browser key" failure when there is no
               key to mount with. */}
-          <div className="stage-canvas" id="stageCanvas">
+          <div className="stage-canvas" id="stageCanvas" data-tour="fence-map">
             <div className="map-slot" id="mapSlot">
               {/* TOPO LEGEND. Filled by the behavior module once the lot's
                   elevation lattice lands: contour interval, fall across the
@@ -313,7 +313,7 @@ export function FenceEstimatorContent({ initialAddress }: { initialAddress?: str
               tallest card, comes last: in this order the columns come out even at 2
               and at 3 across (every order measured at 1280/1440/1920, 2026-10-18). */}
           <div className="fs-settings" id="fsSettings">
-            <div className="card fs-card fs-set fs-set--height">
+            <div className="card fs-card fs-set fs-set--height" data-tour="fence-height">
               <div className="ledger-head">Height</div>
               <div className="seg" id="heights"></div>
             </div>
@@ -415,7 +415,7 @@ export function FenceEstimatorContent({ initialAddress }: { initialAddress?: str
             <div className="card fs-card">
               <div className="stat-strip" id="statStrip"></div>
               <div className="ledger-head">Runs</div>
-              <ul className="runs" id="runsList"></ul>
+              <ul className="runs" id="runsList" data-tour="fence-runs"></ul>
               {/* Same empty-state idiom as #openEmpty below. The page opens with
                   NO runs: every foot in the ledger is either traced on the map or
                   typed by the user, so nothing on the ticket is invented. */}
@@ -449,10 +449,10 @@ export function FenceEstimatorContent({ initialAddress }: { initialAddress?: str
 
         {/* RIGHT RAIL */}
         <aside className="fs-rail">
-          <div className="card tk">
+          <div className="card tk" data-tour="fence-price">
             <div className="tk-body">
               <div className="kpi-lbl">Estimated total</div>
-              <div className="tk-total" id="tkTotal">—</div>
+              <div className="tk-total" id="tkTotal" data-tour="fence-total">—</div>
               <div className="tk-sub" id="tkSub">—</div>
               {/* Good / Better / Best for the picked type — three totals from
                   the same engine; tapping one picks that fence. Hidden until
@@ -462,7 +462,7 @@ export function FenceEstimatorContent({ initialAddress }: { initialAddress?: str
               {/* The contractor's notes: what the package assumed and what to
                   check before the quote goes out (lib/fence/pricing fenceChecks). */}
               <ul className="tk-notes is-hidden" id="tkNotes" aria-label="Notes"></ul>
-              <button className="btn btn-primary" id="convertBtn">
+              <button className="btn btn-primary" id="convertBtn" data-tour="fence-convert">
                 <svg className="ic">
                   <use href="#i-file" />
                 </svg>
@@ -473,7 +473,7 @@ export function FenceEstimatorContent({ initialAddress }: { initialAddress?: str
 
 
 
-          <div className="card fs-card fs-types">
+          <div className="card fs-card fs-types" data-tour="fence-type">
             {/* The catalog's rates are a starting point, not a quote: a
                 contractor who charges $26 for cedar says so BY EDITING CEDAR —
                 click the figure on the row and type the material, labor and

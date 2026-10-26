@@ -19,6 +19,7 @@ import type { Route } from "next";
 import { useBlueprintContent } from "@/components/v3/blueprint-shell/use-blueprint-content";
 import { WEEK_DAY_EVENT, initDashboardContent, initialWeekIso } from "./blueprint-behavior";
 import { leadProfileHref, leadProfileNameOnly, type DashboardData } from "./blueprint-data";
+import { TourShowMe } from "@/components/v3/onboarding-tour/tour-show-me";
 
 export function DashboardContent({ data }: { data: DashboardData }) {
   // The week strip is drawn imperatively, but the day it lands on has to reach
@@ -99,12 +100,16 @@ export function DashboardContent({ data }: { data: DashboardData }) {
                   : "Type the job the way you'd say it to a customer — the estimate writes itself in about two minutes."}
             </div>
           </div>
-          <Link className="btn btn-primary" href={data.firstRun.href as Route} data-cta="first-run">
-            {data.firstRun.label}
-            <svg className="ic">
-              <use href="#i-arrow" />
-            </svg>
-          </Link>
+          <div className="first-run-acts">
+            {/* The first-estimate tour, step by step (components/v3/onboarding-tour). */}
+            <TourShowMe className="btn btn-ghost" />
+            <Link className="btn btn-primary" href={data.firstRun.href as Route} data-cta="first-run">
+              {data.firstRun.label}
+              <svg className="ic">
+                <use href="#i-arrow" />
+              </svg>
+            </Link>
+          </div>
         </div>
       )}
 

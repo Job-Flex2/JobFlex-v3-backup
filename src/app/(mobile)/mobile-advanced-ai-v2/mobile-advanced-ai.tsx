@@ -1074,7 +1074,7 @@ export function MobileSmartProposal() {
     const suggestions = lines.filter((l) => l.flag === "suggested");
     const total = totals.subtotal;
     return (
-      <section className={styles.card} key="lines">
+      <section className={styles.card} key="lines" data-tour="smart-lines">
         <div className={styles.cardHead}>
           <span className={styles.cardLbl}>Line items</span>
           <span className={`${styles.cardSum} ${total ? "" : styles.isZero}`}>
@@ -1405,6 +1405,7 @@ export function MobileSmartProposal() {
                         </label>
                         <textarea
                           className={styles.area}
+                          data-tour="smart-brief"
                           id="maBrief"
                           placeholder="Materials, finishes, conditions, access, square footage if you have it…"
                           value={brief}
@@ -1680,7 +1681,7 @@ export function MobileSmartProposal() {
 
               {/* TOTALS — an estimate sheet: right-aligned tabular numerals and
                   a ruled total row. Every figure is computeTotals'. */}
-              <section className={styles.card} key="totals">
+              <section className={styles.card} key="totals" data-tour="smart-price">
                 <div className={styles.cardHead}>
                   <span className={styles.cardLbl}>Totals</span>
                 </div>
@@ -1913,6 +1914,7 @@ export function MobileSmartProposal() {
             </button>
             <button
               className={`${styles.btn} ${styles.btnPrimary}`}
+              data-tour="smart-convert"
               type="button"
               disabled={saveBusy || lines.length === 0}
               onClick={() => void saveAsProposal()}
@@ -1927,7 +1929,7 @@ export function MobileSmartProposal() {
               disabled={step === 1 || phase === "busy"} onClick={() => goStep(step - 1)}>
               <Icon id="i-chevl" />Back
             </button>
-            <button className={`${styles.btn} ${styles.btnPrimary}`} type="button"
+            <button className={`${styles.btn} ${styles.btnPrimary}`} type="button" data-tour="smart-generate"
               disabled={phase === "busy"} onClick={next}>
               {step === STEP_COUNT ? (
                 <>

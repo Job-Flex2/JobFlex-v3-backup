@@ -26,14 +26,14 @@ export type DashboardRead =
   | { ok: true; data: DashboardData }
   | { ok: false; reason: "no-org" | "signed-out" | "no-access" };
 
-export async function getDashboardData(): Promise<DashboardRead> {
+export async function getDashboardData(opts: { showTour?: boolean } = {}): Promise<DashboardRead> {
   try {
     // The Overview's KPIs and pipeline money: for whoever may open the
     // Overview (lib/roleRoutes). A limited role is sent to its own home by
     // the page gate; a crafted call gets the same answer (2026-10-12).
     const { role } = await requireOrg();
     if (!roleMayOpen(role, "/dashboard")) return { ok: false, reason: "no-access" };
-    return { ok: true, data: await buildDashboardData() };
+    return { ok: true, data: await buildDashboardData({ showTour: opts.showTour === true }) };
   } catch (err) {
     if (err instanceof NoOrgError) return { ok: false, reason: "no-org" };
     if (err instanceof UnauthorizedError) return { ok: false, reason: "signed-out" };

@@ -20,6 +20,7 @@ import { money, relative } from "@/lib/format";
 import { parseTradeTypes } from "@/lib/tradeTypes";
 import { firstEstimateTarget } from "@/lib/firstEstimate";
 import { readCustomPages } from "@/lib/customPageAccess";
+import { estimatesSoFar as estimatesSoFarOf } from "@/lib/onboarding/progress";
 import { actorsOf, whoOfEvent } from "@/lib/activityLog";
 import { isOrgNameUnset } from "@/lib/orgName";
 import {
@@ -148,7 +149,7 @@ function buildRange(
  * decides whether that means a redirect (the server page) or an error state
  * (the handheld build, which reaches this through a server action).
  */
-export async function buildDashboardData(): Promise<DashboardData> {
+export async function buildDashboardData(opts: { showTour?: boolean } = {}): Promise<DashboardData> {
   const { organizationId, role, user } = await requireOrg();
   const userId = user.id;
 
@@ -191,12 +192,7 @@ export async function buildDashboardData(): Promise<DashboardData> {
       }),
       readCustomPages(organizationId).catch(() => null),
     ]).then(([org, pages]) => (org ? { ...org, pages } : null)),
-    Promise.all([
-      db.proposal.count({ where: { organizationId } }),
-      db.aiEstimate.count({ where: { organizationId } }),
-      db.roofMeasurement.count({ where: { organizationId } }),
-      db.hvacEstimate.count({ where: { organizationId } }),
-    ]).then((c) => c[0] + c[1] + c[2] + c[3]),
+    estimatesSoFarOf(organizationId),
     // Owners/admins see the Lead Center nudge until the org is matchable
     // (geocoded address + at least one trade). Everyone else never sees it.
     role === "OWNER" || role === "ADMIN"
@@ -410,7 +406,9 @@ export async function buildDashboardData(): Promise<DashboardData> {
     leadProfile:
       needsTrades || needsAddress || needsName ? { needsCompany, needsAddress, needsTrades, needsName } : null,
     firstRun:
-      firstRunOrg && estimatesSoFar === 0
+      // `?tour=show` (2026-10-26): the card — and its "Show me how" — for a
+      // company that has estimates already, so the tour can be started there.
+      firstRunOrg && (estimatesSoFar === 0 || opts.showTour)
         ? firstEstimateTarget(parseTradeTypes(firstRunOrg.tradeTypesJson), firstRunOrg.landingIndustry, firstRunOrg.pages)
         : null,
     kpis: {

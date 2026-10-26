@@ -62,6 +62,7 @@ import { ACTIVE_ENGINE_HREFS } from "@/components/v3/estimators-blueprint/estima
 import styles from "./mobile-nav.module.css";
 import "@/components/v3/estimators-blueprint/estimators-global.css";
 import { MobileSprite } from "./sprite";
+import { TourChip } from "@/components/v3/onboarding-tour/tour-chip";
 
 const prefersReducedMotion = () =>
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -255,6 +256,7 @@ export function MobileNav() {
         key={item.label}
         className={cls + (item.locked ? ` ${styles.sbLockd}` : "") + (tool ? ` ${styles.sbTool}` : "") + (tool && soonMark ? ` ${styles.sbToolSoon}` : "")}
         data-tone={tool?.tone}
+        data-tour={`nav:${item.href}`}
         href={item.href as Route}
         aria-current={isActive ? "page" : undefined}
         onClick={() => setOpen(false)}
@@ -338,6 +340,7 @@ export function MobileNav() {
           className={styles.tbarBtn}
           type="button"
           aria-label="Open navigation"
+          data-tour="nav-menu"
           aria-expanded={open}
           onClick={() => setOpen(true)}
         >
@@ -441,6 +444,9 @@ export function MobileNav() {
           </button>
         </div>
 
+        {/* The first-estimate tour, paused or under way (components/v3/onboarding-tour) — at the head of
+            the drawer, where the trial ribbon's dock never covers it. */}
+        <TourChip onPick={() => setOpen(false)} />
         <nav className={styles.sbScroll} ref={navScrollRef}>
           <div className={styles.sbIndicator} ref={indicatorRef} />
           {sections.map((sec) => (
@@ -478,6 +484,7 @@ export function MobileNav() {
             </div>
           ))}
         </nav>
+
 
         {/* The account row printed the donor's demo identity — the literal
             strings "I" / "Ivan" / "Owner" — to every signed-in user, and both

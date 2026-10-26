@@ -2241,7 +2241,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     <>
       {linkedStrip}
       {/* ===== INTAKE: measure a roof ===== */}
-      <section className={"ppanel" + (panel === "intake" ? "" : " is-hidden")} data-panel="intake">
+      <section className={"ppanel" + (panel === "intake" ? "" : " is-hidden")} data-panel="intake" data-tour="roof-intake">
         <div className="card rf-card">
           <div className="rf-head rf-head--bar">
             <div>
@@ -2260,7 +2260,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
             }}
           >
             <div className="addr-grid">
-              <label className="est-field addr-wide">
+              <label className="est-field addr-wide" data-tour="roof-address">
                 <span className="est-lbl">Address</span>
                 <input ref={addrRef} className="est-in" id="addr" name="roof-location-query" type="search" placeholder="4812 Maple Ave" autoComplete="new-password" aria-describedby="rf-address-status" />
               </label>
@@ -2352,7 +2352,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
             )}
 
             <div className="rf-actions">
-              <button className="btn btn-primary btn--sm" type="submit" id="instantBtn" disabled={busy || addressLoading || !measurementEnabled}>
+              <button className="btn btn-primary btn--sm" type="submit" id="instantBtn" data-tour="roof-measure" disabled={busy || addressLoading || !measurementEnabled}>
                 <svg className="ic" aria-hidden="true"><use href="#i-roof" /></svg>
                 {measurementBusy || instantBusy ? "Measuring…" : "Measure this roof"}
               </button>
@@ -2411,7 +2411,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
       </section>
 
       {/* ===== MEASUREMENT IN PROGRESS ===== */}
-      <section className={"ppanel" + (panel === "measuring" ? "" : " is-hidden")} data-panel="measuring">
+      <section className={"ppanel" + (panel === "measuring" ? "" : " is-hidden")} data-panel="measuring" data-tour="roof-measuring">
         <div className="card rf-card measuring">
           <div className="ms-body">
             <div className="ms-num">{msReport}</div>
@@ -2448,7 +2448,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
       </section>
 
       {/* ===== RESULT ===== */}
-      <section className={"ppanel" + (panel === "report" && (measurement || manual) ? "" : " is-hidden")} data-panel="report">
+      <section className={"ppanel" + (panel === "report" && (measurement || manual) ? "" : " is-hidden")} data-panel="report" data-tour="roof-report">
         {(measurement || manual) && (
           <>
             {manual && (
@@ -2579,7 +2579,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
               </div>
             )}
 
-            <div className="card rf-hero" id="rfHero">
+            <div className="card rf-hero" id="rfHero" data-tour="roof-hero">
               <HeroCell l="Total area" v={totals?.areaSqft != null ? num(totals.areaSqft) : "—"} h={isSolar ? "sq ft · estimated" : "sq ft"} />
               <HeroCell l="Roofing squares" v={totals?.squares != null ? num(totals.squares, 1) : "—"} h="× 100 sq ft" accent />
               <HeroCell l="Roof pitch" v={pitchLabelShown} h={pitchHint} />
@@ -2978,6 +2978,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                             className="btn btn-primary btn--sm"
                             type="button"
                             id="convertBtn"
+                            data-tour="roof-convert-lines"
                             disabled={convertBusy || isRecon || sampleEstimate}
                             title={sampleEstimate ? "Sample lines (AI is off) can’t become a proposal — build the package instead." : linked && !linked.lock ? `Put these lines on ${linked.ref}` : "Create a draft proposal from these lines"}
                             onClick={() => void convert()}

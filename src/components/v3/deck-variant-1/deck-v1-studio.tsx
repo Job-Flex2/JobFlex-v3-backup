@@ -3214,7 +3214,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
           <div className="v1-q" role="region" aria-label="Design the deck">
             <div className="v1-q-scroll" ref={qScrollRef}>
               {stepList.map((section, index) => (
-                <section className="v1-form-section" key={section.id} data-deck-section={section.id} aria-labelledby={`v1-section-${section.id}`}>
+                <section className="v1-form-section" key={section.id} data-deck-section={section.id} data-tour={`deck-${section.id}`} aria-labelledby={`v1-section-${section.id}`}>
                   <div className="v1-form-heading"><span className="v1-section-number" aria-hidden="true">{index + 1}</span><h2 className="v1-question" id={`v1-section-${section.id}`} tabIndex={-1}>{section.question}</h2></div>
                   <Scope step={scopeOf(section.id)}>
                     {/* A saved deck in the preview: shown as answered, not to be changed; its print links are in the band above. */}
@@ -3225,7 +3225,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
                 </section>
               ))}
             </div>
-            <footer className="v1-q-foot">
+            <footer className="v1-q-foot" data-tour="deck-price">
               <span className="v1-foot-sum">
                 <span className="v1-foot-price" aria-label="Deck price before tax" aria-live="polite" data-v1-price>{money(pkg.subtotal)}</span>
                 <span className="v1-foot-note" aria-hidden="true">before tax</span>

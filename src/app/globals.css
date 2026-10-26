@@ -257,6 +257,16 @@ body {
   --msheet-cancel-h: 52px;
 }
 
+/* ── The first-estimate tour (2026-10-26, components/v3/onboarding-tour) ────
+   Above the handheld drawer (90) and the shell's dialogs (120), under the
+   Smart estimator's working overlay and its questions (205/210), so a question
+   the estimator asks is never covered. The dim is the sheets' scrim. */
+:root {
+  --tour-z: 150;
+  --tour-pop-w: 340px;
+  --tour-sheet-max-h: 46%;
+}
+
 @layer utilities {
   .pt-safe { padding-top: var(--safe-top); }
   .pb-safe { padding-bottom: var(--safe-bottom); }

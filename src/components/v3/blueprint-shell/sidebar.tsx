@@ -25,6 +25,7 @@ import { quotaPill, useNavBadges, useNavLimits, useNavLimitsExempt, type NavLimi
 import { DoorSwitch } from "./door-switch";
 import { SignOutButton } from "./sign-out";
 import { foldShortcutLabel } from "./sidebar-fold";
+import { TourChip } from "@/components/v3/onboarding-tour/tour-chip";
 
 export { NAV_SECTIONS };
 
@@ -175,6 +176,7 @@ export function Sidebar({
                   key={item.label}
                   className={`sb-link${tool ? " sb-tool" : ""}${here ? " active" : ""}${child ? " sb-sub-link" : ""}${current ? " sb-sub-on" : ""}${item.locked ? " sb-lockd" : ""}${tool && soonMark ? " sb-tool-soon" : ""}`}
                   data-tone={tool?.tone}
+                  data-tour={`nav:${item.href}`}
                   aria-current={current ? "page" : undefined}
                   href={item.href as Route}
                   onClick={(e) => onRowClick(e, item.href)}
@@ -328,6 +330,9 @@ export function Sidebar({
           );
         })}
       </nav>
+
+      {/* The first-estimate tour, paused or under way (components/v3/onboarding-tour). */}
+      <TourChip />
 
       {/* The account block was a dead <button> showing the hardcoded literals
           "Ivan" / "Owner" — the donor's demo identity, displayed to every user

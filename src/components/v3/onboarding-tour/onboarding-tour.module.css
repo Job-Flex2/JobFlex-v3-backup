@@ -1,0 +1,417 @@
+/* THE FIRST-ESTIMATE TOUR (2026-10-26). Portalled to <body>, outside the
+   dashboard shell's resets, so single-class rules hold. Blueprint: white
+   cards in a 2px ink frame, near-square corners, one blue action, flat
+   numbered squares (no shadow behind them). The page's dim is the sheets'
+   scrim, cut round the lit element by a box-shadow on its frame. */
+
+.root {
+  position: relative;
+  z-index: var(--tour-z);
+  font-family: var(--font-sans);
+  color: var(--ink);
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: var(--tour-z);
+  background: var(--msheet-scrim);
+}
+
+/* ── The lit element ─────────────────────────────────────────────────── */
+.frame {
+  position: fixed;
+  z-index: var(--tour-z);
+  pointer-events: none;
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  outline: 2px solid var(--paper-deep);
+  outline-offset: 0;
+}
+.frameDim {
+  box-shadow: 0 0 0 200vmax var(--msheet-scrim);
+}
+.tag {
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  transform: translateY(-100%);
+  padding: 3px 7px;
+  background: var(--ink);
+  color: var(--paper-deep);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+}
+
+/* ── Where the card hangs ────────────────────────────────────────────── */
+.deskLayer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: calc(var(--tour-z) + 1);
+  pointer-events: none;
+}
+/* A phone: a fixed layer that states its size; the sheet hangs from its foot. */
+.layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: calc(var(--tour-z) + 1);
+  pointer-events: none;
+}
+
+.card {
+  pointer-events: auto;
+  box-sizing: border-box;
+  background: var(--paper-deep);
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+}
+.pop {
+  position: absolute;
+  width: min(var(--tour-pop-w), calc(100% - 24px));
+  padding: 16px 18px 16px;
+}
+.center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(480px, calc(100% - 32px));
+  max-height: calc(100% - 48px);
+  overflow: auto;
+  padding: 24px;
+}
+.sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: var(--tour-sheet-max-h);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-width: 2px 0 0;
+  border-radius: 0;
+  padding: 22px var(--msheet-pad-x) calc(var(--msheet-foot-pad-y) + var(--msheet-safe-b));
+}
+/* The lit control is a bar on the screen's foot (Save & send, a sticky total): the sheet hangs from the top. */
+.sheetTop {
+  top: 0;
+  bottom: auto;
+  border-width: 0 0 2px;
+  padding-top: calc(18px + env(safe-area-inset-top, 0px));
+  padding-bottom: 16px;
+}
+/* The welcome and the next steps are taller: the sheet's own ceiling. */
+.sheet[aria-modal="true"] {
+  max-height: var(--msheet-max-h);
+}
+.grab {
+  position: absolute;
+  top: var(--msheet-grab-top);
+  left: 50%;
+  width: var(--msheet-grab-w);
+  height: var(--msheet-grab-h);
+  margin-left: calc(var(--msheet-grab-w) / -2);
+  background: var(--ink-line);
+}
+
+/* ── Type ────────────────────────────────────────────────────────────── */
+.kicker {
+  margin: 0 40px 6px 0;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.title {
+  margin: 0 36px 0 0;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  color: var(--ink);
+  outline: none;
+  overflow-wrap: anywhere;
+}
+.center .title {
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+.body {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.wait {
+  margin: 8px 0 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+/* ── The plan on the welcome card, and the next steps ───────────────── */
+.plan,
+.nextList {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--ink);
+}
+.plan li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--ink-line);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.sq {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--ink);
+  background: var(--paper-deep);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.sqDone {
+  background: var(--emerald);
+  border-color: var(--emerald);
+  color: var(--paper-deep);
+}
+.nextList li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ink-line);
+}
+.nextTxt {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.nextT {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.nextB {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+.stamp {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 3px 7px;
+  border: 1.5px solid var(--ink-line);
+  border-radius: var(--r-sm);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.stampOk {
+  border-color: var(--emerald);
+  background: color-mix(in srgb, var(--emerald) 10%, transparent);
+  color: var(--emerald);
+}
+
+/* ── Actions ─────────────────────────────────────────────────────────── */
+.acts {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.primary,
+.small {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--paper-deep);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color 140ms var(--ease-out), box-shadow 140ms var(--ease-out), transform 140ms var(--ease-out);
+}
+.primary:hover,
+.small:hover {
+  background: var(--accent-ink);
+  box-shadow: 2px 2px 0 var(--ink);
+  transform: translate(-1px, -1px);
+}
+.small {
+  align-self: center;
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.link {
+  appearance: none;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.link:hover {
+  color: var(--accent);
+}
+.hint {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.close {
+  appearance: none;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1.5px solid transparent;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+.close:hover {
+  border-color: var(--ink);
+}
+.close svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+.primary:focus-visible,
+.small:focus-visible,
+.link:focus-visible,
+.close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* A phone: 44px targets, the main action across the sheet. */
+.sheet .close {
+  top: 12px;
+  right: 8px;
+  width: 44px;
+  height: 44px;
+}
+.sheet .acts {
+  gap: 4px 16px;
+}
+.sheet .primary {
+  flex: 1 1 100%;
+  min-height: 48px;
+  font-size: 14px;
+}
+.sheet .link {
+  min-height: 44px;
+}
+.sheet .small {
+  min-height: 44px;
+}
+.sheet .plan li {
+  min-height: 40px;
+}
+
+/* ── Motion: the frame glides between steps, the card fades in ───────── */
+@media (prefers-reduced-motion: no-preference) {
+  .frame {
+    transition: top 220ms var(--ease-out), left 220ms var(--ease-out), width 220ms var(--ease-out), height 220ms var(--ease-out), box-shadow 180ms var(--ease-out);
+  }
+  .pop {
+    transition: top 220ms var(--ease-out), left 220ms var(--ease-out);
+    animation: tourIn 180ms var(--ease-out);
+  }
+  .sheet {
+    animation: tourUp 240ms var(--ease-out);
+  }
+  .center,
+  .scrim {
+    animation: tourFade 180ms var(--ease-out);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .primary,
+  .small {
+    transition: none;
+  }
+  .primary:hover,
+  .small:hover {
+    transform: none;
+  }
+}
+@keyframes tourIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes tourUp {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+@keyframes tourFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.sheet.sheetTop {
+  animation: none;
+}
+.sheetTop .grab {
+  display: none;
+}

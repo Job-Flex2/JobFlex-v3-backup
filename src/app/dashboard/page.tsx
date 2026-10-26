@@ -31,10 +31,11 @@ export const metadata: Metadata = {
     "The JobFlex operations overview — proposals, revenue, schedule and lead flow on one sheet.",
 };
 
-export default async function DashboardPage() {
+// `searchParams` is optional: /dashboard/beige renders this page bare.
+export default async function DashboardPage({ searchParams }: { searchParams?: Promise<{ tour?: string | string[] }> }) {
   let data: DashboardData;
   try {
-    data = await buildDashboardData();
+    data = await buildDashboardData({ showTour: (await searchParams)?.tour === "show" });
   } catch (err) {
     if (err instanceof UnauthorizedError) redirect("/auth/login?next=%2Fdashboard");
     // NOT a redirect. This page is where every other blueprint page sends a

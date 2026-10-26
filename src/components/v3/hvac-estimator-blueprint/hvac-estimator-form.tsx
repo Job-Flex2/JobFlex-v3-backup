@@ -239,7 +239,7 @@ const JOB_ICONS: Record<JobKind, string> = {
    and the walk's clip live in it — and is hidden, not removed. */
 function Step({ k, meta, open, children }: { k: StepKey; meta: StepMeta; open: boolean; children: React.ReactNode }) {
   return (
-    <section className={cx("st", open && "st-open")} id={STEP_IDS[k]} hidden={!open} aria-current={open ? "step" : undefined}>
+    <section className={cx("st", open && "st-open")} id={STEP_IDS[k]} data-tour={`hvac-${k}`} hidden={!open} aria-current={open ? "step" : undefined}>
       <div className={cx("st-h")}>
         <span className={cx("st-n")} aria-hidden="true">{meta.n}</span>
         <span className={cx("st-t")}>
@@ -1366,7 +1366,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
       </dl>
       <div className={cx("sum-a")}>
         <button type="button" className={cx("btn", "btn-ghost", "btn-sm")} disabled={!S.estimate.done || saving} onClick={() => void save()}>{saving ? "Saving…" : savedId ? "Saved" : "Save"}</button>
-        <button type="button" className={cx("btn", "btn-primary", "btn-sm")} disabled={!S.estimate.done || converting || !(lines && (lines.materials.length || lines.labor.length))} onClick={() => void convert()}><svg className={cx("ic")}><use href="#i-doc" /></svg>{converting ? "Converting…" : "Convert to proposal"}</button>
+        <button type="button" className={cx("btn", "btn-primary", "btn-sm")} data-tour="hvac-convert" disabled={!S.estimate.done || converting || !(lines && (lines.materials.length || lines.labor.length))} onClick={() => void convert()}><svg className={cx("ic")}><use href="#i-doc" /></svg>{converting ? "Converting…" : "Convert to proposal"}</button>
       </div>
     </aside>
   );
@@ -2068,7 +2068,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
           {tiers.length > 1 && (
             <div className={cx("dsec")}>
             <div className={cx("kpi-lbl", "dsec-k")}>Equipment</div>
-            <div className={cx("tiers")} role="radiogroup" aria-label="Good, better, best" onKeyDown={radioKeys}>
+            <div className={cx("tiers")} data-tour="hvac-tiers" role="radiogroup" aria-label="Good, better, best" onKeyDown={radioKeys}>
               {tiers.map((t) => {
                 const on = (engine?.selection.chosen?.item.id ?? "") === t.candidate.item.id;
                 return (
@@ -2375,7 +2375,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
             <span><span className={cx("kpi-lbl")}>Subtotal</span><span className={cx("bo-total-v")} style={{ marginLeft: 12 }}>{money2(subtotal)}</span></span>
             <span className={cx("head-acts")}>
               <button type="button" className={cx("btn", "btn-ghost", "btn-sm")} disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : savedId ? "Saved · save again" : "Save"}</button>
-              <button type="button" className={cx("btn", "btn-primary", "btn-sm")} disabled={converting || !(lines.materials.length || lines.labor.length)} onClick={() => void convert()}>{converting ? "Converting…" : "Convert to proposal"}</button>
+              <button type="button" className={cx("btn", "btn-primary", "btn-sm")} data-tour="hvac-convert" disabled={converting || !(lines.materials.length || lines.labor.length)} onClick={() => void convert()}>{converting ? "Converting…" : "Convert to proposal"}</button>
             </span>
           </div>
           <details className={cx("how", "how-wide")}>

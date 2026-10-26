@@ -28,7 +28,13 @@ export type ActivationEvent =
   // The cancel window's reasons and the ask for more trial days (2026-10-20):
   // the reason keys and the days asked, never the owner's own words.
   | "subscription_cancel_reason"
-  | "trial_extension_requested";
+  | "trial_extension_requested"
+  // The first-estimate tour (2026-10-26, actions/onboarding): the path and the
+  // step's id (lib/onboarding/tour-paths), never what was typed.
+  | "tour_started"
+  | "tour_step"
+  | "tour_completed"
+  | "tour_skipped";
 
 export type EstimatorKind = "smart" | "roof" | "fence" | "hvac" | "video";
 /** Where a proposal came from; "duplicate" can never be an org's first. */

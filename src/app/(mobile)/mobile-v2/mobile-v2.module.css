@@ -542,6 +542,29 @@
   transform: translate(-1px, -1px);
   box-shadow: 2px 2px 0 var(--ink);
 }
+/* "Show me how" (2026-10-26): the tour's door, the quiet plate under the button. */
+.firstRunHow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius);
+  background: var(--paper-deep);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink);
+  cursor: pointer;
+}
+.firstRunHow:active {
+  background: var(--accent-soft);
+}
 .pageHead {
   padding-top: 2px;
 }

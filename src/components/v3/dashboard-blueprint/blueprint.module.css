@@ -512,6 +512,7 @@
 .bp :global(.first-run-title) { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
 .bp :global(.first-run-txt) { margin-top: 4px; font-size: 13.5px; font-weight: 500; line-height: 1.45; color: var(--ink-soft); }
 .bp :global(.first-run .btn) { flex: 0 0 auto; }
+.bp :global(.first-run-acts) { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .bp :global(svg.ic.banner-pin) { width: 26px; height: 26px; color: var(--warning); }
 .bp :global(.banner-body) { min-width: 0; }
 .bp :global(.banner-kicker) {

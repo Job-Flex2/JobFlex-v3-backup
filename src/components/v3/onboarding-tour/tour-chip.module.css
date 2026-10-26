@@ -1,0 +1,105 @@
+/* The tour's sidebar chip. It lives inside the shell's sidebar and drawers,
+   so its root carries data-nest and every rule here has two classes — the
+   shell's margin/padding reset ties a single class and wins on prod. */
+
+.wrap .chip {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 6px 10px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 140ms var(--ease-out), background-color 140ms var(--ease-out);
+}
+.wrap .chip:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.wrap .chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.wrap .count {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  min-width: 32px;
+  height: 28px;
+  margin: 0;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--ink);
+  background: var(--paper-deep);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.wrap .txt {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+.wrap .name {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wrap .sub {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wrap .sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.wrap.wrap {
+  position: relative;
+  margin: 8px 12px 4px;
+  padding: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wrap .chip {
+    transition: none;
+  }
+}
+
+/* The desk sidebar folded to its icon rail: the count square alone. */
+:global([data-sb="fold"]) .wrap.wrap {
+  margin: 8px 10px 4px;
+}
+:global([data-sb="fold"]) .wrap .chip {
+  justify-content: center;
+  padding: 6px 0;
+  border-color: transparent;
+}
+:global([data-sb="fold"]) .wrap .txt {
+  display: none;
+}

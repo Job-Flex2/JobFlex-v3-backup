@@ -65,6 +65,8 @@ import { trialView, type TrialView } from "@/lib/cardlessTrial";
 import { trialDismissCookie, trialNoticeDismissed } from "@/lib/trialNotice";
 import { TrialRibbon } from "@/components/v3/trial-card/trial-card";
 import { PaymentRibbon } from "@/components/v3/payment-ribbon/payment-ribbon";
+import { tourView, type TourView } from "@/lib/onboarding/progress";
+import { OnboardingTour } from "@/components/v3/onboarding-tour/onboarding-tour";
 
 /** Membership.role is a raw enum-ish string ("OWNER", "INSTALLER"). The
  *  sidebar shows it to a human, so title-case it. */
@@ -139,6 +141,8 @@ export default async function DashboardBlueprintLayout({
   let startTrial: MetaStartTrialEvent | null = null;
   // Meta's CompleteRegistration, due on the live site in the first hour of a company (lib/metaCompleteRegistration).
   let registered: MetaCompleteRegistrationEvent | null = null;
+  // The first-estimate tour (lib/onboarding/progress): its path, step and whether it offers itself.
+  let tour: TourView | null = null;
   try {
     const ctx = await requireOrg();
     role = ctx.role;
@@ -205,6 +209,7 @@ export default async function DashboardBlueprintLayout({
     plan = planRow === undefined ? null : (planRow?.plan ?? "FREE");
     paymentFailed = ["PAST_DUE", "UNPAID"].includes(planRow?.status ?? "");
     if (planRow?.status === "TRIALING") startTrial = await metaStartTrialEvent(ctx.organizationId);
+    tour = await tourView({ user: ctx.user, organizationId: ctx.organizationId, role: ctx.role }).catch(() => null);
   } catch {
     // Signed out, or no membership yet. The page decides what happens next.
   }
@@ -263,6 +268,8 @@ export default async function DashboardBlueprintLayout({
       {/* Outside the shell: on a phone the mapped handheld pages replace `children`, and this must mount on both. */}
       {startTrial ? <MetaStartTrial event={startTrial} /> : null}
       {registered ? <MetaPixelOnce name="CompleteRegistration" organizationId={registered.organizationId} /> : null}
+      {/* Outside the shell for the same reason: the desk and the handheld trees both carry the tour. */}
+      {tour ? <OnboardingTour view={tour} /> : null}
       <ResponsiveDashboardShell
         sidebarFolded={sidebarFolded}
         user={user}

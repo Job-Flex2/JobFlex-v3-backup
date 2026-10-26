@@ -89,6 +89,7 @@ export function Card({
   return (
     <section
       id={id}
+      data-tour={`proposal-card-${num}`}
       // The reveal cascade collects `[data-rv]` rather than walking
       // `.content.children`: this page renders ONE wrapper element, so a
       // children-walk would animate the whole column as a single block and

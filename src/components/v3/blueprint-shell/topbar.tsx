@@ -37,7 +37,7 @@ export function Topbar() {
 
   return (
     <header className="topbar">
-      <button className="icon-btn nav-burger" id="navBurger" type="button" aria-label="Open navigation">
+      <button className="icon-btn nav-burger" id="navBurger" data-tour="nav-menu" type="button" aria-label="Open navigation">
         <svg className="ic">
           <use href="#i-menu" />
         </svg>

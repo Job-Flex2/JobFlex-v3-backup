@@ -257,6 +257,19 @@ monthly" is one 12px line (weight 600) under the price.
   stage Mark paid green, Send invoice blue, Remind amber. Sales reps and
   estimators see the stages and what is left, never the billing buttons.
   Phone: the same pieces inside the card, every action 44px.
+- The first-estimate tour (owner's brief, 2026-10-26;
+  [onboarding-tour](src/components/v3/onboarding-tour/onboarding-tour.tsx)):
+  the lit element gets a 2px ink frame with a white hairline outside it and
+  a small ink tag "2/6" on its top-left corner; the rest of the page takes
+  the sheets' scrim (`--msheet-scrim`), lifted while a field inside the frame
+  is being typed in. The dim never takes a click. The card is white in a 2px
+  ink frame: a blue 11px caps kicker ("First estimate · step 2 of 6"), a 17px
+  900 caps title, 14px body, one blue Next (only on steps with nothing to
+  do) and "Skip tour" as an underlined ink link. Desk: beside the element;
+  phone: a bottom sheet on the `--msheet-*` geometry, hung from the top when
+  the element is a bar on the screen's foot. Numbered squares are flat. The
+  sidebar chip is one 44px row: an ink-framed count square, "First estimate"
+  and a blue sub-line.
 - Roof estimator buildings (owner, 2026-10-26, ticket 8KETUL). Before the
   order the intake map's pin can be dragged (or the map tapped) onto the
   building to measure, with "Measure the building under the pin" in 15px 800
