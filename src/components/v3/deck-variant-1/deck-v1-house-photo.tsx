@@ -673,9 +673,14 @@ export function HousePhotoCard({ hp, design }: { hp: HousePhotoState; design: De
       )}
       <PhotoInputs fileInput={hp.setFileInput} camInput={hp.setCamInput} onFile={hp.onFile} />
       {hp.busy ? (
-        <p className="v1-hint" role="status" data-deck-house-photo-busy>
-          {hp.busy}
-        </p>
+        // One square with the line running round its frame, the step in words beside it (owner, 2026-10-26).
+        <div className="v1-hp-busy" role="status" aria-live="polite" data-deck-house-photo-busy>
+          <svg className="v1-hp-busy-box" viewBox="0 0 56 56" aria-hidden="true">
+            <rect className="v1-hp-busy-track" x="2" y="2" width="52" height="52" />
+            <rect className="v1-hp-busy-run" x="2" y="2" width="52" height="52" />
+          </svg>
+          <span>{hp.busy}</span>
+        </div>
       ) : null}
       {hp.error ? <p className="v1-call v1-call-bad">{hp.error}</p> : null}
       {hp.clientPhotos ? (

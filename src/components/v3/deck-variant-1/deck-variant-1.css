@@ -783,6 +783,16 @@
 .jf-deck-v1 .v1-hp-built-text { display: grid; gap: 4px; min-width: 0; }
 .jf-deck-v1 .v1-hp-built-text b { font-size: 15px; font-weight: 800; }
 .jf-deck-v1 .v1-hp-built-text > span { font-size: 13.5px; color: var(--ink-soft); }
+/* Reading the picture (owner, 2026-10-26): one square with the line running round its frame and the step in words
+   beside it — not a spinner, not a bar. The line runs while the work runs; the words say which step. */
+.jf-deck-v1 .v1-hp-busy { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1.5px solid var(--ink); border-radius: var(--r-sm); background: var(--paper-deep); font-size: 13.5px; font-weight: 600; line-height: 1.4; }
+.jf-deck-v1 .v1-hp-busy-box { flex: none; display: block; width: 44px; height: 44px; }
+.jf-deck-v1 .v1-hp-busy-box rect { fill: none; stroke-width: 3; }
+.jf-deck-v1 .v1-hp-busy-track { stroke: var(--ink-line); }
+/* The frame is 52 × 52 in the box, 208 round: one side's worth of line, the rest gap, the offset walking it round. */
+.jf-deck-v1 .v1-hp-busy-run { stroke: var(--accent); stroke-dasharray: 52 156; animation: v1-hp-run 1.6s linear infinite; }
+@keyframes v1-hp-run { to { stroke-dashoffset: -208; } }
+@media (prefers-reduced-motion: reduce) { .jf-deck-v1 .v1-hp-busy-run { animation: none; stroke-dasharray: 4 4; } }
 .jf-deck-v1 .v1-hp-clients { display: grid; gap: 2px; padding-top: 8px; border-top: 1px solid var(--ink-line); }
 .jf-deck-v1 .v1-hp-client-row { display: grid; gap: 2px; padding: 9px 4px; text-align: left; border-bottom: 1px solid var(--ink-line); }
 .jf-deck-v1 .v1-hp-client-row > span:first-child { display: flex; align-items: center; gap: 8px; font-size: 14px; }
@@ -805,12 +815,13 @@
 .jf-deck-v1 .v1-hp-l-win { stroke: var(--accent); stroke-width: 2.5; fill: rgba(24, 84, 160, 0.18) !important; }
 .jf-deck-v1 .v1-hp-l-door { stroke: #fff; stroke-width: 3; fill: rgba(10, 10, 10, 0.28) !important; }
 .jf-deck-v1 .v1-hp-pic svg .is-sel { stroke: #fff; stroke-width: 4; fill: rgba(255, 255, 255, 0.32) !important; }
-.jf-deck-v1 .v1-hp-handle { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border: 2.5px solid #fff; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 1.5px var(--ink), 0 2px 6px rgba(0, 0, 0, 0.35); cursor: grab; touch-action: none; }
+/* The handles and the parts' chips are Blueprint (owner, 2026-10-26: "circles are not blueprint style"): near-square
+   corners, an ink ring, no blurred shadow. A corner is ink, a window and a step blueprint, a door white. */
+.jf-deck-v1 .v1-hp-handle { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border: 2.5px solid #fff; border-radius: var(--r-sm); background: var(--accent); box-shadow: 0 0 0 1.5px var(--ink); cursor: grab; touch-action: none; }
 .jf-deck-v1 .v1-hp-handle.is-corner { background: var(--ink); }
-.jf-deck-v1 .v1-hp-handle.is-door { border-radius: 3px; background: #fff; box-shadow: 0 0 0 2px var(--ink); }
+.jf-deck-v1 .v1-hp-handle.is-door { background: #fff; box-shadow: 0 0 0 2px var(--ink); }
 .jf-deck-v1 .v1-hp-handle.is-small { width: 14px; height: 14px; margin: -7px 0 0 -7px; }
 .jf-deck-v1 .v1-hp-handle.is-win { width: 16px; height: 16px; margin: -8px 0 0 -8px; }
-.jf-deck-v1 .v1-hp-handle.is-jog { border-radius: 3px; }
 .jf-deck-v1 .v1-hp-handle.is-sel { background: #fff; box-shadow: 0 0 0 3px var(--accent); }
 .jf-deck-v1 .v1-hp-handle:active { cursor: grabbing; }
 .jf-deck-v1 .v1-hp-tools { justify-content: center; }
@@ -819,7 +830,7 @@
 .jf-deck-v1 .v1-hp-pic svg .v1-hp-l-sec.is-out { fill: rgba(24, 84, 160, 0.2) !important; }
 .jf-deck-v1 .v1-hp-pic svg .v1-hp-l-sec.is-back { fill: rgba(10, 10, 10, 0.26) !important; }
 .jf-deck-v1 .v1-hp-pic svg .v1-hp-l-sec.is-sel { stroke: #fff; stroke-width: 3; stroke-dasharray: 2 4; }
-.jf-deck-v1 .v1-hp-sec { position: absolute; transform: translate(-50%, 0); padding: 3px 9px; border: 2px solid var(--ink); border-radius: 999px; background: #fff; color: var(--ink); font-size: 12px; font-weight: 800; white-space: nowrap; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); cursor: pointer; }
+.jf-deck-v1 .v1-hp-sec { position: absolute; transform: translate(-50%, 0); padding: 3px 9px; border: 2px solid var(--ink); border-radius: var(--r-sm); background: #fff; color: var(--ink); font-size: 12px; font-weight: 800; white-space: nowrap; cursor: pointer; }
 .jf-deck-v1 .v1-hp-sec.is-out { background: var(--accent); border-color: var(--accent); color: #fff; }
 .jf-deck-v1 .v1-hp-sec.is-back { background: var(--ink); color: #fff; }
 .jf-deck-v1 .v1-hp-sec.is-sel { box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--accent); }
@@ -857,7 +868,7 @@
 .jf-deck-v1.v1-hp-portal .v1-hp-scrim { z-index: 2000; }
 
 /* Pick up where you left off (2026-10-24): one line under the top bar, gone on a tap. */
-.jf-deck-v1 .v1-resume { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 10px; padding: 10px 14px; border: 1px solid var(--v1-line, #d9d4ca); border-left: 4px solid var(--v1-accent, #1854a0); border-radius: 10px; background: var(--v1-paper, #fff); font-size: 14px; }
+.jf-deck-v1 .v1-resume { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 10px; padding: 10px 14px; border: 1px solid var(--v1-line, #d9d4ca); border-left: 4px solid var(--v1-accent, #1854a0); border-radius: var(--r-sm); background: var(--v1-paper, #fff); font-size: 14px; }
 .jf-deck-v1 .v1-resume-text b { margin-right: 6px; }
 .jf-deck-v1 .v1-resume-acts { display: flex; gap: 8px; }
 @media (max-width: 768px) { .jf-deck-v1 .v1-resume { margin: 0 12px 10px; } }

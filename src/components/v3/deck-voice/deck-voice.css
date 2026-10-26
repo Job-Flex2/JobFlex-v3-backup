@@ -21,7 +21,7 @@
   background: color-mix(in srgb, var(--paper-deep) 94%, transparent);
   border: 2px solid var(--ink);
   border-radius: var(--r-sm);
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.18);
+  box-shadow: 8px 8px 0 rgba(10, 10, 10, 0.18);
   overflow: auto;
   font-size: 14px;
   line-height: 1.4;
@@ -70,7 +70,7 @@
   width: 48px;
   height: 48px;
   border: 2px solid var(--ink);
-  border-radius: 50%;
+  border-radius: var(--r-sm);
   background: var(--accent);
   color: #fff;
 }
@@ -81,7 +81,7 @@
   position: absolute;
   inset: -6px;
   border: 2px solid var(--accent);
-  border-radius: 50%;
+  border-radius: var(--r-sm);
   animation: dv-pulse 1.4s var(--ease-out) infinite;
 }
 :is(.jf-deck-v1, [data-deck-client]) .dv-mic.is-talking::after { animation-duration: 0.7s; }
@@ -100,7 +100,7 @@
 :is(.jf-deck-v1, [data-deck-client]) .v1-stage.is-full .v1-view-head .v1-view-acts { grid-column: 4; grid-row: 1; }
 :is(.jf-deck-v1, [data-deck-client]) .v1-view-head .v1-talk-btn.is-on { background: var(--ink); border-color: var(--ink); color: #fff; }
 
-/* The round mic over the 3D, when the panel is closed. */
+/* The Talk button over the 3D, when the panel is closed — Blueprint (owner, 2026-10-26): near-square, no blurred shadow. */
 :is(.jf-deck-v1, [data-deck-client]) .dv-fab {
   position: absolute;
   right: 12px;
@@ -112,11 +112,10 @@
   min-height: 46px;
   padding: 0 16px 0 12px;
   border: 2px solid var(--ink);
-  border-radius: 999px;
+  border-radius: var(--r-sm);
   background: var(--accent);
   color: #fff;
   font-weight: 800;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
 }
 :is(.jf-deck-v1, [data-deck-client]) .dv-fab:hover { background: var(--accent-ink); }
 
@@ -156,5 +155,5 @@
 :is(.jf-deck-v1, [data-deck-client]) .dv-price b { font-size: 15px; font-weight: 800; }
 :is(.jf-deck-v1, [data-deck-client]) .dv-price span { font-size: 12.5px; color: var(--ink-soft, #3a3a3a); }
 /* The client's page: the panel's open button over their 3D. */
-[data-deck-client] .dv-open { position: absolute; right: 12px; bottom: 12px; z-index: 6; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--ink); color: #fff; font: inherit; font-size: 14px; font-weight: 800; cursor: pointer; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18); }
+[data-deck-client] .dv-open { position: absolute; right: 12px; bottom: 12px; z-index: 6; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1.5px solid var(--ink); border-radius: var(--r-sm); background: var(--ink); color: #fff; font: inherit; font-size: 14px; font-weight: 800; cursor: pointer; }
 [data-deck-client] .dv-open:focus-visible { outline: 3px solid var(--accent, #1854a0); outline-offset: 2px; }
