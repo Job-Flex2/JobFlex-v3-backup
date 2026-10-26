@@ -1,4 +1,6 @@
 import "server-only";
+import { approveTrialRequest, pendingTrialRequest } from "@/lib/trialExtensionServer";
+import { trialExtensionEligible } from "@/lib/trialExtension";
 // SUPPORT · THE AI ON A TICKET (2026-10-15) — the server half of
 // lib/support/aiReply: what the model is told about the customer, the call,
 // the sends, the copies to the support inbox, and the fix decisions.
@@ -59,6 +61,7 @@ import {
   supportUserPrompt,
   teamCopyEmail,
   aiMayAnswer,
+  extensionOfferFact,
   type LiveState,
   type SupportAiMode,
   type SupportAiOutcome,
@@ -185,6 +188,10 @@ async function accountFacts(t: TicketRow): Promise<string[]> {
   } else {
     facts.push("No subscription row: on the free tier.");
   }
+  // Whether the team can add trial days (owner, 2026-10-26: "if you didn't have enough time to explore the platform,
+  // we can extend it for another 2 weeks") — the model offers it only when this says AVAILABLE.
+  const pending = sub ? await pendingTrialRequest(org.id).catch(() => null) : null;
+  facts.push(extensionOfferFact(sub, pending ? { days: pending.requestedDays } : null).fact);
   const limited = usage.filter((u) => u.limit !== null);
   if (limited.length) facts.push(`Usage this period: ${limited.map((u) => `${u.resource} ${u.used}/${u.limit}`).join(", ")}.`);
   if (proposals !== null) facts.push(`Proposals: ${proposals} in total, ${proposals30 ?? 0} in the last 30 days. Clients: ${clients ?? 0}.`);
@@ -452,6 +459,56 @@ export async function answerMissedTickets(limit = 4): Promise<{ checked: number;
     if (rec) answered += 1;
   }
   return { checked: rows.length, answered };
+}
+
+// ── Re-drafting what waits, and the days the team can give ────────────────────
+
+/** Every answer still waiting for a person (drafted or held, the customer not yet answered by one of us) written
+ *  again under the current rules (owner, 2026-10-26: "re-answer the existing answers") — drafts, never sent. */
+export async function redraftWaitingTickets(limit = 20): Promise<{ waiting: number; redrafted: number }> {
+  if (!isOpenAIEnabled()) return { waiting: 0, redrafted: 0 };
+  const rows = await db.supportTicket.findMany({ where: { status: { in: ["OPEN", "IN_PROGRESS"] } }, orderBy: { lastMessageAt: "desc" }, take: 100, select: { id: true } });
+  const ids = rows.map((r) => r.id);
+  if (!ids.length) return { waiting: 0, redrafted: 0 };
+  const [records, threads] = await Promise.all([supportAiForTickets(ids), threadsFor(ids)]);
+  const waiting = ids.filter((id) => {
+    const r = records[id];
+    return !!r && (r.outcome === "drafted" || r.outcome === "held") && aiMayAnswer(threads[id] ?? [], r).ok;
+  });
+  let redrafted = 0;
+  for (const id of waiting.slice(0, limit)) {
+    const rec = await answerTicketWithAi(id, { trigger: "admin" }).catch((err) => {
+      console.error(`[support-ai] re-draft ${supportTicketRef(id)} failed:`, err instanceof Error ? err.message : err);
+      return null;
+    });
+    if (rec && rec.outcome !== "failed") redrafted += 1;
+  }
+  return { waiting: waiting.length, redrafted };
+}
+
+export type GrantResult = { ok: true; until: string | null; localOnly: boolean } | { ok: false; error: string };
+
+/** The days offered on a ticket, given: a trial-extension request filed for the company (or its pending one) and
+ *  approved at once — the customer gets the "Your trial is extended until …" email the approval sends. */
+export async function grantTrialDaysFromTicket(ticketId: string, days: number, actor: { id: string }): Promise<GrantResult> {
+  const t = await db.supportTicket.findUnique({ where: { id: ticketId }, select: { id: true, organizationId: true, userId: true, subject: true } });
+  if (!t) return { ok: false, error: "That ticket is gone." };
+  const sub = await db.subscription.findUnique({ where: { organizationId: t.organizationId } });
+  if (!sub || sub.provider === "MANUAL" || !trialExtensionEligible(sub)) return { ok: false, error: "Their trial can't be extended: it isn't running, and it didn't end within the last 14 days." };
+  let req = await pendingTrialRequest(t.organizationId).catch(() => null);
+  if (!req) {
+    try {
+      req = await db.trialExtensionRequest.create({
+        data: { organizationId: t.organizationId, userId: t.userId, requestedDays: days, note: `Offered from support ticket ${supportTicketRef(t.id)}: "${t.subject.slice(0, 80)}"`, plan: sub.plan, trialStartedAt: null, trialEndsAt: sub.trialEndsAt },
+      });
+    } catch (err) {
+      console.error("[support-ai] extension request failed:", err instanceof Error ? err.message : err);
+      return { ok: false, error: "Couldn't file the extension — try it from Trial requests." };
+    }
+  }
+  const res = await approveTrialRequest(req.id, days, actor);
+  if (!res.ok) return res;
+  return { ok: true, until: res.until ?? null, localOnly: !!res.localOnly };
 }
 
 // ── The fix: approve, decline, done ──────────────────────────────────────────

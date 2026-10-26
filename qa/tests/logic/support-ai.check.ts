@@ -9,6 +9,7 @@ import {
   badgeFor,
   commitsMoneyOrData,
   deliveryFor,
+  extensionOfferFact,
   failedRecord,
   firstNameOf,
   fixApprovedEmail,
@@ -145,6 +146,21 @@ check("the handbook is there and substantial", SUPPORT_HANDBOOK.length > 30_000,
 check("…covers the areas tickets are about", ["Plans", "Stripe", "password", "Smart Proposal", "Roof", "Video", "proposal", "AI desk", "Internal"].every((k) => SUPPORT_HANDBOOK.includes(k)));
 check("…carries no secrets (keys, tokens, webhook secrets)", !/\b(sk-[A-Za-z0-9]{10,}|sk_live_|rk_live_|whsec_[A-Za-z0-9]|re_[A-Za-z0-9]{20,}|AC[0-9a-f]{32}|pk_live_)/.test(SUPPORT_HANDBOOK));
 check("…and no personal addresses — only JobFlex's own", (SUPPORT_HANDBOOK.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}/gi) ?? []).every((e) => /@(jobflex\.app|platform\.jobflex\.local|example\.com)$/i.test(e)), (SUPPORT_HANDBOOK.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}/gi) ?? []).filter((e) => !/@(jobflex\.app|platform\.jobflex\.local|example\.com)$/i.test(e)).slice(0, 5).join(", "));
+
+// ── Cancellations and the offer (owner, 2026-10-26) ───────────────────────────
+check("the rules on a cancellation: ask why, give the steps anyway, what they'd leave, the two-week offer only when available, a person sends it", /CANCELLATIONS/.test(SUPPORT_AI_RULES) && /ONE honest question/.test(SUPPORT_AI_RULES) && /nobody should feel trapped/.test(SUPPORT_AI_RULES) && /two more weeks, free/.test(SUPPORT_AI_RULES) && /ONLY when the ACCOUNT FACTS say "TRIAL EXTENSION: AVAILABLE"/.test(SUPPORT_AI_RULES) && /Someone is leaving — a person sends this one/.test(SUPPORT_AI_RULES) && /never pushy/.test(SUPPORT_AI_RULES));
+check("the rules on a bug: double-check with the team, fix as soon as we can; a doubted figure is a bug and asks for the exact case", /double-check it with our team/.test(SUPPORT_AI_RULES) && /SOMETHING LOOKS WRONG/.test(SUPPORT_AI_RULES) && /exact address, proposal or screen/.test(SUPPORT_AI_RULES) && /Never say it's fixed, never give a date/.test(SUPPORT_AI_RULES));
+const d = (daysFromNow: number) => new Date(Date.now() + daysFromNow * 86_400_000);
+const onTrial = extensionOfferFact({ status: "TRIALING", trialEndsAt: d(5), provider: "STRIPE", plan: "professional" }, null);
+check("on a trial: the offer is available and says when the trial ends", onTrial.eligible && /AVAILABLE/.test(onTrial.fact) && /on their trial/.test(onTrial.fact) && /two more weeks/.test(onTrial.fact), onTrial.fact);
+const justEnded = extensionOfferFact({ status: "ACTIVE", trialEndsAt: d(-6), provider: "STRIPE", plan: "starter" }, null);
+check("a trial that ended six days ago: still available (the 14-day window)", justEnded.eligible && /ended/.test(justEnded.fact) && /within the last 14 days/.test(justEnded.fact), justEnded.fact);
+const longPaying = extensionOfferFact({ status: "ACTIVE", trialEndsAt: d(-40), provider: "STRIPE", plan: "starter" }, null);
+check("a plan paying for weeks: not available — offer help, never money", !longPaying.eligible && /they pay for the starter/.test(longPaying.fact) && /never money/.test(longPaying.fact), longPaying.fact);
+check("no subscription, or a plan granted by hand: not available", !extensionOfferFact(null, null).eligible && !extensionOfferFact({ status: "TRIALING", trialEndsAt: d(5), provider: "MANUAL" }, null).eligible);
+const pending = extensionOfferFact({ status: "TRIALING", trialEndsAt: d(5), provider: "STRIPE" }, { days: 14 });
+check("a request already pending: say we're on it, don't offer again", pending.eligible && /PENDING/.test(pending.fact) && /don't offer again/.test(pending.fact));
+check("the offer's words never trip the money regex, so a draft in auto mode isn't held for that reason", !commitsMoneyOrData("If you simply haven't had time to explore it properly, we'll gladly add two more weeks, free — just reply yes and we'll set it up."));
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);

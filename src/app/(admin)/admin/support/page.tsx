@@ -19,6 +19,7 @@ import {
 import { tasksForTicketsSafe } from "@/lib/adminTasks/service";
 import { recipientsForTickets, threadsFor } from "@/lib/supportThread";
 import { readSupportAiMode, supportAiForTickets } from "@/lib/support/aiSupport";
+import { extensionOfferFact } from "@/lib/support/aiReply";
 import { supportRecipients } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
@@ -69,7 +70,23 @@ export default async function AdminSupportPage({
     supportRecipients().catch(() => [] as string[]),
   ]);
 
+  // Can the team add trial days for the ticket's company? (the AI's cancellation offer, and the button on the ticket)
+  const orgIds = [...new Set(rows.map((t) => t.organizationId))];
+  const [subs, pendingReqs] = await Promise.all([
+    db.subscription.findMany({ where: { organizationId: { in: orgIds } }, select: { organizationId: true, status: true, trialEndsAt: true, provider: true, plan: true } }).catch(() => []),
+    db.trialExtensionRequest.findMany({ where: { organizationId: { in: orgIds }, status: "PENDING" }, select: { organizationId: true, requestedDays: true } }).catch(() => []),
+  ]);
+  const subOf = new Map(subs.map((x) => [x.organizationId, x]));
+  const pendingOf = new Map(pendingReqs.map((x) => [x.organizationId, x.requestedDays]));
+  const offerFor = (organizationId: string) => {
+    const sub = subOf.get(organizationId) ?? null;
+    const pending = pendingOf.get(organizationId) ?? null;
+    const o = extensionOfferFact(sub, pending !== null ? { days: pending } : null);
+    return { eligible: o.eligible, pendingDays: pending, trialEndsAt: sub?.trialEndsAt ? sub.trialEndsAt.toISOString() : null };
+  };
+
   const tickets: SupportTicketDTO[] = rows.map((t) => ({
+    trialOffer: offerFor(t.organizationId),
     id: t.id,
     ref: supportTicketRef(t.id),
     subject: t.subject,
