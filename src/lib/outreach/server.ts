@@ -39,7 +39,7 @@ import {
 import { outreachInstructions, outreachText, outreachTools, outreachVoicemail, type ScriptFacts } from "./script";
 import { sendText } from "@/lib/sms/send";
 import { appBaseUrl } from "@/lib/appUrl";
-import { outreachLetter } from "./letter";
+import { OUTREACH_SENDER, outreachLetter } from "./letter";
 import { listProspects, newProspectId, optOutId, readProspect, updateProspect, writeProspect } from "./store";
 
 /** The company a call token names for these calls: none — JobFlex itself. */
@@ -555,7 +555,8 @@ export async function emailProspects(n: number, base: string, admin: { name: str
   if (!room) return { sent: 0, skipped: 0, error: `${EMAILS_PER_DAY} emails went out today already — the rest go tomorrow.` };
   // Everyone with an address who wasn't written to — a landline too, before its call (lib/outreach/rules emailDue).
   const todo = list.filter(emailDue).slice(0, Math.min(room, Math.max(1, n)));
-  const sender = (admin.name ?? "").trim().split(/\s+/)[0] || "The JobFlex team";
+  // From "JobFlex Team <app@jobflex.app>" — never an admin's own name; replies still reach the admin (reply-to).
+  const sender = OUTREACH_SENDER;
   let sent = 0;
   let skipped = 0;
   let error: string | null = null;
@@ -567,7 +568,7 @@ export async function emailProspects(n: number, base: string, admin: { name: str
     const token = callMeToken(p.id);
     if (!token) return { sent, skipped, error: "The server has no signing secret (NEXTAUTH_SECRET)." };
     const unsub = unsubscribeUrl(base, optOutId(p.id));
-    const letter = outreachLetter({ p, sender, callMeUrl: `${base}/call-me/${token}`, siteUrl: `${base}/?utm_source=jobflex-email&utm_medium=outreach`, unsubscribeUrl: unsub, postal: addr });
+    const letter = outreachLetter({ p, callMeUrl: `${base}/call-me/${token}`, siteUrl: `${base}/?utm_source=jobflex-email&utm_medium=outreach`, unsubscribeUrl: unsub, postal: addr });
     try {
       await sendEmail({ to: p.email!, subject: letter.subject, html: letter.html, text: letter.text, from: fromLine(sender), replyTo: admin.email, headers: unsubscribeHeaders(unsub) });
       await writeProspect({ ...p, emailedAt: nowIso() });
