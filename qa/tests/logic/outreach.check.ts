@@ -9,7 +9,7 @@
 process.env.VOICE_SERVER_SECRET = process.env.VOICE_SERVER_SECRET || "qa-secret";
 import { ALL_ZONES, EMAIL_LEAD_MS, MAX_CALLS, OUTREACH_CONSENT_TEXT, callableNow, consentCoversTexts, emailDue, emailFirst, funnel, parseProspectList, routeFor, scheduleWords, stateCode, textDue, textableNow, tradeKey, twilioWords, withinCallingHours, type Prospect } from "@/lib/outreach/rules";
 import { outreachGreeting, outreachInstructions, outreachText, outreachTools, outreachVoicemail, tradePitch, tradeWords } from "@/lib/outreach/script";
-import { outreachLetter } from "@/lib/outreach/letter";
+import { OUTREACH_SENDER, outreachLetter } from "@/lib/outreach/letter";
 import { spammySubject } from "@/lib/adminMail/compose";
 import { signCallToken, verifyCallToken } from "@/lib/aiDesk/voiceToken";
 
@@ -94,18 +94,19 @@ const vm = outreachVoicemail(ll, "+12065550100", "jobflex.app");
 check("the voicemail: JobFlex calling first, from its AI receptionist, the number back, how to stop", /^Hi Dana, this is JobFlex calling for Summit Roofing — JobFlex makes software for contractors, and this message is from our AI receptionist\./.test(vm) && /206-555-0100/.test(vm) && /take you off our list/.test(vm) && /jobflex dot app/.test(vm), vm);
 
 console.log("— the letter —");
-const L = outreachLetter({ p: ll, sender: "Dmitriy", callMeUrl: "https://jobflex.app/call-me/abc.def", siteUrl: "https://jobflex.app/", unsubscribeUrl: "https://jobflex.app/api/email/unsubscribe?o=prospect_x&t=y", postal: "PO Box 1, Seattle, WA 98101" });
+const L = outreachLetter({ p: ll, callMeUrl: "https://jobflex.app/call-me/abc.def", siteUrl: "https://jobflex.app/", unsubscribeUrl: "https://jobflex.app/api/email/unsubscribe?o=prospect_x&t=y", postal: "PO Box 1, Seattle, WA 98101" });
 check("the call-me link, the unsubscribe and the postal address, in the HTML and the text", [L.html, L.text].every((x) => x.includes("https://jobflex.app/call-me/abc.def") && x.includes("unsubscribe?o=prospect_x") && x.includes("PO Box 1, Seattle")));
+check("it is from the JobFlex Team — no person's name: the opening, the signature, in the HTML and the text", OUTREACH_SENDER === "JobFlex Team" && /^Hi .*\n\nWe're the JobFlex team — we make software for contractors\./.test(L.text) && /\n\nJobFlex Team\njobflex\.app\n\n--/.test(L.text) && L.html.includes(">JobFlex Team<br>") && !/Dmitriy|I'm /.test(L.text + L.html), L.text.slice(0, 160));
 check("it thanks them and says it is a one-time introduction", /thank you for what you do/.test(L.text) && /one-time note/.test(L.text));
 check("the subject has no spam words", spammySubject(L.subject) === null, `${L.subject} → ${spammySubject(L.subject)}`);
-check("a business name with < > & is escaped in the HTML", !outreachLetter({ ...{ p: { ...ll, business: "A<b>&C" } }, sender: "D", callMeUrl: "u", siteUrl: "s", unsubscribeUrl: "x", postal: "p" }).html.includes("A<b>"));
+check("a business name with < > & is escaped in the HTML", !outreachLetter({ ...{ p: { ...ll, business: "A<b>&C" } }, callMeUrl: "u", siteUrl: "s", unsubscribeUrl: "x", postal: "p" }).html.includes("A<b>"));
 
 console.log("— each trade's own pitch —");
 const PITCH: Array<[string, RegExp]> = [["roofing", /aerial imagery/], ["fencing", /on the map/], ["hvac", /Manual J-style/], ["decks", /3D/]];
 for (const [trade, word] of PITCH) {
   const pt = tradePitch(trade);
   check(`${trade}: its tool in the call, the email, the text and the voicemail`, [pt.call, pt.email, pt.sms, pt.voicemail].every((x) => word.test(x)), JSON.stringify(pt));
-  check(`${trade}: the call's brief leads with it, the email says it, the voicemail too`, outreachInstructions({ ...ll, trade }, facts, mon10).includes(pt.call) && outreachLetter({ p: { ...ll, trade }, sender: "D", callMeUrl: "u", siteUrl: "s", unsubscribeUrl: "x", postal: "p" }).text.includes(pt.email) && outreachVoicemail({ ...ll, trade }, null, "jobflex.app").includes(pt.voicemail));
+  check(`${trade}: the call's brief leads with it, the email says it, the voicemail too`, outreachInstructions({ ...ll, trade }, facts, mon10).includes(pt.call) && outreachLetter({ p: { ...ll, trade }, callMeUrl: "u", siteUrl: "s", unsubscribeUrl: "x", postal: "p" }).text.includes(pt.email) && outreachVoicemail({ ...ll, trade }, null, "jobflex.app").includes(pt.voicemail));
 }
 check("a plumber, a remodeler, an unknown trade and none: JobFlex in general (the AI desk, Smart Proposal, the job)", ["plumbing", "remodeling", "underwater welding", null].every((t) => /AI desk/.test(tradePitch(t).email) && /Smart Proposal/.test(tradePitch(t).email)));
 const txt = outreachText({ p: ll, answered: true, link: "https://jobflex.app/auth/register?utm_source=jobflex-call&utm_medium=sms&utm_campaign=roofing", trialDays: 7 });
@@ -155,7 +156,7 @@ check("the text with no call before it: JobFlex named, why it comes, the trade's
 const real = (t: string) => `https://jobflex.app/auth/register?utm_source=jobflex-call&utm_medium=sms&utm_campaign=${t}`;
 check("every trade's text makes the offer — grow faster, save time — with its tools, after a call and on the schedule (a short first name, the real link)", ["roofing", "fencing", "hvac", "decks", "plumbing"].every((t) => [true, false].every((noCall) => { const x = outreachText({ p: { name: "Mike Carter", trade: t }, answered: !noCall, noCall, link: real(t), trialDays: 7 }); return /Grow your .*business faster and save time/.test(x) && x.includes(tradePitch(t).sms) && x.length <= 306; })));
 check("a name too long for the tools: the bare offer stays", (() => { const x = outreachText({ p: { name: "Christopher-Alexander", trade: "roofing" }, answered: false, noCall: true, link: real("roofing"), trialDays: 7 }); return x.includes(tradePitch("roofing").grow) && x.length <= 306 && /Reply STOP to opt out\.$/.test(x); })());
-check("the email makes the offer too, in the business's name", /JobFlex is built to help Acme Roofing grow faster and save time\./.test(outreachLetter({ p: { ...ll, business: "Acme Roofing" }, sender: "D", callMeUrl: "u", siteUrl: "s", unsubscribeUrl: "x", postal: "p" }).text));
+check("the email makes the offer too, in the business's name", /JobFlex is built to help Acme Roofing grow faster and save time\./.test(outreachLetter({ p: { ...ll, business: "Acme Roofing" }, callMeUrl: "u", siteUrl: "s", unsubscribeUrl: "x", postal: "p" }).text));
 
 console.log(bad ? `\n${bad} FAILED` : "\nALL PASS");
 process.exit(bad ? 1 : 0);
