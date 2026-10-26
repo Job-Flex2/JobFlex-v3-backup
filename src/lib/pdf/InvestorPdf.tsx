@@ -39,7 +39,8 @@ function milestones(curve: CurvePoint[], today: string): number[] {
   const pace = monthlyPace(curve, today);
   const { todayIndex: ti } = runRateWindow(curve, today, null);
   const cross = payMonthlyDay(curve, pace, ti);
-  const picks = new Set<number>([0, ti - 7, ti, ti + 7, ti + 30, cross?.index ?? -1]);
+  // From a week back — not the count's first day (owner, 2026-10-26: the total, not the start).
+  const picks = new Set<number>([ti - 7, ti, ti + 7, ti + 30, cross?.index ?? -1]);
   for (let i = ti + 60; i < curve.length; i += 30) picks.add(i);
   return [...picks].filter((i) => i >= 0 && i < curve.length).sort((x, y) => x - y);
 }

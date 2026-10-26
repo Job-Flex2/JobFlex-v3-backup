@@ -56,7 +56,7 @@ export function InvestorReportView({ report, shared = false, between }: { report
           {/* The three to read first (owner, 2026-10-25, chose: growth + cost per lead): each true as labelled. */}
           <div data-fact="cost-per-lead"><b>{money(f.unit.costPerSignupCents)}</b><span>{f.signups > 0 ? `per lead · ${dollars(f.spend.totalCents)} ÷ ${n(f.signups)} signups` : "per lead · no signup yet"}</span></div>
           <div data-fact="cost-per-customer-expected"><b>{f.unit.costPerCustomerExpectedCents !== null ? `≈ ${dollars(f.unit.costPerCustomerExpectedCents)}` : money(f.unit.costPerPayingCents)}</b><span>{f.unit.costPerCustomerExpectedCents !== null ? `per customer, expected · once the running trials convert at ${r.pct}%` : "per paying customer"}</span></div>
-          <div data-fact="growth"><b>{f.growth.multiple !== null ? `${f.growth.multiple}×` : dollars(f.growth.toCents)}</b><span>{f.growth.multiple !== null ? `revenue in ${f.growth.days} days · ${dollars(f.growth.fromCents)} → ${dollars(f.growth.toCents)} a month` : `a month in, ${f.growth.days} days in`}</span></div>
+          <div data-fact="growth"><b>{f.growth.multiple !== null ? `${f.growth.multiple}×` : dollars(f.growth.toCents)}</b><span>{f.growth.multiple !== null ? `revenue in ${f.growth.days} days · ${dollars(f.growth.toCents)} a month now` : `a month in, ${f.growth.days} days in`}</span></div>
         </div>
       </section>
 
