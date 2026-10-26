@@ -6,7 +6,8 @@
 // customer's account.
 import { revalidatePath } from "next/cache";
 import { requirePlatformAdmin } from "@/lib/orgContext";
-import { answerTicketWithAi, decideFix, markFixDone, writeSupportAiMode } from "@/lib/support/aiSupport";
+import { answerTicketWithAi, decideFix, grantTrialDaysFromTicket, markFixDone, redraftWaitingTickets, writeSupportAiMode } from "@/lib/support/aiSupport";
+import { isExtensionDays } from "@/lib/trialExtension";
 import { SUPPORT_AI_MODES, type SupportAiMode, type SupportAiRecord } from "@/lib/support/aiReply";
 import type { ThreadMessage } from "@/lib/supportReply";
 
@@ -80,4 +81,23 @@ export async function markSupportFixed(ticketId: unknown): Promise<{ ok: true; r
   if (!r.ok) return r;
   refresh();
   return { ok: true, record: r.record, reply: r.reply! };
+}
+
+/** Every answer still waiting for a person, written again under the current rules (owner, 2026-10-26). */
+export async function redraftSupportAnswers(): Promise<{ ok: true; waiting: number; redrafted: number } | Fail> {
+  const a = await asAdmin();
+  if (!a) return { ok: false, error: DENIED };
+  const r = await redraftWaitingTickets(20);
+  revalidatePath("/admin/support");
+  return { ok: true, ...r };
+}
+
+/** The two weeks (or one) offered on a ticket, given at once: the extension request filed and approved. */
+export async function extendTrialFromSupport(ticketId: unknown, days: unknown): Promise<{ ok: true; until: string | null; localOnly: boolean } | Fail> {
+  const a = await asAdmin();
+  if (!a) return { ok: false, error: DENIED };
+  if (!isId(ticketId) || !isExtensionDays(days)) return { ok: false, error: "Pick 7 or 14 days." };
+  const r = await grantTrialDaysFromTicket(ticketId, days, { id: a.id });
+  if (r.ok) revalidatePath("/admin/support");
+  return r;
 }

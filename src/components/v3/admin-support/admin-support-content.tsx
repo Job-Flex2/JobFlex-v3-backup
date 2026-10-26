@@ -42,7 +42,7 @@ import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { replyToSupportTicket, updateTicketStatus } from "@/actions/admin";
 import type { ThreadMessage } from "@/lib/supportReply";
-import { approveSupportFix, askSupportAi, declineSupportFix, markSupportFixed, setSupportAiMode } from "@/actions/supportAi";
+import { approveSupportFix, askSupportAi, declineSupportFix, extendTrialFromSupport, markSupportFixed, redraftSupportAnswers, setSupportAiMode } from "@/actions/supportAi";
 import {
   SUPPORT_AI_CATEGORY_LABEL,
   SUPPORT_AI_MODES,
@@ -75,6 +75,8 @@ import s from "./admin-support.module.css";
 const cx = makeCx(s, shared);
 
 export interface SupportTicketDTO {
+  /** Whether the team can add trial days for this company (the offer the AI makes on a cancellation), 2026-10-26. */
+  trialOffer?: { eligible: boolean; pendingDays: number | null; trialEndsAt: string | null } | null;
   id: string;
   /** Short reference, derived from the id by the page (lib/notify). */
   ref: string;
@@ -283,6 +285,22 @@ export function AdminSupportContent({
   const [mode, setMode] = useState<SupportAiMode>(aiMode);
   const [modeBusy, setModeBusy] = useState(false);
   const [modeError, setModeError] = useState<string | null>(null);
+  // Re-draft every waiting answer under the current rules (owner, 2026-10-26: "re-answer the existing answers").
+  const [redrafting, setRedrafting] = useState(false);
+  const [redraftNote, setRedraftNote] = useState<string | null>(null);
+  async function redraftAll() {
+    setRedrafting(true);
+    setRedraftNote(null);
+    try {
+      const r = await redraftSupportAnswers();
+      if (!r.ok) setRedraftNote(r.error);
+      else { setRedraftNote(`${r.redrafted} of ${r.waiting} written again — open a ticket to read it.`); router.refresh(); }
+    } catch {
+      setRedraftNote("That didn't work — try again.");
+    } finally {
+      setRedrafting(false);
+    }
+  }
   const [liveAi, setLiveAi] = useState<Record<string, SupportAiRecord>>({});
   const [aiFilter, setAiFilter] = useState<"" | "fix" | "needs">("");
   const aiOf = useCallback((t: SupportTicketDTO) => liveAi[t.id] ?? t.ai, [liveAi]);
@@ -433,6 +451,14 @@ export function AdminSupportContent({
                 {answersWaiting} answer{answersWaiting === 1 ? "" : "s"} waiting for you
               </button>
             ) : null}
+          </div>
+        ) : null}
+        {answersWaiting ? (
+          <div className={cx("aiChips")}>
+            <button type="button" className={cx("btn", "btn-ghost", "btn-sm")} disabled={redrafting} onClick={() => void redraftAll()} data-support-redraft>
+              {redrafting ? "Writing them again…" : `Re-draft the ${answersWaiting} waiting answer${answersWaiting === 1 ? "" : "s"} with the current guidance`}
+            </button>
+            {redraftNote ? <span className={cx("aiPanelS")} data-support-redraft-note>{redraftNote}</span> : null}
           </div>
         ) : null}
         {modeError ? <Note tone="danger">{modeError}</Note> : null}
@@ -643,7 +669,21 @@ function TicketDetail({
   const [replyError, setReplyError] = useState<string | null>(null);
   // The AI on this ticket: its record, the call in flight, and the fix's note.
   const [aiRec, setAiRec] = useState<SupportAiRecord | null>(ai);
-  const [aiBusy, setAiBusy] = useState<"ask" | "approve" | "decline" | "done" | null>(null);
+  const [aiBusy, setAiBusy] = useState<"ask" | "approve" | "decline" | "done" | "give" | null>(null);
+  // The days the draft offers, given from here (2026-10-26): the request filed and approved at once.
+  const [given, setGiven] = useState<string | null>(null);
+  async function give(days: 7 | 14) {
+    setAiBusy("give");
+    try {
+      const r = await extendTrialFromSupport(ticket.id, days);
+      if (!r.ok) setGiven(`Couldn't add the days: ${r.error}`);
+      else setGiven(`${days} more days given${r.until ? ` — their trial now runs until ${filedAt(r.until)}` : ""}${r.localOnly ? " (noted here; Stripe wasn't reachable)" : ""}. They've been emailed.`);
+    } catch {
+      setGiven("Couldn't add the days — try again.");
+    } finally {
+      setAiBusy(null);
+    }
+  }
   const [aiError, setAiError] = useState<string | null>(null);
   const [fixNote, setFixNote] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
@@ -920,6 +960,25 @@ function TicketDetail({
                 ) : null}
               </div>
               {aiRec.summary ? <div className={cx("aiSummary")}>{aiRec.summary}</div> : null}
+              {ticket.trialOffer?.eligible ? (
+                <div className={cx("aiWhy")} data-support-offer>
+                  {given
+                    ? given
+                    : ticket.trialOffer.pendingDays
+                      ? `They already asked for ${ticket.trialOffer.pendingDays} more days — give them here, or decide it on Trial requests.`
+                      : `Two free weeks if they simply haven't had time to explore: their trial can take more days${ticket.trialOffer.trialEndsAt ? ` (it ends ${filedAt(ticket.trialOffer.trialEndsAt)})` : ""}. Give them here — the request is filed, approved and emailed at once.`}
+                  {!given ? (
+                    <div className={cx("replyActs")}>
+                      <button type="button" className={cx("btn", "btn-primary", "btn-sm")} disabled={!!aiBusy} onClick={() => void give(14)} data-support-give-days="14">
+                        {aiBusy === "give" ? "Adding…" : "Give 14 more days"}
+                      </button>
+                      <button type="button" className={cx("btn", "btn-ghost", "btn-sm")} disabled={!!aiBusy} onClick={() => void give(7)} data-support-give-days="7">
+                        Give 7
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               {aiRec.customer ? (
                 <div className={cx("aiVerdict", aiRec.customer.verdict === "solved" ? "aiVerdict--ok" : "aiVerdict--stuck")} data-support-verdict={aiRec.customer.verdict}>
                   <b>{aiRec.customer.verdict === "solved" ? "The customer pressed “That solved it”" : "The customer pressed “I still need help”"}</b>
