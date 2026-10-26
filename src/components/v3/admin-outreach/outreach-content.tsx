@@ -14,7 +14,7 @@ import { useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/components/ui/Toast";
 import { relative, shortDate } from "@/lib/format";
-import { LINE_WORDS, OUTCOME_WORDS, emailDue, type OutreachCall } from "@/lib/outreach/rules";
+import { LINE_WORDS, OUTCOME_WORDS, emailDue, scheduleWords, type OutreachCall } from "@/lib/outreach/rules";
 import type { OutreachReadiness } from "@/lib/outreach/server";
 import type { OutreachSettings } from "@/lib/outreach/find";
 import { HUNT_TRADES, PER_DAY_CHOICES, huntStatusWords, huntWords } from "@/lib/outreach/hunt";
@@ -32,6 +32,7 @@ import {
   runOutreachHunt,
   setOutreachDnc,
   setOutreachHuntDaily,
+  setOutreachChannels,
   setOutreachSchedule,
   type HuntView,
   type OutreachRow,
@@ -184,7 +185,7 @@ export function AdminOutreachContent({ rows, readiness, funnel, hunts, settings,
           </label>
           <label className={styles.field}>
             <span className={styles.lbl}>Where</span>
-            <input className={styles.in} placeholder="Seattle, WA" value={hunt.area} onChange={(e) => setHunt({ ...hunt, area: e.target.value })} data-outreach-hunt-area />
+            <input className={styles.in} placeholder="Seattle, WA — or a whole state: California" title="A city and state, or a state on its own for its biggest cities, one after another" value={hunt.area} onChange={(e) => setHunt({ ...hunt, area: e.target.value })} data-outreach-hunt-area />
           </label>
           <label className={styles.field}>
             <span className={styles.lbl}>A day</span>
@@ -331,7 +332,7 @@ export function AdminOutreachContent({ rows, readiness, funnel, hunts, settings,
         <div className="card-head">
           <div className="card-titles">
             <div className="card-title">On a schedule</div>
-            <div className="card-sub">Every hour, on its own: the new numbers checked, the first email to those with one, then the AI desk calls the next {settings.callsPerRun} landlines whose turn it is — only in their calling hours, two calls at most, a cell phone only once they ask. The texts follow the same consent.</div>
+            <div className="card-sub" data-outreach-schedule-words>{scheduleWords(settings.channels, { emails: settings.emailsPerRun, calls: settings.callsPerRun, texts: settings.textsPerRun })}</div>
           </div>
         </div>
         <div className={styles.acts}>
@@ -341,6 +342,35 @@ export function AdminOutreachContent({ rows, readiness, funnel, hunts, settings,
             </span>
             <span className={styles.toggleText}>{settings.autoWork ? "Working the list every hour" : "Off — by hand only"}</span>
           </button>
+        </div>
+        {/* What it sends (2026-10-25): email, calls, texts — any mix; how many of each an hour. */}
+        <div className={styles.channels} role="group" aria-label="What the schedule sends" data-outreach-channels>
+          {([
+            { key: "email", label: "Email", per: "emailsPerRun", choices: [10, 20, 40], unit: "emails" },
+            { key: "calls", label: "Calls", per: "callsPerRun", choices: [3, 5, 10, 20], unit: "calls" },
+            { key: "texts", label: "Texts", per: "textsPerRun", choices: [10, 20, 50], unit: "texts" },
+          ] as const).map((c) => {
+            const on = settings.channels[c.key];
+            const onCount = Number(settings.channels.email) + Number(settings.channels.calls) + Number(settings.channels.texts);
+            return (
+              <div key={c.key} className={cx(styles.channel, on && styles.channelOn)} data-channel={c.key} data-on={on}>
+                <button type="button" role="switch" aria-checked={on} className={styles.toggle} disabled={!!busy || (on && onCount === 1)} title={on && onCount === 1 ? "Keep at least one on" : undefined} onClick={() => void run(`ch-${c.key}`, () => setOutreachChannels({ [c.key]: !on }), (r) => `${c.label} ${r.settings.channels[c.key] ? "on" : "off"} for the schedule.`)}>
+                  <span className={cx(styles.switch, on && styles.switchOn)} aria-hidden="true">
+                    <span className={styles.knob} />
+                  </span>
+                  <span className={styles.toggleText}>{c.label}</span>
+                </button>
+                <label className={styles.channelPer}>
+                  <span>up to</span>
+                  <select value={settings[c.per]} disabled={!!busy || !on} onChange={(e) => void run(`per-${c.key}`, () => setOutreachChannels({ [c.per]: Number(e.target.value) }), () => `Up to ${e.target.value} ${c.unit} an hour.`)} aria-label={`${c.label}: how many an hour`}>
+                    {[...new Set([...c.choices, settings[c.per]])].sort((x, y) => x - y).map((v) => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                  <span>an hour</span>
+                </label>
+                {c.key === "texts" ? <small className={styles.channelNote}>Only to contractors who agreed to texts — the law and the carriers ask for that.</small> : null}
+              </div>
+            );
+          })}
         </div>
         {settings.lastWork ? (
           <p className={styles.from} data-outreach-schedule-last>

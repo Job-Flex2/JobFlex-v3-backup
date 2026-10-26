@@ -39,7 +39,8 @@ function milestones(curve: CurvePoint[], today: string): number[] {
   const pace = monthlyPace(curve, today);
   const { todayIndex: ti } = runRateWindow(curve, today, null);
   const cross = payMonthlyDay(curve, pace, ti);
-  const picks = new Set<number>([0, ti - 7, ti, ti + 7, ti + 30, cross?.index ?? -1]);
+  // From a week back — not the count's first day (owner, 2026-10-26: the total, not the start).
+  const picks = new Set<number>([ti - 7, ti, ti + 7, ti + 30, cross?.index ?? -1]);
   for (let i = ti + 60; i < curve.length; i += 30) picks.add(i);
   return [...picks].filter((i) => i >= 0 && i < curve.length).sort((x, y) => x - y);
 }
@@ -66,8 +67,9 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
     ["Spent on ads", dollars(f.spend.totalCents), `since ${longDate(f.since)}`],
     ["Collected so far", got.read ? dollars(got.cents) : "—", got.read ? `Stripe, ${got.invoices} payments${got.cents !== got.wonCents ? ` · ${dollars(got.wonCents)} from the ads' customers` : ""}` : "Stripe not read", true],
     ["Customers the ads brought", String(f.paying.won), `paying · ${dollars(f.paying.wonMrrCents)}/mo`],
-    ["Per signup", money(f.unit.costPerSignupCents), `${f.signups} signed up`],
-    ["Per paying customer", money(f.unit.costPerPayingCents), f.paying.won > 0 ? `${dollars(f.spend.totalCents)} ÷ ${f.paying.won}` : "none paying yet", true],
+    ["Per lead (signup)", money(f.unit.costPerSignupCents), `${f.signups} signed up`, true],
+    ["Per customer, expected", f.unit.costPerCustomerExpectedCents !== null ? `≈ ${dollars(f.unit.costPerCustomerExpectedCents)}` : "—", f.unit.costPerCustomerExpectedCents !== null ? `once the running trials convert at ${r.pct}%` : "once a trial has ended"],
+    ["Per paying customer", money(f.unit.costPerPayingCents), f.paying.won > 0 ? `${dollars(f.spend.totalCents)} ÷ ${f.paying.won} paying today` : "none paying yet"],
     ["Earns the spend back in", pct(f.unit.paybackMonths, " mo"), f.paying.wonMrrCents > 0 ? `at ${dollars(f.paying.wonMrrCents)} a month` : "once a customer pays"],
   ];
   return (
@@ -86,7 +88,7 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
             ["Ad spend", dollars(f.spend.totalCents), f.spend.dailyBudgetCents !== null && f.spend.budgetFrom ? `${dollars(f.spend.dailyBudgetCents)}/day, all ads, since ${longDate(f.spend.budgetFrom)}` : `${dollars(f.spend.perDayRecentCents)}/day lately`],
             ["Visitors", f.visitors === null ? "—" : f.visitors.toLocaleString("en-US"), f.visitors === null ? "analytics not reached" : `${money(f.unit.costPerVisitorCents)} each`],
             ["Signed up", String(f.signups), `${f.unit.signupsPerDay}/day · ${pct(f.unit.visitorToSignupPct)} of visitors`],
-            ["Paying", String(f.paying.count), `${dollars(f.paying.mrrCents)}/mo · ${dollars(f.paying.arrCents)} a year${f.paying.preexisting > 0 ? ` · ${f.paying.preexisting} from before the start day` : ""}${f.paying.fromNoCard > 0 ? ` · ${f.paying.fromNoCard} started without a card` : ""}`],
+            ["Paying", String(f.paying.count), `${dollars(f.paying.mrrCents)}/mo · ${dollars(f.paying.arrCents)} a year${f.paying.fromNoCard > 0 ? ` · ${f.paying.fromNoCard} started without a card` : ""}`],
             ["Trial to paid", pct(r.pct), r.pct === null ? "no trial has ended yet" : `${r.paid} of ${r.ended} ended trials converted${f.outcomes && f.outcomes.cameBack > 0 ? ` · ${f.outcomes.cameBack} came back later` : ""}`],
             ["On trial now", String(f.trials.count), ex.payers === null ? "no measured rate yet" : `${about(ex.payers)} expected to pay · +${dollars(ex.mrrCents ?? 0)}/mo`],
           ].map(([l, v, nt]) => (
@@ -147,7 +149,7 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
         )}
         <View wrap={false}>
         <Text style={s.h2}>How these are figured</Text>
-        <Text style={s.li}>· Counting from {longDate(report.startDay)}, the day the first campaign went live{f.since !== report.startDay ? ` — the figures from ${longDate(f.since)}, from when every trial needed a card` : ""} — only what happened from that day on. Visitors are unique people on www.jobflex.app, bots and previews out.{report.before.paying > 0 ? ` ${report.before.paying} ${report.before.paying === 1 ? "account" : "accounts"} paying from before that day (${dollars(report.before.mrrCents)}/mo) ${report.before.paying === 1 ? "is" : "are"} counted as paying, not as signups of the period.` : ""}</Text>
+        <Text style={s.li}>· Counting from {longDate(report.startDay)}, the day the first campaign went live{f.since !== report.startDay ? ` — the figures from ${longDate(f.since)}, from when every trial needed a card` : ""} — only what happened from that day on. Visitors are unique people on www.jobflex.app, bots and previews out.</Text>
         <Text style={s.li}>· Nothing here is a share we chose. &quot;Trial to paid&quot; is measured on the trials that have ended ({r.pct === null ? "none has ended yet" : `${r.paid} of ${r.ended} converted`}): converted means the trial moved to a paid plan (one paid after its trial had ended counted as &quot;came back later&quot;); not converted means canceled during the trial, or not paid two weeks after it ended — and converted again if it pays later. &quot;Likely&quot; is the 90% range for that many trials. The running trials are expected to pay at the measured rate.</Text>
         <Text style={s.li}>· Ad spend is {a.dailyBudgetCents !== null && a.dailyBudgetCents !== undefined && a.budgetFrom ? `the daily budget, ${dollars(a.dailyBudgetCents)} for all ads together, counted as spent every day since ${longDate(a.budgetFrom)}` : "what was booked per day"}; tomorrow on it runs at the last full week&apos;s pace, {dollars(f.spend.perDayProjectedCents)} a day. &quot;Collected so far&quot; is what Stripe took for subscriptions since the start day from the accounts counted here.</Text>
         <Text style={s.li}>· {f.since !== report.startDay ? `Ad spend, visitors, signups and the trial-to-paid rate are counted from ${longDate(f.since)}, from when every trial needed a card. ` : "Every trial counted here took a card. "}{f.paying.fromNoCard > 0 ? `${f.paying.fromNoCard} paying ${f.paying.fromNoCard === 1 ? "customer" : "customers"} who started on an earlier free trial without a card ${f.paying.fromNoCard === 1 ? "is" : "are"} counted as paying — not as signups, in the rate, or in the cost of a customer.` : ""}</Text>

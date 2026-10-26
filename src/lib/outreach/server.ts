@@ -28,6 +28,7 @@ import {
   emailDue,
   emailFirst,
   textDue,
+  textableNow,
   twilioWords,
   type CallStatus,
   type LineType,
@@ -38,7 +39,7 @@ import {
 import { outreachInstructions, outreachText, outreachTools, outreachVoicemail, type ScriptFacts } from "./script";
 import { sendText } from "@/lib/sms/send";
 import { appBaseUrl } from "@/lib/appUrl";
-import { outreachLetter } from "./letter";
+import { OUTREACH_SENDER, outreachLetter } from "./letter";
 import { listProspects, newProspectId, optOutId, readProspect, updateProspect, writeProspect } from "./store";
 
 /** The company a call token names for these calls: none — JobFlex itself. */
@@ -292,10 +293,11 @@ export async function callProspect(id: string, base: string): Promise<{ ok: true
 }
 
 /** The next `n` the AI may call now: who asked for a call first, then the landlines in the order they came in. */
-export async function callNext(n: number, base: string): Promise<{ placed: number; failed: number; waiting: number; errors: string[] }> {
+export async function callNext(n: number, base: string, opts: { emailsOn?: boolean } = {}): Promise<{ placed: number; failed: number; waiting: number; errors: string[] }> {
   const now = new Date();
-  // The email goes first: a landline that has one is called two days after it (lib/outreach/rules emailFirst).
-  const emailsOn = (await outreachReadiness()).emails;
+  // The email goes first: a landline that has one is called two days after it (lib/outreach/rules emailFirst) — unless
+  // the schedule sends no emails (calls only, 2026-10-25): then there is nothing to wait for.
+  const emailsOn = opts.emailsOn ?? (await outreachReadiness()).emails;
   const list = (await listProspects()).filter((p) => callableNow(p, now).ok && emailFirst(p, now, emailsOn).ok);
   list.sort((a, b) => Number(!!b.consent) - Number(!!a.consent) || a.createdAt.localeCompare(b.createdAt));
   let placed = 0;
@@ -399,13 +401,51 @@ const trialUrl = (base: string, p: Prospect, medium: "ai-desk" | "sms" = "ai-des
  * marked; a STOP on record marks them "don't call" too.
  */
 async function textAfterCall(id: string, answered: boolean): Promise<void> {
+  await sendOutreachText(id, { answered });
+}
+
+/** One outreach text, if it is due (they agreed to texts; none since): sent or held, it is marked; a STOP on record marks
+ *  them "don't call" too. The reason it did not go, else null. */
+async function sendOutreachText(id: string, how: { answered: boolean; noCall?: boolean }): Promise<string | null> {
   const p = await readProspect(id);
-  if (!p || !textDue(p) || !p.phone) return;
+  if (!p || !textDue(p) || !p.phone) return "not due";
   const base = (await appBaseUrl()).replace(/\/$/, "");
   const { trialDays } = await scriptFacts();
-  const r = await sendText({ organizationId: null, to: p.phone, body: outreachText({ p, answered, link: trialUrl(base, p, "sms"), trialDays }), kind: "jobflex-outreach" });
-  if (r.ok && (r.status === "SENT" || r.status === "HELD")) await updateProspect(id, (x) => ({ ...x, textedAt: nowIso() }));
-  else if (!r.ok && r.reason === "opted-out") await updateProspect(id, (x) => ({ ...x, dnc: x.dnc ?? { at: nowIso(), via: "sms" } }));
+  const r = await sendText({ organizationId: null, to: p.phone, body: outreachText({ p, answered: how.answered, noCall: how.noCall, link: trialUrl(base, p, "sms"), trialDays }), kind: "jobflex-outreach" });
+  if (r.ok && (r.status === "SENT" || r.status === "HELD")) {
+    await updateProspect(id, (x) => ({ ...x, textedAt: nowIso() }));
+    return null;
+  }
+  if (!r.ok && r.reason === "opted-out") await updateProspect(id, (x) => ({ ...x, dnc: x.dnc ?? { at: nowIso(), via: "sms" } }));
+  return r.ok ? `held: ${r.status}` : r.reason;
+}
+
+/**
+ * THE SCHEDULE'S TEXTS (owner, 2026-10-25: "text only, or call only, or email only, or all together — put it on the
+ * schedule and it keeps texting them"). The next `n` contractors whose text is due — they agreed to calls and texts on
+ * the call-me page, no text since — in their daytime hours (lib/outreach/rules textableNow), each through the one
+ * texting chokepoint (lib/sms/send: STOP honoured, caps, the log). Never a number that did not agree: the law (TCPA;
+ * Washington bans unsolicited commercial texts) and the carriers ask for that consent.
+ */
+export async function textNext(n: number): Promise<{ sent: number; waiting: number; later: number; errors: string[] }> {
+  const now = new Date();
+  const all = await listProspects();
+  const list = all.filter((p) => textableNow(p, now));
+  // Due, but night or Sunday on their clock: they wait for their daytime (said in the hour's summary).
+  const later = all.filter((p) => textDue(p) && !textableNow(p, now)).length;
+  list.sort((a, b) => (a.consent?.at ?? a.createdAt).localeCompare(b.consent?.at ?? b.createdAt));
+  let sent = 0;
+  const errors: string[] = [];
+  for (const p of list.slice(0, Math.max(1, Math.min(50, n)))) {
+    const why = await sendOutreachText(p.id, { answered: false, noCall: !p.calls.length });
+    if (why === null) sent++;
+    else if (why === "held: SKIPPED") {
+      // Texting is switched off (the Twilio integration): stop here instead of logging a skipped text for each.
+      errors.push("texting is switched off");
+      break;
+    } else if (!errors.includes(why)) errors.push(why);
+  }
+  return { sent, waiting: Math.max(0, list.length - sent), later, errors };
 }
 
 export async function outreachTool(t: CallToken, name: string, args: Record<string, unknown>, base: string): Promise<{ ok: true; outcome?: "done"; output: Record<string, unknown> } | { ok: false; error: string }> {
@@ -515,7 +555,8 @@ export async function emailProspects(n: number, base: string, admin: { name: str
   if (!room) return { sent: 0, skipped: 0, error: `${EMAILS_PER_DAY} emails went out today already — the rest go tomorrow.` };
   // Everyone with an address who wasn't written to — a landline too, before its call (lib/outreach/rules emailDue).
   const todo = list.filter(emailDue).slice(0, Math.min(room, Math.max(1, n)));
-  const sender = (admin.name ?? "").trim().split(/\s+/)[0] || "The JobFlex team";
+  // From "JobFlex Team <app@jobflex.app>" — never an admin's own name; replies still reach the admin (reply-to).
+  const sender = OUTREACH_SENDER;
   let sent = 0;
   let skipped = 0;
   let error: string | null = null;
@@ -527,7 +568,7 @@ export async function emailProspects(n: number, base: string, admin: { name: str
     const token = callMeToken(p.id);
     if (!token) return { sent, skipped, error: "The server has no signing secret (NEXTAUTH_SECRET)." };
     const unsub = unsubscribeUrl(base, optOutId(p.id));
-    const letter = outreachLetter({ p, sender, callMeUrl: `${base}/call-me/${token}`, siteUrl: `${base}/?utm_source=jobflex-email&utm_medium=outreach`, unsubscribeUrl: unsub, postal: addr });
+    const letter = outreachLetter({ p, callMeUrl: `${base}/call-me/${token}`, siteUrl: `${base}/?utm_source=jobflex-email&utm_medium=outreach`, unsubscribeUrl: unsub, postal: addr });
     try {
       await sendEmail({ to: p.email!, subject: letter.subject, html: letter.html, text: letter.text, from: fromLine(sender), replyTo: admin.email, headers: unsubscribeHeaders(unsub) });
       await writeProspect({ ...p, emailedAt: nowIso() });

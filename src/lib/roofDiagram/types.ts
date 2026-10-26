@@ -307,7 +307,27 @@ export interface MeasurementProvenance {
    * (lib/roofDiagram/instantTotals.pickMainStructure). `others` / `othersSqft`
    * are the rest, listed on the page with checkboxes.
    */
-  mainStructure?: { index: number; how: string; others: number; othersSqft: number };
+  mainStructure?: {
+    index: number;
+    how: string;
+    others: number;
+    othersSqft: number;
+    /** The pin the pick was made at (2026-10-26): the one the contractor confirmed on the map, or a building they
+     *  chose on the page — kept so a late pack's re-check picks the same building. null/absent = the vendor's point. */
+    pin?: { lat: number; lng: number } | null;
+  };
+  /**
+   * The pin the person placed on the map before ordering (2026-10-26, ticket
+   * 8KETUL) — the first word on which building is main (pickMainStructure
+   * "user-pin"). Null when no pin was shown; absent on older rows.
+   */
+  userPin?: { lat: number; lng: number } | null;
+  /**
+   * The other structures ticked into the estimate (indices into the answer's
+   * structures, never the main one) — kept on the row so a reopened
+   * measurement shows the same buildings. Absent on older rows (none ticked).
+   */
+  included?: number[];
   /**
    * Which footprint the estimate prices on, and why (audit 2026-09-17).
    * `eagleview` = the reported `structure_footprint_sqft`; `outline` = the

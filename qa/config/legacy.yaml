@@ -197,6 +197,8 @@ scripts:
   - { file: roof-proposal-edit.check.ts, suite: logic, kind: check, status: live }
   - { file: roof-review.check.ts, suite: logic, kind: check, status: live }
   - { file: roofReview.check.ts, suite: logic, kind: check, status: live, note: "not a duplicate of roof-review: a different review, different fixes" }
+  - { file: roof-structures.check.ts, suite: logic, kind: check, status: live, note: "main building: the person's pin (user-pin / near-user-pin) before EagleView's point, then the old rules; ticks kept on the row (2026-10-26, ticket 8KETUL)" }
+  - { file: roof-main-structure.check.ts, suite: logic, kind: check, status: live, note: "Make main / kept ticks / Invalid address orders nothing / pending > 10 min closed and refunded — throwaway company, network off (2026-10-26, ticket 8KETUL)" }
   - { file: service-plans.check.ts, suite: logic, kind: check, status: live }
   - { file: sms.check.ts, suite: logic, kind: check, status: live }
   - { file: solar-houses.check.ts, suite: logic, kind: check, status: live }

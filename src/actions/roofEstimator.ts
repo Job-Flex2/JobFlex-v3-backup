@@ -192,6 +192,8 @@ const roofPlanInput = z.object({
   factsKey: z.string().max(400).nullable().optional(),
   manual: z.object({ squares: z.number().positive().max(100000), pitchLabel: z.string().max(20), address: z.string().max(300).nullable() }).nullable().optional(),
   extra: z.array(z.number().int().min(0).max(200)).max(50).optional(),
+  /** The main building the figures were about (2026-10-26, "Make main") — reopened as it was. */
+  mainIndex: z.number().int().min(0).max(500).nullable().optional(),
   pitchEntered: z.string().max(20).nullable().optional(),
   assumptions: z.array(z.string().max(2000)).max(60).optional(),
 });
@@ -213,6 +215,7 @@ async function writeRoofPlan(
       spec: plan?.spec ?? null,
       factsKey: plan?.factsKey ?? null,
       extra: plan?.extra ?? [],
+      mainIndex: plan?.mainIndex ?? null,
       pitchEntered: plan?.pitchEntered ?? null,
       assumptions: plan?.assumptions ?? [],
       address: at.address,
@@ -438,6 +441,8 @@ export type RoofFromProposal = {
   spec: RoofPackageSpec | null;
   factsKey: string | null;
   extra: number[];
+  /** The main building when the proposal was made; null on older plans. */
+  mainIndex: number | null;
   pitchEntered: string | null;
   address: string | null;
   title: string;
@@ -498,6 +503,7 @@ export async function loadRoofFromProposal(proposalId: string): Promise<RoofFrom
     spec: plan?.spec ?? null,
     factsKey: plan?.factsKey ?? null,
     extra: plan?.extra ?? [],
+    mainIndex: plan?.mainIndex ?? null,
     pitchEntered: plan?.pitchEntered ?? null,
     address: row.address ?? plan?.address ?? null,
     title: row.title,

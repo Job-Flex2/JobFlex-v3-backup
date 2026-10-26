@@ -81,3 +81,11 @@
   :global(.jf-blueprint .content) .acts :global(.btn) { width: 100%; justify-content: center; min-height: 44px; }
   :global(.jf-blueprint .content) .cell { white-space: normal; }
 }
+/* What the schedule sends (2026-10-25): three channels, any mix, each with how many an hour. */
+:global(.jf-blueprint .content) .channels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 12px 0 0; }
+:global(.jf-blueprint .content) .channel { display: grid; gap: 6px; align-content: start; padding: 10px 12px; border: 1.5px solid var(--hair-strong, rgba(10, 10, 10, 0.28)); border-radius: 8px; background: var(--paper, #fff); }
+:global(.jf-blueprint .content) .channelOn { border-color: var(--blueprint); box-shadow: inset 3px 0 0 var(--blueprint); }
+:global(.jf-blueprint .content) .channelPer { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .channelPer select { min-height: 32px; padding: 0 8px; border: 1px solid var(--hair-strong, rgba(10, 10, 10, 0.28)); border-radius: 6px; background: #fff; font: inherit; font-weight: 700; color: var(--ink); }
+:global(.jf-blueprint .content) .channelNote { font-size: 11.5px; line-height: 1.4; color: var(--ink-soft); }
+@media (max-width: 760px) { :global(.jf-blueprint .content) .channels { grid-template-columns: minmax(0, 1fr); } }

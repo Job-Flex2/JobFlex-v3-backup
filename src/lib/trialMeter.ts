@@ -349,6 +349,28 @@ export async function notePaidCall(
   }
 }
 
+/**
+ * Take one recorded paid call back off the counts — the organization's day it
+ * was filed under (`at`) and its trial meter — when the call turned out to buy
+ * nothing: an EagleView order that never arrived and was closed as failed
+ * (lib/instantOrderExpiry, 2026-10-26). Same price rule as notePaidCall, so
+ * the two cancel exactly. Never throws.
+ */
+export async function refundPaidCall(
+  orgId: string,
+  service: PaidService,
+  op: string,
+  opts: { units?: number; at?: Date } = {},
+): Promise<void> {
+  try {
+    const cents = unitCents(service, op, opts.units ?? 1);
+    const entries: ApiSpendEntry[] = [{ service, op, cents: -cents, calls: -1 }];
+    await Promise.all([recordApiSpend(orgId, entries, opts.at), writeTrialSpend(orgId, entries)]);
+  } catch (err) {
+    console.warn(`[trial-meter] ${service} ${op} refund not recorded:`, err);
+  }
+}
+
 async function flushNote(note: RequestNote): Promise<void> {
   const tally = note.tally;
   note.tally = new Map();

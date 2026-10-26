@@ -7,22 +7,32 @@ import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { logServerError } from "@/lib/server-events";
 import { listProspects } from "./store";
-import { checkLines, callNext, emailProspects, importRows, outreachReadiness } from "./server";
-import { contactPages, emailFromHtml, huntDue, huntPhrases, huntQuery, placeToRow, placesErrorWords, rememberSeen, type FoundPlace, type FoundRow, type Hunt } from "./hunt";
+import { checkLines, callNext, emailProspects, importRows, outreachReadiness, textNext } from "./server";
+import { contactPages, emailFromHtml, huntDue, huntPhrases, huntQuery, nextSpot, placeToRow, placesErrorWords, rememberSeen, type FoundPlace, type FoundRow, type Hunt } from "./hunt";
 
 const HUNT_PREFIX = "outreach:hunt:";
 const SETTINGS_KEY = "outreach:settings";
 
+/** What the schedule sends (owner, 2026-10-25: "text only, call only, email only — or all together"). */
+export interface OutreachChannels {
+  email: boolean;
+  calls: boolean;
+  texts: boolean;
+}
+
 export interface OutreachSettings {
   /** The cron works the list every hour: line checks, the email first, up to `callsPerRun` calls to landlines in hours. */
   autoWork: boolean;
+  /** Which of the three it sends; any mix. Off: that step is skipped. */
+  channels: OutreachChannels;
   callsPerRun: number;
   emailsPerRun: number;
+  textsPerRun: number;
   lastWorkAt: string | null;
   lastWork: string | null;
 }
 
-export const DEFAULT_SETTINGS: OutreachSettings = { autoWork: false, callsPerRun: 5, emailsPerRun: 20, lastWorkAt: null, lastWork: null };
+export const DEFAULT_SETTINGS: OutreachSettings = { autoWork: false, channels: { email: true, calls: true, texts: true }, callsPerRun: 5, emailsPerRun: 20, textsPerRun: 20, lastWorkAt: null, lastWork: null };
 
 export const newHuntId = () => randomBytes(8).toString("hex");
 
@@ -65,7 +75,7 @@ export async function readSettings(): Promise<OutreachSettings> {
   const row = await db.syncState.findUnique({ where: { key: SETTINGS_KEY }, select: { cursor: true } }).catch(() => null);
   try {
     const s = row?.cursor ? (JSON.parse(row.cursor) as Partial<OutreachSettings>) : {};
-    return { ...DEFAULT_SETTINGS, ...s };
+    return { ...DEFAULT_SETTINGS, ...s, channels: { ...DEFAULT_SETTINGS.channels, ...(s.channels ?? {}) } };
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -175,12 +185,14 @@ export async function runHunt(id: string): Promise<HuntRun> {
     const taken: string[] = [];
     // Where the last run left off: its page of its phrase; a hunt that ran dry starts over for newcomers.
     const phrases = huntPhrases(hunt.trade);
+    const cities = hunt.cities?.length ? hunt.cities : null;
     let phrase = hunt.exhausted ? 0 : Math.min(hunt.phraseIndex, phrases.length - 1);
+    let city = hunt.exhausted || !cities ? 0 : Math.min(Math.max(0, hunt.cityIndex ?? 0), cities.length - 1);
     let token = hunt.exhausted ? null : hunt.pageToken;
     let exhausted = false;
     let pages = 0;
     while (rows.length < hunt.perDay && pages < MAX_PAGES) {
-      const page = await searchPlaces(huntQuery({ ...hunt, phraseIndex: phrase }), token);
+      const page = await searchPlaces(huntQuery({ ...hunt, phraseIndex: phrase, cityIndex: city }), token);
       pages++;
       for (const p of page.places) {
         if (rows.length >= hunt.perDay) break;
@@ -195,9 +207,12 @@ export async function runHunt(id: string): Promise<HuntRun> {
       }
       token = page.nextPage;
       if (!token) {
-        // This phrase has run dry — on to the next one; past the last, Google knows no more of this trade here.
-        if (phrase + 1 < phrases.length) {
-          phrase++;
+        // This phrase has run dry here — a whole state takes it to its next city, then the next phrase from the first
+        // city; an area takes the next phrase. Past the last, Google knows no more of this trade here.
+        const next = nextSpot({ phrase, city }, phrases.length, cities?.length ?? 0);
+        if (next) {
+          phrase = next.phrase;
+          city = next.city;
           continue;
         }
         exhausted = true;
@@ -220,7 +235,7 @@ export async function runHunt(id: string): Promise<HuntRun> {
     out.added = imported.added;
     out.merged = imported.merged;
     out.onJobflex = imported.onJobflex;
-    await writeHunt({ ...hunt, seen: rememberSeen(hunt.seen, taken), pageToken: exhausted ? null : token, phraseIndex: exhausted ? 0 : phrase, exhausted, lastRunAt: now, lastFound: imported.added, totalFound: hunt.totalFound + imported.added, lastError: null });
+    await writeHunt({ ...hunt, seen: rememberSeen(hunt.seen, taken), pageToken: exhausted ? null : token, phraseIndex: exhausted ? 0 : phrase, ...(cities ? { cityIndex: exhausted ? 0 : city } : {}), exhausted, lastRunAt: now, lastFound: imported.added, totalFound: hunt.totalFound + imported.added, lastError: null });
   } catch (err) {
     out.error = err instanceof Error ? err.message : "The search didn't work.";
     logServerError("outreach-hunt", err, { kind: "action" });
@@ -239,16 +254,18 @@ export async function runDueHunts(now = new Date()): Promise<Array<{ id: string;
 
 /** The scheduled work step (the cron, every hour, when the schedule is on): the lines checked, the emails that are due
  *  sent, the landlines whose turn it is called — each by the outreach's own rules (hours, two calls, consent). */
-export async function workOutreach(base: string, now = new Date()): Promise<{ checked: number; emailed: number; called: number; waiting: number; notes: string[] }> {
+export async function workOutreach(base: string, now = new Date()): Promise<{ checked: number; emailed: number; called: number; texted: number; waiting: number; notes: string[] }> {
   const notes: string[] = [];
   const readiness = await outreachReadiness();
+  const ch = (await readSettings()).channels;
   const lines = await checkLines(50).catch((err) => {
     notes.push(`Line check: ${err instanceof Error ? err.message : "failed"}`);
     return { checked: 0, failed: 0, left: 0, error: null };
   });
   if (lines.error) notes.push(`Line check: ${lines.error}`);
   let emailed = 0;
-  if (readiness.emails) {
+  if (!ch.email) notes.push("Emails off on the schedule.");
+  else if (readiness.emails) {
     const admin = await db.user.findFirst({ where: { isPlatformAdmin: true, email: { not: "" } }, orderBy: { createdAt: "asc" }, select: { name: true, email: true } });
     if (admin) {
       const settings = await readSettings();
@@ -259,15 +276,29 @@ export async function workOutreach(base: string, now = new Date()): Promise<{ ch
   } else notes.push("Emails aren't set up — the AI calls landlines without the email first.");
   let called = 0;
   let waiting = 0;
-  if (readiness.calls) {
+  if (!ch.calls) notes.push("Calls off on the schedule.");
+  else if (readiness.calls) {
     const settings = await readSettings();
-    const c = await callNext(settings.callsPerRun, base).catch((err) => ({ placed: 0, failed: 0, waiting: 0, errors: [err instanceof Error ? err.message : "failed"] }));
+    // Calls only: no email to wait two days for.
+    const c = await callNext(settings.callsPerRun, base, { emailsOn: ch.email && readiness.emails }).catch((err) => ({ placed: 0, failed: 0, waiting: 0, errors: [err instanceof Error ? err.message : "failed"] }));
     called = c.placed;
     waiting = c.waiting;
     notes.push(...c.errors.slice(0, 3));
   } else notes.push("Calls aren't ready (Twilio or the voice server).");
-  const summary = `${now.toISOString().slice(0, 16).replace("T", " ")}Z — checked ${lines.checked}, emailed ${emailed}, called ${called}${waiting ? `, ${waiting} waiting` : ""}${notes.length ? ` · ${notes[0]}` : ""}`;
+  // The texts: only to the ones who agreed to texts, in their daytime (lib/outreach/server textNext).
+  let texted = 0;
+  let textsLater = 0;
+  if (ch.texts) {
+    if (readiness.texts) {
+      const settings = await readSettings();
+      const t = await textNext(settings.textsPerRun).catch((err) => ({ sent: 0, waiting: 0, later: 0, errors: [err instanceof Error ? err.message : "failed"] }));
+      texted = t.sent;
+      textsLater = t.later;
+      notes.push(...t.errors.filter((e) => e !== "not due").slice(0, 2).map((e) => `Texts: ${e}`));
+    } else notes.push("Texts aren't ready (JobFlex's texting number).");
+  }
+  const summary = `${now.toISOString().slice(0, 16).replace("T", " ")}Z — checked ${lines.checked}, emailed ${emailed}, called ${called}, texted ${texted}${textsLater ? ` (${textsLater} ${textsLater === 1 ? "text waits" : "texts wait"} for their daytime)` : ""}${waiting ? `, ${waiting} waiting` : ""}${notes.length ? ` · ${notes[0]}` : ""}`;
   const s = await readSettings();
   await writeSettings({ ...s, lastWorkAt: now.toISOString(), lastWork: summary }).catch(() => {});
-  return { checked: lines.checked, emailed, called, waiting, notes };
+  return { checked: lines.checked, emailed, called, texted, waiting, notes };
 }

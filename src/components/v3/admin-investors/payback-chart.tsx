@@ -220,7 +220,9 @@ export function PaybackChart({ curve, today, ratePct, share }: { curve: CurvePoi
         </figcaption>
       </figure>
       <div className={s.readings}>
-        {startLabel && reading(startLabel, "start", first)}
+        {/* The view's start, read out — not on the count's first day (owner, 2026-10-26: "don't show the 782, make it the
+            total"): the line still starts where it did; the words give the multiple and the total. */}
+        {startLabel && w.from !== 0 && reading(startLabel, "start", first)}
         {reading("Today", "today", now)}
         {endLabel && reading(endLabel, "end", last)}
       </div>

@@ -299,6 +299,77 @@ export interface RoofPackageSpec {
   productFor?: string | null;
   /** True while the product is the state's pick, not the contractor's: re-picked when the system or state changes. */
   productAuto?: boolean;
+  /** MANSARD SIDES (2026-10-26, a contractor's ticket: "the apartment has mansards on the sides as well that need to be
+   *  shingled"). The near-upright shingled walls below the roof's edge, which an aerial measurement cannot see: how far
+   *  they run around the building and how tall they are measured up the face. They take their OWN shingle and rates —
+   *  the roof above a mansard is often flat. 0 ft (or absent, on an older estimate) = none. */
+  mansardFt?: number;
+  mansardHeightFt?: number;
+  mansardName?: string;
+  /** The catalog row the mansard's shingle came from (the page's picker); the name and rates are what price it. */
+  mansardSystemId?: string;
+  mansardMatPerSq?: number;
+  /** Install on a near-vertical face, staging included — dearer than the roof's own install. */
+  mansardLaborPerSq?: number;
+  mansardUnderPerSq?: number;
+  /** "assumed": the run and height are the estimate's own (round the roof's outline, one storey up the face — owner,
+   *  2026-10-26: "calculate there, or at least assume") until the contractor types theirs ("entered"). Absent = entered. */
+  mansardBasis?: "assumed" | "entered";
+}
+
+/** A mansard's install against the roof's: a near-vertical lay from staging. */
+export const MANSARD_LABOR_FACTOR = 1.5;
+/** The face height a mansard opens at — one storey's worth, the contractor's to change. */
+export const MANSARD_DEFAULT_HEIGHT_FT = 8;
+
+/**
+ * The mansard sides when nobody has measured them: all the way round the roof's outline (the outline's perimeter, else
+ * the edges the estimate runs — eave + rake, a flat roof's perimeter — else a square of the footprint) and one storey
+ * up the face. null when there is nothing to go round.
+ */
+export function mansardAssumed(facts: RoofFacts, spec?: Pick<RoofPackageSpec, "eaveFt" | "rakeFt"> | null): { ft: number; heightFt: number } | null {
+  const edges = spec ? Math.max(0, spec.eaveFt) + Math.max(0, spec.rakeFt) : 0;
+  const ft =
+    facts.perimeterFt != null && facts.perimeterFt > 0
+      ? facts.perimeterFt
+      : edges > 0
+        ? edges
+        : facts.footprintSqft != null && facts.footprintSqft > 0
+          ? 4 * Math.sqrt(facts.footprintSqft) * 1.05
+          : 0;
+  return ft > 0 ? { ft: Math.round(ft), heightFt: MANSARD_DEFAULT_HEIGHT_FT } : null;
+}
+
+/** The aerial data's own shape word calls the roof a mansard — the estimate opens with the sides assumed in. */
+export const isMansardShape = (facts: Pick<RoofFacts, "shape">) => /mansard/i.test(facts.shape ?? "");
+
+/** The mansard's area, sq ft: around × up the face; 0 when there is none. */
+export function mansardSqft(spec: Pick<RoofPackageSpec, "mansardFt" | "mansardHeightFt">): number {
+  const ft = Math.max(0, spec.mansardFt ?? 0);
+  const h = Math.max(0, spec.mansardHeightFt ?? 0);
+  return ft > 0 && h > 0 ? ft * h : 0;
+}
+
+/** The shingle a mansard is laid with, and its rates: the roof's own system when that is a shingle, else the
+ *  catalog's architectural shingle. */
+export function mansardDefaults(sys: RoofSystem, lists: CatalogLists): Pick<RoofPackageSpec, "mansardName" | "mansardSystemId" | "mansardMatPerSq" | "mansardLaborPerSq" | "mansardUnderPerSq"> {
+  const shingle = sys.family === "asphalt" ? sys : lists.systems.find((x) => x.id === "architectural") ?? BUILTIN_LISTS.systems.find((x) => x.id === "architectural") ?? sys;
+  const under = lists.underlayments.find((u) => u.id === "synthetic") ?? BUILTIN_LISTS.underlayments.find((u) => u.id === "synthetic");
+  return {
+    ...mansardSystem(shingle),
+    mansardUnderPerSq: under?.perSq ?? 32,
+  };
+}
+
+/** A new estimate's mansard: none, unless the aerial data calls the roof a mansard — then the sides assumed. */
+function openingMansard(facts: RoofFacts): Pick<RoofPackageSpec, "mansardFt" | "mansardHeightFt" | "mansardBasis"> {
+  const a = isMansardShape(facts) ? mansardAssumed(facts) : null;
+  return a ? { mansardFt: a.ft, mansardHeightFt: a.heightFt, mansardBasis: "assumed" } : { mansardFt: 0, mansardHeightFt: MANSARD_DEFAULT_HEIGHT_FT };
+}
+
+/** A catalog row as the mansard's shingle: its name and material price, its install at the mansard factor. */
+export function mansardSystem(sys: RoofSystem): Pick<RoofPackageSpec, "mansardName" | "mansardSystemId" | "mansardMatPerSq" | "mansardLaborPerSq"> {
+  return { mansardName: sys.label, mansardSystemId: sys.id, mansardMatPerSq: sys.matPerSq, mansardLaborPerSq: Math.round(sys.laborPerSq * MANSARD_LABOR_FACTOR) };
 }
 
 /** The system as the proposal names it — the brand and line in front when one is picked for THIS system
@@ -834,6 +905,8 @@ export function defaultSpecWith(facts: RoofFacts, lists: CatalogLists, sys: Roof
     flat: seedFlat(facts, sys, facts.buildingUse === "commercial"),
     commercial: defaultCommercial(facts.buildingUse === "commercial"),
     systemAuto: true,
+    ...mansardDefaults(sys, lists),
+    ...openingMansard(facts),
   };
   return sys.family === "low-slope" ? flattenForLowSlope(base) : base;
 }
@@ -1082,6 +1155,15 @@ export function withSystem(spec: RoofPackageSpec, sys: RoofSystem, facts: RoofFa
       plywoodSize: spec.plywoodSize,
       cleanupLump: spec.cleanupLump,
       permitLump: spec.permitLump,
+      // The mansard sides are walls, not the roof: a switch between a flat top and a pitched one keeps them as typed.
+      ...(spec.mansardFt != null ? { mansardFt: spec.mansardFt } : {}),
+      ...(spec.mansardHeightFt != null ? { mansardHeightFt: spec.mansardHeightFt } : {}),
+      ...(spec.mansardName != null ? { mansardName: spec.mansardName } : {}),
+      ...(spec.mansardSystemId != null ? { mansardSystemId: spec.mansardSystemId } : {}),
+      ...(spec.mansardMatPerSq != null ? { mansardMatPerSq: spec.mansardMatPerSq } : {}),
+      ...(spec.mansardLaborPerSq != null ? { mansardLaborPerSq: spec.mansardLaborPerSq } : {}),
+      ...(spec.mansardUnderPerSq != null ? { mansardUnderPerSq: spec.mansardUnderPerSq } : {}),
+      ...(spec.mansardBasis != null ? { mansardBasis: spec.mansardBasis } : {}),
     };
   }
   const prevRule = wasLow ? lowSlopeRule(spec.systemId, spec.systemName) : null;
@@ -1186,6 +1268,14 @@ const fmt = (n: number) => Number(n).toLocaleString("en-US", { maximumFractionDi
 export function buildRoofPackage(spec: RoofPackageSpec, facts: RoofFacts): RoofPackage {
   const lowSlope = spec.systemFamily === "low-slope";
   const built = lowSlope ? buildLowSlope(spec, facts) : buildSteep(spec, facts);
+  // The mansard sides go on either kind of roof (a flat top over shingled mansards is the classic apartment block).
+  const mansard = mansardPackage(spec, facts);
+  if (mansard) {
+    built.materials.push(...mansard.materials);
+    built.labor.push(...mansard.labor);
+    built.assumptions.push(...mansard.assumptions);
+    built.scope.push(...mansard.scope);
+  }
   const c = spec.commercial ?? defaultCommercial(false);
   const surface = lowSlope && isSurfaceApplied(lowSlopeRule(spec.systemId, spec.systemName));
   applyCommercial(built.materials, built.labor, built.assumptions, {
@@ -1200,6 +1290,52 @@ export function buildRoofPackage(spec: RoofPackageSpec, facts: RoofFacts): RoofP
   }
   const plain = (l: TaggedLine): PkgLine => ({ name: l.name, quantity: l.quantity, unit: l.unit, unitPrice: l.unitPrice, kind: l.kind, basis: l.basis });
   return { materials: built.materials.map(plain), labor: built.labor.map(plain), assumptions: built.assumptions, scope: built.scope, vent: built.vent };
+}
+
+/**
+ * THE MANSARD SIDES (2026-10-26). Their own lines, so the client and the contractor see them apart from the roof: the
+ * shingle and an underlayment for the face, drip edge and starter along the bottom edge, transition flashing where the
+ * face meets the roof above, the old shingles off when the roof is torn off, and the install at the mansard's rate (a
+ * near-vertical lay from staging). Every quantity is the contractor's entry, or the estimate's assumption until they
+ * give one (mansardBasis) — an aerial measurement cannot see them.
+ */
+function mansardPackage(spec: RoofPackageSpec, facts: RoofFacts): { materials: TaggedLine[]; labor: TaggedLine[]; assumptions: string[]; scope: string[] } | null {
+  const sqft = mansardSqft(spec);
+  if (sqft <= 0) return null;
+  const ft = Math.max(0, spec.mansardFt ?? 0);
+  const h = Math.max(0, spec.mansardHeightFt ?? 0);
+  const name = (spec.mansardName ?? "").trim() || "Architectural shingle";
+  const msq = sqft / 100;
+  const wastePct = spec.systemFamily === "low-slope" ? 12 : spec.wastePct;
+  const msqWaste = r1(msq * (1 + wastePct / 100));
+  const storeyF = storeyLaborFactor(facts.storeys);
+  const L = spec.tearOffLayers;
+  const assumed = spec.mansardBasis === "assumed";
+  const B = assumed ? "estimated" : "entered";
+  const materials: TaggedLine[] = [];
+  const labor: TaggedLine[] = [];
+  const mat = Math.max(0, spec.mansardMatPerSq ?? 0);
+  const under = Math.max(0, spec.mansardUnderPerSq ?? 0);
+  if (mat > 0) materials.push({ name: `${name} · mansard sides`, quantity: msqWaste, unit: "square", unitPrice: mat, kind: "material", basis: B });
+  if (under > 0) materials.push({ name: "Underlayment · mansard sides", quantity: msqWaste, unit: "square", unitPrice: under, kind: "material", basis: B });
+  const edge = Math.max(0, spec.dripPerFt) + Math.max(0, spec.starterPerFt);
+  if (edge > 0) materials.push({ name: "Drip edge & starter · mansard bottom edge", quantity: r1(ft), unit: "linear ft", unitPrice: r1(edge * 100) / 100, kind: "material", basis: B });
+  if (spec.apronPerFt > 0) materials.push({ name: "Transition flashing · mansard top edge", quantity: r1(ft), unit: "linear ft", unitPrice: spec.apronPerFt, kind: "material", basis: B });
+  // A flat roof's spec carries no shingle nails (flattenForLowSlope) — the mansard's shingles still need them.
+  const nails = spec.nailsPerSq > 0 ? spec.nailsPerSq : NAILS_PER_SQ;
+  materials.push({ name: "Fasteners · mansard sides", quantity: msqWaste, unit: "square", unitPrice: nails, kind: "material", basis: B });
+  if (L > 0) {
+    labor.push({ name: `Tear-off · mansard sides · ${L} layer${L === 1 ? "" : "s"}`, quantity: r1(msq), unit: "square", unitPrice: spec.tearOffPerSqLayer * L, kind: "labor", basis: B, wageable: true });
+    labor.push({ name: "Disposal · mansard sides", quantity: r1(msq), unit: "square", unitPrice: spec.disposalPerSqLayer * L, kind: "labor", basis: B });
+  }
+  const install = Math.max(0, spec.mansardLaborPerSq ?? 0);
+  if (install > 0) labor.push({ name: `Install · ${name} · mansard sides · near-vertical${storeyF > 1 ? ` · ${facts.storeys}-storey` : ""}`, quantity: r1(msq), unit: "square", unitPrice: Math.round(install * storeyF), kind: "labor", basis: B, wageable: true });
+  if (spec.apronLaborPerFt > 0) labor.push({ name: "Transition flashing · mansard top edge", quantity: r1(ft), unit: "linear ft", unitPrice: spec.apronLaborPerFt, kind: "labor", basis: B, wageable: true });
+  const assumptions = [
+    `Mansard sides: ${fmt(ft)} ft around × ${fmt(h)} ft up the face = ${fmt(sqft)} sq ft (${msq.toFixed(1)} squares, ${wastePct}% waste) — ${assumed ? "ASSUMED, not measured: all the way round the roof's outline and one storey up the face; confirm the run and the height on site" : "entered by the contractor"}; an aerial measurement does not see near-vertical faces. Laid with ${name}; install at the mansard rate for the near-vertical lay and staging; drip edge and starter along the bottom edge, transition flashing along the top${L > 0 ? "; the old shingles torn off and hauled away" : ""}.`,
+  ];
+  const scope = [`Shingle the mansard sides — ${fmt(ft)} ft around and ${fmt(h)} ft tall — with ${name}${L > 0 ? ", the old shingles removed first" : ""}: new drip edge and starter at the bottom, and flashing where they meet the roof above.`];
+  return { materials, labor, assumptions, scope };
 }
 
 interface BuiltPackage {

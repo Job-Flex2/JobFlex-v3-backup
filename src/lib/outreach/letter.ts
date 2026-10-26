@@ -17,7 +17,11 @@ export interface OutreachLetter {
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const firstName = (name: string) => name.trim().split(/\s+/)[0] || "";
 
-export function outreachLetter(input: { p: Pick<Prospect, "name" | "business" | "trade">; sender: string; callMeUrl: string; siteUrl: string; unsubscribeUrl: string; postal: string }): OutreachLetter {
+/** Who the letter is from (owner, 2026-10-26: "don't say Dmitriy in the email, say JobFlex Team") — the From name, the
+ *  opening and the signature; the address stays the platform's (EMAIL_FROM, app@jobflex.app). */
+export const OUTREACH_SENDER = "JobFlex Team";
+
+export function outreachLetter(input: { p: Pick<Prospect, "name" | "business" | "trade">; callMeUrl: string; siteUrl: string; unsubscribeUrl: string; postal: string }): OutreachLetter {
   const { p } = input;
   const t = tradeWords(p.trade);
   const who = firstName(p.name);
@@ -25,9 +29,10 @@ export function outreachLetter(input: { p: Pick<Prospect, "name" | "business" | 
   const subject = `Who answers ${p.business ? `${p.business}'s` : "your"} phone when you're on a job?`;
   const paras = [
     who ? `Hi ${who},` : "Hi,",
-    `I'm ${input.sender}, from JobFlex — we make software for contractors. First, thank you for what you do: people count on ${t.who} for ${t.help}, and that matters.`,
+    `We're the JobFlex team — we make software for contractors. First, thank you for what you do: people count on ${t.who} for ${t.help}, and that matters.`,
     `We built an AI desk that answers a contractor's phone in their own company's name, books visits onto their calendar and texts them what came in — so the call that comes in while you're up on a job isn't lost to the next company on the list.`,
-    tradePitch(p.trade).email,
+    // The offer (owner, 2026-10-26: "they need JobFlex to grow the business faster and save time with our tools").
+    `JobFlex is built to help ${biz} grow faster and save time. ${tradePitch(p.trade).email}`,
     `The quickest way to see it is to hear it: tap the link below and it will call you in about half a minute and answer the way it would for ${biz}.`,
   ];
   const linkLabel = "Have the AI desk call me";
@@ -40,10 +45,10 @@ export function outreachLetter(input: { p: Pick<Prospect, "name" | "business" | 
     ...paras.map((x) => `<p ${P}>${esc(x)}</p>`),
     `<p ${P}><a href="${esc(input.callMeUrl)}" style="color:#1854a0;text-decoration:underline;font-weight:600;">${esc(linkLabel)}</a></p>`,
     `<p ${P}>Or have a look first at <a href="${esc(input.siteUrl)}" style="color:#1854a0;text-decoration:underline;">jobflex.app</a>.</p>`,
-    `<p style="margin:24px 0 0;font:15px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;">${esc(input.sender)}<br><span style="color:#6a6a6a;">JobFlex · jobflex.app</span></p>`,
+    `<p style="margin:24px 0 0;font:15px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;">${esc(OUTREACH_SENDER)}<br><span style="color:#6a6a6a;">jobflex.app</span></p>`,
     `<p style="margin:32px 0 0;padding-top:12px;border-top:1px solid #e5e5e5;font:12px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#8a8a8a;">${esc(why)} <a href="${esc(input.unsubscribeUrl)}" style="color:#8a8a8a;text-decoration:underline;">Unsubscribe</a><br>${esc(input.postal)}</p>`,
     "</div></body></html>",
   ].join("\n");
-  const text = [...paras, `${linkLabel}: ${input.callMeUrl}`, `Or have a look first: ${input.siteUrl}`, `${input.sender}\nJobFlex · jobflex.app`, `--\n${why}\nUnsubscribe: ${input.unsubscribeUrl}\n${input.postal}`].join("\n\n");
+  const text = [...paras, `${linkLabel}: ${input.callMeUrl}`, `Or have a look first: ${input.siteUrl}`, `${OUTREACH_SENDER}\njobflex.app`, `--\n${why}\nUnsubscribe: ${input.unsubscribeUrl}\n${input.postal}`].join("\n\n");
   return { subject, html, text };
 }

@@ -257,6 +257,20 @@ monthly" is one 12px line (weight 600) under the price.
   stage Mark paid green, Send invoice blue, Remind amber. Sales reps and
   estimators see the stages and what is left, never the billing buttons.
   Phone: the same pieces inside the card, every action 44px.
+- Roof estimator buildings (owner, 2026-10-26, ticket 8KETUL). Before the
+  order the intake map's pin can be dragged (or the map tapped) onto the
+  building to measure, with "Measure the building under the pin" in 15px 800
+  ink under the map; an address typed without picking a suggestion gets its
+  pin from the geocoder and the line "Pick the address from the list so we
+  measure the right building." In the report only the buildings in the
+  estimate carry a number: the main one is always "Main · Building 1 of N",
+  the ticked ones stand under it in turn ("In the
+  estimate"), the unticked rows follow with no number. Every other row has a quiet "Make main" button (white, 1.5px ink
+  frame, 13px 700, 44px on a phone). The report map outlines every building —
+  the main one in blueprint, a ticked one in its colour with its number on a
+  flat disc, the rest a thin white line — and a click on an outline selects
+  its row. This replaces the 2026-10-10 "pins, no outlines" rule for the
+  report map only; the client's picture keeps one pin and no outline.
 - Use existing Lucide icons at consistent sizes; decorative icons are hidden
   from assistive technology, icon-only controls have accessible names.
 - Preserve all existing actions, validation, units, permissions and data

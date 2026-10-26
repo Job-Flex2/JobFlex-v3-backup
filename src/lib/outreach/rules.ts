@@ -226,6 +226,30 @@ export function textDue(p: Prospect): boolean {
   return !(p.textedAt && p.consent && p.textedAt >= p.consent.at);
 }
 
+/** What the schedule sends, in plain words (2026-10-25): each channel on, what it does, and the one honest limit —
+ *  a text goes only to a contractor who agreed to texts, and they agree through the email's link. */
+export function scheduleWords(ch: { email: boolean; calls: boolean; texts: boolean }, per: { emails: number; calls: number; texts: number }): string {
+  const on = [ch.email && "email", ch.calls && "calls", ch.texts && "texts"].filter(Boolean) as string[];
+  if (!on.length) return "Nothing is sent — switch on email, calls or texts.";
+  const parts: string[] = [];
+  if (ch.email) parts.push(`the first email to up to ${per.emails} contractors who have an address`);
+  if (ch.calls) parts.push(`the AI desk calls up to ${per.calls} landlines whose turn it is${ch.email ? " (two days after their email)" : ""}, and anyone who asked`);
+  if (ch.texts) parts.push(`up to ${per.texts} texts to contractors who agreed to texts`);
+  const lead = on.length === 1 ? `${on[0][0].toUpperCase()}${on[0].slice(1)} only. ` : "";
+  const limit = ch.texts
+    ? ch.email
+      ? " A contractor agrees to texts on the call-me page the email links to — so the texts grow as they answer."
+      : " With emails off, only the contractors who already agreed get texts — the email's link is where they agree."
+    : "";
+  return `${lead}Every hour, on its own: the new numbers checked, then ${parts.join("; ")} — all in their own daytime hours, two calls at most, a cell phone only once they ask.${limit}`;
+}
+
+/** A text may go now (2026-10-25, the schedule's Texts): it is due (they agreed to texts, none since), and it is
+ *  daytime on their clock — texts keep the calls' hours. */
+export function textableNow(p: Prospect, now: Date): boolean {
+  return textDue(p) && withinCallingHours(p.state, now);
+}
+
 /* ── The list ──────────────────────────────────────────────────────────── */
 
 export interface ListRow {

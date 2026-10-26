@@ -62,7 +62,9 @@ export async function satellitePhotoPng(row: PhotoSubject): Promise<{ ok: true; 
     key: process.env.GOOGLE_MAPS_API_KEY,
   });
   try {
-    const res = await fetch(`https://maps.googleapis.com/maps/api/staticmap?${params}`, { cache: "no-store", signal: AbortSignal.timeout(8_000) });
+    // Outside production a stand-in may answer instead of Google (STATICMAP_BASE — the stand draws its own aerial).
+    const base = (process.env.NODE_ENV !== "production" && process.env.STATICMAP_BASE?.trim()) || "https://maps.googleapis.com";
+    const res = await fetch(`${base.replace(/\/$/, "")}/maps/api/staticmap?${params}`, { cache: "no-store", signal: AbortSignal.timeout(8_000) });
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
       return { ok: false, error: `Static Maps refused (${res.status})${detail ? `: ${detail.slice(0, 120)}` : ""}` };

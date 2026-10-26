@@ -27,6 +27,7 @@
 // or Decline; "Mark fixed" later tells the customer.
 
 import { z } from "zod";
+import { trialExtensionEligible } from "@/lib/trialExtension";
 import { SUPPORT_HANDBOOK } from "./handbook";
 import {
   SEVERITIES,
@@ -212,7 +213,17 @@ NEVER (set needsHuman=true instead, and still write your best suggested reply fo
 - Anything you are less than 60% sure of.
 
 BUGS — something in JobFlex is broken (an error message, a wrong number, a page that won't load or save, data missing, an email or text that didn't arrive though it should have)
-- category "bug". In the reply: thank them for the detail, say plainly that you've passed it to our engineers and they are working on it, that we'll email them as soon as it's fixed, and give a workaround if the HANDBOOK supports one. Never say it's fixed, never give a date.
+- category "bug". In the reply: thank them for the detail, say plainly that we'll double-check it with our team right away and fix it as soon as we can, and that we'll email them the moment it's done; give a workaround if the HANDBOOK supports one. Never say it's fixed, never give a date.
+- SOMETHING LOOKS WRONG — a measurement, a price, a count or a figure they doubt (a roof's squares, a proposal total, a count of leads): treat it as a bug. Ask for the exact address, proposal or screen so the team checks that very case, and say we'll double-check it with the team and put it right as soon as we can.
+
+CANCELLATIONS — they want to cancel or downgrade the plan, ask how to cancel, or say they are leaving (also "close my account" when they mean the plan)
+- category "billing" (the plan, the bill) or "account" (the whole account). Set needsHuman=true with humanReason "Someone is leaving — a person sends this one" — and still write the full reply: it is the draft the team sends.
+- Write like a person who is sorry to see them go and would like to help — warm, never pushy, no guilt, never arguing with their reason. Five short paragraphs at most:
+  1. One warm line, then ONE honest question: what made them decide — a missing feature, the price, not enough time, something that didn't work — because we read every answer and fix what we can.
+  2. How to cancel, plainly, with the HANDBOOK's exact steps and link, and what happens after (the plan runs to the end of the period, then the Free plan, nothing more is charged) — nobody should feel trapped.
+  3. What they would be leaving: JobFlex keeps getting better month by month — name two or three things from the HANDBOOK that fit their trade and what they have used (the ACCOUNT FACTS say) — and for everything it does the plan costs a fraction of one job. Your own words; no prices unless the ACCOUNT FACTS give them.
+  4. The offer, ONLY when the ACCOUNT FACTS say "TRIAL EXTENSION: AVAILABLE": if they simply haven't had time to explore it properly, we'll gladly add two more weeks, free — they just reply "yes" and we set it up. When the facts say a request is already pending: say we're on it, don't offer again. When NOT available (a paying plan, a trial long over): offer a short walkthrough call or help setting up the part they struggled with instead. Never refunds, credits or discounts.
+  5. Close warmly: the door stays open either way, and they can reply to this email.
 - Fill "bug" for the team: title (short), symptoms (their words plus the relevant account facts and server errors), likelyCause (your best diagnosis, naming the area from the HANDBOOK's internal code map — say how sure you are), proposedFix (the concrete change a developer should make, step by step), areas (file paths or routes from the code map), severity (high = they cannot work or money is affected; low = cosmetic), workaround (if any).
 - If it is really a how-to misunderstanding, answer the how-to and leave "bug" null.
 
@@ -220,6 +231,30 @@ FEATURE REQUESTS AND FEEDBACK: thank them warmly, say it has been shared with th
 
 OUTPUT — JSON only, exactly these keys:
 {"language": "en", "category": "how-to"|"billing"|"account"|"bug"|"feature-request"|"feedback"|"other", "summary": "one line for the admin list", "confidence": 0-100, "needsHuman": true|false, "humanReason": "why a person must answer, or null", "reply": "the full email body to the customer, plain text, paragraphs separated by blank lines", "internalNotes": "for the team: what you checked, what you assumed, what to watch", "factsUsed": ["the account facts or handbook points you relied on"], "bug": null | {"title": "", "symptoms": "", "likelyCause": "", "proposedFix": "", "areas": [""], "severity": "low"|"normal"|"high", "workaround": "" }}`;
+
+// ── The trial-extension offer, as a fact for the model and a flag for the admin ──────────────────────────────────
+
+export interface OfferSubscription {
+  status: string;
+  trialEndsAt: Date | null;
+  provider?: string | null;
+  plan?: string | null;
+}
+
+/** Whether the team can add days (lib/trialExtension's rule: on the trial, or within 14 days after it ended), said
+ *  as a line of ACCOUNT FACTS the model reads — and the flag the admin page shows its button on. */
+export function extensionOfferFact(sub: OfferSubscription | null | undefined, pending: { days: number } | null, now = Date.now()): { eligible: boolean; fact: string } {
+  if (!sub) return { eligible: false, fact: "TRIAL EXTENSION: not available — no subscription (the free tier)." };
+  if (sub.provider === "MANUAL") return { eligible: false, fact: "TRIAL EXTENSION: not available — a plan granted by hand." };
+  if (!trialExtensionEligible(sub, now)) {
+    const paying = sub.status === "ACTIVE";
+    return { eligible: false, fact: paying ? `TRIAL EXTENSION: not available — they pay for the ${sub.plan ?? "plan"} (no trial to extend); offer help instead, never money.` : "TRIAL EXTENSION: not available — the trial ended more than 14 days ago." };
+  }
+  if (pending) return { eligible: true, fact: `TRIAL EXTENSION: a request for ${pending.days} more days is already PENDING with the team — say we're on it, don't offer again.` };
+  const when = sub.trialEndsAt ? sub.trialEndsAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : null;
+  const where = sub.status === "TRIALING" ? `they are on their trial${when ? ` (it ends ${when})` : ""}` : `their trial ended${when ? ` ${when}` : ""}, within the last 14 days`;
+  return { eligible: true, fact: `TRIAL EXTENSION: AVAILABLE — ${where}; the team can add 7 or 14 free days on top. If they haven't had time to explore, offer two more weeks — they reply "yes" and a teammate sets it up.` };
+}
 
 /** The whole system message: the rules, then the knowledge. */
 export function supportSystemPrompt(): string {

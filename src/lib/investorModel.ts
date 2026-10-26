@@ -215,6 +215,10 @@ export interface InvestorFigures {
     costPerSignupCents: number | null;
     /** Spend ÷ the paying customers the period brought — counted, not expected. */
     costPerPayingCents: number | null;
+    /** Spend ÷ (those customers + the running trials expected to convert at the measured rate) — EXPECTED, said so
+     *  (owner, 2026-10-25: "cost per lead to make better stats" → the honest kind: per lead, and per customer once the
+     *  trials already paid for convert). null with no measured rate. */
+    costPerCustomerExpectedCents: number | null;
     visitorToSignupPct: number | null;
     signupsPerDay: number;
     /** Spend ÷ the monthly list price of those customers — months for them to earn the spend back. */
@@ -223,6 +227,8 @@ export interface InvestorFigures {
     returnToDatePct: number | null;
   };
   breakEven: { date: string | null; daysFromToday: number | null; withinHorizon: boolean };
+  /** A month in on the first day against today (2026-10-25: "3.3× in 17 days"): the multiple is null from $0. */
+  growth: { fromCents: number; toCents: number; days: number; multiple: number | null };
   curve: CurvePoint[];
 }
 
@@ -403,12 +409,19 @@ export function investorFigures(input: ModelInput): InvestorFigures {
       costPerVisitorCents: input.visitors ? div(totalSpend, input.visitors) : null,
       costPerSignupCents: div(totalSpend, signups),
       costPerPayingCents: div(totalSpend, won.length),
+      costPerCustomerExpectedCents: share === null || totalSpend <= 0 || won.length + trials.length * share <= 0 ? null : r0(totalSpend / (won.length + trials.length * share)),
       visitorToSignupPct: input.visitors ? Math.round((signups / input.visitors) * 1000) / 10 : null,
       signupsPerDay: Math.round(signupsPerDay * 100) / 100,
       paybackMonths: wonMrr > 0 && totalSpend > 0 ? Math.round((totalSpend / wonMrr) * 10) / 10 : null,
       returnToDatePct: totalSpend > 0 ? Math.round((revenueToDate / totalSpend) * 100) : null,
     },
     breakEven,
+    growth: (() => {
+      const ti = curve.findIndex((p) => p.date === today);
+      const from = curve[0]?.mrrCents ?? 0;
+      const to = ti >= 0 ? curve[ti].mrrCents : from;
+      return { fromCents: from, toCents: to, days: Math.max(0, ti), multiple: from > 0 ? Math.round((to / from) * 10) / 10 : null };
+    })(),
     curve,
   };
 }
@@ -608,6 +621,18 @@ export function runRateStory(curve: readonly CurvePoint[], today: string, days: 
     const moved = d === 0 ? `revenue per month held at ${dollars(t.revenueCents)}` : `revenue per month ${d > 0 ? "grew" : "fell"} ${dollars(Math.abs(d))}${pct}, from ${dollars(a.revenueCents)} to ${dollars(t.revenueCents)}`;
     const ads = a.adsCents === t.adsCents ? `a month of ads stayed at ${dollars(t.adsCents)}` : `a month of ads went from ${dollars(a.adsCents)} to ${dollars(t.adsCents)}`;
     past = `${lead}, ${moved}; ${ads}.`;
+    // FROM THE FIRST DAY (owner, 2026-10-25: "say from 0, not from 782 — move those 782 to the total"): the view starts
+    // where the count starts, so the growth is counted from $0 and what was already paying that day stands beside it,
+    // in the total — never as money the period brought.
+    if (w.from === 0 && d > 0) {
+      const since = `Since ${shortDay(curve[0].date)}`;
+      // The multiple leads (owner, 2026-10-25, chose: "3.3× growth + cost per lead"): true, and it reads strong.
+      const x = Math.round((t.revenueCents / Math.max(1, a.revenueCents)) * 10) / 10;
+      past = a.revenueCents > 0
+        // The total only (owner, 2026-10-26: "don't show the 782 — make it the total"): the multiple carries the start.
+        ? `${since}, monthly revenue grew ${x}×, to ${dollars(t.revenueCents)}. ${ads[0].toUpperCase()}${ads.slice(1)}.`
+        : `${since}, revenue per month grew from $0 to ${dollars(t.revenueCents)}; ${ads}.`;
+    }
   }
   let ahead: string | null = null;
   const fwd = w.to - w.todayIndex;

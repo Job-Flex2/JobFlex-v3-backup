@@ -32,8 +32,13 @@ export function instantTotalsOf(structures: readonly InstantStructure[]): Instan
   };
 }
 
-/** "at-pin": the address pin stands on this building's outline (2026-10-16). */
-export type MainStructureHow = "single" | "at-pin" | "area+parcel" | "nearest-pin" | "area" | "none";
+/**
+ * "at-pin": the address pin stands on this building's outline (2026-10-16).
+ * "user-pin" / "near-user-pin": the pin the person placed before ordering stands on it, or nearest it (ticket 8KETUL).
+ * "chosen": the contractor picked this building on the page (2026-10-26) — "Make main", or "Measure this one" —
+ * recorded by the server, never computed here.
+ */
+export type MainStructureHow = "single" | "user-pin" | "near-user-pin" | "chosen" | "at-pin" | "area+parcel" | "nearest-pin" | "area" | "none";
 
 export interface MainStructurePick {
   /** Index into `structures`, or null when there are none. */
@@ -44,6 +49,32 @@ export interface MainStructurePick {
 function centroid(ring: ReadonlyArray<{ lat: number; lng: number }>): { lat: number; lng: number } {
   const n = ring.length;
   return { lat: ring.reduce((a, p) => a + p.lat, 0) / n, lng: ring.reduce((a, p) => a + p.lng, 0) / n };
+}
+
+/**
+ * A point that stands on the building — its centroid when that is inside, else the middle of the widest stretch of the
+ * outline along the centroid's latitude (an L- or U-shaped roof's centroid can fall in its yard). What "Measure this
+ * building instead" sends, so the at-pin rule finds this building and no other.
+ */
+export function pointOnRing(ring: ReadonlyArray<{ lat: number; lng: number }>): { lat: number; lng: number } {
+  const c = centroid(ring);
+  if (pointInRing(c, ring)) return c;
+  const xs: number[] = [];
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i];
+    const b = ring[j];
+    if (a.lat > c.lat !== b.lat > c.lat) xs.push(((b.lng - a.lng) * (c.lat - a.lat)) / (b.lat - a.lat) + a.lng);
+  }
+  xs.sort((a, b) => a - b);
+  let best: { lat: number; lng: number } = c;
+  let width = -1;
+  for (let k = 0; k + 1 < xs.length; k += 2) {
+    if (xs[k + 1] - xs[k] > width) {
+      width = xs[k + 1] - xs[k];
+      best = { lat: c.lat, lng: (xs[k] + xs[k + 1]) / 2 };
+    }
+  }
+  return best;
 }
 
 /** Whether a point stands inside a lat/lng ring (ray casting — a building is small enough to be flat). */
@@ -64,6 +95,24 @@ export function feetBetween(a: { lat: number; lng: number }, b: { lat: number; l
   const dx = (b.lng - a.lng) * Math.cos(((a.lat + b.lat) / 2) * D2R) * D2R * 6378137;
   const dy = (b.lat - a.lat) * D2R * 6378137;
   return Math.sqrt(dx * dx + dy * dy) * 3.28084;
+}
+
+/** Feet from a point to a building's outline — 0 inside it; Infinity without an outline. */
+export function feetToRing(p: { lat: number; lng: number }, ring: ReadonlyArray<{ lat: number; lng: number }> | null | undefined): number {
+  if (!ring || ring.length < 3) return Infinity;
+  if (pointInRing(p, ring)) return 0;
+  const D2R = Math.PI / 180;
+  const kx = Math.cos(p.lat * D2R) * D2R * 6378137 * 3.28084;
+  const ky = D2R * 6378137 * 3.28084;
+  let best = Infinity;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const ax = (ring[j].lng - p.lng) * kx, ay = (ring[j].lat - p.lat) * ky;
+    const bx = (ring[i].lng - p.lng) * kx, by = (ring[i].lat - p.lat) * ky;
+    const dx = bx - ax, dy = by - ay;
+    const t = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / (dx * dx + dy * dy || 1e-12)));
+    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+  }
+  return best;
 }
 
 export type OtherStructure = {
@@ -100,6 +149,11 @@ export function otherStructuresOf(input: {
 /**
  * Which structure the page is about.
  *   · one structure → it;
+ *   · the pin the person placed on the map before ordering (`userPin`) stands on a building → that one (the
+ *     largest, where outlines overlap), whatever the lot check said: the person pointed at it; on none → the
+ *     building nearest the pin among this lot's (2026-10-26, ticket 8KETUL: EagleView's own point for an
+ *     apartment complex stood on its garage, and nothing the person did could change it);
+ *   · then the rules below, with EagleView's own point as `origin`:
  *   · the parcel is known (mask applied) → the largest by roof area among the
  *     structures NOT vetoed as someone else's;
  *   · no parcel → the structure whose outline centroid is nearest the geocode
@@ -108,7 +162,12 @@ export function otherStructuresOf(input: {
  */
 export function pickMainStructure(
   structures: readonly InstantStructure[],
-  opts: { foreign?: readonly number[]; origin?: { lat: number; lng: number } | null; parcelKnown: boolean },
+  opts: {
+    foreign?: readonly number[];
+    origin?: { lat: number; lng: number } | null;
+    parcelKnown: boolean;
+    userPin?: { lat: number; lng: number } | null;
+  },
 ): MainStructurePick {
   if (!structures.length) return { index: null, how: "none" };
   if (structures.length === 1) return { index: 0, how: "single" };
@@ -117,6 +176,16 @@ export function pickMainStructure(
   const pool = candidates.length ? candidates : structures.map((_, i) => i);
   const byArea = (idx: readonly number[]) =>
     idx.slice().sort((a, b) => (structures[b].areaSqft ?? structures[b].footprintSqft ?? -1) - (structures[a].areaSqft ?? structures[a].footprintSqft ?? -1))[0];
+  const pin = opts.userPin;
+  if (pin && Number.isFinite(pin.lat) && Number.isFinite(pin.lng)) {
+    const under = structures.map((_, i) => i).filter((i) => pointInRing(pin, structures[i].outline));
+    if (under.length) return { index: byArea(under), how: "user-pin" };
+    const near = pool
+      .map((i) => ({ i, ft: feetToRing(pin, structures[i].outline) }))
+      .filter((r) => Number.isFinite(r.ft))
+      .sort((a, b) => a.ft - b.ft || a.i - b.i)[0];
+    if (near) return { index: near.i, how: "near-user-pin" };
+  }
   // The address pin standing on a building is the strongest word there is about which one this is — stronger than
   // size: the largest roof in reach can be a neighbour's when the lot check misses it (2026-10-16).
   if (opts.origin) {
@@ -139,6 +208,24 @@ export function pickMainStructure(
     }
   }
   return { index: byArea(pool), how: "area" };
+}
+
+/**
+ * The pick the server records (2026-10-26, a contractor's ticket: "wrong building — the apartment building needs to be
+ * measured, not the garage"): at the contractor's pin — the address they confirmed, or a building they chose on the
+ * page ("chosen") — when it stands on a building; else at the vendor's point for the address, which can stand on the
+ * garage of a lot with several buildings.
+ */
+export function pickMainStructureAt(
+  structures: readonly InstantStructure[],
+  opts: { pin?: { lat: number; lng: number } | null; vendor?: { lat: number; lng: number } | null; chosen?: boolean; foreign?: readonly number[]; parcelKnown: boolean },
+): MainStructurePick {
+  const at = (origin: { lat: number; lng: number } | null) => pickMainStructure(structures, { foreign: opts.foreign, origin, parcelKnown: opts.parcelKnown });
+  const pin = opts.pin ?? null;
+  const vendor = opts.vendor ?? null;
+  const pick = at(pin ?? vendor);
+  if (pin && pick.how !== "at-pin" && vendor) return at(vendor);
+  return opts.chosen && pin && pick.how === "at-pin" ? { ...pick, how: "chosen" } : pick;
 }
 
 /** `provenance.parcelVeto.foreignStructures` ("s3") → indices (3). */
@@ -175,6 +262,30 @@ export function mainStructureOf(input: {
     origin: o?.lat != null && o?.lng != null ? { lat: o.lat, lng: o.lng } : null,
     parcelKnown: !!veto,
   });
+}
+
+/**
+ * The other structures ticked into the estimate, as the row keeps them (`provenance.included`, 2026-10-26):
+ * valid indices only, never the main one, each once, in the order given. Rows saved before then have none.
+ */
+export function includedIndicesOf(
+  provenance: Record<string, unknown> | null | undefined,
+  structureCount: number,
+  mainIndex: number | null,
+): number[] {
+  const raw = provenance?.included;
+  if (!Array.isArray(raw)) return [];
+  const out: number[] = [];
+  for (const v of raw) {
+    if (typeof v === "number" && Number.isInteger(v) && v >= 0 && v < structureCount && v !== mainIndex && !out.includes(v)) out.push(v);
+  }
+  return out;
+}
+
+/** The pin the person placed before ordering, as the row keeps it (`provenance.userPin`); null on older rows. */
+export function userPinOf(provenance: Record<string, unknown> | null | undefined): { lat: number; lng: number } | null {
+  const p = provenance?.userPin as { lat?: unknown; lng?: unknown } | null | undefined;
+  return p && typeof p.lat === "number" && typeof p.lng === "number" && Number.isFinite(p.lat) && Number.isFinite(p.lng) ? { lat: p.lat, lng: p.lng } : null;
 }
 
 const FT_PER_M = 3.28084;

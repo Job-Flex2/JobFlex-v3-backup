@@ -144,12 +144,17 @@ export function classify(a: BoardAccount, now: number): BoardRow {
     }
   }
   const past = trialEnd !== null && trialEnd <= now ? trialEnd : null;
+  // A trial is decided when it ENDS (owner, 2026-10-26: "is it for the last 7 days or how does it count?"). The Cancel
+  // button books the cancel for the trial's end (actions/billing: cancel_at_period_end) and Stripe's canceled_at keeps
+  // the CLICK — dating a leaver by it put most cancels days before their trial ended, out of "the last 7 days", while
+  // payers were dated at the end: the paid share read high. Only a cancel that ended the trial early (its end still
+  // ahead) is dated by the cancel.
   const decidedAt = !isTrial
     ? null
     : phase === "paying"
       ? paidFrom
       : phase === "left"
-        ? c?.endedAt ?? a.canceledAt ?? past ?? a.subUpdatedAt
+        ? c?.endedAt ?? past ?? a.canceledAt ?? a.subUpdatedAt
         : phase === "failed"
           ? past ?? a.subUpdatedAt
           : null;
@@ -208,13 +213,15 @@ export interface TrialBoard {
     likelyCents: number;
     priced: number;
   };
+  /** The first of the RECENT_DAYS days the 7-day counts cover (TRAFFIC_TZ midnight; today is the last of them). */
+  since: number;
   /** Trials started in the last RECENT_DAYS signup days (today included), card at signup or not. */
   started: { trials: number; card: number; nocard: number };
   /** Every running trial, the one ending first first. */
   ending: string[];
   /** CALENDAR_DAYS signup days, today first. */
   calendar: CohortDay[];
-  /** Trials decided in the last day and the last seven. */
+  /** Trials decided in the last 24 hours, and on the same seven days as `started` (since `since`). */
   decided: { day: Outcome; week: Outcome };
   /** Paying accounts, the newest payer first. */
   startedPaying: string[];
@@ -300,11 +307,13 @@ export function buildTrialBoard(accounts: readonly BoardAccount[], now: number):
   }
 
   const week = calendar.slice(0, RECENT_DAYS);
+  const since = week[week.length - 1].dayStart;
   const started = { trials: week.reduce((n, d) => n + d.trials, 0), card: week.reduce((n, d) => n + d.card, 0), nocard: week.reduce((n, d) => n + d.nocard, 0) };
 
   const decidedRows = counted.filter((r) => isTrial(r) && r.decidedAt !== null && r.decidedAt <= now);
   const within = (ms: number) => decidedRows.filter((r) => (r.decidedAt as number) > now - ms);
-  const decided = { day: tally(within(DAY_MS)), week: tally(within(RECENT_DAYS * DAY_MS)) };
+  // The week is the same seven days as "started" — not a rolling 168 hours — so both tiles can name the day they begin.
+  const decided = { day: tally(within(DAY_MS)), week: tally(decidedRows.filter((r) => (r.decidedAt as number) >= since)) };
 
   const startedPaying = counted
     .filter((r) => r.phase === "paying" && r.kind !== "comp")
@@ -320,6 +329,7 @@ export function buildTrialBoard(accounts: readonly BoardAccount[], now: number):
     now,
     rows,
     onTrial,
+    since,
     started,
     ending: running.map((r) => r.orgId),
     calendar,
@@ -356,7 +366,7 @@ export function boardHeadline(b: Pick<TrialBoard, "onTrial" | "decided">): strin
   if (w.total === 0) parts.push("No trial has ended in the last 7 days yet.");
   else {
     const sides = [w.card.total ? `with a card ${w.card.paid} of ${w.card.total}` : "", w.nocard.total ? `without one ${w.nocard.paid} of ${w.nocard.total}` : ""].filter(Boolean).join(", ");
-    parts.push(`Of the ${plural(w.total, "trial")} decided in the last 7 days, ${w.paid} ${w.paid === 1 ? "is" : "are"} paying (${pct(w.paid, w.total)}%)${sides ? ` — ${sides}` : ""}.`);
+    parts.push(`Of the ${plural(w.total, "trial")} that ended in the last 7 days, ${w.paid} ${w.paid === 1 ? "is" : "are"} paying (${pct(w.paid, w.total)}%)${sides ? ` — ${sides}` : ""}.`);
   }
   return parts.join(" ");
 }

@@ -881,6 +881,12 @@ export interface InstantRoofData {
   structures: InstantStructure[];
   /** Imagery tokens (fetch bytes with fetchPropertyImage); empty without packs 008/009. */
   imagery: InstantImage[];
+  /**
+   * EagleView could not place the address at all ("Invalid address", EVPD-10101):
+   * no structures, coordinates 0,0. Absent on every other answer, and on rows
+   * saved before 2026-10-26 — instantAddressNotFound reads those too.
+   */
+  notFound?: true;
   totals: {
     areaSqft: number;
     squares: number;
@@ -906,6 +912,21 @@ interface PdResult {
   response_address?: { full_address?: string };
   response_coordinates?: { lat?: number; lon?: number };
   imagery?: Record<string, { image_token?: string; metadata?: Record<string, unknown> }>;
+  info?: { code?: string; message?: string };
+}
+
+/** EagleView's own code for an address it could not place (seen 2026-10-26, ticket 8KETUL). */
+const PD_INVALID_ADDRESS = "EVPD-10101";
+
+/**
+ * Whether an answer says the address was not found. Rows saved before the
+ * `notFound` flag carry the same answer as no structures, an empty address and
+ * coordinates 0,0 — read that too, so a stored refusal never reads as "no roof".
+ */
+export function instantAddressNotFound(instant: Pick<InstantRoofData, "notFound" | "structures" | "address" | "lat" | "lng"> | null | undefined): boolean {
+  if (!instant) return false;
+  if (instant.notFound) return true;
+  return !instant.structures?.length && !instant.address && instant.lat === 0 && instant.lng === 0;
 }
 
 // Unknown is not zero: Number(null), Number("") and Number(false) all produce
@@ -1171,6 +1192,7 @@ export function parseInstantResult(raw: PdResult, requestId: string, input: EvOr
     lng: raw.response_coordinates?.lon ?? input.lng ?? null,
     structures,
     imagery,
+    ...(raw.info?.code === PD_INVALID_ADDRESS && !structures.length ? { notFound: true as const } : {}),
     totals: instantTotalsOf(structures),
   };
 }
@@ -1247,6 +1269,7 @@ export function mergeInstantResults(parts: readonly InstantRoofData[]): InstantR
     lng: base.lng ?? rest.find((p) => p.lng != null)?.lng ?? null,
     structures,
     imagery,
+    ...(base.notFound ? { notFound: true as const } : {}),
     totals: instantTotalsOf(structures),
   };
 }
