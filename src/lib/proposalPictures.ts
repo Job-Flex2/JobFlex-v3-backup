@@ -12,8 +12,6 @@
 //               a plan, the only 3D there is when a proposal predates plans;
 //   fence-plan  the traced layout (an ActivityEvent FENCE_PLAN), drawn on
 //               request by /api/public-quote/[publicId]/fence-plan;
-//   roof-look   the roof in the material and colour the contractor chose in the estimator's visualizer
-//               (2026-10-25, lib/roofLook) — a PNG on Blob, named by an ActivityEvent ROOF_LOOK;
 //   roof-photo  the aerial (EagleView ortho, else Google satellite) with ONE
 //               PIN on the roof, when a key is on the server — never the
 //               measured outline (owner, 2026-10-12: "remove it and never
@@ -117,10 +115,6 @@ export async function proposalPictures(p: { id: string; publicId: string; trade?
       } else if (shot.frames) {
         out.push({ kind: "roof-photo", src: `${base}/roof-photo?f=standin`, alt: "Your roof", caption: "Your roof", facts: factsLine || null, overlay: null, pin: null });
       }
-      // The look the contractor chose in the estimator's visualizer (2026-10-25): the newest ROOF_LOOK for this
-      // proposal, else for this measurement — "Your roof in <material · colour>".
-      const look = await roofLookPicture(p.id, link!.roofMeasurementId);
-      if (look) out.push(look);
     }
   } catch {
     /* the link table is not there, or the measurement is gone */
@@ -128,22 +122,3 @@ export async function proposalPictures(p: { id: string; publicId: string; trade?
   return out;
 }
 
-export const ROOF_LOOK_EVENT = "ROOF_LOOK";
-
-/** The newest saved look for the proposal (or its measurement), as a picture; null when there is none. */
-async function roofLookPicture(proposalId: string, measurementId: string): Promise<PortalPicture | null> {
-  try {
-    const rows = await db.activityEvent.findMany({ where: { kind: ROOF_LOOK_EVENT, OR: [{ proposalId }, { meta: { contains: measurementId } }] }, orderBy: { createdAt: "desc" }, select: { meta: true }, take: 5 });
-    for (const r of rows) {
-      const m = r.meta ? (JSON.parse(r.meta) as { url?: unknown; words?: unknown; measurementId?: unknown; source?: unknown }) : null;
-      if (!m || typeof m.url !== "string" || !/^https:\/\/[a-z0-9.-]+\.public\.blob\.vercel-storage\.com\/roof-look\//i.test(m.url)) continue;
-      if (m.measurementId !== measurementId) continue;
-      const words = typeof m.words === "string" ? m.words : "";
-      const fromAir = m.source !== "photo";
-      return { kind: "roof-look", src: m.url, alt: `Your roof in ${words || "the chosen material"}`, caption: fromAir ? `Your roof from the air, in ${words || "the chosen look"}` : `Your roof in ${words || "the chosen look"}`, facts: words || null, overlay: null, pin: null };
-    }
-  } catch {
-    /* no event table, or a bad row — no look */
-  }
-  return null;
-}

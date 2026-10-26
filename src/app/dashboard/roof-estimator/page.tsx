@@ -20,7 +20,7 @@ import { RoofEstimatorContent } from "@/components/v3/roof-estimator-blueprint/r
 import { readEstimateSeed } from "@/lib/estimateSeed";
 import { EstimateSeedStrip } from "@/components/v3/estimate-seed-strip";
 import { looksLikeStreetAddress } from "@/lib/leadRules";
-import { requireOrg, requirePlatformAdmin } from "@/lib/orgContext";
+import { requireOrg } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { parseStateZip } from "@/lib/fence/market";
 import { customPageGate } from "@/components/v3/upgrade-gate/custom-page-gate";
@@ -32,17 +32,6 @@ async function readRoofSeed() {
     return await readEstimateSeed(organizationId, "roof");
   } catch {
     return null;
-  }
-}
-
-/** The roof visualizer is in preview for JobFlex's own admins (owner, 2026-10-25: "only for admin to test it; users
- *  can't see it yet") — the card shows only when a platform admin is signed in. */
-async function adminLooking(): Promise<boolean> {
-  try {
-    await requirePlatformAdmin();
-    return true;
-  } catch {
-    return false;
   }
 }
 
@@ -103,7 +92,6 @@ export default async function RoofEstimatorPage({ searchParams }: { searchParams
     <>
       <EstimateSeedStrip seed={seed} />
       <RoofEstimatorContent
-        roofLookPreview={await adminLooking()}
         evEnabled={isEagleViewEnabled()}
         measurementEnabled={isRoofMeasurementEnabled()}
         aiEnabled={isOpenAIEnabled()}
