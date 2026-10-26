@@ -111,6 +111,23 @@ export async function setOutreachSchedule(on: boolean): Promise<{ ok: true; sett
   return { ok: true, settings };
 }
 
+/** What the schedule sends (owner, 2026-10-25: "text only, call only, email only — or all together"), and how many of
+ *  each an hour. At least one stays on. */
+export async function setOutreachChannels(input: { email?: boolean; calls?: boolean; texts?: boolean; emailsPerRun?: number; callsPerRun?: number; textsPerRun?: number }): Promise<{ ok: true; settings: OutreachSettings } | Fail> {
+  const a = await admin();
+  if (!a.ok) return a;
+  const s = await readSettings();
+  const channels = {
+    email: typeof input.email === "boolean" ? input.email : s.channels.email,
+    calls: typeof input.calls === "boolean" ? input.calls : s.channels.calls,
+    texts: typeof input.texts === "boolean" ? input.texts : s.channels.texts,
+  };
+  if (!channels.email && !channels.calls && !channels.texts) return { ok: false, error: "Keep at least one on — or switch the schedule off." };
+  const n = (v: unknown, cur: number, max: number) => (typeof v === "number" && Number.isFinite(v) ? Math.max(1, Math.min(max, Math.round(v))) : cur);
+  const settings = await writeSettings({ ...s, channels, emailsPerRun: n(input.emailsPerRun, s.emailsPerRun, 40), callsPerRun: n(input.callsPerRun, s.callsPerRun, 25), textsPerRun: n(input.textsPerRun, s.textsPerRun, 50) });
+  return { ok: true, settings };
+}
+
 export async function importOutreachList(text: string): Promise<{ ok: true; added: number; merged: number; skipped: number; onJobflex: number } | Fail> {
   const a = await admin();
   if (!a.ok) return a;

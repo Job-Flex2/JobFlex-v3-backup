@@ -218,7 +218,7 @@ export class Call {
       if (!this.ended) void this.finish("openai-error");
     });
     // The desk speaks first: its greeting.
-    this.aiSend({ type: "response.create", response: { instructions: "Start the call by saying your GREETING exactly as written in your instructions — every word of it, including that this is a virtual assistant and the call is recorded — then wait for the caller." } });
+    this.aiSend({ type: "response.create", response: { instructions: "Start the call by saying your GREETING exactly as written in your instructions — every word of it, including that it is an AI and that the call is recorded, in the greeting's own words — then wait for the caller." } });
     const max = Math.max(60, Number(this.brief.maxSeconds) || 600) * 1000;
     this.timers.push(setTimeout(() => this.aiSend({ type: "response.create", response: { instructions: "You have about thirty seconds left on this call. Wrap up: confirm anything booked or any message taken, say goodbye, and call end_call." } }), max - 30_000));
     this.timers.push(setTimeout(() => void this.finish("time-cap"), max));
