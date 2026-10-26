@@ -101,11 +101,12 @@ export function PaybackChart({ curve, today, ratePct, share }: { curve: CurvePoi
   const tip = cur !== null && cur < n ? runRateReading(curve, pace, at(cur)) : null;
   const tipLeft = cur !== null ? (x(cur) / W) * 100 : 0;
 
-  const reading = (label: string, key: string, r: RunRateReading) => (
+  const reading = (label: string, key: string, r: RunRateReading, note?: string) => (
     <div className={s.reading} data-reading={key} key={key}>
       <div className={s.readingHead}>{label} · {short(r.date)}{r.projected ? " · projected" : ""}</div>
       <div className={s.readingBig}>{dollars(r.revenueCents)} <span>a month in</span></div>
       <div className={s.readingRows}>
+        {note ? <span data-reading-note>{note}</span> : null}
         <span>{dollars(r.adsCents)} a month of ads</span>
         <span>{r.coverPct === null ? "no ads running" : `revenue covers ${r.coverPct}% of the ads`}</span>
         <span>{approx(r.paying)} paying · {approx(r.signups)} signed up</span>
@@ -220,7 +221,8 @@ export function PaybackChart({ curve, today, ratePct, share }: { curve: CurvePoi
         </figcaption>
       </figure>
       <div className={s.readings}>
-        {startLabel && reading(startLabel, "start", first)}
+        {/* The count's first day (2026-10-25): what came in that day was already paying — the growth is counted from $0. */}
+        {startLabel && reading(startLabel, "start", first, w.from === 0 && first.revenueCents > 0 ? "already paying when the count began" : undefined)}
         {reading("Today", "today", now)}
         {endLabel && reading(endLabel, "end", last)}
       </div>
