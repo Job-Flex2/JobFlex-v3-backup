@@ -64,7 +64,11 @@ export interface TradePitch {
   tool: string;
   call: string;
   email: string;
+  /** The text's offer (owner, 2026-10-26: "offer them that they need JobFlex to grow the business faster and save time
+   *  with our tools") — the offer, then the trade's tools. */
   sms: string;
+  /** The same offer without the tools, for a text the tools don't fit in (a long name or link). */
+  grow: string;
   voicemail: string;
 }
 
@@ -73,7 +77,8 @@ const GENERAL: TradePitch = {
   tool: "JobFlex",
   call: `For a business like theirs, lead with the AI desk (${DESK}), then Smart Proposal — a full proposal written from a few sentences, that the homeowner signs on their phone — and running the job: schedule, crew app with photos, invoices, reviews.`,
   email: `For a business like yours: ${DESK}, Smart Proposal writes the whole proposal from a few sentences, the homeowner signs it on their phone and pays the deposit online, and the schedule, the crew's photos and the invoices live in the same place.`,
-  sms: "JobFlex answers your calls with an AI desk, writes your proposals, and runs the job — schedule, crew, invoices.",
+  sms: "Grow your business faster and save time: an AI desk takes your calls, proposals in minutes, the job in one app.",
+  grow: "Grow your business faster and save time with JobFlex.",
   voicemail: "We help contractors answer every call, send proposals faster, and run their jobs.",
 };
 const TRADE_PITCHES: Record<string, TradePitch> = {
@@ -81,28 +86,32 @@ const TRADE_PITCHES: Record<string, TradePitch> = {
     tool: "the roof estimator",
     call: "For a roofer, lead with the roof estimator: it measures the roof from aerial imagery in minutes and prices it with their own rates, and the proposal goes out the same visit for the homeowner to sign on their phone. Then the AI desk for the calls they miss on a roof.",
     email: "For a roofer: JobFlex measures the roof from aerial imagery in minutes, prices it with your own rates, and sends a proposal the homeowner signs on their phone — while the AI desk answers the calls you can't take on a roof.",
-    sms: "For roofers: measure a roof from aerial imagery in minutes, price it, and send a proposal they sign on their phone.",
+    sms: "Grow your roofing business faster and save time: roofs measured from aerial imagery, proposals they sign on their phone.",
+    grow: "Grow your roofing business faster and save time with JobFlex.",
     voicemail: "For roofers, it measures the roof from aerial imagery and has the proposal out in minutes.",
   },
   fencing: {
     tool: "the fence estimator",
     call: "For a fence builder, lead with the fence estimator: draw the fence on the map, see it in 3D, and get the materials and the price, then a proposal the homeowner signs on their phone. Then the AI desk for the calls they miss.",
     email: "For a fence builder: draw the fence on the map, see it in 3D with the gates and the posts, get the materials and the price, and send a proposal the homeowner signs on their phone.",
-    sms: "For fence builders: draw the fence on the map, see it in 3D, and send the priced proposal in minutes.",
+    sms: "Grow your fence business faster and save time: draw the fence on the map, see it in 3D, send the price in minutes.",
+    grow: "Grow your fence business faster and save time with JobFlex.",
     voicemail: "For fence builders, you draw the fence on the map, see it in 3D and send the price in minutes.",
   },
   hvac: {
     tool: "the HVAC estimator",
     call: "For an HVAC company, lead with the HVAC estimator: it sizes the system with a Manual J-style load, matches the equipment, and builds the proposal the homeowner signs on their phone. Then the AI desk, which books service calls straight onto the calendar.",
     email: "For an HVAC company: size the system with a Manual J-style load, match the equipment, and send the proposal the homeowner signs on their phone — while the AI desk books the service calls onto your calendar.",
-    sms: "For HVAC: size the system with a Manual J-style load, match the equipment, and send the proposal in minutes.",
+    sms: "Grow your HVAC business faster and save time: Manual J-style sizing, matched equipment, the proposal in minutes.",
+    grow: "Grow your HVAC business faster and save time with JobFlex.",
     voicemail: "For HVAC companies, it sizes the system with a Manual J-style load and builds the proposal in minutes.",
   },
   decks: {
     tool: "Deck Studio",
     call: "For a deck builder, lead with Deck Studio: design the deck with the homeowner in 3D, with the material list and the permit drawings, priced in the same place — and a link the homeowner can design on themselves. Deck Studio is in the free trial.",
     email: "For a deck builder: Deck Studio designs the deck with your client in 3D, with the material list and the permit drawings, prices it, and sends a link your client can design on themselves.",
-    sms: "For deck builders: design the deck in 3D with your client, with the material list and permit drawings, and price it.",
+    sms: "Grow your deck business faster and save time: design the deck in 3D with your client, material list and price included.",
+    grow: "Grow your deck business faster and save time with JobFlex.",
     voicemail: "For deck builders, Deck Studio designs the deck in 3D with the material list and the permit drawings.",
   },
   remodeling: GENERAL,
@@ -213,13 +222,20 @@ export function outreachVoicemail(p: Pick<Prospect, "name" | "business" | "trade
 export const TEXT_MAX = 306;
 const plain = (s: string) => s.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/[\u2013\u2014]/g, "-").replace(/[^\x20-\x7E]/g, "");
 
-/** The one text after a call they asked for — JobFlex named, the trade's line, the trial link, how to stop (the carriers ask for all of it). */
+/** The one text to a contractor who asked for it — JobFlex named, the offer with the trade's tools, the trial link, how to
+ *  stop (the carriers ask for all of it). */
 export function outreachText(input: { p: Pick<Prospect, "name" | "trade">; answered: boolean; link: string; trialDays: number; /** No call before it: the schedule's texts (2026-10-25). */ noCall?: boolean }): string {
   const who = plain(firstName(input.p.name)).slice(0, 20);
   const hi = `Hi${who ? ` ${who}` : ""},`;
-  const open = input.noCall ? `${hi} JobFlex here - thanks for asking about the AI desk.` : input.answered ? `${hi} thanks for taking JobFlex's call.` : `${hi} JobFlex here - we tried to call you back as you asked.`;
+  // The schedule's text (no call before it) says why it comes — they asked on the call-me page — in few letters, so the
+  // offer and the tools fit in two segments.
+  const open = input.noCall ? `${hi} JobFlex here, as you asked on our site.` : input.answered ? `${hi} thanks for taking JobFlex's call.` : `${hi} JobFlex here - we tried to call you back as you asked.`;
   const tail = `Free ${input.trialDays}-day trial: ${input.link} Reply STOP to opt out.`;
-  const full = plain(`${open} ${tradePitch(input.p.trade).sms} ${tail}`);
-  // Too long (a long link): the trade's line gives way, never the brand, the link or the way to stop.
-  return full.length <= TEXT_MAX ? full : plain(`${open} ${tail}`);
+  const pitch = tradePitch(input.p.trade);
+  const full = plain(`${open} ${pitch.sms} ${tail}`);
+  if (full.length <= TEXT_MAX) return full;
+  // Too long (a long name or link): the tools give way to the bare offer, then the offer too — never the brand, the
+  // link or the way to stop.
+  const short = plain(`${open} ${pitch.grow} ${tail}`);
+  return short.length <= TEXT_MAX ? short : plain(`${open} ${tail}`);
 }
