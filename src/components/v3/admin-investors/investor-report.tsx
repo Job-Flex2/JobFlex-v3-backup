@@ -53,9 +53,10 @@ export function InvestorReportView({ report, shared = false, between }: { report
         <p className={s.leadText} data-standing>{standingSentence(f)}</p>
         <p className={s.leadMore} data-outlook>{outlookSentence(f)}</p>
         <div className={s.leadFacts}>
-          <div data-fact="cost-per-paying"><b>{money(f.unit.costPerPayingCents)}</b><span>{f.paying.won > 0 ? `per paying customer · ${dollars(f.spend.totalCents)} ÷ ${f.paying.won}` : "per paying customer · none paying yet"}</span></div>
-          <div data-fact="collected"><b>{got.read ? dollars(got.cents) : "—"}</b><span>{got.read ? `collected so far · Stripe, ${got.invoices} ${got.invoices === 1 ? "payment" : "payments"}` : `collected · Stripe not read${got.error ? `: ${got.error}` : ""}`}</span></div>
-          <div data-fact="break-even"><b>{be.daysFromToday !== null && be.daysFromToday > 0 ? `${be.daysFromToday} days` : be.daysFromToday !== null ? "Covered" : "—"}</b><span>{be.date ? `to break even at today's pace · ${longDate(be.date)}` : `no break-even within ${a.horizonDays} days at today's pace`}</span></div>
+          {/* The three to read first (owner, 2026-10-25, chose: growth + cost per lead): each true as labelled. */}
+          <div data-fact="cost-per-lead"><b>{money(f.unit.costPerSignupCents)}</b><span>{f.signups > 0 ? `per lead · ${dollars(f.spend.totalCents)} ÷ ${n(f.signups)} signups` : "per lead · no signup yet"}</span></div>
+          <div data-fact="cost-per-customer-expected"><b>{f.unit.costPerCustomerExpectedCents !== null ? `≈ ${dollars(f.unit.costPerCustomerExpectedCents)}` : money(f.unit.costPerPayingCents)}</b><span>{f.unit.costPerCustomerExpectedCents !== null ? `per customer, expected · once the running trials convert at ${r.pct}%` : "per paying customer"}</span></div>
+          <div data-fact="growth"><b>{f.growth.multiple !== null ? `${f.growth.multiple}×` : dollars(f.growth.toCents)}</b><span>{f.growth.multiple !== null ? `revenue in ${f.growth.days} days · ${dollars(f.growth.fromCents)} → ${dollars(f.growth.toCents)} a month` : `a month in, ${f.growth.days} days in`}</span></div>
         </div>
       </section>
 
@@ -100,6 +101,7 @@ export function InvestorReportView({ report, shared = false, between }: { report
               <tr><td>Earned at list price</td><td className={s.num}>{dollars(f.paying.revenueToDateCents)}</td><td className={s.sub}>{pct(f.unit.returnToDatePct)} of the spend · each paying account by the day</td></tr>
               <tr><td>Customers the ads brought</td><td className={s.num}>{n(f.paying.won)}</td><td className={s.sub}>paying today · {dollars(f.paying.wonMrrCents)}/mo</td></tr>
               <tr><td>Per signup</td><td className={s.num}>{money(f.unit.costPerSignupCents)}</td><td className={s.sub}>{n(f.signups)} signed up with a card</td></tr>
+              <tr data-row="cost-per-customer-expected"><td>Per customer, expected</td><td className={s.num}>{f.unit.costPerCustomerExpectedCents !== null ? `≈ ${dollars(f.unit.costPerCustomerExpectedCents)}` : "—"}</td><td className={s.sub}>{f.unit.costPerCustomerExpectedCents !== null && ex.payers !== null ? `${dollars(f.spend.totalCents)} ÷ (${f.paying.won} paying + ≈${Math.round(ex.payers)} of the trials running, at ${r.pct}%)` : "once a trial has ended"}</td></tr>
               <tr className={s.strong} data-row="cost-per-paying"><td>Per paying customer</td><td className={s.num}>{money(f.unit.costPerPayingCents)}</td><td className={s.sub}>{f.paying.won > 0 ? `${dollars(f.spend.totalCents)} ÷ ${f.paying.won} paying` : "none paying yet"}</td></tr>
               <tr><td>Earns the spend back in</td><td className={s.num}>{pct(f.unit.paybackMonths, " months")}</td><td className={s.sub}>{f.paying.wonMrrCents > 0 ? `at those customers' ${dollars(f.paying.wonMrrCents)} a month` : "once a customer pays"}</td></tr>
               <tr><td>Per visitor</td><td className={s.num}>{money(f.unit.costPerVisitorCents)}</td><td className={s.sub}>{f.visitors === null ? "no visitor count" : `${n(f.visitors)} visitors`}</td></tr>

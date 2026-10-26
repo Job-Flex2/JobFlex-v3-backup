@@ -66,8 +66,9 @@ export function InvestorPdfDocument({ report }: { report: InvestorReport }) {
     ["Spent on ads", dollars(f.spend.totalCents), `since ${longDate(f.since)}`],
     ["Collected so far", got.read ? dollars(got.cents) : "—", got.read ? `Stripe, ${got.invoices} payments${got.cents !== got.wonCents ? ` · ${dollars(got.wonCents)} from the ads' customers` : ""}` : "Stripe not read", true],
     ["Customers the ads brought", String(f.paying.won), `paying · ${dollars(f.paying.wonMrrCents)}/mo`],
-    ["Per signup", money(f.unit.costPerSignupCents), `${f.signups} signed up`],
-    ["Per paying customer", money(f.unit.costPerPayingCents), f.paying.won > 0 ? `${dollars(f.spend.totalCents)} ÷ ${f.paying.won}` : "none paying yet", true],
+    ["Per lead (signup)", money(f.unit.costPerSignupCents), `${f.signups} signed up`, true],
+    ["Per customer, expected", f.unit.costPerCustomerExpectedCents !== null ? `≈ ${dollars(f.unit.costPerCustomerExpectedCents)}` : "—", f.unit.costPerCustomerExpectedCents !== null ? `once the running trials convert at ${r.pct}%` : "once a trial has ended"],
+    ["Per paying customer", money(f.unit.costPerPayingCents), f.paying.won > 0 ? `${dollars(f.spend.totalCents)} ÷ ${f.paying.won} paying today` : "none paying yet"],
     ["Earns the spend back in", pct(f.unit.paybackMonths, " mo"), f.paying.wonMrrCents > 0 ? `at ${dollars(f.paying.wonMrrCents)} a month` : "once a customer pays"],
   ];
   return (
