@@ -317,6 +317,18 @@ export interface MeasurementProvenance {
     pin?: { lat: number; lng: number } | null;
   };
   /**
+   * The pin the person placed on the map before ordering (2026-10-26, ticket
+   * 8KETUL) — the first word on which building is main (pickMainStructure
+   * "user-pin"). Null when no pin was shown; absent on older rows.
+   */
+  userPin?: { lat: number; lng: number } | null;
+  /**
+   * The other structures ticked into the estimate (indices into the answer's
+   * structures, never the main one) — kept on the row so a reopened
+   * measurement shows the same buildings. Absent on older rows (none ticked).
+   */
+  included?: number[];
+  /**
    * Which footprint the estimate prices on, and why (audit 2026-09-17).
    * `eagleview` = the reported `structure_footprint_sqft`; `outline` = the
    * building's own ring, believed when the two disagree by more than

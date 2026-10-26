@@ -5,6 +5,7 @@ import { isCronAuthorized } from "@/lib/cronAuth";
 import { sweepPendingDaysEverywhere } from "@/lib/workDays";
 import { EMAIL_LOG_KEEP_DAYS } from "@/lib/emailLog";
 import { API_SPEND_KEEP_MONTHS, utcMonthStart } from "@/lib/apiSpend";
+import { expireStaleInstantOrders } from "@/lib/instantOrderExpiry";
 
 export const runtime = "nodejs";
 
@@ -75,8 +76,14 @@ export async function GET(req: Request) {
       return { count: 0 };
     });
 
+  // ── 6) EagleView orders that never arrived (lib/instantOrderExpiry) ───────
+  const expiredOrders = await expireStaleInstantOrders().catch((err) => {
+    console.warn("[cron/daily-cleanup] stale roof orders not closed:", err instanceof Error ? err.message : err);
+    return 0;
+  });
+
   console.info(
-    `[cron/daily-cleanup] revoked ${revoked} inactive worker token(s); pruned ${pruned.count} price-cache row(s); ${pendingDays} day(s) on site now pending; pruned ${mailLog.count} mail-log row(s); pruned ${apiSpend.count} API-spend row(s).`,
+    `[cron/daily-cleanup] revoked ${revoked} inactive worker token(s); pruned ${pruned.count} price-cache row(s); ${pendingDays} day(s) on site now pending; pruned ${mailLog.count} mail-log row(s); pruned ${apiSpend.count} API-spend row(s); closed ${expiredOrders} stale roof order(s).`,
   );
-  return NextResponse.json({ ok: true, revokedWorkers: revoked, prunedCache: pruned.count, prunedMetaAuthorizations: pendingMeta.count, pendingDays, prunedMailLog: mailLog.count, prunedApiSpend: apiSpend.count });
+  return NextResponse.json({ ok: true, revokedWorkers: revoked, prunedCache: pruned.count, prunedMetaAuthorizations: pendingMeta.count, pendingDays, prunedMailLog: mailLog.count, prunedApiSpend: apiSpend.count, expiredRoofOrders: expiredOrders });
 }

@@ -34,8 +34,11 @@ import {
   getMeasurementPhoto,
   getRoofMeasurement,
   listRoofMeasurements,
+  locateRoofAddress,
   measureRoof,
   measureRoofInstant,
+  saveIncludedStructures,
+  setMainStructure,
 } from "@/actions/roofMeasurement";
 import { estimateRoof, convertRoofEstimateToProposal, loadRoofFromProposal, updateRoofProposal } from "@/actions/roofEstimator";
 import { DECK_LOCK_WORDS, PROPOSAL_STATUS_WORDS, type LinkedDeckProposal } from "@/lib/deck/proposalEdit";
@@ -54,7 +57,7 @@ import { EstimateLinesTable, type EditableLine } from "./estimate-lines-table";
 import { estimateEdges, likeForLikeFamily, ringPerimeterFt, type MeasuredFootage, type RoofFacts, type RoofPackage, type RoofPackageSpec } from "@/lib/roofPackage/takeoff";
 import { evOrderRoof, evPriceRoof, evReportFootages, evReportStatus, evRoofModel } from "@/actions/eagleview";
 import { isMapsBrowserEnabled, loadMapsLibrary } from "@/lib/googleMaps";
-import { displayedPitchLabel, footprintRead, foreignIndices, instantTotalsOf, mainStructureOf, otherStructuresOf, pitchFamilyShares, pointOnRing } from "@/lib/roofDiagram/instantTotals";
+import { displayedPitchLabel, footprintRead, foreignIndices, includedIndicesOf, instantTotalsOf, mainStructureOf, otherStructuresOf, pitchFamilyShares, pointOnRing, userPinOf } from "@/lib/roofDiagram/instantTotals";
 import { AERIAL } from "@/lib/vendorLabels";
 import { familyOfMaterial, WASTE_OPTIONS } from "@/lib/roofPackage/catalog";
 import { isFlatRoof } from "@/lib/roofPackage/flatRule";
@@ -280,6 +283,7 @@ type MarkerCtor = new (opts: Record<string, unknown>) => LiveMapMarker;
 interface MapOverlay {
   setMap(map: unknown): void;
   setAnimation?(a: unknown): void;
+  addListener?(ev: string, fn: () => void): { remove(): void };
 }
 interface MapBounds {
   extend(p: { lat: number; lng: number }): MapBounds;
@@ -288,18 +292,55 @@ interface MapBounds {
 type OverlayCtor = new (opts: Record<string, unknown>) => MapOverlay;
 type OutlineSdk = {
   Marker?: OverlayCtor;
+  Polygon?: OverlayCtor;
   LatLngBounds?: new () => MapBounds;
   Point?: PointCtor;
   Animation?: { BOUNCE: unknown };
 };
 /** Other buildings shown before the rest fold away (owner, 2026-10-16). */
 const BUILDINGS_SHOWN = 3;
+/** "Measure this one" on a building row (a2b54fb6): hidden: duplicates Make main, owner decision 2026-10-26. */
+const SHOW_MEASURE_THIS = false;
+
+/** What a failed measurement says on the intake, and which way out it offers. */
+type IntakeErrorKind = "no-roof" | "processing" | "failed" | "not-found" | "expired";
+/** The intake map's pin: where the address resolved, or where the person moved it; `key` = the address it is for. */
+type IntakePin = { lat: number; lng: number; label: string; key: string; moved: boolean };
+/** One address, however it was typed — the key a pin belongs to. */
+const pinKey = (address: string, city: string, state: string, zip: string) =>
+  [address, city, state, zip].map((v) => v.trim().replace(/\s+/g, " ").toUpperCase()).join("|");
 /**
  * One colour per other building, the same on its row's dot and its pin on
  * the map — bright enough to read on a satellite roof (sky, amber, violet, mint).
  */
 const BUILDING_COLORS = ["#4a9eff", "#f0b03c", "#b394ff", "#5fd3a2"] as const;
-const buildingColor = (k: number) => BUILDING_COLORS[k % BUILDING_COLORS.length];
+const buildingColor = (k: number) => BUILDING_COLORS[((k % BUILDING_COLORS.length) + BUILDING_COLORS.length) % BUILDING_COLORS.length];
+/** The main building's colour on the map and its row: the blueprint of the house pin. */
+const MAIN_COLOR = "#1854a0";
+/** Why this building is the main one, under the Structures title. */
+const MAIN_HOW_WORDS: Record<string, string> = {
+  "user-pin": "The building under your pin",
+  "near-user-pin": "The building nearest your pin",
+  chosen: "The building you chose to measure",
+  "at-pin": "Picked as the building at the address pin",
+  "nearest-pin": "Picked as nearest the pin",
+  "area+parcel": "Picked as largest on the parcel",
+};
+
+/**
+ * Where the report's map stands and where its pin goes (2026-10-26): centred on the main building's outline, the
+ * pin on the point the person placed before ordering — else the point the measurement read.
+ */
+function reportHome(m: RoofMeasurementDTO | null): { center: { lat: number; lng: number }; pin: { lat: number; lng: number } | null; pinIsUsers: boolean } | null {
+  const inst = m?.instant;
+  if (!m || !inst || inst.lat == null || inst.lng == null) return null;
+  const read = { lat: inst.lat, lng: inst.lng };
+  const userPin = userPinOf(m.provenance as Record<string, unknown>);
+  const main = mainStructureOf({ structures: inst.structures, provenance: m.provenance as Record<string, unknown>, origin: { lat: m.lat, lng: m.lng } }).index;
+  const ring = main != null ? inst.structures[main]?.outline : null;
+  const center = ring && ring.length >= 3 ? ringCenter(ring) : userPin ?? read;
+  return { center, pin: userPin ?? read, pinIsUsers: !!userPin };
+}
 
 /** Where a building's pin stands: the middle of its outline. */
 function ringCenter(ring: ReadonlyArray<{ lat: number; lng: number }>): { lat: number; lng: number } {
@@ -316,6 +357,90 @@ function shotDateLabel(v: string | undefined): string | null {
   const d = new Date(v);
   if (isNaN(d.getTime())) return v;
   return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+/** One other building in the Structures list: its tick, its number when it is in the estimate, "Make main", "Show
+ *  on map" and its figures. Stateless — the page hands in every value and handler. */
+function StructureRow(p: {
+  o: { i: number; s: InstantStructure; offLot: boolean; feet: number | null };
+  n: number | null;
+  total: number;
+  ticked: boolean;
+  focus: boolean;
+  canMakeMain: boolean;
+  makeMainBusy: boolean;
+  makeMainDisabled: boolean;
+  showOnMapButton: boolean;
+  noLocationNote: boolean;
+  measureThis: boolean;
+  busy: boolean;
+  onHover: React.Dispatch<React.SetStateAction<number | null>>;
+  onTick: (i: number, on: boolean) => void;
+  onMakeMain: (i: number) => void;
+  onShowOnMap: (i: number) => void;
+  onMeasureThis: (ring: ReadonlyArray<{ lat: number; lng: number }>) => void;
+}) {
+  const { o, n } = p;
+  const { s, i } = o;
+  const name = n != null ? `Building ${n} of ${p.total}` : "Building";
+  return (
+    <div
+      className={"rf-details-row" + (o.offLot ? " is-offlot" : "") + (p.focus ? " is-focus" : "")}
+      data-structure={i}
+      data-building={n ?? undefined}
+      onMouseEnter={() => p.onHover(i)}
+      onMouseLeave={() => p.onHover((h) => (h === i ? null : h))}
+      onFocus={() => p.onHover(i)}
+      onBlur={() => p.onHover((h) => (h === i ? null : h))}
+    >
+      <dt>
+        <label className={"rf-attach" + (p.ticked ? "" : " is-off")}>
+          <input
+            type="checkbox"
+            checked={p.ticked}
+            aria-label={`Include this building (${s.areaSqft != null ? num(s.areaSqft) + " sq ft" : "no area"}) in the estimate`}
+            onChange={(e) => p.onTick(i, e.target.checked)}
+          />
+          <span className={"rf-swatch" + (n == null ? " is-empty" : "")} style={n != null ? { background: buildingColor(n - 2) } : undefined} aria-hidden="true" />
+          {name}
+        </label>
+        {p.canMakeMain && (
+          <button type="button" className="rf-make-main" disabled={p.makeMainDisabled} aria-busy={p.makeMainBusy || undefined} onClick={() => p.onMakeMain(i)} data-rf-make-main={i}>
+            {p.makeMainBusy ? "Switching…" : "Make main"}
+          </button>
+        )}
+        {p.showOnMapButton ? (
+          <button type="button" className={"rf-locate" + (p.focus ? " is-on" : "")} onClick={() => p.onShowOnMap(i)} aria-label={`Show ${name} on the map`}>
+            Show on map
+          </button>
+        ) : null}
+        {p.measureThis ? (
+          // The wrong building measured (a contractor's ticket, 2026-10-26: "the apartment building needs to be
+          // measured, not the garage"): this one becomes the roof the report and the estimate are about. The
+          // address's stored order answers it, so it is not billed again.
+          <button
+            type="button"
+            className="rf-locate rf-measure-this"
+            disabled={p.busy}
+            onClick={() => p.onMeasureThis(s.outline!)}
+            aria-label={`Measure ${name} instead`}
+            data-rf-measure-this={i}
+          >
+            Measure this one
+          </button>
+        ) : null}
+        {o.offLot && <span className="rf-attach-note">outside the lot</span>}
+        {p.noLocationNote && <span className="rf-attach-note">no location in the report — not drawn on the map</span>}
+      </dt>
+      <dd>
+        {s.areaSqft != null ? num(s.areaSqft) : "—"}
+        <span>sq ft</span>
+        {s.pitch && <span>· {s.pitch}</span>}
+        {s.footprintSqft != null && <span>· footprint {num(s.footprintSqft)}</span>}
+        {o.feet != null && <span>· {num(Math.max(10, Math.round(o.feet / 10) * 10))} ft away</span>}
+      </dd>
+    </div>
+  );
 }
 
 export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, measurementEnabled = false, initialAddress, proposalId, homeState = null, roofLookPreview = false }: { aiEnabled?: boolean; evEnabled?: boolean; measurementEnabled?: boolean; initialAddress?: string; proposalId?: string; homeState?: string | null; /** The roof visualizer, in preview for platform admins only (2026-10-25). */ roofLookPreview?: boolean } = {}) {
@@ -520,9 +645,15 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // What the intake shows when a measurement fails: one plain sentence, and
   // the one action that fits (a free re-check for an order still processing,
   // a billed new lookup when the paid answer holds no roof).
-  const [intakeError, setIntakeError] = React.useState<{ text: string; kind: "no-roof" | "processing" | "failed"; target: OrderInput; reorder?: boolean } | null>(null);
+  const [intakeError, setIntakeError] = React.useState<{ text: string; kind: IntakeErrorKind; target: OrderInput; reorder?: boolean } | null>(null);
   // The previous pick, for the retype rule below (the effect's closure cannot read state).
   const lastPickRef = React.useRef<PickedPlace | null>(null);
+  // THE PIN ON THE INTAKE MAP (2026-10-26, ticket 8KETUL: an apartment complex was measured at its garage, the
+  // building EagleView's own point stood on). Where the picked suggestion — or, for an address typed out in full,
+  // the server's geocoder — puts the address; dragged by the person onto the building to measure. `key` is the
+  // address it belongs to: change the address and the pin goes with it. The order carries it as `userPin`.
+  const [pin, setPin] = React.useState<IntakePin | null>(null);
+  const [locating, setLocating] = React.useState(false);
 
   // Google Places on the donor's plain <input>, the same module the Fence
   // studio uses. Uncontrolled on purpose: the module writes the field itself.
@@ -545,6 +676,9 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
         const prev = lastPickRef.current;
         lastPickRef.current = p;
         setPicked(p);
+        if (!p.typed && p.lat != null && p.lng != null) {
+          setPin({ lat: p.lat, lng: p.lng, label: p.formatted, key: pinKey(p.address, p.city, p.state, p.zip), moved: false });
+        }
         if (p.typed) {
           // City, state and ZIP filled in by a picked suggestion belong to
           // THAT address and go when it is typed over; ones typed by hand
@@ -568,6 +702,47 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
       },
     });
   }, [panel]);
+
+  // An address typed out in full (no suggestion picked) gets its pin from the server's geocoder once it reads as
+  // an address — a street number and name, and a city with a state or a ZIP — so the person sees, and can move,
+  // where it lands before anything is ordered. Asked once per address, after typing settles.
+  const typedAddress = picked?.typed ? picked.address.trim() : "";
+  const typedKey = typedAddress ? pinKey(typedAddress, city, stateCode, zip) : "";
+  const locatedRef = React.useRef(new Map<string, { lat: number; lng: number; label: string } | null>());
+  React.useEffect(() => {
+    if (panel !== "intake" || !typedKey || !isMapsBrowserEnabled()) return;
+    const looksLikeAddress = /\d/.test(typedAddress) && /[a-z]{2}/i.test(typedAddress) && (/^\d{5}/.test(zip.trim()) || (city.trim().length > 1 && !!stateCode));
+    if (!looksLikeAddress) return;
+    if (pin?.key === typedKey) return;
+    const known = locatedRef.current.get(typedKey);
+    if (known !== undefined) {
+      setPin(known ? { ...known, key: typedKey, moved: false } : null);
+      return;
+    }
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      setLocating(true);
+      void locateRoofAddress({ address: typedAddress, city, state: stateCode, zip })
+        .then((r) => {
+          const hit = r.ok ? { lat: r.lat, lng: r.lng, label: r.formatted } : null;
+          locatedRef.current.set(typedKey, hit);
+          if (!cancelled) setPin(hit ? { ...hit, key: typedKey, moved: false } : null);
+        })
+        .catch(() => {
+          /* no pin — the address still measures as typed */
+        })
+        .finally(() => {
+          if (!cancelled) setLocating(false);
+        });
+    }, 900);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+      setLocating(false);
+    };
+    // `pin` is read for its key only; a moved pin must not ask again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panel, typedKey, typedAddress, city, stateCode, zip]);
 
   // ── Estimate ──
   const [waste, setWaste] = React.useState(12);
@@ -688,11 +863,24 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     return () => clearInterval(timer);
   }
 
-  type OrderInput = { address: string; city: string; state: string; zip: string; lat?: number; lng?: number };
+  type OrderInput = { address: string; city: string; state: string; zip: string; lat?: number; lng?: number; userPin?: { lat: number; lng: number } | null };
+  // The pin on the intake map, when it belongs to the address as it stands now.
+  const currentPinKey = picked ? pinKey(picked.address, city, stateCode, zip) : "";
+  const intakePin = pin && pin.key === currentPinKey ? pin : null;
   function orderInput(): OrderInput {
     const address = addrRef.current ? addrRef.current.value.trim() : picked?.address ?? "";
     const matchingPick = picked?.address === address ? picked : null;
-    return { address, city, state: stateCode, zip, lat: matchingPick?.lat, lng: matchingPick?.lng };
+    // The pin the person saw — and may have moved — goes with the order and decides the building (user-pin).
+    const shown = intakePin && intakePin.key === pinKey(address, city, stateCode, zip) && isMapsBrowserEnabled() ? intakePin : null;
+    return {
+      address,
+      city,
+      state: stateCode,
+      zip,
+      lat: shown?.lat ?? matchingPick?.lat,
+      lng: shown?.lng ?? matchingPick?.lng,
+      userPin: shown ? { lat: shown.lat, lng: shown.lng } : null,
+    };
   }
 
   // ── Photos ──
@@ -752,8 +940,11 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // Live SATELLITE map (owner's call: drag to pan, scroll to zoom). Needs the
   // browser key and the measurement's pin; either missing → the cached static
   // photo (getMeasurementPhoto) serves exactly as before.
-  const mapLat = measurement?.instant?.lat ?? null;
-  const mapLng = measurement?.instant?.lng ?? null;
+  // The map stands on the MAIN building (2026-10-26: on a lot of many buildings EagleView's point can stand on
+  // another one); the pin marks the point the person placed, else the one the measurement read.
+  const home = React.useMemo(() => reportHome(measurement), [measurement]);
+  const mapLat = home?.center.lat ?? null;
+  const mapLng = home?.center.lng ?? null;
   const liveMap = isMapsBrowserEnabled() && !mapDown && mapLat != null && mapLng != null;
 
   // The map is built only while the SATELLITE tab is visible (the SDK lays
@@ -775,13 +966,14 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
         const host = mapHostRef.current;
         if (cancelled || !host) return;
         const center = { lat: mapLat, lng: mapLng };
+        const pinAt = home?.pin ?? center;
         const key = `${mapLat},${mapLng}`;
         if (liveMapRef.current?.host === host) {
           if (centeredOnRef.current !== key) {
             liveMapRef.current.map.setCenter(center);
             liveMapRef.current.map.setZoom(LIVE_MAP_ZOOM);
-            liveMapRef.current.marker?.setPosition(center);
           }
+          liveMapRef.current.marker?.setPosition(pinAt);
         } else {
           const map = new GMap(host, {
             center,
@@ -796,7 +988,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
           // The map's whole reason to exist on this panel is "which house was
           // measured" — mark the point the measurement read.
           const marker = Marker
-            ? new Marker({ map, position: center, title: "The point the measurement read", icon: blueprintPinIcon(gmaps?.Point) })
+            ? new Marker({ map, position: pinAt, title: home?.pinIsUsers ? "Your pin" : "The point the measurement read", icon: blueprintPinIcon(gmaps?.Point), zIndex: 8 })
             : null;
           liveMapRef.current = { host, map, marker };
         }
@@ -811,6 +1003,8 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     return () => {
       cancelled = true;
     };
+    // `home` is read for its pin, which moves only with the measurement (mapLat/mapLng stand for it).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveMap, panel, view, mapLat, mapLng, savedId, loadSatellite]);
 
   // The "back to the house" button: the live map's escape hatch after a wander.
@@ -825,7 +1019,9 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     setMeasurement(m);
     latestRef.current = m;
     setReport({ state: m.source === "solar" || m.source === "recon" ? "none" : "loading" });
-    setExtra(new Set());
+    // The buildings ticked in when this measurement was last open (kept on the row since 2026-10-26).
+    const savedMain = m.instant ? mainStructureOf({ structures: m.instant.structures, provenance: m.provenance as Record<string, unknown>, origin: { lat: m.lat, lng: m.lng } }).index : null;
+    setExtra(new Set(includedIndicesOf(m.provenance as Record<string, unknown>, m.instant?.structures.length ?? 0, savedMain)));
     setPitchEntered(null);
     setUnsaved(wasUnsaved);
     if (reveal) setPanel("report");
@@ -885,6 +1081,25 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   });
   React.useEffect(() => () => stopHoldProgress(), []);
 
+  /** A failed measurement, said on the intake with the one way out that fits. An address EagleView could not place
+   *  goes back to the address field (2026-10-26): nothing more is ordered for those words. */
+  function failIntake(
+    res: { error: string; noRoof?: boolean; stillProcessing?: boolean; canReorder?: boolean; addressNotFound?: boolean; expired?: boolean },
+    input: OrderInput,
+  ) {
+    const kind: IntakeErrorKind = res.addressNotFound ? "not-found" : res.expired ? "expired" : res.noRoof ? "no-roof" : res.stillProcessing ? "processing" : "failed";
+    setIntakeError({ text: res.error, kind, target: input, reorder: res.canReorder === true });
+    if (kind === "not-found") {
+      window.requestAnimationFrame(() => {
+        const field = addrRef.current;
+        if (!field) return;
+        field.scrollIntoView({ behavior: "smooth", block: "center" });
+        field.focus({ preventScroll: true });
+        field.select();
+      });
+    }
+  }
+
   async function runMeasurement() {
     if (busy || addressLoading || !measurementEnabled) return;
     const input = orderInput();
@@ -911,7 +1126,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
       const res = await measureRoof(input);
       if (!res.ok) {
         setPanel("intake");
-        setIntakeError({ text: res.error, kind: res.noRoof ? "no-roof" : res.stillProcessing ? "processing" : "failed", target: input, reorder: res.canReorder === true });
+        failIntake(res, input);
         if (!reportPlanLimitResult(res)) toast.error("Couldn't measure this roof", res.error);
         return;
       }
@@ -1003,7 +1218,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
       if (!res.ok) {
         stop();
         setPanel("intake");
-        setIntakeError({ text: res.error, kind: res.noRoof ? "no-roof" : res.stillProcessing ? "processing" : "failed", target: input, reorder: res.canReorder === true });
+        failIntake(res, input);
         // The card-less trial's ceiling: the dialog asks for a card instead.
         if (reportPlanLimitResult(res)) return;
         toast.error("Couldn't measure this roof", res.error);
@@ -1131,9 +1346,22 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
         opened = true;
       } else if (r.measurementId) {
         opened = await openRecent(r.measurementId);
+        // The proposal was made about one main building: if it was changed since, the measurement goes back to the
+        // proposal's (free — nothing is ordered), so the figures match the lines it is about to show.
+        const m = latestRef.current;
+        const nowMain = m?.instant ? mainStructureOf({ structures: m.instant.structures, provenance: m.provenance as Record<string, unknown>, origin: { lat: m.lat, lng: m.lng } }).index : null;
+        if (opened && m && r.mainIndex != null && nowMain !== r.mainIndex && m.instant?.structures[r.mainIndex]) {
+          const back = await setMainStructure(m.id, r.mainIndex).catch(() => null);
+          if (back?.ok) {
+            setMeasurement(back.measurement);
+            latestRef.current = back.measurement;
+          }
+        }
       }
       if (opened) {
-        setExtra(new Set(r.extra));
+        const m = latestRef.current;
+        const main = m?.instant ? mainStructureOf({ structures: m.instant.structures, provenance: m.provenance as Record<string, unknown>, origin: { lat: m.lat, lng: m.lng } }).index : null;
+        setExtra(new Set(r.extra.filter((i) => i !== main)));
         setPitchEntered(r.pitchEntered);
         const toLine = (l: { name: string; quantity: number; unitPrice: number; unit: string }): EditableLine => ({ id: nanoid(6), name: l.name, quantity: l.quantity, unitPrice: l.unitPrice, unit: l.unit });
         setMaterials(r.materials.map(toLine));
@@ -1355,7 +1583,17 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   }
   function reportInput() {
     const m = measurement;
-    return { address: m?.address ?? "", city: m?.city ?? "", state: m?.state ?? "", zip: m?.zip ?? "", lat: m?.lat ?? undefined, lng: m?.lng ?? undefined };
+    // A re-measure keeps the pin the person placed for this measurement, so the same building stays main.
+    const userPin = userPinOf(m?.provenance as Record<string, unknown> | undefined);
+    return {
+      address: m?.address ?? "",
+      city: m?.city ?? "",
+      state: m?.state ?? "",
+      zip: m?.zip ?? "",
+      lat: m?.lat ?? undefined,
+      lng: m?.lng ?? undefined,
+      userPin,
+    };
   }
   // Price, confirm, order. The order is BILLED and takes about 48 hours; the
   // lookup effect above picks the lengths up whenever the measurement is
@@ -1416,6 +1654,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
       factsKey: roofFacts ? factsKey(roofFacts) : null,
       manual: manual ? { squares: manual.squares, pitchLabel: manual.pitchLabel, address: manual.address } : null,
       extra: [...extra],
+      mainIndex: manual ? null : mainPick.index,
       pitchEntered,
       assumptions: assumptionsNow,
     };
@@ -1526,72 +1765,98 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
       })
     : [];
 
-  // The other buildings on the map (owner, 2026-10-10: "when I tick a box,
-  // show on the map which one that is" — then "don't outline buildings, just
-  // show a different colour pin"). A ticked building gets the house's pin in
-  // its row's colour, standing on the middle of its outline, its number in the
-  // head; the row under the pointer shows its pin faintly. A building the map
-  // cannot see yet is brought into view once, when ticked.
+  // THE BUILDINGS IN THE ESTIMATE, NUMBERED (2026-10-26, ticket 8KETUL: the list numbered every building on the
+  // lot nearest-first, and a contractor read "1, 2, 3" as sections of one roof spread over three buildings). Only
+  // the buildings in the estimate carry a number — the main one is always 1, then the ticked ones in list order —
+  // the same number on the row and on the map ("Building 2 of 3").
+  const includedOrder: number[] = mainPick.index != null ? [mainPick.index, ...otherStructures.filter(({ i }) => extra.has(i)).map(({ i }) => i)] : [];
+  const numberOf = (i: number): number | null => {
+    const n = includedOrder.indexOf(i);
+    return n < 0 ? null : n + 1;
+  };
+
+  // The buildings on the map (owner, 2026-10-10: "when I tick a box, show on the map which one that is"; outlines
+  // since 2026-10-26, owner: "contours with the same numbers as the list"). Every building of the answer is drawn:
+  // the main one in blueprint, a ticked one in its colour with its number on it, the rest as a thin white line.
+  // A building is chosen on the map by a click — its row is brought into view. What was just ticked, or asked
+  // for with "Show on map", is framed with the main building once.
   const overlaysRef = React.useRef<MapOverlay[]>([]);
   const framedRef = React.useRef<{ on: string | null; ticked: ReadonlySet<number>; focus: number | null }>({ on: null, ticked: new Set(), focus: null });
-  const outlineKey = otherStructures.map(({ s, i }) => `${i}:${s.outline?.length ?? 0}`).join(",");
+  const outlineKey = (inst?.structures ?? []).map((s, i) => `${i}:${s.outline?.length ?? 0}`).join(",");
+  const includedKey = includedOrder.join(",");
+  const pickRef = React.useRef<(i: number) => void>(() => {});
   React.useEffect(() => {
     const live = liveMapRef.current;
     const sdk = (window as unknown as { google?: { maps?: OutlineSdk } }).google?.maps;
-    const timers: number[] = [];
     const clear = () => {
       for (const o of overlaysRef.current) o.setMap(null);
       overlaysRef.current = [];
-      for (const t of timers) window.clearTimeout(t);
     };
     clear();
-    if (!live || !sdk?.Marker || !mapReadyFor || view !== "satellite" || panel !== "report") return clear;
+    if (!live || !inst || !sdk?.Polygon || !mapReadyFor || view !== "satellite" || panel !== "report") return clear;
     const map = live.map as LiveGoogleMap & {
       fitBounds?: (b: MapBounds, pad?: number) => void;
       getZoom?: () => number;
       addListener?: (ev: string, fn: () => void) => { remove(): void };
     };
-    const shown = otherStructures
-      .map(({ s, i }, k) => ({ i, k, at: (s.outline?.length ?? 0) >= 3 ? ringCenter(s.outline!) : null, ticked: extra.has(i), focus: i === focusBuilding }))
-      .filter((b): b is { i: number; k: number; at: { lat: number; lng: number }; ticked: boolean; focus: boolean } => (b.ticked || b.focus || b.i === hoverBuilding) && b.at != null);
-    // What was just chosen — ticked this moment, or asked for with "Show on map" — is framed with the house and
-    // bounces once, so it is plain which roof it is (owner, 2026-10-16), even when it was already somewhere on screen.
-    const before = framedRef.current.on === mapReadyFor ? framedRef.current : { on: mapReadyFor, ticked: new Set<number>(), focus: null };
-    const fresh = shown.filter((b) => b.ticked && !before.ticked.has(b.i));
-    const asked = focusBuilding != null && focusBuilding !== before.focus ? shown.find((b) => b.i === focusBuilding) : undefined;
-    const target = asked ?? fresh[fresh.length - 1];
-    for (const b of shown) {
-      const bounce = !!sdk.Animation && b === target;
-      const marker = new sdk.Marker({
+    inst.structures.forEach((s, i) => {
+      const ring = s.outline ?? [];
+      if (ring.length < 3) return;
+      const n = numberOf(i);
+      const isMain = i === mainPick.index;
+      const lit = i === focusBuilding || i === hoverBuilding;
+      const colour = isMain ? MAIN_COLOR : n != null ? buildingColor(n - 2) : "#ffffff";
+      const shape = new sdk.Polygon!({
         map,
-        position: b.at,
-        clickable: false,
-        zIndex: b === target ? 6 : b.focus ? 5 : b.ticked ? 4 : 3,
-        opacity: b.ticked || b.focus ? 1 : 0.6,
-        title: `Building ${b.k + 1}`,
-        label: { text: String(b.k + 1), color: "#0a0a0a", fontSize: "11px", fontWeight: "800" },
-        icon: { ...blueprintPinIcon(sdk.Point, buildingColor(b.k)), ...(sdk.Point ? { labelOrigin: new sdk.Point(12, 9) } : {}) },
-        ...(bounce ? { animation: sdk.Animation!.BOUNCE } : {}),
+        paths: ring,
+        strokeColor: lit && n == null ? "#ffd84a" : colour,
+        strokeOpacity: n != null || lit ? 1 : 0.85,
+        strokeWeight: isMain ? 3.5 : n != null ? 3 : lit ? 2.5 : 1.5,
+        fillColor: colour,
+        fillOpacity: isMain ? 0.22 : n != null ? 0.18 : lit ? 0.12 : 0.05,
+        clickable: true,
+        zIndex: isMain ? 4 : n != null ? 3 : lit ? 2 : 1,
       });
-      overlaysRef.current.push(marker);
-      if (bounce) timers.push(window.setTimeout(() => marker.setAnimation?.(null), 1500));
-    }
-    framedRef.current = { on: mapReadyFor, ticked: new Set(shown.filter((b) => b.ticked).map((b) => b.i)), focus: focusBuilding };
-    if (target && sdk.LatLngBounds && map.fitBounds) {
+      shape.addListener?.("click", () => pickRef.current(i));
+      overlaysRef.current.push(shape);
+      if (n != null && sdk.Marker) {
+        const tag = new sdk.Marker({
+          map,
+          position: ringCenter(ring),
+          clickable: false,
+          zIndex: 7,
+          title: `Building ${n} of ${includedOrder.length}`,
+          label: { text: String(n), color: isMain ? "#ffffff" : "#0a0a0a", fontSize: "12px", fontWeight: "800" },
+          // Beside the outline's middle, not on it: the person's pin often stands there.
+          icon: { path: 0, scale: 11, fillColor: colour, fillOpacity: 1, strokeColor: "#0a0a0a", strokeWeight: 1.5, ...(sdk.Point ? { anchor: new sdk.Point(-1.7, 0) } : {}) },
+        });
+        overlaysRef.current.push(tag);
+      }
+    });
+    const ticked = otherStructures.filter(({ i }) => extra.has(i)).map(({ i }) => i);
+    // A measurement opened with buildings already ticked (kept on the row) opens on its main building: only a tick
+    // made now is framed.
+    const before = framedRef.current.on === mapReadyFor ? framedRef.current : { on: mapReadyFor, ticked: new Set<number>(ticked), focus: null };
+    const fresh = ticked.filter((i) => !before.ticked.has(i));
+    const asked = focusBuilding != null && focusBuilding !== before.focus ? focusBuilding : null;
+    const target = asked ?? fresh[fresh.length - 1] ?? null;
+    framedRef.current = { on: mapReadyFor, ticked: new Set(ticked), focus: focusBuilding };
+    const targetRing = target != null ? inst.structures[target]?.outline : null;
+    if (targetRing && targetRing.length >= 3 && sdk.LatLngBounds && map.fitBounds) {
       const bounds = new sdk.LatLngBounds();
       if (mapLat != null && mapLng != null) bounds.extend({ lat: mapLat, lng: mapLng });
-      bounds.extend(target.at);
-      map.fitBounds(bounds, 90);
-      // Two pins a few yards apart would zoom past the imagery; stop at the house's own zoom.
+      for (const p of targetRing) bounds.extend(p);
+      map.fitBounds(bounds, 60);
+      // Two buildings a few yards apart would zoom past the imagery; stop at the house's own zoom.
       const once = map.addListener?.("idle", () => {
         once?.remove();
         if ((map.getZoom?.() ?? 0) > LIVE_MAP_ZOOM) map.setZoom(LIVE_MAP_ZOOM);
       });
     }
     return clear;
-    // outlineKey stands for otherStructures' outlines; the array itself is rebuilt every render.
+    // outlineKey / includedKey stand for the outlines and the numbering; the arrays are rebuilt every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReadyFor, view, panel, extra, hoverBuilding, focusBuilding, outlineKey, mapLat, mapLng]);
+  }, [mapReadyFor, view, panel, extra, hoverBuilding, focusBuilding, outlineKey, includedKey, mapLat, mapLng]);
   /** "Show on map": the satellite view, the map in sight on a phone, and the building framed with the house. */
   const showOnMap = (i: number) => {
     if (view !== "satellite") setView("satellite");
@@ -1602,9 +1867,90 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
       if (r.bottom < 60 || r.top > window.innerHeight - 60) host.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   };
+  /** A building clicked on the map: its row in the list, unfolded and brought into view. */
+  React.useEffect(() => {
+    pickRef.current = (i: number) => {
+      setFocusBuilding(i);
+      window.requestAnimationFrame(() => {
+        const row = document.querySelector<HTMLElement>(`[data-structure="${i}"]`);
+        if (!row) return;
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+        row.querySelector<HTMLElement>("input, button")?.focus({ preventScroll: true });
+      });
+    };
+  }, []);
+
+  // The ticks are kept on the row (2026-10-26): reopened from Recent, a proposal or another device, the same
+  // buildings are in. Written once the ticking settles; the page never waits for it.
+  const saveTicksRef = React.useRef<number | null>(null);
+  function tickBuildings(next: ReadonlySet<number>) {
+    setExtra(next);
+    if (!savedId) return;
+    const id = savedId;
+    if (saveTicksRef.current) window.clearTimeout(saveTicksRef.current);
+    saveTicksRef.current = window.setTimeout(() => {
+      saveTicksRef.current = null;
+      void saveIncludedStructures(id, [...next]).then(
+        (r) => {
+          if (!r.ok) toast.error("Couldn't keep the buildings", r.error);
+        },
+        () => toast.error("Couldn't keep the buildings", "Check the connection; the estimate on this page is unchanged."),
+      );
+    }, 500);
+  }
+
+  // "Make main" (2026-10-26, ticket 8KETUL): the building the figures are about, chosen by the person. The server
+  // works the measurement out again from what it already holds — nothing is ordered — and the figures, the hero
+  // and the estimate follow at once; the building that was main joins the list unticked.
+  const [mainBusy, setMainBusy] = React.useState<number | null>(null);
+  async function makeMain(i: number) {
+    if (!savedId || mainBusy != null) return;
+    const id = savedId;
+    const n = numberOf(i);
+    if (saveTicksRef.current) {
+      window.clearTimeout(saveTicksRef.current);
+      saveTicksRef.current = null;
+      await saveIncludedStructures(id, [...extra]).catch(() => null);
+    }
+    setMainBusy(i);
+    try {
+      const r = await setMainStructure(id, i);
+      if (!r.ok) {
+        toast.error("Couldn't change the main building", r.error);
+        return;
+      }
+      setMeasurement(r.measurement);
+      latestRef.current = r.measurement;
+      const nowMain = r.measurement.instant ? mainStructureOf({ structures: r.measurement.instant.structures, provenance: r.measurement.provenance as Record<string, unknown>, origin: { lat: r.measurement.lat, lng: r.measurement.lng } }).index : null;
+      setExtra(new Set(includedIndicesOf(r.measurement.provenance as Record<string, unknown>, r.measurement.instant?.structures.length ?? 0, nowMain)));
+      setFocusBuilding(null);
+      const area = r.measurement.instant?.structures[i]?.areaSqft;
+      toast.success("Main building changed", `${n != null ? `Building ${n}` : "The building you chose"}${area != null ? ` · ${num(area)} sq ft` : ""} is now Building 1; the estimate follows it.`);
+      window.requestAnimationFrame(() => document.querySelector<HTMLElement>("[data-structure-main]")?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+    } catch {
+      toast.error("Couldn't change the main building", "Check the connection and try again.");
+    } finally {
+      setMainBusy(null);
+    }
+  }
   const includedStructures: InstantStructure[] = structure
     ? [structure, ...otherStructures.filter(({ i }) => extra.has(i)).map(({ s }) => s)]
     : [];
+  /** A building ticked in or out of the estimate; the row moves between the two groups, the keyboard stays on it. */
+  function onTickBuilding(i: number, on: boolean) {
+    const next = new Set(extra);
+    if (on) next.add(i);
+    else next.delete(i);
+    tickBuildings(next);
+    window.requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`[data-structure="${i}"] input[type=checkbox]`)?.focus({ preventScroll: true }));
+  }
+  function onMakeMain(i: number) {
+    void makeMain(i);
+  }
+  /** "Measure this one" (a2b54fb6): this building measured from the address's stored order — no new charge. */
+  function onMeasureThis(ring: ReadonlyArray<{ lat: number; lng: number }>) {
+    void runInstant(false, reportInput(), pointOnRing(ring));
+  }
   // The footprint the estimate prices on: EagleView's figure unless it
   // disagrees with the building's own outline by more than a tenth, in which
   // case the outline wins (lib/roofDiagram/instantTotals.footprintRead).
@@ -1931,24 +2277,42 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
               </label>
             </div>
             <div id="rf-address-status" className="rf-address-status" role="status" aria-live="polite">
-              {addressLoading && <><span className="rf-status-dot" />Loading address details and roof pin…</>}
+              {addressLoading ? (
+                <><span className="rf-status-dot" />Loading address details and roof pin…</>
+              ) : locating ? (
+                <><span className="rf-status-dot" />Finding the address on the map…</>
+              ) : null}
             </div>
+            {/* Typed out, not picked (2026-10-26): the suggestion carries the exact point; say so under the field. */}
+            {picked?.typed && picked.address.trim().length > 2 && !addressLoading && (
+              <p className="rf-note rf-typed-hint" data-rf-typed-hint>
+                Pick the address from the list so we measure the right building.
+              </p>
+            )}
             {intakeError && (
               <div className="call warn rf-intake-error" role="alert" data-intake-error={intakeError.kind}>
                 <div>
                   <span className="rf-stamp">
-                    {intakeError.kind === "no-roof" ? "NO ROOF IN THE ANSWER" : intakeError.kind === "processing" ? "STILL PROCESSING" : "COULDN’T MEASURE"}
+                    {intakeError.kind === "no-roof"
+                      ? "NO ROOF IN THE ANSWER"
+                      : intakeError.kind === "processing"
+                        ? "STILL PROCESSING"
+                        : intakeError.kind === "not-found"
+                          ? "CHECK THE ADDRESS"
+                          : intakeError.kind === "expired"
+                            ? "ORDER NEVER ARRIVED"
+                            : "COULDN’T MEASURE"}
                   </span>
                   {intakeError.text}
-                  {intakeError.kind !== "failed" && (
+                  {intakeError.kind !== "failed" && intakeError.kind !== "not-found" && (
                     <span className="rf-use-acts">
                       <button
                         type="button"
                         className="btn btn-primary btn--sm"
                         disabled={busy}
-                        onClick={() => void runInstant(intakeError.kind === "no-roof", intakeError.target)}
+                        onClick={() => void runInstant(intakeError.kind === "no-roof" || intakeError.kind === "expired", intakeError.target)}
                       >
-                        {intakeError.kind === "no-roof" ? "Order a new lookup — billed" : "Check again — free"}
+                        {intakeError.kind === "no-roof" || intakeError.kind === "expired" ? "Order a new lookup — billed" : "Check again — free"}
                       </button>
                       {intakeError.kind === "processing" && intakeError.reorder && (
                         <button type="button" className="btn btn-ghost btn--sm" disabled={busy} onClick={() => void runInstant(true, intakeError.target)}>
@@ -1961,10 +2325,16 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
               </div>
             )}
 
-            {/* Pin-on-the-roof check before measurement. Only a picked
-                suggestion carries the rooftop point; free typing hides it. */}
-            {picked && !picked.typed && picked.lat != null && picked.lng != null && (
-              <AddressPinPreview lat={picked.lat} lng={picked.lng} label={picked.formatted} />
+            {/* Pin-on-the-roof check before measurement: the picked suggestion's rooftop point, or the geocoded
+                point of an address typed out in full — dragged onto the building to measure (2026-10-26). */}
+            {intakePin && (
+              <AddressPinPreview
+                lat={intakePin.lat}
+                lng={intakePin.lng}
+                label={intakePin.label}
+                moved={intakePin.moved}
+                onMove={(p) => setPin((cur) => (cur && cur.key === intakePin.key ? { ...cur, ...p, moved: true } : cur))}
+              />
             )}
 
             <div className="rf-actions">
@@ -2383,110 +2753,116 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                     <div className="card-title">Structures</div>
                     <div className="card-sub">
                       {structure
-                        ? `Main structure ${structure.areaSqft != null ? num(structure.areaSqft) + " sq ft" : "— no area"}${footprint.sqft != null ? ` · footprint ${num(footprint.sqft)} sq ft${footprint.source === "outline" ? " (outline)" : ""}` : ""}`
+                        ? includedOrder.length > 1
+                          ? `${includedOrder.length} buildings in the estimate · ${num(totals?.areaSqft ?? 0)} sq ft`
+                          : `Main building ${structure.areaSqft != null ? num(structure.areaSqft) + " sq ft" : "— no area"}${footprint.sqft != null ? ` · footprint ${num(footprint.sqft)} sq ft${footprint.source === "outline" ? " (outline)" : ""}` : ""}`
                         : `${measurement.instant?.structures.length ?? 0} on the property`}
                     </div>
-                    {structure && (mainPick.how === "nearest-pin" || mainPick.how === "area+parcel" || mainPick.how === "at-pin" || mainPick.how === "chosen") && (
-                      <div className="rf-pick" data-rf-pick={mainPick.how}>{mainPick.how === "chosen" ? "The building you chose to measure" : mainPick.how === "at-pin" ? "Picked as the building at the address pin" : mainPick.how === "nearest-pin" ? "Picked as nearest the pin" : "Picked as largest on the parcel"}</div>
-                    )}
+                    {structure && MAIN_HOW_WORDS[mainPick.how] && <div className="rf-pick" data-rf-pick={mainPick.how}>{MAIN_HOW_WORDS[mainPick.how]}</div>}
                   </div>
-                  {otherStructures.length > 0 && (() => {
+                  {structure && mainPick.index != null && (() => {
                     // Folded when there are many (owner, 2026-10-16): the first few of this lot's buildings, anything
                     // ticked, and the rest behind one button. A building the parcel check put outside the lot is a
                     // neighbour's — said so on its row and counted apart, never as "on the parcel".
-                    const onLot = otherStructures.filter((o) => !o.offLot);
-                    const offLot = otherStructures.filter((o) => o.offLot);
-                    const folds = otherStructures.length > BUILDINGS_SHOWN + 1;
-                    const visible = (o: (typeof otherStructures)[number], k: number) => allBuildings || !folds || extra.has(o.i) || o.i === focusBuilding || (!o.offLot && k < BUILDINGS_SHOWN);
-                    const hidden = otherStructures.filter((o, k) => !visible(o, k)).length;
+                    const mainAt = mainPick.index;
+                    // The buildings in the estimate stand together under the main one, numbered in turn; the rest
+                    // follow under their own heading — a tick moves a row up, an untick moves it back.
+                    const inEst = otherStructures.filter((o) => extra.has(o.i));
+                    const rest = otherStructures.filter((o) => !extra.has(o.i));
+                    const onLot = rest.filter((o) => !o.offLot);
+                    const offLot = rest.filter((o) => o.offLot);
+                    const folds = rest.length > BUILDINGS_SHOWN + 1;
+                    const visible = (o: (typeof otherStructures)[number], k: number) => allBuildings || !folds || o.i === focusBuilding || (!o.offLot && k < BUILDINGS_SHOWN);
+                    const hidden = rest.filter((o, k) => !visible(o, k)).length;
                     const mapOn = liveMap && !!mapReadyFor;
+                    const total = includedOrder.length;
+                    // One row of the list (StructureRow below), the page's handlers handed in.
+                    const otherRow = (o: (typeof otherStructures)[number]) => (
+                      <StructureRow
+                        o={o}
+                        n={numberOf(o.i)}
+                        total={total}
+                        ticked={extra.has(o.i)}
+                        focus={focusBuilding === o.i}
+                        canMakeMain={!!savedId}
+                        makeMainBusy={mainBusy === o.i}
+                        makeMainDisabled={mainBusy != null || busy}
+                        showOnMapButton={mapOn && (o.s.outline?.length ?? 0) >= 3}
+                        noLocationNote={extra.has(o.i) && liveMap && view === "satellite" && (o.s.outline?.length ?? 0) < 3}
+                        measureThis={SHOW_MEASURE_THIS && !o.offLot && evEnabled && (o.s.outline?.length ?? 0) >= 3}
+                        busy={busy}
+                        onHover={setHoverBuilding}
+                        onTick={onTickBuilding}
+                        onMakeMain={onMakeMain}
+                        onShowOnMap={showOnMap}
+                        onMeasureThis={onMeasureThis}
+                      />
+                    );
                     return (
-                      /* The Details card's own <dl> rhythm; each other building is a drawn checkbox with a plain name, its figures right. */
+                      /* The Details card's own <dl> rhythm: the main building first, numbered 1, and the ticked ones after
+                         it; then the others, each a drawn checkbox with "Make main" beside it. */
                       <dl className="rf-details rf-others" data-rf-others data-folded={folds && !allBuildings ? "1" : "0"}>
-                        <div className="rf-details-sec">
-                          {onLot.length
-                            ? <>Other structures on the parcel · {onLot.length} · {num(onLot.reduce((a, { s }) => a + (s.areaSqft ?? 0), 0))} sq ft</>
-                            : <>No other structures on this lot</>}
+                        <div className="rf-details-sec">In the estimate{total > 1 ? ` · ${total}` : ""}</div>
+                        <div
+                          className={"rf-details-row rf-main-row" + (focusBuilding === mainAt ? " is-focus" : "")}
+                          data-structure={mainAt}
+                          data-structure-main
+                          data-building={1}
+                        >
+                          <dt>
+                            <span className="rf-main-name">
+                              <span className="rf-swatch" style={{ background: MAIN_COLOR }} aria-hidden="true" />
+                              Building 1{total > 1 ? ` of ${total}` : ""}
+                            </span>
+                            <span className="rf-main-tag">Main</span>
+                            {mapOn && (structure.outline?.length ?? 0) >= 3 ? (
+                              <button type="button" className={"rf-locate" + (focusBuilding === mainAt ? " is-on" : "")} onClick={() => showOnMap(mainAt)} aria-label="Show the main building on the map" data-rf-locate={1}>
+                                Show on map
+                              </button>
+                            ) : null}
+                          </dt>
+                          <dd>
+                            {structure.areaSqft != null ? num(structure.areaSqft) : "—"}
+                            <span>sq ft</span>
+                            {structure.pitch && <span>· {structure.pitch}</span>}
+                          </dd>
                         </div>
-                        {offLot.length > 0 && (
-                          <div className="rf-note rf-offlot-note" data-rf-offlot>
-                            {offLot.length} nearby {offLot.length === 1 ? "building is" : "buildings are"} outside this lot — a neighbour&rsquo;s, not part of this property, and not in the estimate.
-                          </div>
-                        )}
-                        <div className="rf-note">
-                          Select a building to include it in your estimate{mapOn ? " — “Show on map” points to it" : ""}. Measured the wrong one? “Measure this one” makes that building the roof — no new charge.
-                        </div>
-                        {otherStructures.map((o, k) => {
-                          const { s, i } = o;
-                          if (!visible(o, k)) return null;
-                          const firstOff = o.offLot && otherStructures.findIndex((x) => x.offLot) === k;
-                          return (
-                            <React.Fragment key={i}>
-                              {firstOff && onLot.length > 0 && <div className="rf-details-sec rf-offlot-sec">Outside this lot · {offLot.length}</div>}
-                              <div
-                                className={"rf-details-row" + (o.offLot ? " is-offlot" : "")}
-                                data-building={k + 1}
-                                onMouseEnter={() => setHoverBuilding(i)}
-                                onMouseLeave={() => setHoverBuilding((h) => (h === i ? null : h))}
-                                onFocus={() => setHoverBuilding(i)}
-                                onBlur={() => setHoverBuilding((h) => (h === i ? null : h))}
-                              >
-                                <dt>
-                                  <label className={"rf-attach" + (extra.has(i) ? "" : " is-off")}>
-                                    <input
-                                      type="checkbox"
-                                      checked={extra.has(i)}
-                                      onChange={(e) => {
-                                        const next = new Set(extra);
-                                        if (e.target.checked) next.add(i); else next.delete(i);
-                                        setExtra(next);
-                                      }}
-                                    />
-                                    <span className="rf-swatch" style={{ background: buildingColor(k) }} aria-hidden="true" />
-                                    Building {k + 1}
-                                  </label>
-                                  {mapOn && (s.outline?.length ?? 0) >= 3 ? (
-                                    <button type="button" className={"rf-locate" + (focusBuilding === i ? " is-on" : "")} onClick={() => showOnMap(i)} aria-label={`Show Building ${k + 1} on the map`} data-rf-locate={k + 1}>
-                                      Show on map
-                                    </button>
-                                  ) : null}
-                                  {!o.offLot && evEnabled && (s.outline?.length ?? 0) >= 3 ? (
-                                    // The wrong building measured (a contractor's ticket, 2026-10-26: "the apartment building
-                                    // needs to be measured, not the garage"): this one becomes the roof the report and the
-                                    // estimate are about. The address's stored order answers it, so it is not billed again.
-                                    <button
-                                      type="button"
-                                      className="rf-locate rf-measure-this"
-                                      disabled={busy}
-                                      onClick={() => void runInstant(false, reportInput(), pointOnRing(s.outline!))}
-                                      aria-label={`Measure Building ${k + 1} instead`}
-                                      data-rf-measure-this={k + 1}
-                                    >
-                                      Measure this one
-                                    </button>
-                                  ) : null}
-                                  {o.offLot && <span className="rf-attach-note">outside the lot</span>}
-                                  {extra.has(i) && liveMap && view === "satellite" && (s.outline?.length ?? 0) < 3 && (
-                                    <span className="rf-attach-note">no location in the report — no pin on the map</span>
-                                  )}
-                                </dt>
-                                <dd>
-                                  {s.areaSqft != null ? num(s.areaSqft) : "—"}
-                                  <span>sq ft</span>
-                                  {s.pitch && <span>· {s.pitch}</span>}
-                                  {s.footprintSqft != null && <span>· footprint {num(s.footprintSqft)}</span>}
-                                  {o.feet != null && <span>· {num(Math.max(10, Math.round(o.feet / 10) * 10))} ft away</span>}
-                                </dd>
+                        {inEst.map((o) => (
+                          <React.Fragment key={o.i}>{otherRow(o)}</React.Fragment>
+                        ))}
+                        {rest.length > 0 && (
+                          <>
+                            <div className="rf-details-sec">
+                              {onLot.length
+                                ? <>Other structures on the parcel · {onLot.length} · {num(onLot.reduce((a, { s }) => a + (s.areaSqft ?? 0), 0))} sq ft</>
+                                : <>No other structures on this lot</>}
+                            </div>
+                            {offLot.length > 0 && (
+                              <div className="rf-note rf-offlot-note" data-rf-offlot>
+                                {offLot.length} nearby {offLot.length === 1 ? "building is" : "buildings are"} outside this lot — a neighbour&rsquo;s, not part of this property, and not in the estimate.
                               </div>
-                            </React.Fragment>
-                          );
-                        })}
-                        {folds && (hidden > 0 || allBuildings) && (
-                          <div className="rf-fold">
-                            <button type="button" className="rf-fold-btn" onClick={() => setAllBuildings((v) => !v)} aria-expanded={allBuildings} data-rf-fold>
-                              {allBuildings ? "Show fewer" : `Show ${hidden} more building${hidden === 1 ? "" : "s"}${offLot.length && onLot.length <= BUILDINGS_SHOWN ? " — outside this lot" : ""}`}
-                            </button>
-                          </div>
+                            )}
+                            <div className="rf-note">
+                              Tick a building to add it to the estimate{savedId ? ", or make it the main building" : ""}{mapOn ? " — or click it on the map" : ""}.
+                            </div>
+                            {rest.map((o, k) => {
+                              if (!visible(o, k)) return null;
+                              const firstOff = o.offLot && rest.findIndex((x) => x.offLot) === k;
+                              return (
+                                <React.Fragment key={o.i}>
+                                  {firstOff && onLot.length > 0 && <div className="rf-details-sec rf-offlot-sec">Outside this lot · {offLot.length}</div>}
+                                  {otherRow(o)}
+                                </React.Fragment>
+                              );
+                            })}
+                            {folds && (hidden > 0 || allBuildings) && (
+                              <div className="rf-fold">
+                                <button type="button" className="rf-fold-btn" onClick={() => setAllBuildings((v) => !v)} aria-expanded={allBuildings} data-rf-fold>
+                                  {allBuildings ? "Show fewer" : `Show ${hidden} more building${hidden === 1 ? "" : "s"}${offLot.length && onLot.length <= BUILDINGS_SHOWN ? " — outside this lot" : ""}`}
+                                </button>
+                              </div>
+                            )}
+                          </>
                         )}
                       </dl>
                     );
