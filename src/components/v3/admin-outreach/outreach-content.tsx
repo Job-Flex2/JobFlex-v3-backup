@@ -185,7 +185,7 @@ export function AdminOutreachContent({ rows, readiness, funnel, hunts, settings,
           </label>
           <label className={styles.field}>
             <span className={styles.lbl}>Where</span>
-            <input className={styles.in} placeholder="Seattle, WA" value={hunt.area} onChange={(e) => setHunt({ ...hunt, area: e.target.value })} data-outreach-hunt-area />
+            <input className={styles.in} placeholder="Seattle, WA — or a whole state: California" title="A city and state, or a state on its own for its biggest cities, one after another" value={hunt.area} onChange={(e) => setHunt({ ...hunt, area: e.target.value })} data-outreach-hunt-area />
           </label>
           <label className={styles.field}>
             <span className={styles.lbl}>A day</span>
