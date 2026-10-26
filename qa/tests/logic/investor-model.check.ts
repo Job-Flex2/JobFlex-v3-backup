@@ -139,6 +139,12 @@ check("the words — today", st2.now === "Today a month brings in $158 against $
 check("…the last 2 days: $79 → $158, +100%; the ads held", st2.past === "In the last 2 days, revenue per month grew $79 (+100%), from $79 to $158; a month of ads stayed at $3,000.", st2.past ?? "");
 check("…the next 2 days at today's pace and the measured 67%", st2.ahead === "In 2 days, at today's pace and with 67% of trials converting, as measured: $158 a month in, $3,000 a month of ads.", st2.ahead ?? "");
 check("…and the day each month first earns more than its ads (Dec 30, in 85 days)", pm?.date === "2026-12-30" && pm?.inDays === 85 && st2.cross === "From December 30, 2026 — in 85 days — each month brings in more than its ads cost.", st2.cross);
+const fromStart = runRateStory(f.curve, "2026-10-06", 30, 67).past ?? "";
+check("a view from the first day counts the growth from $0 (nothing paying on Sep 30 here)", fromStart === "Since Sep 30, revenue per month grew from $0 to $158; a month of ads stayed at $3,000.", fromStart);
+const withEarly = investorFigures({ ...base, paying: [...base.paying, { startedAt: "2026-09-01", monthlyCents: 9900, signedUpAt: "2026-08-20", preexisting: true }] });
+const fromStartEarly = runRateStory(withEarly.curve, "2026-10-06", 30, 67).past ?? "";
+check("…and what was already paying that first day stands beside it, in the total — not as growth from it", fromStartEarly === "Since Sep 30, new customers added $158 a month — from $0 to $158 — on top of the $99 a month from accounts already paying; together $257. A month of ads stayed at $3,000.", fromStartEarly);
+check("…a shorter view still says how it moved in those days", /^In the last 2 days, revenue per month grew \$79/.test(runRateStory(withEarly.curve, "2026-10-06", 2, 67).past ?? ""));
 check("one day: \"Since yesterday\"", (runRateStory(f.curve, "2026-10-06", 1, 67).past ?? "").startsWith("Since yesterday, revenue per month grew $79 (+100%), from $79 to $158"));
 check("no ads running: said so; a month that already earns more than its ads: said so", runRateStory(investorFigures({ ...base, spend: [] }).curve, "2026-10-06", 7, 67).now === "Today a month brings in $158, and no ads are running." && runRateStory(investorFigures({ ...base, spend: [{ date: "2026-10-06", cents: 100 }] }).curve, "2026-10-06", 7, 67).cross === "Already today a month brings in more than its ads cost.");
 

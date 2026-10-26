@@ -608,6 +608,15 @@ export function runRateStory(curve: readonly CurvePoint[], today: string, days: 
     const moved = d === 0 ? `revenue per month held at ${dollars(t.revenueCents)}` : `revenue per month ${d > 0 ? "grew" : "fell"} ${dollars(Math.abs(d))}${pct}, from ${dollars(a.revenueCents)} to ${dollars(t.revenueCents)}`;
     const ads = a.adsCents === t.adsCents ? `a month of ads stayed at ${dollars(t.adsCents)}` : `a month of ads went from ${dollars(a.adsCents)} to ${dollars(t.adsCents)}`;
     past = `${lead}, ${moved}; ${ads}.`;
+    // FROM THE FIRST DAY (owner, 2026-10-25: "say from 0, not from 782 — move those 782 to the total"): the view starts
+    // where the count starts, so the growth is counted from $0 and what was already paying that day stands beside it,
+    // in the total — never as money the period brought.
+    if (w.from === 0 && d > 0) {
+      const since = `Since ${shortDay(curve[0].date)}`;
+      past = a.revenueCents > 0
+        ? `${since}, new customers added ${dollars(d)} a month — from $0 to ${dollars(d)} — on top of the ${dollars(a.revenueCents)} a month from accounts already paying; together ${dollars(t.revenueCents)}. ${ads[0].toUpperCase()}${ads.slice(1)}.`
+        : `${since}, revenue per month grew from $0 to ${dollars(t.revenueCents)}; ${ads}.`;
+    }
   }
   let ahead: string | null = null;
   const fwd = w.to - w.todayIndex;
