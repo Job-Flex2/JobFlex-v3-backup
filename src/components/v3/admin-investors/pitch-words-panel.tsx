@@ -6,6 +6,7 @@ import { useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { saveInvestorPitchAction } from "@/actions/investors";
 import type { InvestorPitch } from "@/lib/investorPitch";
+import { RAISE_DRAFT } from "@/lib/investorPitchShared";
 import s from "./admin-investors.module.css";
 import p from "./pitch-words.module.css";
 
@@ -14,18 +15,8 @@ const BOXES: Array<{ key: "ask" | "roadmap"; label: string; hint: string; exampl
   { key: "roadmap", label: "What's next", hint: "One item per line, in order. Empty: no roadmap slide.", example: "Payments inside the proposal for every trade\nSpanish for crews" },
 ];
 
-/** A FIRST DRAFT OF THE RAISE (owner, 2026-10-25: "write the raise — $1.5M for contractors joining JobFlex to use the
- *  platform, $2.5M for the homeowners portal: advertising, projects to sell to the contractors, the lead generation
- *  portal; make it smart, pre-fill it, make it attractive to investors"). It sits in the box while nothing is saved and
- *  reaches the link only when the owner saves it. Only what the product does — no figures it cannot show. */
-export const RAISE_DRAFT = [
-  "Raising $4M seed to grow both sides of JobFlex",
-  "$1.5M — contractors: ads in the trades that convert best, AI-desk outreach and onboarding, to put more shops on JobFlex every month",
-  "$2.5M — homeowners: advertising that brings homeowners to the JobFlex portal with real projects — roofing, fencing, decks, HVAC, remodeling",
-  "Every homeowner project becomes a lead we sell to the contractors on JobFlex — a second revenue line on top of subscriptions",
-  "Each request arrives with the job's details and opens straight in our estimators — the contractor prices it and sends a proposal without retyping a thing",
-  "The two sides feed each other: more projects make JobFlex worth more to contractors; more contractors answer every homeowner faster",
-].join("\n");
+/** The raise's first draft lives in lib/investorPitchShared (the link reads it too, until the owner saves their own). */
+export { RAISE_DRAFT };
 
 export function PitchWordsPanel({ initial, linkBase }: { initial: InvestorPitch; /** The live shared link, or null when it is off. */ linkBase: string | null }) {
   // Nothing saved for the raise yet: the box starts with the draft (not on the link until saved).
@@ -69,7 +60,7 @@ export function PitchWordsPanel({ initial, linkBase }: { initial: InvestorPitch;
           <label key={b.key} className={p.box}>
             <span className={p.label}>{b.label}</span>
             <textarea className={p.area} id={`pitch-${b.key}`} rows={b.key === "ask" ? 10 : 6} maxLength={2000} value={words[b.key]} placeholder={b.example} onChange={(e) => setWords((w) => ({ ...w, [b.key]: e.target.value }))} data-pitch-box={b.key} />
-            {b.key === "ask" && !saved.ask && words.ask === RAISE_DRAFT ? <span className={p.draft} data-pitch-draft>A first draft, written for you — change anything, then save. It is not on the link until you save it.</span> : null}
+            {b.key === "ask" && !saved.ask && words.ask === RAISE_DRAFT ? <span className={p.draft} data-pitch-draft>A first draft, written for you — it is what the link shows at the top and on the deck&apos;s ask slide until you change it here and save.</span> : null}
             <span className={s.hint}>{b.hint}</span>
           </label>
         ))}
