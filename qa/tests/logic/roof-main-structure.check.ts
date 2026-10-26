@@ -110,6 +110,17 @@ async function main() {
   check("…a paid re-measure too — the same words would be refused again", paid?.ok === false && paid.addressNotFound === true, paid);
   check("…and nothing was ordered", (await db.instantOrder.count({ where: { organizationId: A.org.id } })) === before);
 
+  // ── "Make main" = the full measurement again from the stored order (owner, 2026-10-26) ──
+  const fix = { address: "1 Fixture Way", city: "Testville", state: "KS", zip: "67000" };
+  await db.instantOrder.create({ data: { organizationId: A.org.id, addressKey: instantAddressKey(fix), address: fix.address, requestId: `qa-${rid()}`, status: "complete", instantJson: JSON.stringify(instant), packs: JSON.stringify([PD_PACK.ROOF_AREA, PD_PACK.OUTLINES, PD_PACK.PITCH_EAVE]) } });
+  const ordersBefore = await db.instantOrder.count({ where: { organizationId: A.org.id } });
+  const rowsBefore = await db.roofMeasurement.count({ where: { organizationId: A.org.id } });
+  const re = (await outcome(() => measureRoofInstant(fix, { mainIndex: 3, included: [5, 3, 99] }))).value as { ok: boolean; measurement?: { id: string; areaSqft: number | null; provenance: Record<string, unknown> }; reusedInstant?: { how: string } } | undefined;
+  const reMain = re?.measurement?.provenance.mainStructure as { index: number; how: string; pin?: unknown } | undefined;
+  check("Make main remeasures: a new measurement from the stored order, nothing ordered", re?.ok === true && re.reusedInstant?.how === "stored" && (await db.instantOrder.count({ where: { organizationId: A.org.id } })) === ordersBefore && (await db.roofMeasurement.count({ where: { organizationId: A.org.id } })) === rowsBefore + 1, re);
+  check("…about the chosen building, said as chosen, with a pin on it", reMain?.index === 3 && reMain.how === "chosen" && !!reMain.pin && re?.measurement?.areaSqft === lot.structures[3].areaSqft, reMain);
+  check("…the ticks carried over, without the new main one or junk", JSON.stringify(re?.measurement?.provenance.included) === "[5]", re?.measurement?.provenance.included);
+
   const placed: string[][] = [];
   const deps: OrderDeps = {
     submit: async (_i, packs) => {

@@ -1070,8 +1070,10 @@ function userFacingInstantError(err: unknown): string {
 export async function measureRoofInstant(
   input: RoofOrderInput,
   // `building`: a point on the building the contractor chose to measure on a lot with several — the stored order is
-  // reused (it is the same address), only which roof the report is about changes.
-  opts?: { forceNewOrder?: boolean; building?: LatLng },
+  // reused (it is the same address), only which roof the report is about changes. `mainIndex` names that building
+  // exactly ("Make main", 2026-10-26 — also off the lot, where a pin alone gives way to the vendor's point), and
+  // `included` carries the buildings already ticked into the estimate over to the new measurement.
+  opts?: { forceNewOrder?: boolean; building?: LatLng; mainIndex?: number; included?: number[] },
 ): Promise<MeasureResult> {
   let organizationId: string;
   let userId: string;
@@ -1151,7 +1153,8 @@ export async function measureRoofInstant(
     pickPin: okLatLng(opts?.building) ? opts.building : null,
     chosen: okLatLng(opts?.building),
     userPin: cleanPin(input.userPin),
-    included: [],
+    forceMain: Number.isInteger(opts?.mainIndex) && (opts?.mainIndex ?? -1) >= 0 ? opts!.mainIndex : null,
+    included: Array.isArray(opts?.included) ? opts.included.slice(0, 500) : [],
   });
   if (reuse) provenance.instantReuse = reuse;
 

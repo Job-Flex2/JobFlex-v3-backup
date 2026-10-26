@@ -263,8 +263,8 @@ monthly" is one 12px line (weight 600) under the price.
   ink under the map; an address typed without picking a suggestion gets its
   pin from the geocoder and the line "Pick the address from the list so we
   measure the right building." In the report only the buildings in the
-  estimate carry a number: the main one is always "Building 1 of N" with a
-  blueprint MAIN stamp, the ticked ones stand under it in turn ("In the
+  estimate carry a number: the main one is always "Main · Building 1 of N",
+  the ticked ones stand under it in turn ("In the
   estimate"), the unticked rows follow with no number. Every other row has a quiet "Make main" button (white, 1.5px ink
   frame, 13px 700, 44px on a phone). The report map outlines every building —
   the main one in blueprint, a ticked one in its colour with its number on a

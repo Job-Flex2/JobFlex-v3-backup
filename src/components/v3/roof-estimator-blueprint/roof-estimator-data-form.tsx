@@ -1163,7 +1163,8 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
   // `building` is a point on the roof the contractor chose from the lot's
   // list ("Measure this building instead", 2026-10-26) — same address, same
   // stored order, only which building the report is about changes.
-  async function runInstant(forceNewOrder = false, target?: OrderInput, building?: { lat: number; lng: number }) {
+  // `pick` is "Make main": the building by its index, and the ticks to keep on the new measurement.
+  async function runInstant(forceNewOrder = false, target?: OrderInput, building?: { lat: number; lng: number }, pick?: { mainIndex: number; included: number[] }) {
     if (busy || addressLoading || !evEnabled) return;
     const input = target ?? orderInput();
     if (!input.address) {
@@ -1193,7 +1194,10 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     setPanel("measuring");
     const stop = runProgress();
     try {
-      const res = await measureRoofInstant(input, forceNewOrder || building ? { ...(forceNewOrder ? { forceNewOrder } : {}), ...(building ? { building } : {}) } : undefined);
+      const res = await measureRoofInstant(
+        input,
+        forceNewOrder || building || pick ? { ...(forceNewOrder ? { forceNewOrder } : {}), ...(building ? { building } : {}), ...(pick ? pick : {}) } : undefined,
+      );
       // DEBUG (2026-09-08, owner's call — on until told otherwise): the whole
       // EagleView story for this click, in the browser console.
       console.info(
@@ -1907,6 +1911,21 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
       saveTicksRef.current = null;
       await saveIncludedStructures(id, [...extra]).catch(() => null);
     }
+    // THE FULL MEASUREMENT OF THAT BUILDING (owner, 2026-10-26): the other developer's "Measure this one" path
+    // (a2b54fb6) — the address's stored order measured again about the chosen building, the elevation pass, pitch
+    // and package with it, nothing bought from EagleView — named by its index, with the ticks carried over (the old
+    // main one unticked). The page opens the new measurement; Recent gets its row.
+    const ring = inst?.structures[i]?.outline;
+    if (evEnabled) {
+      setMainBusy(i);
+      try {
+        await runInstant(false, reportInput(), ring && ring.length >= 3 ? pointOnRing(ring) : undefined, { mainIndex: i, included: [...extra].filter((x) => x !== i) });
+      } finally {
+        setMainBusy(null);
+      }
+      return;
+    }
+    // Without the aerial service on this server: the figures switch on the saved measurement (setMainStructure).
     setMainBusy(i);
     try {
       const r = await setMainStructure(id, i);
@@ -2807,9 +2826,8 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
                           <dt>
                             <span className="rf-main-name">
                               <span className="rf-swatch" style={{ background: MAIN_COLOR }} aria-hidden="true" />
-                              Building 1{total > 1 ? ` of ${total}` : ""}
+                              Main · Building 1 of {total}
                             </span>
-                            <span className="rf-main-tag">Main</span>
                             {mapOn && (structure.outline?.length ?? 0) >= 3 ? (
                               <button type="button" className={"rf-locate" + (focusBuilding === mainAt ? " is-on" : "")} onClick={() => showOnMap(mainAt)} aria-label="Show the main building on the map" data-rf-locate={1}>
                                 Show on map
