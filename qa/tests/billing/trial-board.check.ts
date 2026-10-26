@@ -69,7 +69,7 @@ check("A4: converted when its trial ended — card at signup, paying from the tr
 check("A5: ended with no card — left", row("A5").phase === "left" && row("A5").decidedAt === now - 3 * DAY && leftWords(row("A5")) === "The trial ended with no card");
 check("A6: paid after the trial ended — from the restart", row("A6").phase === "paying" && row("A6").paidHow === "card-after-end" && row("A6").paidFrom === now - 20 * HOUR);
 check("A7: the card failed at the end", row("A7").phase === "failed" && leftWords(row("A7")) === "The card failed when the trial ended");
-check("A8: canceled during the trial", row("A8").phase === "left" && row("A8").decidedAt === now - 4 * DAY && leftWords(row("A8")) === "Canceled during the trial");
+check("A8: canceled during the trial — decided when the trial ENDED, not at the cancel click", row("A8").phase === "left" && row("A8").decidedAt === now - DAY - 2 * HOUR && leftWords(row("A8")) === "Canceled during the trial", String((now - (row("A8").decidedAt ?? 0)) / HOUR));
 check("A9: a test-mode trial — listed, counted nowhere", row("A9").test && board.tests === 1 && !board.ending.includes("A9"));
 check("A10: paid at signup — no trial", row("A10").kind === "none" && row("A10").paidHow === "paid-at-signup" && row("A10").decidedAt === null);
 check("A11: a comp — no trial, not a payer", row("A11").kind === "comp" && !board.startedPaying.includes("A11"));
@@ -91,10 +91,10 @@ check("…with a card at signup 1 of 3, without 1 of 2", w.card.total === 3 && w
 const d = board.decided.day;
 check("decided in the last day: A6 paid, A7 failed", d.total === 2 && d.paid === 1 && d.failed === 1, JSON.stringify(d));
 check("started paying, newest payer first: A6, A4, A10 (no comp)", board.startedPaying.join(",") === "A6,A4,A10", board.startedPaying.join(","));
-check("left without paying, newest first: A7, A5, A8", board.left.join(",") === "A7,A5,A8", board.left.join(","));
+check("left without paying, newest first by when the trial ended: A7, A8, A5", board.left.join(",") === "A7,A8,A5", board.left.join(","));
 
 // the sentences
-const want = "3 accounts on a trial now — 2 with a card, 1 without one. 1 ends today, 1 tomorrow. Of the 5 trials decided in the last 7 days, 2 are paying (40%) — with a card 1 of 3, without one 1 of 2.";
+const want = "3 accounts on a trial now — 2 with a card, 1 without one. 1 ends today, 1 tomorrow. Of the 5 trials that ended in the last 7 days, 2 are paying (40%) — with a card 1 of 3, without one 1 of 2.";
 check("the headline says it in three sentences", board.headline === want, board.headline);
 const quiet = buildTrialBoard([], now);
 check("an empty board says so", quiet.headline === "No one is on a trial right now. No trial has ended in the last 7 days yet.", quiet.headline);
@@ -134,6 +134,20 @@ check("…and the headline says so", /— 3 with a card, 1 without one; 1 of tho
 check("a paying account with an old cancel date is not 'set to cancel'", !buildTrialBoard([acct("P", { status: "ACTIVE", trialEndsAt: now - 2 * DAY, canceledAt: now - 5 * DAY })], now).rows[0].cancelsAtEnd);
 check("none today but one tomorrow reads as words, not a zero", /None ends today, 1 tomorrow\./.test(buildTrialBoard([acct("T", { createdAt: now - 6 * DAY, trialEndsAt: Date.parse("2026-10-13T09:00:00-07:00") })], now).headline));
 check("no cancel pressed: nothing said about it", board.onTrial.setToCancel === 0 && !/cancel when/.test(board.headline));
+
+// ENDED, NOT CLICKED (owner, 2026-10-26): the 7-day tiles count the same seven days, and a trial set to cancel on its
+// first day is counted when its trial ends — before, it was dated by the click and fell out of the week.
+check("both 7-day counts begin at the same local midnight: Oct 6 (today, Oct 12, is the 7th day)", board.since === cal[6].dayStart && la.format(new Date(board.since)) === "Oct 6, 00", la.format(new Date(board.since)));
+const early = buildTrialBoard([
+  acct("E1", { createdAt: now - 7 * DAY - 5 * HOUR, trialEndsAt: now - 5 * HOUR, status: "CANCELED", canceledAt: now - 7 * DAY - 2 * HOUR }),
+  acct("E2", { createdAt: now - 7 * DAY - 6 * HOUR, trialEndsAt: now - 6 * HOUR, status: "ACTIVE" }),
+], now);
+check("a trial set to cancel an hour into it, ended today: counted in the week next to the one that paid — 1 of 2", early.decided.week.total === 2 && early.decided.week.paid === 1 && early.decided.week.left === 1, JSON.stringify(early.decided.week));
+check("…and listed as leaving today, not a week ago", early.rows.find((r) => r.orgId === "E1")?.decidedAt === now - 5 * HOUR && early.left.join(",") === "E1");
+const cutNow = buildTrialBoard([acct("N", { createdAt: now - DAY, trialEndsAt: now + 6 * DAY, status: "CANCELED", canceledAt: now - 2 * HOUR })], now);
+check("a cancel that ended the trial early (its end still ahead) is dated by the cancel", cutNow.rows[0].decidedAt === now - 2 * HOUR && cutNow.decided.week.total === 1);
+const before = buildTrialBoard([acct("B", { createdAt: now - 14 * DAY, trialEndsAt: Date.parse("2026-10-05T22:00:00-07:00"), status: "ACTIVE" })], now);
+check("a trial that ended the night before the first of the seven days is not in the week", before.decided.week.total === 0, JSON.stringify(before.decided.week));
 
 console.log(bad ? `\n${bad} FAILED` : "\nALL PASS");
 process.exit(bad ? 1 : 0);

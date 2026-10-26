@@ -139,19 +139,24 @@ export function TrialBoardContent({ initial, ledger }: { initial: TrialBoard; le
             {board.started.card} with a card · <span className={b.dot} data-tone="warn" />
             {board.started.nocard} without
           </div>
+          <div className={b.kpiSub}>signed up since {dayInline(board.since, now)}</div>
         </div>
+        {/* ENDED, NOT "DECIDED" (owner, 2026-10-26: "is it for the last 7 days or how does it count? It's confusing"):
+            the trials whose 7 days ran out on the same days as the tile beside it, and how many of them pay. */}
         <div className="kpi" data-kpi="decided">
-          <div className="kpi-lbl">Trials decided · 7 days</div>
+          <div className="kpi-lbl">Trials ended · 7 days</div>
           <div className="kpi-val">
             {w.paid}{" "}
             <span className={b.kpiOf}>
-              of {w.total}
+              paid of {w.total}
               {w.total > 0 ? ` · ${pct(w.paid, w.total)}%` : ""}
             </span>
           </div>
           <div className={b.kpiSub}>
-            paid · card {w.card.paid}/{w.card.total} · no card {w.nocard.paid}/{w.nocard.total}
+            {w.total - w.paid} didn&apos;t pay{w.failed > 0 ? ` (${w.failed} card failed)` : ""}
+            {w.nocard.total > 0 ? ` · card ${w.card.paid}/${w.card.total} · no card ${w.nocard.paid}/${w.nocard.total}` : ""}
           </div>
+          <div className={b.kpiSub}>trials that ended since {dayInline(board.since, now)}</div>
         </div>
       </div>
 
