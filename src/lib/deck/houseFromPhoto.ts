@@ -65,7 +65,6 @@ export interface PhotoHouse {
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
-const q4 = (n: number) => Math.round(n * 4) / 4;
 const half = (n: number) => Math.round(n * 2) / 2;
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
@@ -84,7 +83,16 @@ export function houseScale(read: HouseRead, photoW: number, photoH: number, wall
   if (wallWidthFt && wallWidthFt >= 4 && basePx > 8) return { pxPerFt: basePx / wallWidthFt, by: "width" };
   // Any door gives the scale (they are all about 80 in. tall), the tallest in the picture first — never a garage door.
   const tallest = read.doors.filter((d) => d.kind !== "garage").sort((a, b) => b.bottom - b.top - (a.bottom - a.top))[0];
-  const s: PhotoScale = scaleFromRead(read.door || !tallest ? read : { ...read, door: { x0: tallest.x0, x1: tallest.x1, bottom: tallest.bottom, top: tallest.top } }, photoW, photoH);
+  const candidate = read.door ?? tallest ?? null;
+  // A railing can hide half the entry. Treating that half as an 80-inch door
+  // doubles every dimension. Cross-check against the wall before using it.
+  const wallPx = read.eave ? ((read.base.left.y - read.eave.left.y + read.base.right.y - read.eave.right.y) / 2) * photoH : null;
+  const doorPx = candidate ? (candidate.bottom - candidate.top) * photoH : 0;
+  const storeyFt = wallPx && doorPx > 0 ? (wallPx / doorPx) * DOOR_HEIGHT_FT / (read.storeys ?? 1) : null;
+  const sourceDoor = candidate ? read.doors.find((d) => Math.abs(d.x0 - candidate.x0) < 0.01 && Math.abs(d.x1 - candidate.x1) < 0.01) : null;
+  const aspect = candidate && doorPx > 0 ? ((candidate.x1 - candidate.x0) * photoW) / doorPx : 0;
+  const usableDoor = (storeyFt === null || (storeyFt >= 6 && storeyFt <= 12.5)) && !(sourceDoor?.kind === "hinged" && aspect > 0.65);
+  const s: PhotoScale = scaleFromRead({ ...read, door: usableDoor ? candidate : null }, photoW, photoH);
   return { pxPerFt: s.pxPerFt, by: s.by === "line" ? "line" : s.by === "door" ? "door" : s.by === "eave" ? "eave" : "none" };
 }
 
@@ -114,7 +122,8 @@ export function houseFromPhoto(input: PhotoHouseInput): PhotoHouse | null {
     const cx = (d.x0 + d.x1) / 2;
     const widthFt = ((d.x1 - d.x0) * photoW) / k;
     const heightFt = ((d.bottom - d.top) * photoH) / k;
-    const kind: HouseOpening["kind"] = d.kind === "garage" ? "garage" : d.kind === "slider" || widthFt >= 5 ? "slider" : "door";
+    // Size is not a door type: a scale error must never turn a painted entry into glass.
+    const kind: HouseOpening["kind"] = d.kind === "garage" ? "garage" : d.kind === "slider" ? "slider" : "door";
     return { cx, atFt: along(cx), widthFt, heightFt, sillFt: Math.max(0, above(d.bottom, cx)), kind };
   });
   const within = (a: number, s: { x0: number; x1: number } | null) => !!s && a >= s.x0 - 0.01 && a <= s.x1 + 0.01;
@@ -145,7 +154,7 @@ export function houseFromPhoto(input: PhotoHouseInput): PhotoHouse | null {
   const unsizedSteps = read.jogs.filter((j) => j.depthFt === null).length;
 
   // STOREYS, the roof, the cladding, the colours.
-  const eaveFt = read.eave ? (above(read.eave.left.y, read.eave.left.x) + above(read.eave.right.y, read.eave.right.x)) / 2 : null;
+  const eaveFt = read.eave ? Math.max(above(read.eave.left.y, read.eave.left.x), above(read.eave.right.y, read.eave.right.x)) : null;
   const storeys: 1 | 2 = read.storeys ?? (eaveFt !== null ? (eaveFt >= 14 ? 2 : 1) : input.house.storeys);
   const roof: HouseRoof = read.roof.kind ? ROOF_OF[read.roof.kind] : input.house.roof;
   const material: HouseMaterial = read.material ? MATERIAL_OF[read.material] : (input.house.material ?? "lap");
@@ -157,17 +166,20 @@ export function houseFromPhoto(input: PhotoHouseInput): PhotoHouse | null {
   const openings: HouseOpening[] = [];
   for (const w of read.windows) {
     const cx = (w.x0 + w.x1) / 2;
-    openings.push({ id: `w${openings.length + 1}`, kind: "window", xFt: q4(deckFt(cx)), widthFt: q4(clamp(((w.x1 - w.x0) * photoW) / k, OL.widthFt.min, OL.widthFt.max)), heightFt: q4(clamp(((w.sill - w.head) * photoH) / k, OL.heightFt.min, OL.heightFt.max)), sillFt: toInchFt(clamp(above(w.sill, cx), OL.sillFt.min, OL.sillFt.max)) });
+    openings.push({ id: `w${openings.length + 1}`, kind: "window", xFt: toInchFt(deckFt(cx)), widthFt: toInchFt(clamp(((w.x1 - w.x0) * photoW) / k, OL.widthFt.min, OL.widthFt.max)), heightFt: toInchFt(clamp(((w.sill - w.head) * photoH) / k, OL.heightFt.min, OL.heightFt.max)), sillFt: toInchFt(clamp(above(w.sill, cx), OL.sillFt.min, OL.sillFt.max)) });
   }
   for (const d of doors) {
-    openings.push({ id: `d${openings.length + 1}`, kind: d.kind, xFt: q4(d.atFt - deckAtFt), widthFt: q4(clamp(d.widthFt, 2, OL.widthFt.max)), heightFt: q4(clamp(d.heightFt, 6, 9)), sillFt: toInchFt(clamp(d.sillFt, 0, OL.sillFt.max)) });
+    openings.push({ id: `d${openings.length + 1}`, kind: d.kind, xFt: toInchFt(d.atFt - deckAtFt), widthFt: toInchFt(clamp(d.widthFt, OL.widthFt.min, OL.widthFt.max)), heightFt: toInchFt(clamp(d.heightFt, OL.heightFt.min, OL.heightFt.max)), sillFt: toInchFt(clamp(d.sillFt, 0, OL.sillFt.max)) });
   }
   openings.sort((a, b) => a.xFt - b.xFt || a.sillFt - b.sillFt);
   // Every step of the wall runs the house's full height: the wall's shape, under the one roof.
   const tallBump = storeys === 2 && wallParts({ ...input.house, leftFt, rightFt, jogs }, { kind: "rect", widthFt: W, depthFt: 12 }).some((p) => p.depthFt > 0.4);
 
   // THE DECK'S HEIGHT from the back door: an inch under its threshold.
-  const thresholdIn = mainDoor ? Math.round(mainDoor.sillFt * 12) : null;
+  // A partial door is not a reliable threshold. Keep the current deck height until
+  // its full frame is marked at a credible scale instead of raising the deck to a railing.
+  const reliableThreshold = mainDoor && scale.by !== "eave" && mainDoor.heightFt >= 5 && mainDoor.heightFt <= 9;
+  const thresholdIn = reliableThreshold ? Math.round(mainDoor.sillFt * 12) : null;
   const heightIn = thresholdIn !== null && thresholdIn >= 7 ? thresholdIn - 1 : null;
 
   const house: HouseDesign = {
@@ -182,6 +194,9 @@ export function houseFromPhoto(input: PhotoHouseInput): PhotoHouse | null {
     material,
     bumpOuts: "full",
     openings,
+    // Keep the photo's vertical scale as well as its horizontal scale. A fixed two-storey
+    // height used to discard upper windows and push a transom down into the entry door.
+    eaveHeightFt: eaveFt !== null && eaveFt > 0 ? toInchFt(eaveFt) : undefined,
   };
   // The pitch the photo shows; else the one already set, when the roof is still the same shape; else the shape's own.
   const pitch = read.roof.pitch && roof !== "flat" ? read.roof.pitch : roof === input.house.roof ? input.house.pitch : undefined;
@@ -202,6 +217,8 @@ export function houseFromPhoto(input: PhotoHouseInput): PhotoHouse | null {
   facts.push({ id: "deck", label: "The deck", value: centredOn === "middle" ? "In the middle of the wall" : `Centred on the ${centredOn}`, guess: false });
 
   if (rough) checks.push("Sized by the storeys, the roughest way — type the wall's width (corner to corner) for a true size.");
+  if (rough && read.doors.some((d) => d.kind !== "garage")) checks.push("The door's marked height does not agree with the wall. Include its full frame behind any railing, or enter the measured wall width.");
+  if (mainDoor && !reliableThreshold) checks.push("Deck height kept: mark the full door down to its threshold and check the scale before setting the deck floor from it.");
   if (!mainDoor) checks.push(doors.length ? "No door onto the deck seen (a garage door doesn't count) — if there is one, mark it, and the deck's height comes from its threshold." : "No back door seen — if there is one, mark it, and the deck's height comes from its threshold.");
   if (unsizedSteps) checks.push(`${unsizedSteps === 1 ? "The step's depth is" : "The steps' depths are"} a guess (${ftIn(JOG_DEFAULT_FT)}) — set ${unsizedSteps === 1 ? "it" : "them"} in the wall drawing.`);
   if (read.confidence < 0.5) checks.push("The picture was hard to read — look over the lines before building.");

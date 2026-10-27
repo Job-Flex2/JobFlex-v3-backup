@@ -480,6 +480,9 @@ export function findWindows(read: HouseRead, g: Gray, f: Field, opts: { diff?: n
       }
       const bw = maxX - minX + 1, bh = maxY - minY + 1;
       if (bh < H * 0.05 || bw < (xR - xL) * 0.025 || bw / bh > 7 || bh / bw > 4) continue;
+      // A sliver — four times wider than tall and under a twelfth of the wall's height — is a band of shadow or trim
+      // (the frieze's, a belt board's), not a window (2026-10-27).
+      if (bw / bh > 4 && bh < H * 0.085) continue;
       // No window is most of the wall: a stretch of wall that read dark or bright as a whole (a porch's shadow).
       if (bw > (xR - xL) * 0.45 || bh > H * 0.75) continue;
       // Along the eave or an end, a wide-and-low or tall-and-thin thing is the band or the board, not a window.
@@ -800,7 +803,7 @@ function growToFrame(f: Field, b: Box, others: readonly Box[] = []): Box {
  * The read moved onto the picture's edges: windows and doors (a row of windows split), the wall's corners, its base,
  * its eave and each step. Back come the read and how many lines moved.
  */
-export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: number; split: number; /** Windows read off the picture itself (findWindows), 0 when the model's boxes were lined up instead. */ found: number } {
+export function snapRead(read: HouseRead, g: Gray, opts: { preserveOpenings?: boolean } = {}): { read: HouseRead; moved: number; split: number; /** Windows read off the picture itself (findWindows), 0 when the model's boxes were lined up instead. */ found: number } {
   const { gx, gy } = gradients(g);
   const f: Field = { w: g.w, h: g.h, gx, gy, lum: g.data };
   // The siding's luminance: the wall between the model's eave and base, clear of its windows and doors, the median.
@@ -821,6 +824,30 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
       sample.sort((a, b) => a - b);
       f.wallLum = sample[Math.floor(sample.length / 2)];
     }
+  }
+  // Structured vision identified the objects. Contrast cannot distinguish a
+  // garage panel from a window or a railing from a threshold. Refine locally
+  // without replacing that inventory, changing floor spacing, or moving ground.
+  if (opts.preserveOpenings) {
+    let moved = 0;
+    const refine = (b: Box): Box => {
+      const candidate = snapBox(f, b);
+      const w = b.x1 - b.x0, h = b.bottom - b.top;
+      const close = Math.abs(candidate.x0 - b.x0) <= Math.max(2 / g.w, w * 0.08)
+        && Math.abs(candidate.x1 - b.x1) <= Math.max(2 / g.w, w * 0.08)
+        && Math.abs(candidate.top - b.top) <= Math.max(2 / g.h, h * 0.08)
+        && Math.abs(candidate.bottom - b.bottom) <= Math.max(2 / g.h, h * 0.08);
+      if (!close) return b;
+      if (candidate.x0 !== b.x0 || candidate.x1 !== b.x1 || candidate.top !== b.top || candidate.bottom !== b.bottom) moved++;
+      return candidate;
+    };
+    const windows = mergeMulled(f, read.windows).map((w) => {
+      const b = refine({ x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill });
+      return { x0: b.x0, x1: b.x1, head: b.top, sill: b.bottom };
+    });
+    const doors = read.doors.map((d) => ({ ...d, ...refine(d) }));
+    const main = read.door ? read.doors.findIndex((d) => Math.abs(d.x0 - read.door!.x0) < 0.01 && Math.abs(d.x1 - read.door!.x1) < 0.01) : -1;
+    return { read: { ...read, windows, doors, door: main >= 0 ? doors[main] : read.door }, moved, split: 0, found: 0 };
   }
   let moved = 0;
   let split = 0;
@@ -846,12 +873,20 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
   // and in either case none of them lies inside a door the model drew — a door's lite, a garage door's panels are not
   // windows. Otherwise the model's boxes are lined up on the picture's edges as before (aligned, snapped, split, rowed).
   const pixel = findWindows(read, g, f);
+  // The model's own sashes first (2026-10-27 — the owner's back wall, the triple read one box per sash, then the
+  // pixel pass took over with a sliver and one sash): a model read of three sashes side by side with only mullions
+  // between is one frame before anything is weighed against the picture.
+  const modelWins = mergeMulled(f, read.windows);
+  // Vote before merging: shifted boxes can put their gap on glass and appear
+  // mulled, reducing the overlap vote and disabling a valid rescue.
   const modelBoxes: Box[] = read.windows.map((w) => ({ x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill }));
   const ov = (a: Box, b: Box) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
   const areaOf = (b: Box) => Math.max(1e-9, (b.x1 - b.x0) * (b.bottom - b.top));
   const insideDoor = pixel.some((b) => read.doors.some((d) => ov(b, d) >= 0.7 * areaOf(b)));
   const rescue = modelBoxes.length < 3 && pixel.length >= 3;
   const confirmed = pixel.length >= 3 && pixel.length <= 2 * modelBoxes.length + 2 && modelBoxes.filter((m) => pixel.some((b) => ov(m, b) >= 0.3 * Math.min(areaOf(m), areaOf(b)))).length >= 0.5 * modelBoxes.length;
+  /** How much of a model box the pixel boxes inside it cover. */
+  const coverage = (m: Box) => pixel.filter((b) => ov(b, m) >= 0.7 * areaOf(b)).reduce((t, b) => t + ov(b, m), 0) / areaOf(m);
   const found = (rescue || confirmed) && !insideDoor ? pixel.length : 0;
   // THE PICTURE'S PIECES OF ONE MODEL WINDOW (2026-10-27 — owner, a back wall with a triple unit: "instead of a long
   // window it got two windows together"): a long window the model boxed whole comes back from the pixels as two or
@@ -865,6 +900,15 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
     const frames: Box[] = [];
     for (const m of modelBoxes) {
       const inside = pixel.filter((b) => ov(b, m) >= 0.7 * areaOf(b)).sort((a, b) => a.x0 - b.x0);
+      if (!inside.length) continue;
+      // The picture saw only a part of a window the model boxed whole (one light of three, its reflections losing the
+      // rest): the model's frame stands for that part (2026-10-27 — the owner's back wall, a sliver and one sash).
+      if (inside.length === 1 && coverage(m) < 0.6) {
+        taken.add(inside[0]);
+        frames.push(m);
+        whole.add(m);
+        continue;
+      }
       if (inside.length < 2) continue;
       const h = Math.min(...inside.map((b) => b.bottom - b.top));
       if (!inside.every((b) => Math.abs(b.top - inside[0].top) <= 0.3 * h)) continue;
@@ -883,7 +927,7 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
     }
     return [...frames, ...pixel.filter((b) => !taken.has(b))];
   };
-  const source = found ? framesOverSashes().map((b) => ({ x0: b.x0, x1: b.x1, head: b.top, sill: b.bottom, whole: whole.has(b) })) : read.windows.map((w) => ({ ...w, whole: false }));
+  const source = found ? framesOverSashes().map((b) => ({ x0: b.x0, x1: b.x1, head: b.top, sill: b.bottom, whole: whole.has(b) })) : modelWins.map((w) => ({ ...w, whole: false }));
   for (const w of source) {
     const self: Box = { x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill };
     const rest = (found ? pixel : modelBoxes).filter((o) => o.x0 !== self.x0 || o.top !== self.top);
@@ -1049,7 +1093,9 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
           // the strongest row stands as before.
           const modelY = (base2.left.y + (xm - base2.left.x) * slope) * g.h;
           const wallPx = eave2 ? (lineY(base2, xm) - lineY(eave2, xm)) * g.h : storey * g.h;
-          const withinReach = !(modelY >= y0 && modelY <= y1) || Math.abs(best[0] - modelY) <= Math.max(6, 0.06 * wallPx);
+          // On the model's own boxes (no pixel take-over) the base moves only within that reach, wherever it stood: a GPT-6
+          // base is a good base, and a wrong row of windows must not drag it up onto a sill line (2026-10-27).
+          const withinReach = (found && !(modelY >= y0 && modelY <= y1)) || Math.abs(best[0] - modelY) <= Math.max(6, 0.06 * wallPx);
           if (best[1] > 2 * typical && best[1] > 0.03 && standsOut && withinReach) {
             const yb = best[0] / g.h;
             const dy = yb - (base2.left.y + (xm - base2.left.x) * slope);

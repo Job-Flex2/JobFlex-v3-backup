@@ -30,6 +30,8 @@ import {
   mapHouseRead,
   mergeLooks,
   moveHouseMark,
+  editReadOpening,
+  rectifyHouseRead,
   readFromCrop,
   mainSection,
   readSections,
@@ -44,7 +46,7 @@ import {
 import { colourZones, dominantColour, ftIn, houseFromPhoto, type PhotoHouse } from "@/lib/deck/houseFromPhoto";
 import { snapRead, type Gray } from "@/lib/deck/photoSnap";
 import { SQUARE_ON_PCT, levelRead, photoObliqueness, wallStepsReport, type WallStepsReport, type WallStepsWhy } from "@/lib/deck/wallSteps";
-import { type WallJog, AUTO_STRAIGHTEN_PCT, applyHomography, autoRectify, obliqueness, transformRead } from "@/lib/deck/photoFit";
+import { type WallJog, AUTO_STRAIGHTEN_PCT, applyHomography, obliqueness, transformRead } from "@/lib/deck/photoFit";
 import { applyDepthVerdicts, type DepthRelief } from "@/lib/deck/houseDepthApply";
 import { deckClientPhotoData, deckClientPhotos, deckPhotoHref, readHouseDepth, readHousePhoto, uploadDeckPhoto, type ClientPhoto, type DeckPhotoResult, type HouseDepthResult, type HousePhotoRead } from "@/actions/deckEstimator";
 import { cropPhoto, shrinkPhoto, straightenPhoto, trimLetterbox } from "@/components/v3/deck-estimator-blueprint/deck-photo";
@@ -334,6 +336,20 @@ export function useHousePhoto({
       let gray0: Awaited<ReturnType<typeof grayOf>> = null;
       if (res.ok) {
         read = res.read;
+        // Read the enlarged wall before straightening: cropping at an uncertain eave
+        // first could cut off upper windows and make the closer look get skipped.
+        const crop = wallCrop(read);
+        if (crop) {
+          setBusy("Looking closer at the windows and doors…");
+          const cut = await cropPhoto(image.file, crop, image.w, image.h);
+          const at = { x: Math.round(crop.x * image.w) / image.w, y: Math.round(crop.y * image.h) / image.h, w: cut.w / image.w, h: cut.h / image.h };
+          const close = await api.read(await lookForm(cut, "close")).catch(() => null);
+          if (close?.ok) {
+            const merged = mergeLooks(read, readFromCrop(close.read, at));
+            if (merged !== read) looks = 2;
+            read = merged;
+          }
+        }
         // A SQUARE-ON SHOT STAYS SQUARE (2026-10-24 — owner, the same photo: "still wrong"). The model's eave and base
         // lines lean a few per cent off the wall's; 3 % made a square-on photo look angled, it was "straightened", its
         // corners leaned and the wall's steps went unread. The photo says which it is (lib/deck/wallSteps
@@ -347,17 +363,17 @@ export function useHousePhoto({
         let early: WallStepsReport | null = null;
         let mapPt = (p: { x: number; y: number }) => p;
         if (gray0) {
-          const seen = photoObliqueness(snapRead(read, gray0).read, gray0);
+          const seen = photoObliqueness(snapRead(read, gray0, { preserveOpenings: true }).read, gray0);
           if (seen && seen.obliquePct < SQUARE_ON_PCT) {
             const leaned = obliqueness(read);
             read = levelRead(read, seen.slope, gray0);
             levelSlope = seen.slope;
             if (leaned !== null && leaned >= AUTO_STRAIGHTEN_PCT) squareOn = leaned;
           }
-          early = wallStepsReport(snapRead(read, gray0).read, gray0, { depthFt: stepDepthOf(read) });
+          early = wallStepsReport(snapRead(read, gray0, { preserveOpenings: true }).read, gray0, { depthFt: stepDepthOf(read) });
         }
         // An angled shot is straightened first (lib/deck/photoFit autoRectify), so a foot is a foot across the wall.
-        const plan = autoRectify(read, clean.w, clean.h);
+        const plan = rectifyHouseRead(read, clean.w, clean.h);
         if (plan) {
           setBusy("Straightening the picture…");
           const warped = await straightenPhoto(clean.file, plan.H, { w: plan.w, h: plan.h }, { w: clean.w, h: clean.h }).catch(() => null);
@@ -375,19 +391,6 @@ export function useHousePhoto({
             straightened = plan.obliquePct;
           }
         }
-        // THE SECOND LOOK: the wall cut out and enlarged, read again — its windows, doors and steps from there.
-        const crop = wallCrop(read);
-        if (crop) {
-          setBusy("Looking closer at the windows and doors…");
-          const cut = await cropPhoto(image.file, crop, image.w, image.h);
-          const at = { x: Math.round(crop.x * image.w) / image.w, y: Math.round(crop.y * image.h) / image.h, w: cut.w / image.w, h: cut.h / image.h };
-          const close = await api.read(await lookForm(cut, "close")).catch(() => null);
-          if (close?.ok) {
-            const merged = mergeLooks(read, readFromCrop(close.read, at));
-            if (merged !== read) looks = 2;
-            read = merged;
-          }
-        }
         // The close look draws its own lines: on a square-on shot they take the wall's way across too.
         if (levelSlope !== null && gray0 && image === clean) read = levelRead(read, levelSlope, gray0);
         // THEN THE PICTURE'S OWN EDGES (lib/deck/photoSnap): every box, corner and line moved onto the frame or the
@@ -397,7 +400,7 @@ export function useHousePhoto({
         setBusy("Lining it up with the photo…");
         const gray = image === clean && gray0 ? gray0 : await grayOf(image.file).catch(() => null);
         if (gray) {
-          const snapped = snapRead(read, gray);
+          const snapped = snapRead(read, gray, { preserveOpenings: true });
           read = snapped.read;
           // THE WALL'S STEPS FROM ITS PIXELS (lib/deck/wallSteps, 2026-10-23 night — owner: "still wrong, should be like
           // on the second pic"): its corners where an edge runs up every storey, which way each part stands by where its
@@ -763,15 +766,18 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
   } | null>(null);
   const [sel, setSel] = React.useState<Sel>(null);
   const closeRef = React.useRef<HTMLButtonElement>(null);
+  const isOpen = !!r;
   React.useEffect(() => {
-    if (!r) return;
-    closeRef.current?.focus();
+    if (isOpen) closeRef.current?.focus();
+  }, [isOpen]);
+  React.useEffect(() => {
+    if (!isOpen) return;
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") hp.setReview(null);
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [r, hp]);
+  }, [isOpen, hp]);
   if (!r) return null;
   const read = r.read;
   const b = hp.built;
@@ -798,6 +804,7 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
   };
   const begin = (mark: HouseMark, s: Sel) => (e: React.PointerEvent) => {
     e.preventDefault();
+    setSel(s);
     drag.current = { mark, moved: false, x: e.clientX, y: e.clientY, sel: s };
     stageRef.current?.setPointerCapture(e.pointerId);
   };
@@ -823,6 +830,13 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
       style={{ left: pct(x), top: pct(y) }}
       aria-label={label}
       onPointerDown={begin(mark, s)}
+      onClick={() => setSel(s)}
+      onKeyDown={(e) => {
+        const delta = e.shiftKey ? 10 : 1;
+        const dx = e.key === "ArrowLeft" ? -delta / r.w : e.key === "ArrowRight" ? delta / r.w : 0;
+        const dy = e.key === "ArrowUp" ? -delta / r.h : e.key === "ArrowDown" ? delta / r.h : 0;
+        if (dx || dy) { e.preventDefault(); setRead(moveHouseMark(read, mark, { x: x + dx, y: y + dy })); }
+      }}
       data-house-mark={mark}
     />
   );
@@ -833,6 +847,11 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
     else setRead(removeReadJog(read, sel.i));
     setSel(null);
   };
+  const selectedKind = sel?.kind === "win" || sel?.kind === "door" ? sel.kind : null;
+  const selectedWindow = sel?.kind === "win" ? read.windows[sel.i] : null;
+  const selectedDoor = sel?.kind === "door" ? read.doors[sel.i] : null;
+  const selectedBox = selectedWindow ? { x0: selectedWindow.x0, x1: selectedWindow.x1, top: selectedWindow.head, bottom: selectedWindow.sill } : selectedDoor;
+  const selectedName = sel ? (selectedKind === "win" ? "Window" : "Door") + " " + (sel.i + 1) : "";
   const veneer = b?.house.material === "brick" || b?.house.material === "stone";
   // On the page itself, above the app's sidebar (the studio's own layer sits under it), in the studio's style scope.
   if (typeof document === "undefined") return null;
@@ -845,7 +864,7 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
               <h3 className="v1-h3">Here&rsquo;s what I see</h3>
               <span className="v1-meta">
                 {r.byHand ? "Marked by hand" : `Read off the photo${r.how ? ` in ${r.how.looks === 2 ? "two looks" : "one look"}${r.how.windowsFromPhoto ? `, its ${r.how.windowsFromPhoto} windows read off the picture` : r.how.snapped ? ", lined up with its edges" : ""}${r.how.stepsFromPhoto ? `, the wall's steps measured off the photo${r.how.stepsBeforeWarp ? " before it was straightened" : ""}` : r.how.stepsFromPhoto === 0 ? `, ${stepsWhyWords(r.how.stepsWhy, r.how.cornersFromPhoto ?? 0)}` : ""}${r.how.squareOn ? ", shot square-on — not straightened" : ""}${r.how.depth ? depthWords(r.how.depth) : ""} (${r.how.model})` : ""}${r.straightened ? ` · straightened (the shot was ${r.straightened}% off square)` : ""}`} — drag any line that&rsquo;s off; tap a part
-                of the wall to set it out or back; tap a window, a door or a step to remove it.
+                of the wall to set it out or back. Select a window or door to move it, resize its corners, or change its bounds below.
               </span>
             </div>
             <button ref={closeRef} type="button" className="v1-icon-btn" onClick={() => hp.setReview(null)} aria-label="Close without building">
@@ -938,6 +957,10 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
                   </React.Fragment>
                 ))}
                 {read.windows.map((w, i) => handle(`win-${i}`, (w.x0 + w.x1) / 2, (w.head + w.sill) / 2, `Window ${i + 1}`, { kind: "win", i }, "is-win"))}
+                {sel && selectedKind && selectedBox ? ([
+                  ["nw", selectedBox.x0, selectedBox.top], ["ne", selectedBox.x1, selectedBox.top],
+                  ["sw", selectedBox.x0, selectedBox.bottom], ["se", selectedBox.x1, selectedBox.bottom],
+                ] as const).map(([corner, x, y]) => handle(`${selectedKind}-${corner}-${sel.i}`, x, y, `Resize ${selectedName.toLowerCase()}, ${corner}`, sel, "is-resize")) : null}
                 {sections.map((sec, i) => (
                   <button
                     key={`sc${i}`}
@@ -953,6 +976,28 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
                 ))}
               </div>
               <WallTopView sections={sections} selected={secSel} onPick={(i) => setSel(secSel === i ? null : { kind: "sec", i })} />
+              {sel && selectedKind && selectedBox ? <div className="v1-hp-opening" data-house-opening-editor>
+                <b>{selectedName}</b>
+                <span className="v1-hint">Drag the window’s centre or the door’s bottom handle to move it; drag a corner to resize. Arrow keys move a handle one pixel; Shift moves ten. Bounds below are pixels in the photo.</span>
+                <div className="v1-hp-bounds">
+                  {([
+                    ["Left", selectedBox.x0 * r.w, (1 - selectedBox.x1 + selectedBox.x0) * r.w, (n: number) => ({ x0: n / r.w, x1: n / r.w + selectedBox.x1 - selectedBox.x0 })],
+                    ["Top", selectedBox.top * r.h, (1 - selectedBox.bottom + selectedBox.top) * r.h, (n: number) => ({ top: n / r.h, bottom: n / r.h + selectedBox.bottom - selectedBox.top })],
+                    ["Width", (selectedBox.x1 - selectedBox.x0) * r.w, (1 - selectedBox.x0) * r.w, (n: number) => ({ x1: selectedBox.x0 + n / r.w })],
+                    ["Height", (selectedBox.bottom - selectedBox.top) * r.h, (1 - selectedBox.top) * r.h, (n: number) => ({ bottom: selectedBox.top + n / r.h })],
+                  ] as const).map(([label, value, max, patch]) => <label key={label} className="v1-hp-width">
+                    <span className="v1-lbl">{label} (px)</span>
+                    <NumberInput label={selectedName + " " + label.toLowerCase() + " in photo pixels"} value={Math.round(value)} min={label === "Width" || label === "Height" ? 4 : 0} max={max}
+                      parse={(text) => text.trim() && Number.isFinite(Number(text)) ? Number(text) : null} format={(n) => String(Math.round(n))}
+                      onCommit={(n) => setRead(editReadOpening(read, selectedKind, sel.i, patch(n)))} />
+                  </label>)}
+                </div>
+                {selectedDoor ? <label className="v1-hp-width"><span className="v1-lbl">Door type</span>
+                  <select className="v1-in" aria-label={selectedName + " type"} value={selectedDoor.kind} onChange={(e) => setRead(editReadOpening(read, "door", sel.i, { kind: e.target.value as typeof selectedDoor.kind }))}>
+                    <option value="hinged">Hinged door</option><option value="slider">Sliding glass door</option><option value="french">French doors</option><option value="garage">Garage door</option>
+                  </select>
+                </label> : null}
+              </div> : null}
               {secSel !== null ? (
                 <div className="v1-row-acts v1-hp-tools v1-hp-sec-tools" data-deck-house-section-tools>
                   {secSel === mainAt ? (

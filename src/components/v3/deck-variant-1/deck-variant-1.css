@@ -825,6 +825,13 @@
 .jf-deck-v1 .v1-hp-handle.is-sel { background: #fff; box-shadow: 0 0 0 3px var(--accent); }
 .jf-deck-v1 .v1-hp-handle:active { cursor: grabbing; }
 .jf-deck-v1 .v1-hp-tools { justify-content: center; }
+.jf-deck-v1 .v1-hp-opening { display: grid; gap: 10px; padding: 12px; border: 1.5px solid var(--ink); background: var(--paper-deep); }
+.jf-deck-v1 .v1-hp-bounds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.jf-deck-v1 .v1-hp-bounds .v1-in { width: 100%; max-width: none; min-height: 44px; font-size: 16px; }
+.jf-deck-v1 .v1-hp-opening select { min-height: 44px; font-size: 16px; }
+.jf-deck-v1 .v1-hp-handle::after { content: ""; position: absolute; width: 44px; height: 44px; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.jf-deck-v1 .v1-hp-handle.is-resize { background: var(--paper-deep); border-color: var(--accent); cursor: nwse-resize; z-index: 2; }
+.jf-deck-v1 .v1-hp-handle:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
 /* The wall's parts (2026-10-23 evening): tinted on the photo, a chip under each, the wall seen from above. */
 .jf-deck-v1 .v1-hp-pic svg .v1-hp-l-sec { stroke: none; }
 .jf-deck-v1 .v1-hp-pic svg .v1-hp-l-sec.is-out { fill: rgba(24, 84, 160, 0.2) !important; }
@@ -855,7 +862,7 @@
 .jf-deck-v1 .v1-hp-go .v1-btn-primary { min-width: 180px; }
 @media (max-width: 768px) {
   .jf-deck-v1 .v1-hp-scrim { padding: 0; place-items: stretch; }
-  .jf-deck-v1 .v1-hp-sheet { max-height: 100dvh; height: 100dvh; border: 0; box-shadow: none; }
+  .jf-deck-v1 .v1-hp-sheet { max-height: 100dvh; height: 100dvh; min-height: 0; border: 0; box-shadow: none; }
   .jf-deck-v1 .v1-hp-body { grid-template-columns: minmax(0, 1fr); padding: 12px 16px 24px; }
   .jf-deck-v1 .v1-hp-pic { width: min(100%, calc(56dvh * var(--arn))); }
   .jf-deck-v1 .v1-hp-handle { width: 28px; height: 28px; margin: -14px 0 0 -14px; }

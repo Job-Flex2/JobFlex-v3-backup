@@ -49,6 +49,8 @@ export interface HouseJog {
 }
 export interface HouseDesign {
   storeys: 1 | 2;
+  /** Ground to eave at the photo's scale. Absent on houses drawn by rule. */
+  eaveHeightFt?: number;
   roof: HouseRoof;
   /** How far the back wall runs past the deck's left and right ends, ft. */
   leftFt: number;
@@ -176,13 +178,12 @@ export function normalizeHouse(raw: unknown, shape: DeckShape): HouseDesign {
   if (HOUSE_MATERIALS.includes(r.material as HouseMaterial) && r.material !== "lap") out.material = r.material as HouseMaterial;
   if (typeof r.pitch === "number" && Number.isFinite(r.pitch)) out.pitch = half(clamp(r.pitch, HOUSE_PITCH_LIMITS.min, HOUSE_PITCH_LIMITS.max));
   if (r.bumpOuts === "full") out.bumpOuts = "full";
+  if (typeof r.eaveHeightFt === "number" && Number.isFinite(r.eaveHeightFt) && r.eaveHeightFt >= 4 && r.eaveHeightFt <= 60) out.eaveHeightFt = toInchFt(r.eaveHeightFt);
   if (Array.isArray(r.openings)) out.openings = normalizeOpenings(r.openings, -leftFt, W + rightFt);
   const photo = normalizeHousePhoto(r.photo);
   if (photo) out.photo = photo;
   return out;
 }
-
-const q4 = (n: number) => Math.round(n * 4) / 4;
 
 /** The windows and doors read back: sizes held to their limits, each inside the wall's reach, left to right. */
 export function normalizeOpenings(raw: unknown[], fromFt: number, toFt: number): HouseOpening[] {
@@ -194,7 +195,7 @@ export function normalizeOpenings(raw: unknown[], fromFt: number, toFt: number):
       const id = typeof v.id === "string" && v.id && !seen.has(v.id) ? v.id : `o${i + 1}`;
       seen.add(id);
       const L = OPENING_LIMITS;
-      return { id, kind, xFt: q4(num(v.xFt, NaN)), widthFt: q4(clamp(num(v.widthFt, 3), L.widthFt.min, L.widthFt.max)), heightFt: q4(clamp(num(v.heightFt, 4), L.heightFt.min, L.heightFt.max)), sillFt: toInchFt(clamp(num(v.sillFt, 3), L.sillFt.min, L.sillFt.max)) };
+      return { id, kind, xFt: toInchFt(num(v.xFt, NaN)), widthFt: toInchFt(clamp(num(v.widthFt, 3), L.widthFt.min, L.widthFt.max)), heightFt: toInchFt(clamp(num(v.heightFt, 4), L.heightFt.min, L.heightFt.max)), sillFt: toInchFt(clamp(num(v.sillFt, 3), L.sillFt.min, L.sillFt.max)) };
     })
     .filter((o) => Number.isFinite(o.xFt) && o.xFt - o.widthFt / 2 >= fromFt - 0.5 && o.xFt + o.widthFt / 2 <= toFt + 0.5)
     .sort((a, b) => a.xFt - b.xFt || a.sillFt - b.sillFt)
@@ -215,7 +216,7 @@ function normalizeHousePhoto(raw: unknown): HousePhoto | null {
 /** The windows and the doors moved along the house by `d` ft in the deck's feet (the deck slid with the house still). */
 export function shiftHouseThings(house: HouseDesign, d: number): Pick<HouseDesign, "openings" | "photo"> {
   const out: Pick<HouseDesign, "openings" | "photo"> = {};
-  if (house.openings) out.openings = house.openings.map((o) => ({ ...o, xFt: q4(o.xFt + d) }));
+  if (house.openings) out.openings = house.openings.map((o) => ({ ...o, xFt: toInchFt(o.xFt + d) }));
   else if (house.openings === null) out.openings = null;
   if (house.photo) out.photo = { ...house.photo, deckAtFt: r2(house.photo.deckAtFt - d) };
   return out;
@@ -439,7 +440,7 @@ const BUMP_PIECE: Record<HouseRoof, number> = { hip: ROOF_PIECE.bumpHip, gable: 
 export function houseScene(shape: DeckShape, house: HouseDesign, ctx: { deckHeightFt: number; peakFt: number; mainEdge: { x0: number; x1: number } | null }): HouseScene {
   const parts = impliedParts(wallParts(house, shape), shape, house);
   const storeyTop = (n: number) => n * STOREY_FT + 0.5;
-  const mainH = r2(Math.max(storeyTop(house.storeys), ctx.deckHeightFt + 9, ctx.peakFt + 2.5));
+  const mainH = r2(house.eaveHeightFt ?? Math.max(storeyTop(house.storeys), ctx.deckHeightFt + 9, ctx.peakFt + 2.5));
   const lowH = r2(Math.max(storeyTop(1), ctx.deckHeightFt + 9));
   // THE BODY AND ITS BUMP-OUTS (2026-10-23): the house's body stands behind its main wall — the face most of the wall is
   // on — the whole length of the house under ONE roof; a part that comes out stands in front of the body as a block of
@@ -467,7 +468,7 @@ export function houseScene(shape: DeckShape, house: HouseDesign, ctx: { deckHeig
   }
   const look = { storeys: house.storeys, roof: house.roof, siding: sidingHex(house.siding), roofColour: roofHex(house.roofColour), roofs, ...(house.material && house.material !== "lap" ? { material: house.material } : {}) };
   if (house.openings) {
-    const placed = placeOpenings(house.openings, parts, partH);
+    const placed = placeOpenings(house.openings, parts, partH, house.eaveHeightFt !== undefined);
     const ref = ctx.mainEdge ? (ctx.mainEdge.x0 + ctx.mainEdge.x1) / 2 : referenceX(shape);
     const main = placed.doors.slice().sort((a, b) => Math.abs(a[0] - ref) - Math.abs(b[0] - ref))[0];
     return { blocks, heightFt: mainH, door: main ? [main[0], main[2], main[3], main[1]] : null, windows: placed.windows, doors: placed.doors, ...look };
@@ -514,7 +515,7 @@ const partAt = (parts: WallPart[], x: number) => parts.findIndex((p) => x >= p.x
  * that part, dropped when it would stand above that part's wall (an upper-storey window over a one-storey bump-out)
  * or when nothing of it is left.
  */
-function placeOpenings(openings: HouseOpening[], parts: WallPart[], partH: number[]): { windows: number[][]; doors: number[][] } {
+function placeOpenings(openings: HouseOpening[], parts: WallPart[], partH: number[], fromPhoto = false): { windows: number[][]; doors: number[][] } {
   const windows: number[][] = [];
   const doors: number[][] = [];
   for (const o of openings) {
@@ -524,12 +525,12 @@ function placeOpenings(openings: HouseOpening[], parts: WallPart[], partH: numbe
     const x0 = Math.max(o.xFt - o.widthFt / 2, p.x0 + 0.25);
     const x1 = Math.min(o.xFt + o.widthFt / 2, p.x1 - 0.25);
     if (x1 - x0 < 0.75) continue;
-    const top = partH[i] - 0.6;
+    const top = partH[i] - (fromPhoto ? 0 : 0.6);
     // A window that starts above the part's top stands over a lower part's roof — no window of this wall. One that
     // starts inside the part but runs into the frieze (a transom just under the eave, read off a photo) is brought
     // down to fit under it rather than left out (2026-10-25).
     if (o.sillFt >= top) continue;
-    const sill = o.sillFt + o.heightFt > top ? Math.max(0, top - o.heightFt) : o.sillFt;
+    const sill = !fromPhoto && o.sillFt + o.heightFt > top ? Math.max(0, top - o.heightFt) : o.sillFt;
     const h = Math.min(o.heightFt, top - sill);
     if (h < 0.75) continue;
     const row = [r2((x0 + x1) / 2), p.depthFt, r2(x1 - x0), r2(h), r2(sill)];

@@ -62,6 +62,11 @@ export function applyDeckPatch(design: DeckDesign, patch: DeckPatch): DeckDesign
     // The shape is replaced whole (a rectangle has no notch to keep), a list (the stairs, the fixtures) too; every other part is merged.
     out[key] = key !== "shape" && !Array.isArray(value) && value && typeof value === "object" && current && typeof current === "object" ? { ...(current as object), ...(value as object) } : value;
   }
+  // A manual storey change replaces the photo's measured wall height. A new
+  // photo supplies both fields together and must retain its own vertical scale.
+  if (patch.house?.storeys !== undefined && patch.house.storeys !== design.house.storeys && !("eaveHeightFt" in patch.house)) {
+    delete (out.house as Record<string, unknown>).eaveHeightFt;
+  }
   return normalizeDeckDesign(out);
 }
 

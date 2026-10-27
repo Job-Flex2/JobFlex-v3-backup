@@ -15,7 +15,27 @@
 // the model's guess only standing in when that fails.
 
 import { z } from "zod";
-import { JOG_DEFAULT_FT, parseWallRead, type Pt, type WallRead } from "./photoFit";
+import { JOG_DEFAULT_FT, parseWallRead, autoRectify, applyHomography, type RectifyPlan, type Pt, type WallRead } from "./photoFit";
+
+/** Straighten the wall while retaining complete opening boxes at its edges.
+ * Axis-aligned boxes on an angled photo can extend above the sloping eave.
+ * Pad the output instead of cropping those frames or abandoning perspective correction. */
+export function rectifyHouseRead(read: HouseRead, w: number, h: number): RectifyPlan | null {
+  const plan = autoRectify(read, w, h);
+  if (!plan) return null;
+  const boxes = [...read.windows.map((win) => ({ ...win, top: win.head, bottom: win.sill })), ...read.doors];
+  const points = boxes.flatMap((b) => [b.x0, b.x1].flatMap((x) => [b.top, b.bottom].map((y) => applyHomography(plan.H, { x: x * w, y: y * h }))));
+  if (points.some((p) => !Number.isFinite(p.x) || !Number.isFinite(p.y))) return null;
+  const left = Math.floor(Math.min(0, ...points.map((p) => p.x - 2)));
+  const top = Math.floor(Math.min(0, ...points.map((p) => p.y - 2)));
+  const right = Math.ceil(Math.max(plan.w, ...points.map((p) => p.x + 2)));
+  const bottom = Math.ceil(Math.max(plan.h, ...points.map((p) => p.y + 2)));
+  // A large disagreement means the four wall corners need review first.
+  if (right - left > plan.w * 1.25 || bottom - top > plan.h * 1.25) return null;
+  const H = [...plan.H];
+  for (let i = 0; i < 3; i++) { H[i] -= left * H[6 + i]; H[3 + i] -= top * H[6 + i]; }
+  return { ...plan, H, w: right - left, h: bottom - top };
+}
 
 export type ReadDoorKind = "slider" | "hinged" | "french" | "garage";
 export type ReadRoofKind = "hip" | "gable-side" | "gable-end" | "shed" | "flat";
@@ -217,7 +237,22 @@ export const HOUSE_ZOOM_NOTE = "This picture is the house's wall cut out of a wi
 /* ------------------------------------------------------------------ */
 
 /** A handle on the review picture: the wall's base and eave ends, a step, a door (its foot or its top), a window (its middle). */
-export type HouseMark = "base-left" | "base-right" | "eave-left" | "eave-right" | `jog-${number}` | `door-${number}` | `door-top-${number}` | `win-${number}`;
+export type HouseMark = "base-left" | "base-right" | "eave-left" | "eave-right" | `jog-${number}` | `door-${number}` | `door-top-${number}` | `win-${number}` | `${"win" | "door"}-${"nw" | "ne" | "sw" | "se"}-${number}`;
+
+/** Edit one photo box without re-sorting it or changing the other openings. */
+export function editReadOpening(read: HouseRead, kind: "win" | "door", i: number, patch: Partial<{ x0: number; x1: number; top: number; bottom: number; kind: ReadDoorKind }>): HouseRead {
+  const original = kind === "win" ? read.windows[i] : read.doors[i];
+  if (!original) return read;
+  const b = kind === "win" ? { ...read.windows[i], top: read.windows[i].head, bottom: read.windows[i].sill } : read.doors[i];
+  const x0 = r3(clamp(num(patch.x0, b.x0), 0, Math.min(0.994, num(patch.x1, b.x1) - 0.006)));
+  const x1 = r3(clamp(num(patch.x1, b.x1), x0 + 0.006, 1));
+  const top = r3(clamp(num(patch.top, b.top), 0, Math.min(0.988, num(patch.bottom, b.bottom) - 0.012)));
+  const bottom = r3(clamp(num(patch.bottom, b.bottom), top + 0.012, 1));
+  if (kind === "win") return { ...read, windows: read.windows.map((w, k) => k === i ? { x0, x1, head: top, sill: bottom } : w) };
+  const d = read.doors[i];
+  const moved = { ...d, x0, x1, top, bottom, kind: patch.kind ?? d.kind };
+  return { ...read, doors: read.doors.map((v, k) => k === i ? moved : v), door: sameDoor(read.door, d) ? (moved.kind === "garage" ? null : { x0, x1, top, bottom }) : read.door };
+}
 
 const inside = (p: { x: number; y: number }) => ({ x: r3(clamp(p.x, 0, 1)), y: r3(clamp(p.y, 0, 1)) });
 const baseAt = (read: WallRead, x: number) => {
@@ -250,6 +285,11 @@ export function blankHouseRead(): HouseRead {
 /** One handle moved to `p` (fractions of the picture); everything else stands. A door moves on its foot, a window by its middle. */
 export function moveHouseMark(read: HouseRead, mark: HouseMark, p: { x: number; y: number }): HouseRead {
   const q = inside(p);
+  const corner = /^(win|door)-(nw|ne|sw|se)-(\d+)$/.exec(mark);
+  if (corner) return editReadOpening(read, corner[1] as "win" | "door", Number(corner[3]), {
+    [corner[2].endsWith("w") ? "x0" : "x1"]: q.x,
+    [corner[2].startsWith("n") ? "top" : "bottom"]: q.y,
+  });
   if (mark === "base-left") return { ...read, base: { ...read.base, left: { x: Math.min(q.x, read.base.right.x - 0.05), y: q.y } } };
   if (mark === "base-right") return { ...read, base: { ...read.base, right: { x: Math.max(q.x, read.base.left.x + 0.05), y: q.y } } };
   if (mark === "eave-left" || mark === "eave-right") {
@@ -467,8 +507,25 @@ export function mergeLooks(wide: HouseRead, close: HouseRead | null): HouseRead 
   const wideSpan = wide.base.right.x - wide.base.left.x;
   const closeSpan = close.base.right.x - close.base.left.x;
   if (closeSpan < wideSpan * 0.5 || close.windows.length < wide.windows.length * 0.5) return wide;
+  const overlap = (a: { x0: number; x1: number; top: number; bottom: number }, b: { x0: number; x1: number; top: number; bottom: number }) => {
+    const intersection = Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+    return intersection / Math.max(1e-9, Math.min((a.x1 - a.x0) * (a.bottom - a.top), (b.x1 - b.x0) * (b.bottom - b.top)));
+  };
+  const box = (w: HouseRead["windows"][number]) => ({ ...w, top: w.head, bottom: w.sill });
+  // A closer crop must not silently erase a separate upper/lower window or a
+  // door outside its crop. Keep unmatched detections from the whole image.
+  const windows = [...close.windows, ...wide.windows.filter((w) => !close.windows.some((c) => overlap(box(w), box(c)) > 0.5) && !close.doors.some((d) => overlap(box(w), d) > 0.5))];
+  const doors = [...close.doors.map((d) => {
+    const original = wide.doors.find((w) => w.kind === d.kind && overlap(w, d) > 0.7);
+    // Do not substitute a visible lite/upper half for an already detected full door.
+    return original && d.bottom - d.top < 0.75 * (original.bottom - original.top) ? original : d;
+  }), ...wide.doors.filter((d) => !close.doors.some((c) => overlap(d, c) > 0.5))];
+  const main = close.door ?? wide.door;
   return {
     ...close,
+    windows,
+    doors,
+    door: main ? doors.find((d) => d.kind !== "garage" && overlap(main, d) > 0.5) ?? main : null,
     // The close look sees the wall cut out: its eave line can be missing (the roof mostly out of the cut), and then the
     // wide look's eave stands — the picture's own pass needs one to find the eave's shadow near.
     eave: close.eave ?? wide.eave,
@@ -549,7 +606,7 @@ SUBJECT: "house-exterior" when the picture shows the outside wall(s) of a house 
 OUTLINE: the house's own silhouette, a polygon of 6 to 20 points going round clockwise — along the roof's ridge and its edges, down the walls' corners to the ground and back: the HOUSE, not the trees in front of it, not a fence, not a neighbour's house, not an old deck, a porch roof or a car standing in front of the wall (the outline runs behind them, along the house). Where the house runs off the picture's edge, follow the edge. Null when there is no house.
 THE WALL: "base" is the house wall's bottom edge where the WALL meets the ground (or would meet it behind a patio, steps or a deck), at the house's left corner and at its right corner — the whole face of the house across every step in it. "eave" is the top of that wall above each corner: the underside of the MAIN roof's eave (on a two-storey house, the eave over the upper floor); null when hidden. "storeys": 1 or 2 storeys of wall between the base and that eave (count the rows of windows), null when unsure.
 SECTIONS: FIRST work out the wall's sections, left to right from its left corner to its right corner: a section is a stretch of the house's wall whose face is one flat plane. "outFt" is how far that section's face stands IN FRONT of the main wall (the main wall — the widest stretch — is 0; a bump-out or a bay is +2 to +4; a part set back is negative). "why" is the evidence you see for that section's plane: its own corner boards at both its ends, its own eave or roof edge in front of the main eave, a shadow down the wall at its side, its siding meeting the next section at a corner. A porch roof, a patio roof or an awning in front of the wall does NOT make a section: the wall under it and behind it is the main wall unless its OWN face steps. A lower roof over only the GROUND storey of part of a two-storey wall, with that part's upper-storey windows above it, is a porch roof or a lean-to — that stretch is NOT a bump-out unless its upper storey stands forward too (its own corner boards up both storeys, its own hip or gable in the main roof). One section when the wall is one flat face.
-DOORS: EVERY door in the wall, left to right, with its kind (slider, hinged, french, garage); "ontoYard" true for the one door a deck would meet — the back door, the slider onto the yard — and false for every other (at most one true). A garage door IS a door here, kind "garage", never ontoYard: box the whole panel, its bottom where it meets the driveway. Box every door whole, threshold to head, even where a railing, a step or a plant hides part of it.
+DOORS: EVERY door in the wall, left to right, with its kind (slider, hinged, french, garage); "ontoYard" true for the one door a deck would meet — the back door, the slider onto the yard — and false for every other (at most one true). A garage door IS a door here, kind "garage", never ontoYard: box the whole panel, its bottom where it meets the driveway. Box every door whole, threshold to head, even where a railing, a step or a plant hides part of it. For an elevated entry, follow the door DOWN BEHIND the railing to the landing floor. The TOP RAIL across the door is NOT its threshold. A single hinged entry is usually about 80 inches tall and 32–36 inches wide: a nearly square box around its visible upper half is incomplete. Infer the hidden lower frame cautiously from the landing and the frame sides; state that occlusion in note. Do not use the decorative glass inset as the door box. Keep the separate window ABOVE that door as its own window.
 WINDOWS: EVERY window in the wall, both storeys: the outside edges of its frame left and right, its sill and its head. A window unit of several sashes or panes in ONE frame — a picture window with sliders beside it, a triple, a bay's front — is ONE window: box the whole frame, outside edge to outside edge. Windows with siding between them are separate entries — count them. Not the doors, not a garage door's panels.
 PATIO: a concrete patio or slab at the wall's base, its ends along the wall (only to know where a deck would go); null when none.
 ROOF: the MAIN roof of the house — hip (slopes on every side), gable-side (the ridge runs along this wall, triangles at the sides), gable-end (a triangle of wall faces the camera), shed, flat; pitch in inches of rise per foot when you can judge it (a usual house is 4 to 8), else null.
