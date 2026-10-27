@@ -94,3 +94,6 @@ qa/tests/**/*.png
 !qa/tests/pages/receipt.png
 qa/tests/**/*.csv
 qa/tests/_archive/roof/
+
+# per-run Next.js build dirs (JOBFLEX_DIST_DIR)
+.next-*/

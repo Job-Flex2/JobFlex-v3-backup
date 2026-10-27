@@ -59,6 +59,7 @@ import { db } from "@/lib/db";
 import { hasFullAccess } from "@/lib/fullAccess";
 import {
   parsePlanLimits,
+  withPaidCallDefaults,
   isUnlimited,
   DEFAULT_FREE_LIMITS,
   LIMIT_DEFS,
@@ -68,6 +69,9 @@ import {
   type PlanLimits,
 } from "@/lib/planLimits";
 import { CUSTOM_PLAN_LIMITS_SLUG, CUSTOM_PLAN_SLUG } from "@/lib/customPlan";
+
+/** lib/eagleview PD_PACK.ROOF_AREA — spelled here so the engine does not load the EagleView client. */
+const ROOF_AREA_PACK = "property_data_id_001";
 
 export type LimitResource = LimitKey;
 
@@ -254,7 +258,8 @@ async function resolvePlan(
   if (exempt) return { limits: {}, cycleStart, resets, exempt };
   if (lapsed && !plan) return { limits: { ...DEFAULT_FREE_LIMITS }, cycleStart, resets, exempt };
 
-  return { limits: parsePlanLimits(plan?.limitsJson ?? null), cycleStart, resets, exempt };
+  // The paid lookups never fall open on a row that predates them (planLimits PAID_CALL_DEFAULTS).
+  return { limits: withPaidCallDefaults(parsePlanLimits(plan?.limitsJson ?? null), planKey), cycleStart, resets, exempt };
 }
 
 type ResolvedPlan = Awaited<ReturnType<typeof resolvePlan>>;
@@ -314,6 +319,37 @@ async function countUsage(
       return strict
         ? db.hvacEstimate.count({ where: { organizationId, createdAt: since } })
         : db.hvacEstimate.count({ where: { organizationId, createdAt: since } }).catch(() => 0);
+    case "roofMeasurements":
+      // Paid EagleView measurements: an order that bought the roof-area pack
+      // (one per measurement — the detail packs of the same click are rows of
+      // their own) or a pre-2026-09-08 seven-pack order (packs null). A failed
+      // order delivered nothing and is not counted.
+      return db.instantOrder.count({
+        where: {
+          organizationId,
+          createdAt: since,
+          status: { not: "failed" },
+          OR: [{ packs: null }, { packs: { contains: ROOF_AREA_PACK } }],
+        },
+      });
+    case "manualJReports": {
+      // Cool Calc reports requested this cycle: the estimate's permitJson
+      // carries requestedAt (actions/hvacEstimator). updatedAt ≥ requestedAt,
+      // so it narrows the read; requestedAt decides.
+      const read = db.hvacEstimate.findMany({
+        where: { organizationId, permitJson: { not: null }, updatedAt: since },
+        select: { permitJson: true },
+      });
+      const rows = strict ? await read : await read.catch(() => []);
+      return rows.filter((r) => {
+        try {
+          const at = Date.parse(String((JSON.parse(r.permitJson as string) as { requestedAt?: string }).requestedAt ?? ""));
+          return Number.isFinite(at) && at >= cycleStart.getTime();
+        } catch {
+          return false;
+        }
+      }).length;
+    }
     case "conversationsStarted":
       // JOB-kind threads are auto-created from a job's crew (ensureJobConversation)
       // and must not burn quota; only user-started threads count.

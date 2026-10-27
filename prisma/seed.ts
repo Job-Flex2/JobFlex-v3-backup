@@ -708,6 +708,10 @@ async function main() {
   // lowercase (mixed case previously caused a fail-open limits bug).
   // Checkout still requires an admin to run "Sync to Stripe" on /admin/plans.
   //
+  // trialDays is UNUSED (2026-10-26, audit §4): every trial's length is the
+  // trial offer's (lib/trialOffer signupTrialOffer). Kept at 7 so the column
+  // and /admin/plans agree with what is given.
+  //
   // The "free" row is seeded INACTIVE (the Free tier was removed from the
   // product, 2026-08-17): it never appears on a sales surface, but the row
   // must exist because limitsEngine reads limits from ALL rows regardless of
@@ -746,6 +750,8 @@ async function main() {
         leads: 15,
         aiPhoneCalls: 5,
         reviewRequests: 5,
+        roofMeasurements: 3,
+        manualJReports: 1,
       } as Record<string, number> | null,
     },
     {
@@ -754,7 +760,7 @@ async function main() {
       description: "Solo contractors \u2014 proposals, clients, free leads and the day-to-day books.",
       priceCents: 2900,
       yearlyPriceCents: 29000,
-      trialDays: 14,
+      trialDays: 7,
       order: 1,
       highlight: false,
       active: true,
@@ -769,7 +775,7 @@ async function main() {
         "Messages",
         "1 user",
       ],
-      limits: { workers: 1 },
+      limits: { workers: 1, roofMeasurements: 15, manualJReports: 10 },
     },
     {
       slug: "professional",
@@ -777,7 +783,7 @@ async function main() {
       description: "Growing teams \u2014 everything in Starter plus Smart Proposal and the estimators.",
       priceCents: 7900,
       yearlyPriceCents: 79000,
-      trialDays: 14,
+      trialDays: 7,
       order: 2,
       highlight: true,
       active: true,
@@ -788,7 +794,7 @@ async function main() {
         "Fence estimator",
         "Up to 3 users",
       ],
-      limits: { workers: 3 },
+      limits: { workers: 3, roofMeasurements: 40, manualJReports: 25 },
     },
     {
       slug: "enterprise",
@@ -796,7 +802,7 @@ async function main() {
       description: "Large businesses \u2014 every estimator, AI phone answering, custom branding, unlimited seats.",
       priceCents: 19900,
       yearlyPriceCents: 199000,
-      trialDays: 14,
+      trialDays: 7,
       order: 3,
       highlight: false,
       active: true,
@@ -807,7 +813,8 @@ async function main() {
         "Custom branding & domain",
         "Unlimited users",
       ],
-      limits: null, // absent limits = unlimited
+      // Absent limits = unlimited, except the paid lookups (lib/planLimits PAID_CALL_DEFAULTS).
+      limits: { roofMeasurements: 100, manualJReports: 60 } as Record<string, number> | null,
     },
   ];
   for (const p of plans) {
@@ -830,7 +837,7 @@ async function main() {
       },
     });
   }
-  console.log("   seeded pricing plans: starter $29 / professional $79 / enterprise $199 (14-day trial) + inactive cap-floor row");
+  console.log("   seeded pricing plans: starter $29 / professional $79 / enterprise $199 (7-day trial, lib/trialOffer) + inactive cap-floor row");
 
   console.log("   seeded follow-up rules:", rule1.id, rule2.id);
   console.log("✓ Seed complete");

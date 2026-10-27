@@ -1,5 +1,21 @@
 # Проверка обзора подписок — 2026-10-26
 
+## Статус исправлений (2026-10-26, не закоммичено)
+
+| # | Статус | Что сделано |
+|---|---|---|
+| 1 | Исправлено | Ключи `roofMeasurements` / `manualJReports` в `LIMIT_DEFS`, счётчики в `limitsEngine` (заказы `InstantOrder` с пакетом площади, не failed; `permitJson.requestedAt` в цикле), проверка в `obtainInstant` и `requestHvacPermitReport`, диалог лимита. Значения по умолчанию по тарифу (`PAID_CALL_DEFAULTS`: free 3/1, starter 15/10, professional 40/25, enterprise 100/60) действуют и для строк плана без ключа; «Unlimited» хранится как -1. В /admin/plans — группа «Paid lookups» (сама не появлялась: нужен `LIMIT_GROUPS`). Суточные потолки остались. |
+| 2 | Исправлено | Повышение тарифа на том же сроке идёт маршрутом `charge` (Custom с несколькими строками — по-прежнему Checkout). Test clock `clock_1UV0wS3hfHMBJdIEKOOo60IS`: Starter $45 → Professional $95 на 10-й день — инвойс $33.87 = −$30.48 «Unused time» + $64.35 «Remaining time», одна подписка, дата списания та же. |
+| 3 | Исправлено | Мягкая остановка: в `sms/send` сверх месячной квоты — SKIPPED «allowance», ничего не биллится; диалог «SMS allowance used». `SMS_OVERAGE_CENTS` и текст «3¢» удалены, гайд обновлён. |
+| 4 | Исправлено | `/api/checkout/subscription`, outreach и pitch deck читают длину из `trialOffer` (7). Seed: `trialDays` 7, помечен как неиспользуемый. Terms не тронуты. |
+| 5 | Исправлено | `handbook.ts` — формулировка Terms, «the support AI never promises refunds — it routes the request to the owner»; строка 491 тоже. Строка про кредит Deck оставлена. `support-ai.check.ts` — all passed. |
+| 6 | Уже было сделано | Deck $79 выпущен (8d557a42). |
+| 7 | Исправлено | «Not in this plan» на карточках — только по гейтам (`spotlightInPlan`: add-on Deck, некупленные страницы Custom); `planDiff` между тарифами каталога ничего не открывает и не закрывает. `deckAddonPick`/`deckAddonOffer` проверяют `hasFullAccess`. |
+| 8 | Пропущено | По решению владельца. |
+| 9 | Исправлено | `paidApiCosts`: `eagleview.order = 240` (контрактная цена от владельца 2026-10-26), заглушка $5 за пакет удалена; учёт расхода — за заказ. |
+| 10 | — | Ложная строка гайда «напоминания нет» удалена попутно. |
+
+
 Только проверка: код не менялся, ничего не закоммичено. Stripe — только тестовый ключ (`STRIPE_SECRET_KEY_TEST`, `sk_test_…`) и test clocks; живой Stripe и прод-база не трогались.
 
 **Что проверялось.** `git pull --ff-only origin main` **не прошёл**: локальный `main` разошёлся с `origin/main` (3 локальных коммита 49e9a0ed, 8b6fb7eb, b6434fe3 не запушены, 16 новых на origin не влиты) — `fatal: Not possible to fast-forward, aborting.` Сливать/ребейзить без разрешения не стал. Проверено рабочее дерево локального `main` (вместе с незакоммиченной правкой Deck Studio $49→$79 из другой сессии). Из 16 коммитов origin в тему попадают только `src/lib/paidApiCosts.ts` (добавлен `fal`, цены GPT-6 — EagleView/Cool Calc не тронуты), `src/actions/roofMeasurement.ts` (лимитов не добавляет) и `src/lib/support/aiReply.ts` / `aiSupport.ts` / `actions/supportAi.ts` (сверено в п. 5).

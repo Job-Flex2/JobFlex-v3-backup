@@ -10,7 +10,8 @@ import "server-only";
 //                  is kept to its last day; the switch is booked on a Stripe
 //                  subscription schedule for that day and can be cancelled
 //                  until then ("Switches to monthly on <date>").
-//   · "charge"   — MONTH → YEAR, or a dearer price on the same term: invoiced
+//   · "charge"   — MONTH → YEAR, a higher tier on the same term (2026-10-26),
+//                  or a dearer price on the same term: invoiced
 //                  today with the unused part of the current period credited
 //                  (`always_invoice`; a term change restarts the cycle today).
 //                  ALL OR NOTHING on the card (`pending_if_incomplete`): a
@@ -19,9 +20,9 @@ import "server-only";
 //                  and the owner is sent to update the card.
 //   · "free"     — a cheaper price on the same term: switched now, nothing
 //                  charged, nothing refunded (the rule since 2026-09-02).
-//   · "checkout" — no live subscription, or an upgrade on the same term by
-//                  tier: paid on Stripe's page (the owner's rule, 2026-09-02),
-//                  which replaces the subscription (lib/checkoutReturn).
+//   · "checkout" — no live subscription, or a Custom plan's several lines
+//                  moving up: paid on Stripe's page, which replaces the
+//                  subscription (lib/checkoutReturn).
 //
 // What the dialog shows as "today" is Stripe's own preview of the invoice
 // (invoices.createPreview with the same items, proration and proration date

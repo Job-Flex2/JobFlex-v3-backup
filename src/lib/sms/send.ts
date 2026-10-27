@@ -7,6 +7,10 @@
 //   - the same words to the same number twice in ten minutes is once;
 //   - caps per number, per company and platform-wide, per day, fail-closed —
 //     every text costs money, so a limiter outage pauses texting;
+//   - the plan's monthly allowance (entitlements SMS_ALLOWANCE) is a soft
+//     stop: past it a company's texts are SKIPPED "allowance" until the
+//     next month, nothing is billed (owner, 2026-10-26); JobFlex's own texts
+//     (billing, codes, HELP — format isSystemText) are never stopped;
 //   - quiet hours hold a text until the morning, folded with the others;
 //   - Twilio off (the local stand, a fresh deploy) is a SKIPPED row, not an
 //     error — the app works the same, and the log shows what would have gone;
@@ -33,12 +37,14 @@ import {
   SMS_URGENT_KEYS,
   smsDecision,
   type PrefKey, allowsSms, audienceForRole, textEventsFor } from "@/lib/notificationPrefsShared";
-import { brand, clip, heldDigestText, jobflexRoundupText, SMS_MAX, unbrand } from "./format";
+import { brand, clip, heldDigestText, isSystemText, jobflexRoundupText, SMS_MAX, unbrand } from "./format";
 import { trialBlocksText } from "@/lib/trialMeter";
 import { hasTextConsent, isTeamPhone } from "./consent";
 import { jobflexSender } from "./jobflexSender";
 import { houseLineFor } from "./houseLine";
 import { orgMayText } from "@/lib/paidCaps";
+import { smsAllowanceFor } from "@/lib/entitlements";
+import { getOrgPlanById } from "@/lib/orgPlan";
 
 const CAP_PER_NUMBER_PER_DAY = 25;
 const CAP_PER_ORG_PER_DAY = 500;
@@ -59,7 +65,7 @@ export type SendTextResult =
   | { ok: true; id: string; status: "SENT" | "HELD" }
   /** `why`: "no-number" (the company has no registered number), "no-consent", "not-configured" (no Twilio here). */
   | { ok: true; id: string; status: "SKIPPED"; why: string }
-  | { ok: false; reason: "invalid-number" | "opted-out" | "duplicate" | "cap" | "trial" | "plan-ended" | "limiter-down" | "failed" };
+  | { ok: false; reason: "invalid-number" | "opted-out" | "duplicate" | "cap" | "trial" | "plan-ended" | "allowance" | "limiter-down" | "failed" };
 
 /** What a member reads when the card-less trial held a text back (lib/trialCaps). */
 export const TRIAL_TEXT_MESSAGE = "The free trial without a card sends no texts except the verification code. Add a card to unlock full limits.";
@@ -117,6 +123,12 @@ async function dispatch(m: { organizationId: string | null; to: string; body: st
       await db.smsMessage.create({ data: { organizationId: m.organizationId, direction: "OUT", to: m.to, body: m.body, kind: m.kind, status: "SKIPPED", error: "plan-ended" } }).catch(() => null);
       return { ok: false, reason: "plan-ended" };
     }
+    // The month's allowance is used: a soft stop, nothing billed (2026-10-26). JobFlex's own texts — billing,
+    // codes, HELP — always go (format isSystemText).
+    if (!jobflexOwn && m.organizationId && own && !isSystemText(m.kind) && (await smsAllowanceUsed(m.organizationId))) {
+      await db.smsMessage.create({ data: { organizationId: m.organizationId, direction: "OUT", to: m.to, body: m.body, kind: m.kind, status: "SKIPPED", error: "allowance" } }).catch(() => null);
+      return { ok: false, reason: "allowance" };
+    }
     let blocked: string | null = null;
     if (!own) blocked = "no-number";
     else if (!jobflexOwn && m.kind !== "help" && m.organizationId && !(await isTeamPhone(m.organizationId, m.to)) && !(await hasTextConsent(m.organizationId, m.to))) blocked = "no-consent";
@@ -165,6 +177,18 @@ async function capped(m: { organizationId: string | null; to: string; body: stri
     .catch(() => null);
   console.warn(`[sms] ${which} cap reached, text skipped (${m.kind})`);
   return { ok: false, reason: "cap" };
+}
+
+/** The company's texts this calendar month (UTC) — the count Settings and Subscription show — against its plan's allowance. */
+async function smsAllowanceUsed(organizationId: string): Promise<boolean> {
+  const monthStart = new Date();
+  monthStart.setUTCDate(1);
+  monthStart.setUTCHours(0, 0, 0, 0);
+  const [tier, sent] = await Promise.all([
+    getOrgPlanById(organizationId),
+    db.smsMessage.count({ where: { organizationId, direction: "OUT", status: { in: ["SENT", "DELIVERED", "QUEUED"] }, createdAt: { gte: monthStart } } }),
+  ]);
+  return sent >= smsAllowanceFor(tier);
 }
 
 function msg(err: unknown): string {

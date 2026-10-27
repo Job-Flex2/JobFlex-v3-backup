@@ -75,14 +75,14 @@ export function TextingPageDesk({ sms }: { sms: SmsSettingsData }) {
           <p className="txp-job">{sms.canManage ? P.job : P.jobMine}</p>
         </div>
         {sms.canManage ? (
-          <div className="txp-usage" data-texting-usage title={TEXTS_COPY.overage}>
+          <div className="txp-usage" data-texting-usage title={TEXTS_COPY.allowanceNote}>
             <span className="txp-usageN">
               <b>{sms.monthCount}</b>
               <span aria-hidden="true">/</span>
               {sms.allowance}
             </span>
             <span className="txp-usageL">{P.usageLabel}</span>
-            <span className="txp-usageS">{TEXTS_COPY.overage}</span>
+            <span className="txp-usageS">{TEXTS_COPY.allowanceNote}</span>
           </div>
         ) : null}
       </header>

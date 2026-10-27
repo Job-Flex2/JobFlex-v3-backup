@@ -3,7 +3,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { usePlanLimitStore } from "@/stores/usePlanLimitStore";
-import { LIMIT_DEFS } from "@/lib/planLimits";
+import { LIMIT_DEFS, SMS_ALLOWANCE_MESSAGE } from "@/lib/planLimits";
 import { TRIAL_CAPS, TRIAL_CAP_NOUN, TRIAL_CAP_TITLE, trialCapAllowance, trialCapHref } from "@/lib/trialCaps";
 import { ConfirmPlanChange } from "./ConfirmPlanChange";
 
@@ -21,6 +21,7 @@ export function PlanLimitDialog() {
   const open = usePlanLimitStore((s) => s.open);
   const resource = usePlanLimitStore((s) => s.resource);
   const trial = usePlanLimitStore((s) => s.trial);
+  const sms = usePlanLimitStore((s) => s.sms);
   const close = usePlanLimitStore((s) => s.close);
 
   /* THE CARD-LESS TRIAL'S OWN CEILING (lib/trialCaps): the same box, but the
@@ -60,6 +61,33 @@ export function PlanLimitDialog() {
                 <span>{cap > 0 ? `${cap} of ${cap} used` : "Needs a card"}</span>
               </div>
             )}
+          </>
+        }
+      />
+    );
+  }
+
+  /* THE MONTH'S TEXTS (owner, 2026-10-26): a soft stop — nothing is billed past the allowance, texting waits for
+     the next month or a bigger plan. */
+  if (sms) {
+    return (
+      <ConfirmPlanChange
+        open={open}
+        kicker="Plan limit"
+        title="SMS allowance used"
+        confirmLabel="See plans"
+        onCancel={close}
+        onConfirm={() => {
+          close();
+          router.push("/dashboard/upgrade");
+        }}
+        body={
+          <>
+            <p>{SMS_ALLOWANCE_MESSAGE}. Texts start again on the 1st of next month; nothing past the allowance is billed.</p>
+            <div className="jf-confirm-meter">
+              <span>Text messages</span>
+              <span>0 left this month</span>
+            </div>
           </>
         }
       />

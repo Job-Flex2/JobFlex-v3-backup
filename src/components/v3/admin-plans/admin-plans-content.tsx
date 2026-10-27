@@ -20,7 +20,7 @@ import { money } from "@/lib/format";
 import { upsertPricingPlan, deletePricingPlan, setCustomPlanTrial } from "@/actions/admin";
 import { syncPlanToStripe } from "@/actions/plans";
 import { setPromoActive } from "@/actions/influencers";
-import { LIMIT_DEFS, DEFAULT_FREE_LIMITS, type PlanLimits, type LimitKey } from "@/lib/planLimits";
+import { LIMIT_DEFS, DEFAULT_FREE_LIMITS, PAID_CALL_KEYS, UNLIMITED, isUnlimited, type PlanLimits, type LimitKey } from "@/lib/planLimits";
 import shared from "@/components/v3/admin-users/admin-shared.module.css";
 import {
   makeCx,
@@ -103,6 +103,7 @@ const BLANK: HydratedPlan = {
 const LIMIT_GROUPS: Array<{ title: string; keys: LimitKey[] }> = [
   { title: "Proposals", keys: ["proposalsCreated", "proposalsAccepted", "proposalsCompleted"] },
   { title: "Estimates", keys: ["estimatorUses", "hvacEstimates"] },
+  { title: "Paid lookups", keys: ["roofMeasurements", "manualJReports"] },
   { title: "Clients", keys: ["clients"] },
   { title: "Leads", keys: ["leads"] },
   { title: "Projects & schedules", keys: ["projects", "calendarCards", "calendarEvents"] },
@@ -137,7 +138,7 @@ function slugify(name: string): string {
 }
 
 function capCount(limits: PlanLimits): { caps: number; unlimited: number } {
-  const caps = LIMIT_DEFS.filter((d) => typeof limits[d.key] === "number").length;
+  const caps = LIMIT_DEFS.filter((d) => !isUnlimited(limits[d.key])).length;
   return { caps, unlimited: LIMIT_DEFS.length - caps };
 }
 
@@ -317,7 +318,7 @@ export function AdminPlansContent({
             const sx = synced[p.slug];
             const isSynced = !!sx && sx.monthly && (p.yearlyPriceCents == null || p.yearlyPriceCents === 0 || sx.yearly);
             const { caps, unlimited } = capCount(p.limits);
-            const capped = LIMIT_DEFS.filter((d) => typeof p.limits[d.key] === "number");
+            const capped = LIMIT_DEFS.filter((d) => !isUnlimited(p.limits[d.key]));
             return (
               <article key={p.id} className={cx("pl-card", !p.active && "pl-card--off")} aria-label={p.name}>
                 <div className={cx("pl-head")}>
@@ -777,8 +778,10 @@ function PlanForm({
     setLocal((prev) => {
       const next: PlanLimits = { ...prev.limits };
       if (on) {
-        if (typeof next[key] === "number") lastCaps.current[key] = next[key];
-        delete next[key];
+        if (!isUnlimited(next[key])) lastCaps.current[key] = next[key];
+        // The paid lookups' absence is their tier default, so unlimited is said with -1 (lib/planLimits).
+        if ((PAID_CALL_KEYS as readonly LimitKey[]).includes(key)) next[key] = UNLIMITED;
+        else delete next[key];
       } else {
         next[key] = lastCaps.current[key] ?? DEFAULT_FREE_LIMITS[key] ?? 10;
       }
@@ -980,7 +983,7 @@ function PlanForm({
                   const def = DEF_BY_KEY.get(key);
                   if (!def) return null;
                   const cap = local.limits[key];
-                  const unlimited = typeof cap !== "number";
+                  const unlimited = isUnlimited(cap);
                   const id = `pl-lim-${key}`;
                   return (
                     <div key={key} className={cx("lg-row")}>

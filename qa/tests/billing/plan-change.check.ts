@@ -28,7 +28,9 @@ check("Advanced monthly → Pro annual (down + term): charged today, never free"
 check("Pro annual → Pro monthly: from the end of the paid year", r({ from: "YEAR", to: "MONTH" }) === "schedule");
 check("Advanced annual → Pro monthly: from the end of the paid year", r({ from: "YEAR", to: "MONTH", rankFrom: 2, rankTo: 1, currentCents: 199000, targetCents: 9500 }) === "schedule");
 check("Starter annual → Advanced monthly (up + year→month): still from the year's end", r({ from: "YEAR", to: "MONTH", rankFrom: 0, rankTo: 2, currentCents: 29000, targetCents: 19900 }) === "schedule");
-check("Starter monthly → Pro monthly (up by tier): Stripe's page", r({ from: "MONTH", to: "MONTH", rankFrom: 0, rankTo: 1, currentCents: 4500 }) === "checkout");
+check("Starter monthly → Pro monthly (up by tier): charged today, the unused days credited", r({ from: "MONTH", to: "MONTH", rankFrom: 0, rankTo: 1, currentCents: 4500 }) === "charge");
+check("Starter annual → Pro annual (up by tier): charged today, the unused days credited", r({ from: "YEAR", to: "YEAR", rankFrom: 0, rankTo: 1, currentCents: 45000, targetCents: 85500 }) === "charge");
+check("Custom (two lines) → higher catalog plan, same term: Stripe's page", r({ from: "MONTH", to: "MONTH", rankFrom: -1, rankTo: 1, lines: 2, currentCents: 4000 }) === "checkout");
 check("Advanced annual → Pro annual (down, same term): free now", r({ from: "YEAR", to: "YEAR", rankFrom: 2, rankTo: 1, currentCents: 199000, targetCents: 79000 }) === "free");
 check("Pro monthly → Starter monthly: free now", r({ from: "MONTH", to: "MONTH", rankFrom: 1, rankTo: 0, targetCents: 4500 }) === "free");
 check("dearer price on the same term but not up by tier: charged today", r({ from: "MONTH", to: "MONTH", rankFrom: 1, rankTo: 1, currentCents: 4000, targetCents: 9500 }) === "charge");

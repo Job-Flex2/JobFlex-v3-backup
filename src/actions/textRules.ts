@@ -10,6 +10,7 @@ import { db } from "@/lib/db";
 import { requireManager } from "@/lib/orgContext";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { PLAN_ENDED_TEXT_MESSAGE, sendText, TRIAL_TEXT_MESSAGE } from "@/lib/sms/send";
+import { SMS_ALLOWANCE_MESSAGE } from "@/lib/planLimits";
 import { MAX_RULES, RULE_BODY_MAX, SAMPLE_VARS, renderRuleText, signed, triggerOf, unknownFields, withStopLine } from "@/lib/sms/textRules";
 
 export type TextRuleResult = { ok: true; note?: string; id?: string } | { ok: false; error: string };
@@ -116,6 +117,6 @@ export async function testTextRule(raw: TextRuleInput): Promise<TextRuleResult> 
   const body = c.data.toClient ? withStopLine(words) : words;
   const r = await sendText({ organizationId, to: me.smsPhone, body: `(test) ${body}`, kind: "rule-test" });
   if (r.ok && r.status === "SKIPPED") return { ok: true, note: "Texting is not set up on this server — nothing was sent." };
-  if (!r.ok) return { ok: false, error: r.reason === "duplicate" ? "Same test went out a minute ago." : r.reason === "trial" ? TRIAL_TEXT_MESSAGE : r.reason === "plan-ended" ? PLAN_ENDED_TEXT_MESSAGE : "Couldn't send the test." };
+  if (!r.ok) return { ok: false, error: r.reason === "duplicate" ? "Same test went out a minute ago." : r.reason === "trial" ? TRIAL_TEXT_MESSAGE : r.reason === "plan-ended" ? PLAN_ENDED_TEXT_MESSAGE : r.reason === "allowance" ? SMS_ALLOWANCE_MESSAGE : "Couldn't send the test." };
   return { ok: true, note: "Test sent to your mobile." };
 }

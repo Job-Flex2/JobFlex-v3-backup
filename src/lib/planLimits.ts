@@ -38,6 +38,8 @@ export interface PlanLimitFailure {
   trialCap?: TrialCapKey;
   /** The card-less trial is over with no card: nothing paid runs. */
   trialEnded?: boolean;
+  /** The month's texts are used (entitlements SMS_ALLOWANCE): the dialog names texts, not a LimitKey. */
+  smsAllowance?: true;
 }
 
 export function isPlanLimitFailure(v: unknown): v is PlanLimitFailure {
@@ -47,6 +49,16 @@ export function isPlanLimitFailure(v: unknown): v is PlanLimitFailure {
     (v as { ok?: unknown }).ok === false &&
     (v as { code?: unknown }).code === "PLAN_LIMIT_REACHED"
   );
+}
+
+/**
+ * THE SMS ALLOWANCE IS A SOFT STOP (owner, 2026-10-26 — audit §3): past the
+ * plan's texts for the month nothing more goes out and nothing is billed;
+ * the plan dialog says so (lib/sms/send).
+ */
+export const SMS_ALLOWANCE_MESSAGE = "SMS allowance used — upgrade or wait for the next cycle";
+export function smsAllowanceFailure(): PlanLimitFailure {
+  return { ok: false, error: SMS_ALLOWANCE_MESSAGE, code: "PLAN_LIMIT_REACHED", smsAllowance: true };
 }
 
 /**
@@ -79,6 +91,8 @@ export type LimitKey =
   | "clients"
   | "estimatorUses"
   | "hvacEstimates"
+  | "roofMeasurements"
+  | "manualJReports"
   | "conversationsStarted"
   | "messagesSent"
   | "leads"
@@ -114,6 +128,12 @@ export const LIMIT_DEFS: readonly LimitDef[] = [
   // saved per cycle. It never created AiEstimate rows, so "estimatorUses"
   // only ever gated it — it never counted it. Absent from a plan = unlimited.
   { key: "hvacEstimates", label: "HVAC estimates", scope: "monthly", hint: "New HVAC estimates saved per cycle" },
+  // The paid lookups (owner, 2026-10-26 — audit §1): an EagleView roof
+  // measurement and a Cool Calc Manual J report each cost JobFlex money, so
+  // each plan carries a monthly number. Absent from a plan = the tier's
+  // default (PAID_CALL_DEFAULTS), not unlimited; "Unlimited" stores -1.
+  { key: "roofMeasurements", label: "Roof measurements", scope: "monthly", hint: "Paid EagleView roof measurements per cycle" },
+  { key: "manualJReports", label: "Manual J reports", scope: "monthly", hint: "Paid Cool Calc Manual J reports per cycle" },
   { key: "conversationsStarted", label: "Conversations started", scope: "monthly", hint: "New message threads per cycle" },
   { key: "messagesSent", label: "Messages sent", scope: "monthly", hint: "Messages sent per cycle" },
   { key: "leads", label: "Leads captured", scope: "monthly", hint: "New leads per cycle (all sources)" },
@@ -151,6 +171,8 @@ export const DEFAULT_FREE_LIMITS: PlanLimits = {
   clients: 10,
   estimatorUses: 3,
   hvacEstimates: 3,
+  roofMeasurements: 3,
+  manualJReports: 1,
   conversationsStarted: 5,
   messagesSent: 50,
   leads: 10,
@@ -159,6 +181,32 @@ export const DEFAULT_FREE_LIMITS: PlanLimits = {
   reviewRequests: 3,
   teamSeats: 1,
 };
+
+/**
+ * THE PAID LOOKUPS' DEFAULTS (owner, 2026-10-26). These two keys never fall
+ * open: a plan row without them — every row written before 2026-10-26 —
+ * meters at its tier's numbers below, and a plan made unlimited in
+ * /admin/plans says so with -1. A slug not listed here (an admin-made plan)
+ * keeps the old rule: absent = unlimited, the daily ceilings (lib/paidCaps)
+ * still hold.
+ */
+export const PAID_CALL_KEYS = ["roofMeasurements", "manualJReports"] as const satisfies readonly LimitKey[];
+export const PAID_CALL_DEFAULTS: Record<string, Pick<PlanLimits, (typeof PAID_CALL_KEYS)[number]>> = {
+  free: { roofMeasurements: 3, manualJReports: 1 },
+  starter: { roofMeasurements: 15, manualJReports: 10 },
+  professional: { roofMeasurements: 40, manualJReports: 25 },
+  enterprise: { roofMeasurements: 100, manualJReports: 60 },
+};
+const isPaidCallKey = (key: LimitKey): boolean => (PAID_CALL_KEYS as readonly LimitKey[]).includes(key);
+
+/** A plan's limits with the paid lookups' tier defaults filled in where the row has none. */
+export function withPaidCallDefaults(limits: PlanLimits, slug: string | null | undefined): PlanLimits {
+  const defaults = PAID_CALL_DEFAULTS[(slug ?? "").toLowerCase()];
+  if (!defaults) return limits;
+  const out: PlanLimits = { ...limits };
+  for (const key of PAID_CALL_KEYS) if (typeof out[key] !== "number") out[key] = defaults[key];
+  return out;
+}
 
 /** A limit is "unlimited" when missing, null, or negative (e.g. the -1 sentinel). */
 export function isUnlimited(v: number | null | undefined): boolean {
@@ -188,12 +236,16 @@ export function parsePlanLimits(json: string | null | undefined): PlanLimits {
  * Serialize a PlanLimits-like object for storage. Only known keys with a
  * finite, non-negative cap are persisted; unlimited values are simply omitted
  * (absent key === unlimited on read), keeping the JSON small and intentional.
+ * The paid lookups are the exception: their absence means the tier default,
+ * so their "unlimited" is stored as -1.
  */
 export function serializePlanLimits(limits: Record<string, number | null | undefined>): string {
   const out: Record<string, number> = {};
   for (const def of LIMIT_DEFS) {
     const v = limits[def.key];
-    if (typeof v === "number" && Number.isFinite(v) && v >= 0) out[def.key] = Math.trunc(v);
+    if (typeof v !== "number" || !Number.isFinite(v)) continue;
+    if (v >= 0) out[def.key] = Math.trunc(v);
+    else if (isPaidCallKey(def.key)) out[def.key] = UNLIMITED;
   }
   return JSON.stringify(out);
 }

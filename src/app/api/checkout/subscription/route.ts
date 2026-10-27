@@ -12,6 +12,7 @@ import { ensureRecurringPrice } from "@/lib/stripePriceCache";
 import { REFERRAL_DISCOUNT_PCT, ensureReferralCoupon, referralCouponMonths } from "@/lib/referralDiscount";
 import { ensureYearFirstMonthCoupon, promoPercentOff } from "@/lib/yearDiscount";
 import { trialDaysFor } from "@/lib/trialEligibility";
+import { storedTrialOffer } from "@/lib/trialOffer";
 import { CUSTOM_PLAN_SLUG, customPriceCents, normalizeCustomPages } from "@/lib/customPlan";
 import { getCustomPlanTrialDays } from "@/lib/customPlanConfig";
 import { customLineItems, customMetadata } from "@/lib/customBilling";
@@ -263,8 +264,10 @@ export async function POST(req: Request) {
      company that has had any subscription — paid, trialing, cancelled, ended
      for non-payment, a grant — or a card-less trial pays at once when it buys
      again. Until this, "Restart subscription" after a cancellation (even one
-     for not paying) opened Checkout with the catalog's trial again. */
-  const trialDays = replacesSubId ? 0 : await trialDaysFor(organizationId, plan.trialDays);
+     for not paying) opened Checkout with the catalog's trial again.
+     THE LENGTH IS THE TRIAL OFFER'S (2026-10-26, audit §4) — the sign-up's
+     seven days — never PricingPlan.trialDays, which is unused. */
+  const trialDays = replacesSubId ? 0 : await trialDaysFor(organizationId, storedTrialOffer().days);
   /* DECK STUDIO ON STRIPE'S PAGE (owner, 2026-10-26; lib/deckAddonBilling): "Add Deck Studio" ticked puts the add-on
      on the order; otherwise it is an optional row Stripe's page lets the owner switch on. A replaced subscription
      that holds it on this term passes ITS line's price on — a shop that bought it at $49 keeps $49. */

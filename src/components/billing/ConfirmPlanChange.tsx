@@ -78,14 +78,16 @@ const ARROW = (
   </svg>
 );
 
-/** The one true sentence about the money, per how the change is made. */
+/** The one true sentence about the money, per how the change is made. A tier up on a running subscription is
+ *  a "switch" since 2026-10-26 (lib/planChangeRoute); Stripe's page is left for no subscription and a Custom
+ *  plan's several lines, where nothing is credited. */
 function paymentLine(how: "checkout" | "switch", direction: "up" | "down"): string {
   if (how === "checkout") {
     return "Paid on Stripe now · your current subscription ends the moment payment goes through · no credit for its unused days";
   }
   return direction === "down"
     ? "Switched now · nothing is charged · the lower price is on your next bill · this cycle is not refunded"
-    : "Switched now on your card on file · the difference is invoiced today";
+    : "Prorated: you're charged the difference now, unused days are credited";
 }
 
 function Compare({ c }: { c: NonNullable<ConfirmPlanChangeProps["compare"]> }) {

@@ -54,6 +54,8 @@ import { useSheetDrag } from "@/components/v3/mobile-shell/use-sheet-drag";
 import { lockScroll } from "@/lib/scrollLock";
 import { createClient, updateClient } from "@/actions/clients";
 import { clientChannels, messageClient, type ClientChannel } from "@/actions/clientMessage";
+import { isPlanLimitFailure } from "@/lib/planLimits";
+import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
 import { loadClientBook } from "./client-book";
 import { AddToProjectSheet } from "@/components/v3/project-links/add-to-project-sheet";
 import { openAddToProject } from "@/components/v3/project-links/open-add-to-project";
@@ -607,6 +609,11 @@ export function MobileClients() {
     setMsgErr(null);
     try {
       const res = await messageClient({ clientId: msgId, channel, subject, body: msgBody });
+      // The month's texts are used: the plan dialog says so (lib/sms/send).
+      if (isPlanLimitFailure(res)) {
+        reportPlanLimitResult(res);
+        return;
+      }
       // `delivered: false` means the transport is switched off in this
       // environment and the message went to a server log. Saying "Sent" there
       // would be a lie the contractor only discovers from the client.

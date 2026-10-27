@@ -9,7 +9,7 @@ import { requirePlatformAdmin } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { isStripeEnabled } from "@/lib/sdk/stripe";
 import { getStripeMode, stripeKeyFor } from "@/lib/stripeMode";
-import { parsePlanLimits } from "@/lib/planLimits";
+import { parsePlanLimits, withPaidCallDefaults } from "@/lib/planLimits";
 import { parseFeatures } from "@/lib/planCatalogServer";
 import { getCustomPlanTrialDays } from "@/lib/customPlanConfig";
 import { CUSTOM_BASE_CENTS, CUSTOM_PAGE_CENTS, CUSTOM_PAGES } from "@/lib/customPlan";
@@ -51,7 +51,8 @@ export default async function AdminPlansPage() {
     interval: p.interval,
     order: p.order,
     features: parseFeatures(p.features),
-    limits: parsePlanLimits(p.limitsJson),
+    // The paid lookups show the number the engine meters at, the tier default when the row has none.
+    limits: withPaidCallDefaults(parsePlanLimits(p.limitsJson), p.slug),
     active: p.active,
     highlight: p.highlight,
   }));

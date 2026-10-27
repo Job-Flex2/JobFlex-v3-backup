@@ -6,10 +6,12 @@
 //
 // 2026-09-02 REWORK (owner's calls):
 //   · A plan change is made IN PLACE on the existing Stripe subscription
-//     (actions/billing.changePlan): up charges the prorated difference now,
-//     down is free — checkout only when there is no subscription yet. The old
-//     build opened a fresh Checkout for every click, which minted a SECOND
-//     subscription beside the first.
+//     (actions/billing.changePlan → lib/planChangeRoute): up by tier or term
+//     charges the difference now with the unused days credited (a tier up on
+//     the same term went through Stripe's page with no credit from 2026-09-02
+//     to 2026-10-26), down is free, year → month waits for the paid year's
+//     end. Stripe's page only when there is no subscription yet, or for a
+//     Custom plan's several lines moving up.
 //   · Cards are one row's height (a subgrid since 2026-10-12: prices and
 //     first rows on one line); every benefit is listed, nothing scrolls or
 //     folds inside a card, and the button sits at the foot of every card,
@@ -38,7 +40,7 @@ import { Children, useCallback, useEffect, useMemo, useState, useSyncExternalSto
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { expandPlanFeatures } from "@/lib/planCatalog";
-import { SPOTLIGHT, SPOTLIGHT_MISSING, SPOTLIGHT_TAG, spotlightLine, spotlightRow, withSpotlightFirst, type SpotlightTool } from "@/lib/planSpotlight";
+import { SPOTLIGHT, SPOTLIGHT_MISSING, SPOTLIGHT_TAG, spotlightInPlan, spotlightLine, spotlightRow, withSpotlightFirst, type SpotlightTool } from "@/lib/planSpotlight";
 import { changePlan, previewPlanChange, updateCustomPages, type PlanChangePreviewResult } from "@/actions/billing";
 import { CardDeclinedNote, PlanChangeMoney, ScheduledSwitchNote, longDay, money } from "@/components/billing/PlanChangeNotes";
 import { CustomChangeNote } from "./custom-change-note";
@@ -665,8 +667,9 @@ export function UpgradeContent({
               <PlanDealSlot term={interval} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} />
               <PlanFeatures compact={compactFeatures} id={p.slug} name={p.name} open={featsOpen} onToggle={toggleFeats}>
                 {featureRows.map((f) => {
-                  const has = included.get(p.slug)?.has(f.toLowerCase()) ?? false;
                   const lit = spotRow !== null && f === spotRow;
+                  // The tool the visitor came for is in the plan when its gate says so, whatever the line reads (lib/planSpotlight).
+                  const has = lit && spotlight ? spotlightInPlan(spotlight, p) : (included.get(p.slug)?.has(f.toLowerCase()) ?? false);
                   return (
                     <span key={f} className={"jf-up-f" + (has ? "" : " no") + (lit ? " spot" : "")} data-plan-spot-row={lit ? (has ? "in" : "out") : undefined}>
                       <svg viewBox="0 0 24 24" className="jf-up-fic" aria-hidden="true">

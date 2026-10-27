@@ -1268,7 +1268,7 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
     setPermitMsg("");
     try {
       const res = await requestHvacPermitReport({ estimateId: id });
-      if (!res.ok) { setPermitMsg(res.error); return; }
+      if (!res.ok) { if (!reportPlanLimitResult(res)) setPermitMsg(res.error); return; }
       setPermit(res.permit);
       setPermitMsg(`Project ${res.permit.projectId} created in Cool Calc — finish the envelope there, then pull the report.`);
       window.open(res.appUrl, "_blank", "noopener");

@@ -283,6 +283,12 @@ async function guardChecks() {
   check("…and a plain refusal through untouched", !bad2.ok && /US or Canadian/.test(bad2.error));
 }
 
+// The allowance stop (lib/sms/send, 2026-10-26): JobFlex's own texts pass it, a company's own stop at it.
+check("allowance: billing / payment-failure text passes", F.isSystemText("jobflex-billing"));
+check("allowance: JobFlex lead texts pass", F.isSystemText("jobflex-lead-texts-on"));
+check("allowance: verification code and HELP pass", F.isSystemText("verify") && F.isSystemText("help"));
+check("allowance: client, follow-up, campaign and team texts stop", ["client-message", "client-proposal", "follow-up", "invoice", "payment-reminder", "change-order", "welcome", "rule-test", "test"].every((k) => !F.isSystemText(k)));
+
 void guardChecks().then(() => {
   console.log(bad ? `\n${bad} check(s) FAILED` : "\nall checks passed");
   process.exit(bad ? 1 : 0);

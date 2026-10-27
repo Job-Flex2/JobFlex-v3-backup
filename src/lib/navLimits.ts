@@ -65,6 +65,8 @@ const NAV_NOUN: Partial<Record<LimitKey, string>> = {
   reviewRequests: "review requests",
   estimatorUses: "estimator runs",
   hvacEstimates: "HVAC estimates",
+  roofMeasurements: "roof measurements",
+  manualJReports: "Manual J reports",
 };
 
 export async function getNavLimitCounters(

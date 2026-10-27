@@ -82,13 +82,13 @@ export function MobileTexting({ sms }: { sms: SmsSettingsData }) {
             <h1 className="mtx-title">{P.title}</h1>
             <p className="mtx-job">{sms.canManage ? P.job : P.jobMine}</p>
             {sms.canManage ? (
-              <div className="mtx-usage" data-texting-usage title={TEXTS_COPY.overage}>
+              <div className="mtx-usage" data-texting-usage title={TEXTS_COPY.allowanceNote}>
                 <p className="mtx-usageN">
                   <b>{sms.monthCount}</b>
                   <span>/ {sms.allowance}</span>
                   <span className="mtx-usageL">{P.usageLabel}</span>
                 </p>
-                <p className="mtx-usageS">{TEXTS_COPY.overage}</p>
+                <p className="mtx-usageS">{TEXTS_COPY.allowanceNote}</p>
               </div>
             ) : null}
           </header>

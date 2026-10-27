@@ -76,6 +76,8 @@ import { toDTO, toSummary, type StoredProvenance } from "@/lib/roofDiagram/dto";
 import type { MeasurementProvenance, MeasurementSource, RoofMeasurementDTO, RoofMeasurementSummary } from "@/lib/roofDiagram/types";
 import { takeTrialCap } from "@/lib/trialMeter";
 import { takeRoofOrderCap } from "@/lib/paidCaps";
+import { enforcePlanLimit } from "@/lib/limitsEngine";
+import { isPlanLimitError, PLAN_LIMIT_MESSAGE, type LimitKey } from "@/lib/planLimits";
 import { requirePage } from "@/lib/customPageAccess";
 
 type MeasureResult =
@@ -108,6 +110,9 @@ type MeasureResult =
       addressNotFound?: boolean;
       /** The last area order never arrived and was closed (lib/instantOrderExpiry): only a new, billed lookup measures it. */
       expired?: boolean;
+      /** The plan's monthly roof measurements are used (limitsEngine "roofMeasurements") — the plan dialog. */
+      code?: "PLAN_LIMIT_REACHED";
+      resource?: LimitKey;
       debug?: Record<string, unknown>;
     };
 
@@ -461,6 +466,9 @@ async function obtainInstant(input: EvOrderInput, organizationId: string, forceN
   // and it is paid — 30 a day per company, a "measure again" 5 of those.
   // Everything above (a roof already measured, an order collected) is free
   // and never reaches this line.
+  // THE PLAN'S MONTH (owner, 2026-10-26 — audit §1): a paid measurement is
+  // one of the plan's roofMeasurements; the daily ceiling below still holds.
+  await enforcePlanLimit(organizationId, "roofMeasurements");
   const cap = await takeRoofOrderCap(organizationId, forceNewOrder);
   if (!cap.ok) throw new RoofCapError(cap.error);
   const skip = forceNewOrder && hasAll ? [] : [...have, ...stillPending];
@@ -1110,6 +1118,11 @@ export async function measureRoofInstant(
     if (err instanceof RoofCapError) {
       await trial.refund();
       return { ok: false, error: err.message, capped: true };
+    }
+    // The plan's monthly measurements are used: nothing was ordered.
+    if (isPlanLimitError(err)) {
+      await trial.refund();
+      return { ok: false, error: PLAN_LIMIT_MESSAGE, code: "PLAN_LIMIT_REACHED", resource: "roofMeasurements" };
     }
     // Nothing was measured: the address goes back to the person (no Google
     // fallback — it would measure whatever Google makes of the same words).

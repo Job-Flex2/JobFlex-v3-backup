@@ -63,7 +63,7 @@ import { PasswordlessStep } from "./passwordless-step";
 import { autoPlanFor, type AutoPlanOffer } from "@/lib/signupAutoPlan";
 import { rememberOtpDraft, rememberSignupMode, type SignupMode } from "@/lib/signupMode";
 import { forgetOtpDraft, otpPendingState } from "@/actions/signupOtp";
-import { SPOTLIGHT, SPOTLIGHT_MISSING, SPOTLIGHT_TAG, spotlightLine, spotlightRow, withSpotlightFirst, type SpotlightTool } from "@/lib/planSpotlight";
+import { SPOTLIGHT, SPOTLIGHT_MISSING, SPOTLIGHT_TAG, spotlightInPlan, spotlightLine, spotlightRow, withSpotlightFirst, type SpotlightTool } from "@/lib/planSpotlight";
 import type { OtpRestore } from "@/lib/signupOtp";
 import {
   applySignupPromo,
@@ -2340,8 +2340,9 @@ export function RegisterContent({
                     ) : null}
                     <span className="pw-feats" data-plan-feats>
                       {featureRows.map((f) => {
-                        const included = has.has(f.toLowerCase());
                         const lit = spotRow !== null && f === spotRow;
+                        // The tool the visitor came for is in the plan when its gate says so, whatever the line reads (lib/planSpotlight).
+                        const included = lit && spotlight ? spotlightInPlan(spotlight, p) : has.has(f.toLowerCase());
                         return (
                           <span key={f} className={(included ? "pw-f" : "pw-f pw-f--no") + (lit ? " pw-f--spot" : "")} data-plan-spot-row={lit ? (included ? "in" : "out") : undefined}>
                             <svg className="ic">

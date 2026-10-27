@@ -245,3 +245,10 @@ export function jobScheduledLine(title: string, when: string, where: string | nu
 export function replyForwardLine(who: string, what: string, body: string): string {
   return `${who}${what ? ` (${what})` : ""} texted: "${clip(body, 200)}"`;
 }
+
+/** JobFlex's own texts — billing and payment-failure notices ("jobflex-…"), sign-in/verification codes, the answer
+ *  to HELP. They pass the monthly allowance stop (lib/sms/send); a company's own texts — to clients, follow-ups,
+ *  campaigns, team notices — stop there. */
+export function isSystemText(kind: string): boolean {
+  return kind === "help" || kind === "verify" || kind.startsWith("jobflex-");
+}

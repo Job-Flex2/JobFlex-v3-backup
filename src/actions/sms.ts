@@ -19,6 +19,7 @@ import { isTwilioEnabled } from "@/lib/sdk/twilio";
 import { leadTextsOnText, testText, welcomeText } from "@/lib/sms/format";
 import { checkVerifyCode, sendVerifyCode } from "@/lib/sms/verify";
 import { PLAN_ENDED_TEXT_MESSAGE, sendText, TRIAL_TEXT_MESSAGE } from "@/lib/sms/send";
+import { SMS_ALLOWANCE_MESSAGE } from "@/lib/planLimits";
 import { refreshRegistration, releaseRegistration, submitRegistration } from "@/lib/sms/registration";
 import type { SmsRegistrationDetails } from "@/lib/sms/registrationShared";
 import { SMS_GROUPS, audienceForRole, parseNotificationPrefs, textEventsFor, type PrefCells, type PrefKey, type SmsGroupKey } from "@/lib/notificationPrefsShared";
@@ -175,7 +176,7 @@ async function sendTestTextInner(): Promise<SmsActionResult> {
   if (!await isTwilioEnabled()) return { ok: false, error: "Texting is not set up on this server." };
   const org = await db.organization.findUnique({ where: { id: organizationId }, select: { name: true } });
   const r = await sendText({ organizationId, to: me.smsPhone, body: testText(org?.name ?? null), kind: "test" });
-  if (!r.ok) return { ok: false, error: r.reason === "duplicate" ? "A test just went out — give it a minute." : r.reason === "opted-out" ? "That number replied STOP." : r.reason === "trial" ? TRIAL_TEXT_MESSAGE : r.reason === "plan-ended" ? PLAN_ENDED_TEXT_MESSAGE : "Couldn't send. Try again in a moment." };
+  if (!r.ok) return { ok: false, error: r.reason === "duplicate" ? "A test just went out — give it a minute." : r.reason === "opted-out" ? "That number replied STOP." : r.reason === "trial" ? TRIAL_TEXT_MESSAGE : r.reason === "plan-ended" ? PLAN_ENDED_TEXT_MESSAGE : r.reason === "allowance" ? SMS_ALLOWANCE_MESSAGE : "Couldn't send. Try again in a moment." };
   return { ok: true, note: `Test text sent to ${pretty(me.smsPhone)}.` };
 }
 

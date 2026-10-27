@@ -17,6 +17,7 @@
 // schema change), so the Subscription page keeps marking it for the trial.
 
 import { deckAddonPriceWords } from "@/lib/deckAddon";
+import { CUSTOM_PLAN_SLUG, type CustomPageId } from "@/lib/customPlan";
 
 export type SpotlightTool = "roof" | "hvac" | "fence" | "smart" | "blueprint" | "aidesk" | "deck";
 
@@ -109,3 +110,26 @@ export function spotlightLine(tool: SpotlightTool, listed: boolean): string {
 
 export const SPOTLIGHT_TAG = "The tool you came for";
 export const SPOTLIGHT_MISSING = "Not in this plan";
+
+/** The page each tool opens (lib/customPlan CUSTOM_PAGES; the blueprint estimator is Smart Proposal's). */
+const SPOTLIGHT_PAGE: Record<SpotlightTool, CustomPageId> = {
+  roof: "roof-estimator",
+  hvac: "hvac-estimator",
+  fence: "fence-estimator",
+  smart: "smart-proposal",
+  blueprint: "smart-proposal",
+  aidesk: "phone",
+  deck: "deck-estimator",
+};
+
+/**
+ * IS THE TOOL IN THIS PLAN — read off the real gates, never the card's text (owner, 2026-10-26 — audit §7). Every
+ * catalog plan opens every page (lib/customPageAccess: readCustomPages is null off the Custom plan), so the tool is
+ * in Starter, Professional and Advanced alike. "Not in this plan" is only ever Deck Studio — an add-on, never a
+ * plan's (lib/editions hasEdition) — and a Custom plan's page it did not buy. The feature lines stay display.
+ */
+export function spotlightInPlan(tool: SpotlightTool, plan: { slug: string; customPages?: readonly string[] | null }): boolean {
+  if (isAddOnTool(tool)) return false;
+  if (plan.slug.toLowerCase() !== CUSTOM_PLAN_SLUG) return true;
+  return Boolean(plan.customPages?.includes(SPOTLIGHT_PAGE[tool]));
+}

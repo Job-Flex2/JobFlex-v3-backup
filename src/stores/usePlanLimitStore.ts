@@ -11,7 +11,9 @@ interface PlanLimitState {
   open: boolean;
   resource: LimitKey | null;
   trial: TrialCapHit | null;
-  openLimit: (resource?: LimitKey | null, trial?: TrialCapHit | null) => void;
+  /** The month's texts are used (planLimits smsAllowanceFailure) — no LimitKey names them. */
+  sms: boolean;
+  openLimit: (resource?: LimitKey | null, trial?: TrialCapHit | null, sms?: boolean) => void;
   close: () => void;
 }
 
@@ -19,7 +21,8 @@ export const usePlanLimitStore = create<PlanLimitState>((set) => ({
   open: false,
   resource: null,
   trial: null,
-  openLimit: (resource, trial) => set({ open: true, resource: resource ?? null, trial: trial ?? null }),
+  sms: false,
+  openLimit: (resource, trial, sms) => set({ open: true, resource: resource ?? null, trial: trial ?? null, sms: sms === true }),
   close: () => set({ open: false }),
 }));
 
@@ -55,7 +58,7 @@ export function reportPlanLimit(err: unknown): boolean {
  */
 export function reportPlanLimitResult(res: unknown): boolean {
   if (!isPlanLimitFailure(res)) return false;
-  usePlanLimitStore.getState().openLimit(res.resource ?? null, trialHitOf(res));
+  usePlanLimitStore.getState().openLimit(res.resource ?? null, trialHitOf(res), res.smsAllowance === true);
   return true;
 }
 

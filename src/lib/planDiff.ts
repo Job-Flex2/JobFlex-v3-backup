@@ -8,6 +8,14 @@
 // "Everything in <plan>" rolls up the way lib/planCatalog.expandPlanFeatures
 // rolls it up, so Enterprise reads as including Starter's basics and the diff
 // against Starter is only what Enterprise actually adds.
+//
+// NOTHING OPENS OR CLOSES BETWEEN TWO CATALOG PLANS (owner, 2026-10-26 —
+// audit §7). The feature lines are display; access is the gates', and every
+// catalog plan opens every page and estimator (lib/customPageAccess). Only
+// Deck Studio (an add-on, lib/editions hasEdition — untouched by a plan
+// change) and a Custom plan's unbought pages are ever "Not in this plan", so
+// a change between catalog plans lists no lock and no new line. From no plan
+// (or the Custom plan, which has no catalog row) the target's lines open.
 
 import { expandPlanFeatures } from "@/lib/planCatalog";
 
@@ -34,15 +42,12 @@ const has = (set: Set<string> | undefined, label: string) => Boolean(set?.has(la
  * row) reads as "nothing yet": every feature of the target opens.
  */
 export function planDiff(plans: PlanLike[], fromSlug: string | null, toSlug: string): PlanDiff {
-  const { rows, included } = expandPlanFeatures(plans);
   const from = fromSlug ? (plans.find((p) => p.slug === fromSlug) ?? null) : null;
   const to = plans.find((p) => p.slug === toSlug) ?? null;
-  const fromSet = from ? included.get(from.slug) : undefined;
+  if (from && to) return { opens: [], closes: [] };
+  const { rows, included } = expandPlanFeatures(plans);
   const toSet = to ? included.get(to.slug) : undefined;
-  return {
-    opens: rows.filter((r) => has(toSet, r) && !has(fromSet, r)),
-    closes: rows.filter((r) => has(fromSet, r) && !has(toSet, r)),
-  };
+  return { opens: rows.filter((r) => has(toSet, r)), closes: [] };
 }
 
 /** "$79" — whole dollars, the way every plan surface prints a price. */

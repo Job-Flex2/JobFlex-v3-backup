@@ -854,7 +854,8 @@ export const TEXTS_COPY = {
   quietTo: 'Until',
   testText: 'Send me a test text',
   usage: (n: number, allowance: number) => `${n} of ${allowance} texts this month`,
-  overage: 'Beyond the allowance, texts are billed through at 3¢ each.',
+  // A soft stop, nothing billed (owner, 2026-10-26 — lib/sms/send).
+  allowanceNote: 'At the allowance, texts stop until next month — upgrade for more.',
   clientsTitle: 'Text clients',
   clientsSub: 'The proposal link the moment it is sent, and a reminder the evening before a visit — signed with your company name, with the STOP line.',
   clientsOn: 'On',

@@ -7,6 +7,7 @@ import type { InvestorPitch } from "@/lib/investorPitch";
 import { askLines, splitLines } from "@/lib/investorPitchShared";
 import { MAX_LEAD_PRICE_CENTS, MIN_LEAD_PRICE_CENTS } from "@/lib/leadCenter/purchase";
 import { DESK_PACK } from "@/lib/aiDesk/shared";
+import { storedTrialOffer } from "@/lib/trialOffer";
 import { CAVEAT_LABEL, COMPARE_COMPETITORS, COMPARE_ROWS } from "@/components/v3/landing-e/landing-compare";
 import type { PitchData } from "@/components/v3/investor-deck/pitch-deck";
 
@@ -33,7 +34,8 @@ export function buildPitchData(token: string, report: InvestorReport, plans: rea
     plans: plans
       .filter((p) => p.active && !p.isFree)
       .sort((a, b) => a.order - b.order)
-      .map((p) => ({ name: p.name, priceCents: p.priceCents, yearlyPriceCents: p.yearlyPriceCents, trialDays: p.trialDays, highlight: p.highlight, features: p.features })),
+      // The trial is the sign-up's offer for every plan (lib/trialOffer), never the unused PricingPlan.trialDays.
+      .map((p) => ({ name: p.name, priceCents: p.priceCents, yearlyPriceCents: p.yearlyPriceCents, trialDays: storedTrialOffer().days, highlight: p.highlight, features: p.features })),
     compare: {
       competitors: COMPARE_COMPETITORS,
       rows: COMPARE_ROWS.map((r) => ({ id: r.id, label: r.label, detail: r.detail, them: r.them })),

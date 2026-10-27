@@ -34,6 +34,8 @@ export const USAGE_ACCESS_PAGES: Partial<Record<LimitKey, readonly CustomPageId[
   aiPhoneCalls: ["phone"],
   deskMinutes: ["phone"],
   hvacEstimates: ["hvac-estimator"],
+  roofMeasurements: ["roof-estimator"],
+  manualJReports: ["hvac-estimator"],
   estimatorUses: ["smart-proposal", "roof-estimator", "fence-estimator", "hvac-estimator", "video-estimator", "deck-estimator"],
 };
 

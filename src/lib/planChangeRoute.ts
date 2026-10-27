@@ -7,7 +7,11 @@
 //   MONTH → YEAR                     → "charge"   (invoiced today, the unused month credited,
 //                                                  the cycle restarts today) — "checkout"
 //                                                  for a subscription of several lines (custom)
-//   same term, up by tier            → "checkout" (paid on Stripe's page — the 2026-09-02 rule)
+//   same term, up by tier            → "charge"   (the difference invoiced today, the unused
+//                                                  days credited, the cycle kept — owner,
+//                                                  2026-10-26, audit §2; until then Stripe's
+//                                                  page, which credited nothing) — "checkout"
+//                                                  for a subscription of several lines (custom)
 //   same term, dearer, not up by tier→ "charge"   (one line only; else "free")
 //   same term, otherwise             → "free"     (switched now, nothing charged or refunded)
 
@@ -30,6 +34,6 @@ export function changeRoute(o: {
   if (o.trialing) return "trial";
   if (o.from === "YEAR" && o.to === "MONTH") return "schedule";
   if (o.from === "MONTH" && o.to === "YEAR") return o.lines > 1 ? "checkout" : "charge";
-  if (o.rankTo > o.rankFrom) return "checkout";
+  if (o.rankTo > o.rankFrom) return o.lines > 1 ? "checkout" : "charge";
   return o.targetCents > o.currentCents && o.lines === 1 ? "charge" : "free";
 }

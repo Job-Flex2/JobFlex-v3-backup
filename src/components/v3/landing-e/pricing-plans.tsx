@@ -6,7 +6,7 @@ import { expandPlanFeatures, type PlanDTO } from "@/lib/planCatalog";
 import { rowUsage } from "@/lib/planRowUsage";
 import { annualDeal, offersYearly, sharedDealWords, withBillingTerm, type BillingTerm } from "@/lib/planDeal";
 import { PlanCardHead, PlanDealSlot, PlanPrice, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
-import { SPOTLIGHT, SPOTLIGHT_MISSING, SPOTLIGHT_TAG, spotlightLine, spotlightRow, withSpotlightFirst, type SpotlightTool } from "@/lib/planSpotlight";
+import { SPOTLIGHT, SPOTLIGHT_MISSING, SPOTLIGHT_TAG, spotlightInPlan, spotlightLine, spotlightRow, withSpotlightFirst, type SpotlightTool } from "@/lib/planSpotlight";
 import { deckAddonShortWords } from "@/lib/deckAddon";
 import "./pricing-faq.css";
 
@@ -215,8 +215,9 @@ export function PricingPlans({
               <PlanDealSlot term={term} monthlyCents={p.priceCents} yearlyCents={p.yearlyPriceCents} />
               <ul className="lp-pw-feats" data-plan-feats>
                 {rows.map((f) => {
-                  const on = has.has(f.toLowerCase());
                   const lit = spot !== null && f === spot;
+                  // The tool the visitor came for is in the plan when its gate says so, whatever the line reads (lib/planSpotlight).
+                  const on = lit && spotlight ? spotlightInPlan(spotlight, p) : has.has(f.toLowerCase());
                   return (
                     <li key={f} className={(on ? "lp-pw-f" : "lp-pw-f lp-pw-f--no") + (lit ? " lp-pw-f--spot" : "")} data-plan-spot-row={lit ? (on ? "in" : "out") : undefined}>
                       {on ? <Check /> : <Minus />}

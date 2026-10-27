@@ -24,6 +24,8 @@ import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { updateClient } from "@/actions/clients";
 import { clientChannels, messageClient, type ClientChannel } from "@/actions/clientMessage";
+import { isPlanLimitFailure } from "@/lib/planLimits";
+import { reportPlanLimitResult } from "@/stores/usePlanLimitStore";
 import { closeMdl, openMdl } from "@/components/v3/blueprint-shell/mdl-motion";
 import { joinAddress } from "./client-detail-data";
 import { ClampedName, Ic, cx } from "./cd-ui";
@@ -509,6 +511,11 @@ export function ClientMessageDialog({
     setError(null);
     try {
       const res = await messageClient({ clientId, channel, subject, body });
+      // The month's texts are used: the plan dialog says so (lib/sms/send).
+      if (isPlanLimitFailure(res)) {
+        reportPlanLimitResult(res);
+        return;
+      }
       // `delivered: false` means the transport is switched off in this
       // environment and the message went to a server log. Saying "Sent" there
       // would be a lie the contractor only discovers from the client.

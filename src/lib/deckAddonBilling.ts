@@ -30,6 +30,7 @@ import { ensureRecurringPrice } from "@/lib/stripePriceCache";
 import { readScheduledSwitch } from "@/lib/planChange";
 import { onFreePlan } from "@/lib/freePlan";
 import { customDeckPageHeld } from "@/lib/customPageAccess";
+import { hasFullAccess } from "@/lib/fullAccess";
 import {
   DECK_ADDON_KIND,
   DECK_ADDON_NAME,
@@ -90,6 +91,7 @@ export type DeckAddonFailure = "no-subscription" | "unreachable" | "not-live" | 
 
 /** A Custom plan that bought the Deck estimator page holds the studio: never a second add-on line (owner, 2026-10-20). */
 export const CUSTOM_INCLUDED_WORDS = "Included in your Custom plan.";
+const ADMIN_INCLUDED_WORDS = "Deck Studio is open to platform admins in every company.";
 
 const NO_PAID_PLAN = "Deck Studio goes on a paid plan. Pick a plan on Subscription first, then add it here.";
 
@@ -272,9 +274,9 @@ export interface DeckAddonOffer {
   trialing: boolean;
   /** When the trial ends (ISO), while it runs. */
   trialEndsAt: string | null;
-  /** The studio is open without the add-on: the free trial, a complimentary plan, or the Custom plan's deck page
-   *  (lib/editions). */
-  included: "trial" | "grant" | "custom" | null;
+  /** The studio is open without the add-on: the free trial, a complimentary plan, the Custom plan's deck page, or a
+   *  platform admin (lib/editions). */
+  included: "trial" | "grant" | "custom" | "admin" | null;
 }
 
 /** What adding it would cost, before it is added. */
@@ -295,6 +297,8 @@ export async function deckAddonOffer(organizationId: string): Promise<DeckAddonO
     included: null,
   };
   if (record) return { ...base, interval: record.interval, termCents: record.cents ?? deckAddonCents(record.interval) };
+  // A platform admin has the whole studio in any company (lib/editions hasEdition): nothing to sell them.
+  if (await hasFullAccess(organizationId).catch(() => false)) return { ...base, included: "admin", reason: ADMIN_INCLUDED_WORDS };
   // A complimentary plan holds the studio (lib/editions): nothing to add.
   if (row?.provider === "MANUAL" && !onFreePlan(row)) return { ...base, included: "grant", reason: "Deck Studio is included in your complimentary plan." };
   // The Custom plan's deck page, bought: the add-on as a page — it outlasts the trial, so it is said before it.
@@ -341,6 +345,8 @@ export async function deckAddonPick(organizationId: string): Promise<DeckAddonPi
   const trialing = !free && row?.status === "TRIALING";
   const record = free ? null : await readHeldDeckAddon(organizationId, row?.externalSubId ?? null);
   if (record) return { offer: false, held: { words: deckAddonHeldWords(record.cents, record.interval), interval: record.interval }, included: null, trialing };
+  // A platform admin has the whole studio already (lib/editions hasEdition): no box to tick.
+  if (await hasFullAccess(organizationId).catch(() => false)) return { offer: false, held: null, included: "admin", trialing };
   if (row && !free && row.provider === "MANUAL") return { offer: false, held: null, included: "grant", trialing };
   if (row && !free && (await customDeckPageHeld(organizationId, row.plan))) return { offer: false, held: null, included: "custom", trialing };
   return { offer: true, held: null, included: null, trialing };

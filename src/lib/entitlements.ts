@@ -52,15 +52,15 @@ export const MINIMUM_PLAN_FOR: Record<Feature, Plan> = {
   white_label: "FREE",
 };
 
-/** Texts a company sends each month within its plan (2026-09-24); beyond it
- *  texts still go and are billed through at SMS_OVERAGE_CENTS each. */
+/** Texts a company sends each calendar month (UTC) within its plan (2026-09-24).
+ *  At the allowance texting stops until the next month — a soft stop, nothing
+ *  is billed (owner, 2026-10-26; lib/sms/send). */
 export const SMS_ALLOWANCE: Record<Plan, number> = {
   FREE: 50,
   STARTER: 250,
   PROFESSIONAL: 1000,
   ENTERPRISE: 4000,
 };
-export const SMS_OVERAGE_CENTS = 3;
 export function smsAllowanceFor(plan: Plan | string | null | undefined): number {
   // Subscription.plan as stored may be lower-case or "CUSTOM"; the custom plan
   // rides on Professional (lib/customPlan CUSTOM_PLAN_TIER).

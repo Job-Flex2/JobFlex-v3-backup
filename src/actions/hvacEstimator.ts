@@ -519,7 +519,7 @@ export async function hvacPermitStatus(): Promise<{ enabled: boolean }> {
 /** Create the Cool Calc project and system for a saved estimate (once), so
  *  the contractor finishes the envelope in Cool Calc and the report can be
  *  pulled back. Idempotent: a second call answers the existing ids. */
-export async function requestHvacPermitReport(raw: unknown): Promise<{ ok: true; permit: HvacPermit; appUrl: string } | { ok: false; error: string }> {
+export async function requestHvacPermitReport(raw: unknown): Promise<{ ok: true; permit: HvacPermit; appUrl: string } | Fail> {
   const parsed = z.object({ estimateId: z.string() }).safeParse(raw);
   if (!parsed.success) return { ok: false, error: "Save the estimate first." };
   const { organizationId } = await requireEstimatorOrManager();
@@ -539,6 +539,10 @@ export async function requestHvacPermitReport(raw: unknown): Promise<{ ok: true;
   // THE CEILINGS (lib/paidCaps, 2026-10-12): a new report is a paid credit —
   // 20 an hour and 30 a day per company; the answer above (a report already
   // made) is free and never counted. A refusal is said, not thrown.
+  // THE PLAN'S MONTH first (owner, 2026-10-26 — audit §1): a new report is one
+  // of the plan's manualJReports; the plan dialog says so.
+  const spent = await limitBlocked(organizationId, ["manualJReports"]);
+  if (spent) return spent;
   const cap = await takeHvacReportCap(organizationId);
   if (!cap.ok) return cap;
   // A new system is a Cool Calc report credit: the card-less trial's own

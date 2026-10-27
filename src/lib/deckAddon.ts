@@ -121,8 +121,9 @@ export interface DeckAddonPick {
   offer: boolean;
   /** On the plan: what it costs ("$49/mo (your price)" for a line bought before 2026-10-26) and its term. */
   held: { words: string; interval: AddonInterval } | null;
-  /** The studio is open without it: a complimentary plan, or the Custom plan's deck page. */
-  included: "grant" | "custom" | null;
+  /** The studio is open without it: a complimentary plan, the Custom plan's deck page, or a platform admin
+   *  (lib/fullAccess — the studio is always whole for them, lib/editions). */
+  included: "grant" | "custom" | "admin" | null;
   /** In a trial — the box says "Included in your trial, billed after it". */
   trialing: boolean;
 }

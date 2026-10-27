@@ -12,6 +12,7 @@ import { twilioSettings } from "@/lib/sdk/twilio";
 import { jobflexSender } from "@/lib/sms/jobflexSender";
 import { getPlanCatalog } from "@/lib/planCatalogServer";
 import { formatPlanPrice } from "@/lib/planCatalog";
+import { storedTrialOffer } from "@/lib/trialOffer";
 import { signCallToken, voiceServerConfigured, voiceStreamUrl, type CallToken } from "@/lib/aiDesk/voiceToken";
 import { isEmailEnabled, sendEmail } from "@/lib/sdk/resend";
 import { readOptOut, unsubscribeHeaders, unsubscribeUrl } from "@/lib/adminMail/optout";
@@ -379,7 +380,8 @@ export async function outreachStatus(id: string, params: Record<string, string>)
 async function scriptFacts(): Promise<ScriptFacts> {
   const plans = await getPlanCatalog().catch(() => []);
   const onSale = plans.filter((x) => x.active && !x.isFree).sort((a, b) => a.order - b.order);
-  return { plans: onSale.map((x) => ({ name: x.name, price: formatPlanPrice(x.priceCents) })), trialDays: Math.max(0, ...onSale.map((x) => x.trialDays)) || 7, canTransfer: !!transferTo(), site: SITE };
+  // The trial is the sign-up's offer (lib/trialOffer), never the unused PricingPlan.trialDays (2026-10-26).
+  return { plans: onSale.map((x) => ({ name: x.name, price: formatPlanPrice(x.priceCents) })), trialDays: storedTrialOffer().days, canTransfer: !!transferTo(), site: SITE };
 }
 
 export async function outreachBrief(t: CallToken): Promise<{ ok: true; instructions: string; voice: string; maxSeconds: number; callSid: string; tools: ReturnType<typeof outreachTools> } | { ok: false; error: string }> {
