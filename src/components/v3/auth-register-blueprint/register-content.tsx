@@ -56,7 +56,6 @@ import { GoogleOneTap } from "@/components/auth/google-one-tap";
 import { OpenInBrowser } from "@/components/auth/open-in-browser";
 import { useInAppBrowser } from "@/components/auth/use-in-app-browser";
 import type { InAppBrowser } from "@/lib/inAppBrowser";
-import { trackMetaLeadOnce } from "@/lib/metaLead";
 import { RegisterSprite } from "./register-sprite";
 import { ReferralBanner, type RegisterAttribution } from "./referral-banner";
 import { PasswordlessStep } from "./passwordless-step";
@@ -1355,7 +1354,6 @@ export function RegisterContent({
       setChecking(false);
     }
     step1Outcome("continue");
-    trackMetaLeadOnce(); // Meta Lead: step 1 passed with an address (lib/metaLead)
     if (twoStep) {
       /* The company's part of the one step: the business name and the
          trades are checked and the pending signup starts right here. */
