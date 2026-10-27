@@ -10,7 +10,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { appBaseUrl } from "@/lib/appUrl";
-import { NoOrgError, UnauthorizedError, requireEstimatorOrManager, requireManager, requirePlatformAdmin } from "@/lib/orgContext";
+import { NoOrgError, UnauthorizedError, isOwnerRole, requireEstimatorOrManager, requireManager, requireOrg, requirePlatformAdmin } from "@/lib/orgContext";
+import { dollars, webAddonPriceWords, webModeBills, type AddonInterval, type WebAddonLine, type WebBillingMode } from "@/lib/webAddon";
+import { addWebAddon, quoteWebAddon as quoteWebLine, removeWebAddon, webAddonLines, webBilling, webTradeLive } from "@/lib/webAddonBilling";
 import { HOUR, MINUTE, RateLimitError, clientIp, enforceRateLimit } from "@/lib/rateLimit";
 import { noteRequestOrg } from "@/lib/trialMeter";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
@@ -66,6 +68,17 @@ export interface WebEstimatorView {
   admin: boolean;
   /** The owner's switch: false = platform admins only (nothing billed), true = every account. */
   open: boolean;
+  /** The money (lib/webAddon): how this shop pays and which lines it holds. */
+  billing: WebBillingView;
+}
+
+export interface WebBillingView {
+  mode: WebBillingMode;
+  interval: AddonInterval;
+  trialEndsAt: string | null;
+  held: Partial<Record<WebTrade, WebAddonLine>>;
+  /** The account owner: the one who may put a line on the plan or take one off. */
+  owner: boolean;
 }
 
 export async function loadWebEstimator(): Promise<{ ok: true; view: WebEstimatorView } | Fail> {
@@ -78,20 +91,77 @@ export async function loadWebEstimator(): Promise<{ ok: true; view: WebEstimator
   ]);
   if (!open && !admin) return { ok: false, error: DENIED };
   const choices = Object.fromEntries(WEB_TRADES.map((t) => [t, webTradeAllChoices(t)])) as Record<WebTrade, WebChoice[]>;
-  return { ok: true, view: { settings, slug: org?.slug ?? "", base: await appBaseUrl(), counts, choices, canEdit: true, admin, open } };
+  const billing = { ...(await webBilling(ctx.organizationId, open)), owner: isOwnerRole(ctx.role) };
+  return { ok: true, view: { settings, slug: org?.slug ?? "", base: await appBaseUrl(), counts, choices, canEdit: true, admin, open, billing } };
 }
 
-export async function saveWebEstimator(raw: unknown): Promise<{ ok: true; settings: WebEstimatorSettings } | Fail> {
+const tradeLabel = (t: WebTrade) => WEB_TRADE[t].name.replace(" on your website", "");
+
+/** Save the settings — and, with the feature open, RECONCILE THE PLAN (lib/webAddon): a trade on means its line on
+ *  the subscription, off means off it. A line that can't go on leaves that trade off and says why; what happened to
+ *  the money comes back in `notes`. */
+export async function saveWebEstimator(raw: unknown): Promise<{ ok: true; settings: WebEstimatorSettings; billing: WebBillingView; notes: string[]; errors: string[] } | Fail> {
   let ctx;
   try { ctx = await requireManager(); } catch (err) { if (err instanceof UnauthorizedError || err instanceof NoOrgError) return { ok: false, error: DENIED }; throw err; }
   const [admin, open] = await Promise.all([platformAdmin(), webEstimatorOpen()]);
   if (!open && !admin) return { ok: false, error: "The website estimators are in preview — a JobFlex admin turns them on for now." };
   const settings = normalizeWebEstimatorSettings(raw);
+  const notes: string[] = [];
+  const errors: string[] = [];
+  const owner = isOwnerRole(ctx.role);
+  let billing = await webBilling(ctx.organizationId, open);
+  if (open) {
+    const before = await readWebSettings(ctx.organizationId);
+    for (const t of WEB_TRADES) {
+      const want = settings.trades[t].on;
+      const held = !!billing.held[t];
+      const label = tradeLabel(t);
+      if (webModeBills(billing.mode)) {
+        if (want && !held) {
+          if (!owner) { settings.trades[t].on = false; errors.push(`${label}: only the account owner can add it to the plan.`); continue; }
+          const r = await addWebAddon(ctx.organizationId, t);
+          if (!r.ok) { settings.trades[t].on = false; errors.push(`${label}: ${r.error}`); continue; }
+          const words = webAddonPriceWords(r.termCents, r.interval, true);
+          notes.push(
+            r.already ? `${label} is on your plan (${words}).`
+            : r.trialing ? `${label} added — free until your trial ends, then ${words}.`
+            : `${label} added to your plan: ${dollars(r.chargedCents)} charged today for the rest of this period, then ${words}.`,
+          );
+        } else if (!want && held) {
+          if (!owner) { settings.trades[t].on = true; errors.push(`${label}: only the account owner can take it off the plan.`); continue; }
+          const r = await removeWebAddon(ctx.organizationId, t);
+          if (!r.ok) { settings.trades[t].on = true; errors.push(`${label}: ${r.error}`); continue; }
+          notes.push(billing.mode === "trial-card" ? `${label} taken off your plan.` : `${label} taken off your plan; the unused days come back as a credit on your next bill.`);
+        }
+      } else if (want && !before.trades[t].on && (billing.mode === "free" || billing.mode === "offline")) {
+        settings.trades[t].on = false;
+        errors.push(`${label}: ${billing.mode === "free" ? "website estimators go on a paid plan — pick a plan on Subscription first." : "your plan isn't billed to a card here; write to us from Help and we'll add it."}`);
+      }
+    }
+    if (notes.length || errors.length) billing = await webBilling(ctx.organizationId, open);
+  }
   await writeWebSettings(ctx.organizationId, settings);
   const on = WEB_TRADES.filter((t) => settings.trades[t].on).map((t) => PROJECT_TYPE[t]);
   await logActivity({ organizationId: ctx.organizationId, actorId: ctx.user.id, kind: TRAIL_KINDS.SETTINGS, summary: `Website estimators: ${on.length ? on.join(", ") + " on" : "all off"}${settings.domains.length ? ` · sites ${settings.domains.join(", ")}` : ""}` }).catch(() => {});
   revalidatePath("/dashboard/settings");
-  return { ok: true, settings };
+  if (notes.length) await logActivity({ organizationId: ctx.organizationId, actorId: ctx.user.id, kind: TRAIL_KINDS.SETTINGS, summary: `Website estimators on the plan: ${notes.join(" ")}`, meta: { area: "billing", webAddons: true } }).catch(() => {});
+  return { ok: true, settings, billing: { ...billing, owner }, notes, errors };
+}
+
+/** What putting a trade's line on charges today, before it is put on (the card's words when a trade is ticked). */
+export async function quoteWebAddon(trade: unknown): Promise<{ ok: true; dueNowCents: number | null; termCents: number; interval: AddonInterval; trialing: boolean } | Fail> {
+  try { await requireManager(); } catch (err) { if (err instanceof UnauthorizedError || err instanceof NoOrgError) return { ok: false, error: DENIED }; throw err; }
+  if (!isWebTrade(trade)) return { ok: false, error: "No such estimator." };
+  const ctx = await requireManager();
+  if (!(await webEstimatorOpen())) return { ok: true, dueNowCents: 0, termCents: 0, interval: "MONTH", trialing: false };
+  return quoteWebLine(ctx.organizationId, trade);
+}
+
+/** The Subscription page's card: the website lines this shop holds, in words. */
+export async function getWebAddonLines(): Promise<{ ok: true; lines: Awaited<ReturnType<typeof webAddonLines>>; owner: boolean } | Fail> {
+  let ctx;
+  try { ctx = await requireOrg(); } catch (err) { if (err instanceof UnauthorizedError || err instanceof NoOrgError) return { ok: false, error: DENIED }; throw err; }
+  return { ok: true, lines: await webAddonLines(ctx.organizationId), owner: isOwnerRole(ctx.role) };
 }
 
 /** The owner's switch (a platform admin): false keeps the feature to admins and unbilled; true opens it to every account. */
@@ -150,7 +220,7 @@ export async function openWebLeadInEstimator(leadId: string): Promise<void> {
 async function liveShop(slug: unknown, trade: unknown): Promise<{ shop: WebShop; trade: WebTrade } | Fail> {
   if (typeof slug !== "string" || !isWebTrade(trade)) return { ok: false, error: "This estimator isn't here." };
   const shop = await webShopBySlug(slug);
-  if (!shop || !shop.settings.trades[trade].on) return { ok: false, error: "This estimator isn't turned on." };
+  if (!shop || !(await webTradeLive(shop.id, trade, shop.settings.trades[trade].on))) return { ok: false, error: "This estimator isn't turned on." };
   return { shop, trade };
 }
 const brake = async (key: string, max: number, windowMs: number, what: string): Promise<string | null> => {
@@ -238,7 +308,7 @@ export async function webLead(slug: unknown, trade: unknown, token: unknown, raw
 export async function webPageModel(slug: string, trade: string, host: string | null) {
   if (!isWebTrade(trade)) return null;
   const shop = await webShopBySlug(slug);
-  if (!shop || !shop.settings.trades[trade].on) return null;
+  if (!shop || !(await webTradeLive(shop.id, trade, shop.settings.trades[trade].on))) return null;
   const base = await appBaseUrl();
   let appHost: string | null = null;
   try { appHost = new URL(base).host; } catch { appHost = null; }

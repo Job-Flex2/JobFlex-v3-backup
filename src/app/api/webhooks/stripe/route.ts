@@ -25,6 +25,7 @@ import { cancelReplacedSubscription } from "@/lib/checkoutReturn";
 import { invoiceSubscriptionId, refId } from "@/lib/stripeCompat";
 import { alertInvoiceFailed, alertInvoicePaid, alertOneTimeCharge } from "@/lib/adminAlertsPayments";
 import { mirrorDeckAddon } from "@/lib/deckAddonBilling";
+import { mirrorWebAddons } from "@/lib/webAddonBilling";
 import { markFailuresRecovered, noteInvoiceFailure } from "@/lib/paymentFailures";
 import { textOwnerPaymentFailed } from "@/lib/billingProblemText";
 
@@ -116,6 +117,8 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
       await confirmSyncingFromStripe(sub).catch((err) => console.warn("[webhook] sync mark:", err));
       // The Deck Studio add-on's line (lib/deckAddonBilling): on the subscription or not, the record follows.
       await mirrorDeckAddon(sub).catch((err) => console.warn("[webhook] deck add-on mirror:", err));
+      // The website estimators' lines (lib/webAddonBilling): the record follows what is on the subscription.
+      await mirrorWebAddons(sub).catch((err) => console.warn("[webhook] website add-on mirror:", err));
       break;
     }
     case "customer.subscription.deleted": {
@@ -131,6 +134,7 @@ async function dispatch(event: Stripe.Event, stripe: Stripe) {
         await syncSubscriptionFromStripe(sub, stripe);
       }
       await mirrorDeckAddon(sub, true).catch((err) => console.warn("[webhook] deck add-on mirror:", err));
+      await mirrorWebAddons(sub, true).catch((err) => console.warn("[webhook] website add-on mirror:", err));
       break;
     }
     // Three days before any trial ends. The mirror follows the subscription

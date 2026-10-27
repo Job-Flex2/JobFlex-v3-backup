@@ -38,3 +38,7 @@
 .btn:disabled { opacity: 0.5; cursor: default; }
 .btnGhost { font: inherit; font-size: 13px; font-weight: 700; padding: 8px 12px; border: 1px solid rgba(11, 13, 18, 0.2); border-radius: 8px; background: #fff; color: #0b0d12; cursor: pointer; text-decoration: none; white-space: nowrap; }
 .btnGhost:disabled { opacity: 0.5; }
+.money { margin-top: 6px; font-size: 13px; line-height: 1.4; color: #0b0d12; padding: 6px 10px; border-radius: 8px; background: #e7eefb; }
+.notes, .errors { margin: 0; padding: 10px 14px 10px 30px; border-radius: 10px; font-size: 14px; line-height: 1.5; }
+.notes { background: #e7f5ec; color: #0b3d1f; }
+.errors { background: #fff3f3; color: #8a1c1c; }

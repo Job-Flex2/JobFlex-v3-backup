@@ -93,6 +93,7 @@ import { MobileUpgradeContent } from "@/components/v3/mobile-upgrade/mobile-upgr
 import type { UpgradePlan } from "@/components/v3/upgrade-blueprint/upgrade-content";
 import "./mobile-subscription.css";
 import { DeckAddonCard } from "@/components/v3/deck-addon/deck-addon";
+import { WebAddonCard } from "@/components/v3/web-estimator/web-addon-card";
 
 /** One enforced-limit row from the limits engine (finite caps only). */
 export interface MobileUsageRow {
@@ -442,6 +443,7 @@ export function MobileSubscription({
 
           {/* The Deck Studio add-on (2026-10-19) — reads its own state. */}
           <DeckAddonCard />
+          <WebAddonCard />
 
           <section className="jfms-card" aria-labelledby="jfmsBillingInfoT">
             <div className="jfms-cardHead">

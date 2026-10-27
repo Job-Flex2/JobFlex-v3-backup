@@ -42,7 +42,8 @@ import { getPlanBySlug, getPlanCatalog } from "@/lib/planCatalogServer";
 import { SubscriptionStatus } from "@/lib/prismaEnums";
 import { subscriptionPeriodEnd, subscriptionPeriodEndDate } from "@/lib/stripeCompat";
 import { CUSTOM_PLAN_SLUG } from "@/lib/customPlan";
-import { DECK_ADDON_KIND, DECK_ADDON_NAME, deckAddonCents, isDeckAddonLine, planLines } from "@/lib/deckAddon";
+import { DECK_ADDON_KIND, DECK_ADDON_NAME, deckAddonCents, isAddonLine, isDeckAddonLine, planLines } from "@/lib/deckAddon";
+import { webAddonPricesFor } from "@/lib/webAddonBilling";
 import { customDeckPageHeld } from "@/lib/customPageAccess";
 import { changeRoute, type BillingTermName, type ChangeRoute } from "@/lib/planChangeRoute";
 import { priceInterval } from "@/lib/priceInterval";
@@ -154,6 +155,9 @@ type Resolved = {
   termCents: number;
   /** The Deck Studio add-on's price at the target term, when it was ticked and no line bills on that term. */
   addonPrice: string | null;
+  /** The website estimators' lines at the target term when the term changes (lib/webAddonBilling): the old term's
+   *  lines come off with the change and these go on with the plan, so a shop keeps its estimators. */
+  webCarry: string[];
 };
 
 /** Where a change goes, or why it can't. "checkout" when Stripe's page has to take it. */
@@ -218,7 +222,8 @@ async function resolve(
     addon && !holdsLine && !(await customDeckPageHeld(organizationId).catch(() => false))
       ? await ensureRecurringPrice({ stripe, mode, kind: DECK_ADDON_KIND, name: DECK_ADDON_NAME, interval, cents: deckAddonCents(interval) })
       : null;
-  return { stripe, mode, sub, priceId, plan, interval, fromInterval, termCents, route, anchorNow: route === "charge" && fromInterval !== interval, addonPrice };
+  const webCarry = fromInterval !== interval ? await webAddonPricesFor(stripe, mode, sub, interval).catch(() => []) : [];
+  return { stripe, mode, sub, priceId, plan, interval, fromInterval, termCents, route, anchorNow: route === "charge" && fromInterval !== interval, addonPrice, webCarry };
 }
 
 /* A FIRST-MONTH CODE ON A TERM CHANGE (2026-10-12, lib/firstMonthDiscount).
@@ -277,9 +282,13 @@ function itemsFor(r: Resolved): Stripe.SubscriptionUpdateParams.Item[] {
   // The Deck Studio add-on stays through a change of plan on the same term. A change of term takes it off — its
   // price is the old term's and Stripe bills one term per subscription — and the webhook takes its record with it
   // (lib/deckAddonBilling mirrorDeckAddon): the studio offers it again at the new term.
-  const addon = r.interval === r.fromInterval ? [] : r.sub.items.data.filter(isDeckAddonLine);
+  // The website estimators' lines come off on a term change the same way — and go on again at the new term (webCarry).
+  const addon = r.interval === r.fromInterval ? [] : r.sub.items.data.filter(isAddonLine);
   // Ticked with the plan: one of the change's items in a trial and on a charge; a "free" switch adds it after.
-  const added = r.addonPrice && (r.route === "trial" || r.route === "charge") ? [{ price: r.addonPrice, quantity: 1 }] : [];
+  const added = [
+    ...(r.addonPrice && (r.route === "trial" || r.route === "charge") ? [{ price: r.addonPrice, quantity: 1 }] : []),
+    ...(r.route === "trial" || r.route === "charge" ? r.webCarry.map((price) => ({ price, quantity: 1 })) : []),
+  ];
   return [{ id: first.id, price: r.priceId, quantity: 1 }, ...[...rest, ...addon].map((i) => ({ id: i.id, deleted: true as const })), ...added];
 }
 
@@ -550,7 +559,7 @@ async function bookSwitch(organizationId: string, r: Resolved): Promise<PlanChan
   const { stripe, sub } = r;
   const end = subscriptionPeriodEnd(sub);
   if (!end) return { ok: false, error: "Couldn't read the end of your paid year. Try again." };
-  const booked = await writeSchedule(stripe, sub, end, r.priceId, metadataFor(r, organizationId), r.addonPrice);
+  const booked = await writeSchedule(stripe, sub, end, r.priceId, metadataFor(r, organizationId), r.addonPrice, r.webCarry);
   if (!booked.ok) return { ok: false, error: "Couldn't book the switch. Try again." };
   const record: ScheduledSwitch = {
     scheduleId: booked.scheduleId, subId: sub.id, planSlug: r.plan.slug, planName: r.plan.name, interval: r.interval, at: new Date(end * 1000).toISOString(), priceId: r.priceId,
@@ -567,6 +576,7 @@ async function writeSchedule(
   priceId: string,
   metadata: Record<string, string>,
   addonPriceId?: string | null,
+  extraPriceIds: readonly string[] = [],
 ): Promise<{ ok: true; scheduleId: string } | { ok: false }> {
   const fresh = await stripe.subscriptions.retrieve(sub.id);
   const existing = typeof fresh.schedule === "string" ? fresh.schedule : fresh.schedule?.id;
@@ -590,7 +600,7 @@ async function writeSchedule(
           end_date: end,
           proration_behavior: "none",
         },
-        { items: [{ price: priceId, quantity: 1 }, ...(addonPriceId ? [{ price: addonPriceId, quantity: 1 }] : [])], proration_behavior: "none", metadata },
+        { items: [{ price: priceId, quantity: 1 }, ...(addonPriceId ? [{ price: addonPriceId, quantity: 1 }] : []), ...extraPriceIds.map((price) => ({ price, quantity: 1 }))], proration_behavior: "none", metadata },
       ],
     });
     return { ok: true, scheduleId: schedule.id };
