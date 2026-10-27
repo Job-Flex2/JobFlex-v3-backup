@@ -168,7 +168,7 @@
 :global(.jf-blueprint .content) .stepFoot:has(> [hidden]) { display: none; }
 :global(.jf-blueprint .content) .stepNext {
   display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 14px; cursor: pointer;
-  border: 1.5px solid var(--step-c, var(--ink)); border-radius: 999px; background: #fff; color: var(--step-c, var(--ink));
+  border: 1.5px solid var(--step-c, var(--ink)); border-radius: var(--radius, 2px); background: #fff; color: var(--step-c, var(--ink));
   font-family: var(--font); font-size: 11.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
   transition: background 0.15s, color 0.15s, transform 0.15s var(--ease);
 }
@@ -581,7 +581,7 @@
 .wallPadSep { flex: 1 1 100%; height: 0; }
 .wallPadBtn, :global(.jf-blueprint .content) .wallPadBtn {
   display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 11px; cursor: pointer;
-  border: 1.5px solid var(--hair); border-radius: 999px; background: #fff; color: var(--ink);
+  border: 1.5px solid var(--ink); border-radius: var(--radius, 2px); background: #fff; color: var(--ink);
   font-family: var(--font); font-size: 11.5px; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap; user-select: none; touch-action: manipulation;
   transition: border-color 0.12s, background 0.12s, color 0.12s;
 }
@@ -589,7 +589,7 @@
 .wallPadBtn:active, :global(.jf-blueprint .content) .wallPadBtn:active { background: color-mix(in srgb, var(--step-c, var(--blueprint)) 12%, #fff); }
 .wallPadBtn:focus-visible, :global(.jf-blueprint .content) .wallPadBtn:focus-visible { outline: 2px solid var(--step-c, var(--blueprint)); outline-offset: 2px; }
 .wallPadBtn[disabled], :global(.jf-blueprint .content) .wallPadBtn[disabled] { opacity: 0.4; cursor: default; pointer-events: none; }
-.wallPadBtnPrimary, :global(.jf-blueprint .content) .wallPadBtnPrimary { background: var(--step-c, var(--blueprint)); border-color: var(--step-c, var(--blueprint)); color: #fff; }
+.wallPadBtnPrimary, :global(.jf-blueprint .content) .wallPadBtnPrimary { background: var(--step-c, var(--blueprint)); border-color: var(--ink); color: #fff; }
 .wallPadBtnPrimary:hover, :global(.jf-blueprint .content) .wallPadBtnPrimary:hover { color: #fff; background: color-mix(in srgb, var(--step-c, var(--blueprint)) 82%, #000); }
 .wallFix, :global(.jf-blueprint .content) .wallFix { flex: 1 1 100%; display: grid; gap: 6px; margin-top: 4px; padding: 8px 10px; border-left: 3px solid var(--warning); background: var(--warning-soft); font-size: 12px; line-height: 1.45; color: var(--ink-soft); }
 .wallFixBtns, :global(.jf-blueprint .content) .wallFixBtns { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -605,8 +605,8 @@
 .wallYardPan:active { cursor: grabbing; }
 .wallPart { cursor: move; }
 /* Zoom, on the large drawings */
-.wallZoom, :global(.jf-blueprint .content) .wallZoom { position: absolute; right: 8px; top: 8px; display: flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid var(--hair); border-radius: 999px; background: rgba(255, 255, 255, 0.94); box-shadow: 0 4px 14px -8px rgba(10, 10, 10, 0.35); }
-.wallZoomBtn, :global(.jf-blueprint .content) .wallZoomBtn { min-width: 30px; height: 30px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; color: var(--ink); font-family: var(--font); font-size: 12px; font-weight: 800; cursor: pointer; }
+.wallZoom, :global(.jf-blueprint .content) .wallZoom { position: absolute; right: 8px; top: 8px; display: flex; align-items: center; gap: 4px; padding: 4px; border: 1.5px solid var(--ink); border-radius: var(--radius, 2px); background: rgba(255, 255, 255, 0.94); box-shadow: 0 4px 14px -8px rgba(10, 10, 10, 0.35); }
+.wallZoomBtn, :global(.jf-blueprint .content) .wallZoomBtn { min-width: 30px; height: 30px; padding: 0 10px; border: 0; border-radius: var(--radius, 2px); background: transparent; color: var(--ink); font-family: var(--font); font-size: 12px; font-weight: 800; cursor: pointer; }
 .wallZoomBtn:hover, :global(.jf-blueprint .content) .wallZoomBtn:hover { background: color-mix(in srgb, var(--blueprint) 10%, #fff); color: var(--blueprint); }
 .wallZoomBtn[disabled], :global(.jf-blueprint .content) .wallZoomBtn[disabled] { opacity: 0.35; cursor: default; }
 .wallZoomBtn:focus-visible, :global(.jf-blueprint .content) .wallZoomBtn:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 1px; }
