@@ -3,14 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import s from "./investor-film.module.css";
 
-/* THE PITCH, ON THE INVESTORS PAGE (2026-10-25). Owner: "a professional video pitch for the investors link — what we
-   have, our value, the estimators, the AI desk, the homeowner portal; emotional, professional". The film is
-   advertisement/investor-pitch (real captures of the product, one narrator), about a minute and a half, 16:9.
+/* THE PITCH, ON THE INVESTORS PAGE (2026-10-25; v2 2026-10-26). Owner: "a professional video pitch for the investors
+   link" — then: "more presentable; show exactly where we make money — how the home portal will bring us money and how
+   the contractors bring us money; more details; up to two minutes". The film is advertisement/investor-pitch-v2 (real
+   captures of the product, one narrator, the money drawn from the live pricing page, the code and cited sources), 16:9.
    It sits above the figures on the shared link and on the admin page, with a poster until it is played; nothing is
    fetched until the reader presses play (preload none), so the figures load as fast as before. */
 
 const FILM = { mp4: "/investors/pitch-16x9.mp4", poster: "/investors/pitch-poster.webp" } as const;
-const LENGTH = "1:37";
+const LENGTH = "2:00";
 
 /** The slides and the tour the other pages hold (./pitch, ./tour), named under the film when the link is known. */
 export function InvestorFilm({ deckHref, tourHref }: { deckHref?: string | null; tourHref?: string | null }) {
@@ -45,7 +46,7 @@ export function InvestorFilm({ deckHref, tourHref }: { deckHref?: string | null;
       <div className={s.head}>
         <div className={s.label}>The pitch · {LENGTH}</div>
         <p className={s.words}>
-          What JobFlex is, in the product itself: the estimators, the AI desk, the crew, the homeowner side — one narrator, a minute and a half.
+          What JobFlex is and where the money comes from: the product, what contractors pay each month, how the homeowner side turns projects into paid leads, and why now — two minutes.
           {deckHref || tourHref ? (
             <>
               {" "}Prefer to read? {deckHref ? <a href={deckHref} data-investor-film-deck>The pitch deck</a> : null}
