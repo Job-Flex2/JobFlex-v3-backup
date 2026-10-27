@@ -2,7 +2,7 @@
 // or a full-page embed — so a homeowner types an address, picks a material and sees a price range in the shop's own
 // prices; "Get my full quote" makes a Lead on the shop's My leads, with the measurement and the package, and the shop
 // opens its estimator already measured and priced. One add-on per trade, each a line on the shop's subscription
-// (like the Deck Studio add-on): roof $179, HVAC $79, fence $99 (a stand-in — the owner named no price), deck $150.
+// (like the Deck Studio add-on): roof $179, HVAC $79, fence $99 (confirmed by the owner 2026-10-27), deck $150.
 //
 // Pure: the trades and their prices, a shop's settings (what to show, which materials, the domains the button may run
 // on), the price range, the embed snippets, the lead's words, the SyncState keys. The public address is the company's

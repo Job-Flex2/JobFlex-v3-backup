@@ -1,5 +1,5 @@
 // THE WEBSITE ESTIMATOR ADD-ONS — THE MONEY (owner, 2026-10-27: "each add-on for their websites: Deck Studio $150 a
-// month, roofing $179 a month, HVAC $79, and fence estimator" — fence's price not named; $99 stands in). Pure: the
+// month, roofing $179 a month, HVAC $79, and fence estimator" — fence $99 a month, confirmed 2026-10-27). Pure: the
 // four lines' kinds, names and prices, how a Stripe line is told to be one of them, the record we keep of the lines a
 // shop holds, and the one rule that says whether a trade serves the public.
 //

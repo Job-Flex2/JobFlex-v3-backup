@@ -29,7 +29,7 @@ const check = (name: string, ok: boolean, extra = "") => {
   console.log(`${ok ? "ok  " : "FAIL"} ${name}${ok || !extra ? "" : ` — ${extra}`}`);
 };
 
-// the trades and the owner's prices (fence is a stand-in until the owner names one)
+// the trades and the owner's prices (fence $99 confirmed 2026-10-27)
 check("four trades", WEB_TRADES.join() === "roof,hvac,fence,deck");
 check("roof $179, HVAC $79, deck $150 a month", WEB_TRADE.roof.cents === 17900 && WEB_TRADE.hvac.cents === 7900 && WEB_TRADE.deck.cents === 15000);
 check("every trade has its own Stripe kind", new Set(WEB_TRADES.map((t) => WEB_TRADE[t].kind)).size === 4 && WEB_TRADES.every((t) => WEB_TRADE[t].kind.startsWith("web-")));
