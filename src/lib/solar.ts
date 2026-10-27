@@ -27,7 +27,7 @@ import { fromArrayBuffer } from "geotiff";
 import { ExternalCallError, externalFetch } from "@/lib/externalCall";
 
 // Outside production a stand may point this at a fake (SOLAR_BASE), as the static map does — the website estimator's
-// walk measures a roof without Google (2026-10-27).
+// walk and the home portal's price walk measure a roof without Google (2026-10-27).
 const SOLAR_BASE = process.env.NODE_ENV !== "production" && process.env.SOLAR_BASE ? process.env.SOLAR_BASE.replace(/\/+$/, "") : "https://solar.googleapis.com/v1";
 
 export function isSolarEnabled(): boolean {

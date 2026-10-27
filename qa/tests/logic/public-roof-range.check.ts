@@ -28,7 +28,7 @@ const solar: SolarRoofEstimate = {
   coverageRatio: 1,
   areaMethod: "google-modeled-roof",
   warnings: [],
-  center: { latitude: 42.948, longitude: -78.853 },
+  center: { lat: 42.948, lng: -78.853 },
   buildingName: null,
   rawAreaSqft: 2100,
 };
