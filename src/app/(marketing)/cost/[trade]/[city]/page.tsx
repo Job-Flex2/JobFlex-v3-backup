@@ -221,7 +221,7 @@ export default async function CostCityPage({ params }: { params: Promise<Params>
 
       <div className={s.twoCol}>
         <LinkList title={`Other home projects in ${city.city}`} links={p.otherWorks} />
-        {p.sameState.length ? <LinkList title={`${trade.lower.charAt(0).toUpperCase() + trade.lower.slice(1)} cost in ${city.stateName}`} links={p.sameState} /> : null}
+        {p.sameState.length ? <LinkList title={`${trade.lower.charAt(0).toUpperCase() + trade.lower.slice(1)} cost near ${city.city}`} links={p.sameState} /> : null}
       </div>
 
       <section className={s.card} aria-labelledby="method-h">

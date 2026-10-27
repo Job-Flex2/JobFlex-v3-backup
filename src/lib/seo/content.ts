@@ -6,7 +6,9 @@
 
 import { SEO_TRADES, type SeoTrade } from "./trades";
 import { SEO_PHRASES } from "./keywords";
-import { sameStateCities, citiesInState, rankIn, SEO_CITIES, type SeoCity } from "./cities";
+import { nearbyCities, citiesInState, rankIn, SEO_CITIES, type SeoCity } from "./cities";
+import { CENSUS_NAICS, CENSUS_NAICS_WORDS } from "./census";
+import { CENSUS_ACS_YEARS, CENSUS_CBP_YEAR } from "./city-census.data";
 import { quote, costModel, bookSources, calibration } from "./pricing";
 import { stateFacts, permitFor, LUMBER_WORDS } from "./local";
 import { usd, unitUsd, roundMoney, type CalcModel } from "./calc";
@@ -200,6 +202,7 @@ export function costPage(trade: SeoTrade, city: SeoCity): CostPage {
     text: `Of the ${nationally.of} U.S. cities in JobFlex's index, ${city.city} ranks ${ordinal(nationally.rank)} from the most expensive. The job that averages ${usd(q.avg)} here averages ${usd(nat.avg)} at the national rate.`,
   });
   items.push(...tradeFacts(trade, city));
+  items.push(...censusFacts(trade, city, q.avg));
   if (facts.salesTax != null) {
     items.push({
       title: `Sales tax in ${city.stateName}`,
@@ -214,11 +217,11 @@ export function costPage(trade: SeoTrade, city: SeoCity): CostPage {
   const profile = TRADES.find((t) => t.id === trade.tradeId);
   const questions = { heading: `What a ${city.city} contractor will ask before quoting`, items: profile?.keyQuestions ?? [] };
 
-  // ── Other cities of the state ──
-  const others = sameStateCities(city);
+  // ── Nearby cities ──
+  const others = nearbyCities(city);
   const compare = others.length
     ? {
-        heading: `${cap(trade.lower)} cost in other ${city.stateName} cities`,
+        heading: `${cap(trade.lower)} cost in cities near ${city.city}`,
         intro: `${cap(sizeWords)} with ${lc(variant.label)} averages ${usd(q.avg)} in ${city.city}; ${others
           .slice(0, 3)
           .map((o) => `${usd(typicalAvg(trade, o))} in ${o.city}`)
@@ -241,6 +244,7 @@ export function costPage(trade: SeoTrade, city: SeoCity): CostPage {
   const method = [
     `Every price on this page comes from JobFlex's contractor price book: what a homeowner pays a licensed contractor for each step of the job, as a U.S. national average per unit, with the contractor's overhead and profit included and sales tax left out. The ${trade.lower} is priced step by step, then multiplied by ${city.city}'s construction cost index of ${city.factor.toFixed(2)}.`,
     ...calibrationNote(trade),
+    ...(city.census ? [`Facts about ${city.city}'s homes come from the Census Bureau's American Community Survey (${CENSUS_ACS_YEARS} 5-year estimates); contractor counts from its County Business Patterns (${CENSUS_CBP_YEAR}).`] : []),
     `The index weighs local construction wages (BLS Occupational Employment and Wage Statistics, May 2025) at 60% and the area's material prices (Craftsman ZIP-area factors) at 40%.${checks.length ? ` Published indices for ${city.city}, each on its own base: ${checks.join(", ")}.` : ""} Treat any city figure as about ±5%; a contractor's quote for your house is the number to plan with.`,
   ];
 
@@ -287,6 +291,71 @@ function calibrationNote(trade: SeoTrade): string[] {
   return [
     `Where the price book's steps for an option add up to more than 20% over the installed price a published source gives for the whole job, every step but a permit fee is scaled down to the middle of that range: ${items.join("; ")}.`,
   ];
+}
+
+/** Rounded so a count doesn't read as more exact than it is: 7, 45, 230. */
+function aboutCount(n: number): number {
+  return n < 20 ? n : n < 100 ? Math.round(n / 5) * 5 : Math.round(n / 10) * 10;
+}
+/** A home value to the nearest $5,000 (under $500k) or $10,000. */
+const aboutValue = (v: number) => (v < 500_000 ? Math.round(v / 5000) * 5000 : Math.round(v / 10_000) * 10_000);
+const share = (x: number) => `${Math.round(x * 100)}%`;
+/** "Western Connecticut Planning Region" reads with "the". */
+const countyWords = (c: string) => (/Planning Region$/.test(c) ? `the ${c}` : c);
+
+/**
+ * The Census facts of the city this work cares about (phase 2,
+ * docs/seo-phase-2.md): how old the homes are, how they heat, how many are
+ * houses of their own, what the job is next to a home's value, and how many
+ * of the work's contractors the county has. Each sentence needs its field.
+ */
+function censusFacts(trade: SeoTrade, city: SeoCity, avg: number): CostFact[] {
+  const c = city.census;
+  if (!c) return [];
+  const out: CostFact[] = [];
+  const homes: string[] = [];
+  const t = trade.slug;
+  if ((t === "roof-replacement" || t === "siding-installation") && c.yearBuilt != null) {
+    const what = t === "roof-replacement" ? "most roofs there have been replaced at least once already" : "most of their walls have been re-sided or painted over at least once";
+    homes.push(`The median ${city.city} home was built in ${c.yearBuilt}${c.pre1980 != null ? `, and ${share(c.pre1980)} of its homes date from before 1980` : ""}; on houses that age, ${what}.`);
+  }
+  if (t === "house-painting" && c.pre1980 != null) {
+    homes.push(`${share(c.pre1980)} of ${city.city}'s homes were built before 1980${c.yearBuilt != null ? `; the median one in ${c.yearBuilt}` : ""}. In a home built before 1978, a painter who disturbs old paint must follow the EPA's lead-safe (RRP) rules — a certified renovator, containment and a careful cleanup — which adds time to the job.`);
+  }
+  if (t === "hvac-replacement" && c.heat?.gas != null && c.heat.electric != null) {
+    const extra = [c.heat.oil != null && c.heat.oil >= 0.05 ? `${share(c.heat.oil)} with fuel oil` : null, c.heat.propane != null && c.heat.propane >= 0.05 ? `${share(c.heat.propane)} with propane` : null].filter(Boolean);
+    homes.push(`${share(c.heat.gas)} of ${city.city}'s occupied homes heat with utility gas and ${share(c.heat.electric)} with electricity${extra.length ? `; ${extra.join(" and ")}` : ""}.`);
+    homes.push(
+      c.heat.gas > c.heat.electric
+        ? "So the usual job here pairs a new gas furnace with the air conditioner, and a heat pump is the switch some owners make."
+        : "So electric heat — a heat pump or an electric furnace with the air conditioner — is the usual system here.",
+    );
+  }
+  if (t !== "hvac-replacement" && t !== "house-painting" && c.singleFamily != null) {
+    const what = t === "fence-installation" || t === "deck-building" ? "the homes with a yard of their own" : "the homes with a roof and walls of their own";
+    homes.push(`${share(c.singleFamily)} of ${city.city}'s homes are single-family detached houses — ${what}${c.owners != null ? `; ${share(c.owners)} of homes are lived in by their owners` : ""}.`);
+  }
+  if (c.homeValue != null && c.homeValue > 0) {
+    const p = (avg / c.homeValue) * 100;
+    homes.push(`The median owner-occupied home in ${city.city} is valued at about ${usd(aboutValue(c.homeValue))}; the typical ${trade.lower} here, at ${usd(avg)}, comes to about ${p < 1 ? p.toFixed(1) : Math.round(p)}% of that.`);
+  }
+  if (homes.length) out.push({ title: `Homes in ${city.city}`, text: homes.join(" ") });
+
+  // A borough is a county itself; its Census name is the county's.
+  const county = c.county ?? (/ County$/.test(c.name) ? c.name : null);
+  if (county) {
+    const naics = CENSUS_NAICS[t];
+    const n = c.contractors[naics];
+    const where = c.county ? `${city.city} is in ${countyWords(county)}` : `In Census terms ${city.city} is ${county}`;
+    out.push({
+      title: `Contractors in ${county}`,
+      text:
+        n != null && n > 0
+          ? `${where}, where the Census Bureau counted about ${aboutCount(n)} ${CENSUS_NAICS_WORDS[naics]} with a payroll in ${CENSUS_CBP_YEAR} (County Business Patterns).${naics === "238990" ? ` That class holds ${t === "deck-building" ? "deck" : "fence"} builders along with other specialty trades, so only some of them do this work.` : ""}`
+          : `${where}.`,
+    });
+  }
+  return out;
 }
 
 function typicalAvgAt(trade: SeoTrade, factor: number): number {

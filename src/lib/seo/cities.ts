@@ -9,6 +9,8 @@ import { STATE_COST_INDEX } from "@/lib/estimate/trade-knowledge";
 import { stateDisplayName } from "@/lib/pricing/salesTax";
 import { CITY_INDICES, type CityIndices } from "./city-indices.data";
 import { CITY_POPULATION } from "./city-population.data";
+import { CITY_CENSUS } from "./city-census.data";
+import { milesBetween, type CityCensus } from "./census";
 
 export type SeoCity = {
   slug: string;
@@ -26,6 +28,8 @@ export type SeoCity = {
   order: number;
   /** Census population estimate; null where the estimates carry no place by this name. */
   population: number | null;
+  /** Census facts and coordinates (./city-census.data); null where the Census has no row. */
+  census: CityCensus | null;
 };
 
 export const slugify = (s: string) =>
@@ -51,6 +55,7 @@ export const SEO_CITIES: SeoCity[] = CITY_COST_INDEX.map((r, order) => ({
   indices: indicesByKey.get(`${r.city}|${r.state}`) ?? null,
   order,
   population: CITY_POPULATION[`${slugify(r.city)}-${r.state.toLowerCase()}`] ?? null,
+  census: CITY_CENSUS[`${slugify(r.city)}-${r.state.toLowerCase()}`] ?? null,
 }));
 
 const bySlug = new Map<string, SeoCity>();
@@ -79,12 +84,15 @@ export const SEO_PREBUILT_CITIES: SeoCity[] = [...SEO_CITIES]
  * indices the page explains it with — would print the same guide under
  * another name, so each points at the first of them in the index table,
  * which lists a metro's head city first (Bellevue and Kent → Seattle).
- * A city with data of its own is its own canonical. They all stay in the
- * sitemap.
+ * The Census facts the guide prints (phase 2: age, heating, houses, value,
+ * county, contractors) are part of the data, so neighbours that differ in
+ * them are their own canonical. They all stay in the sitemap.
  */
 const dataKey = (c: SeoCity) => {
   const i = c.indices;
-  return JSON.stringify([c.state, c.factor, i?.labor ?? null, i?.laborMetro ?? null, i?.county ?? null, i?.material ?? null]);
+  const k = c.census;
+  const census = k ? [k.yearBuilt, k.pre1980, k.heat, k.singleFamily, k.homeValue, k.owners, k.county, k.contractors] : null;
+  return JSON.stringify([c.state, c.factor, i?.labor ?? null, i?.laborMetro ?? null, i?.county ?? null, i?.material ?? null, census]);
 };
 const firstByData = new Map<string, SeoCity>();
 for (const c of SEO_CITIES) if (!firstByData.has(dataKey(c))) firstByData.set(dataKey(c), c);
@@ -114,6 +122,24 @@ export function sameStateCities(city: SeoCity, limit = 8): SeoCity[] {
     .filter((c) => c.slug !== city.slug)
     .sort((a, b) => Math.abs(a.order - city.order) - Math.abs(b.order - city.order) || a.order - b.order)
     .slice(0, limit);
+}
+
+/**
+ * The cities nearest to this one in a straight line (Census Gazetteer
+ * coordinates), within 500 miles. A city without coordinates, or with none
+ * that near, falls back to the closest rows of its state in the index table.
+ */
+export function nearbyCities(city: SeoCity, limit = 5): SeoCity[] {
+  const here = city.census?.lat != null && city.census.lng != null ? { lat: city.census.lat, lng: city.census.lng } : null;
+  if (here) {
+    const near = SEO_CITIES.flatMap((c) => (c.slug !== city.slug && c.census?.lat != null && c.census.lng != null ? [{ c, d: milesBetween(here, { lat: c.census.lat, lng: c.census.lng }) }] : []))
+      .filter((x) => x.d <= 500)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, limit)
+      .map((x) => x.c);
+    if (near.length) return near;
+  }
+  return sameStateCities(city, limit);
 }
 
 /** 1 = the dearest. Ties share a rank ("2nd of 13", twice). */
