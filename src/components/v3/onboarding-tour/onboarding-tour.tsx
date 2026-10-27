@@ -7,8 +7,9 @@
 //   · The welcome card — "Create your first roof estimate", Start / Not now —
 //     for a new company with no estimate (lib/onboarding/progress decides).
 //   · The run: one step at a time, the step's element lit (a dimmed page with a
-//     Blueprint frame round the element) and a card beside it on the desk, a
-//     bottom sheet on a phone. A step passes when the page shows it was done
+//     Blueprint frame round the element) and a card docked bottom-right on the
+//     desk, across the foot on a phone; the element is scrolled clear of the
+//     card, never the card moved off it. A step passes when the page shows it was done
 //     (lib/onboarding/tour-paths), checked on a short tick and on every click,
 //     change or keystroke inside the lit element.
 //   · Away and back: leaving the step's page keeps the step; coming back asks
@@ -16,9 +17,10 @@
 //     the sidebar keeps a chip that resumes it.
 //   · After the Send screen: "Next steps · 1/3" behind the same chip.
 //
-// No library. Positions come from getBoundingClientRect, kept fresh by a
-// ResizeObserver, scroll and resize; the dim never takes a click, so the page
-// works exactly as it does without the tour.
+// No library. The frame's position comes from getBoundingClientRect, written
+// straight to its style on every scroll and resize so it moves 1:1 with the
+// page; a ResizeObserver and a slow tick keep the rest fresh. The dim never
+// takes a click, so the page works exactly as it does without the tour.
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
@@ -46,6 +48,15 @@ const TICK_MS = 350;
 /** A conditional step whose element has not appeared by then is not this page's. */
 const WHEN_GRACE_MS = 2000;
 const FRAME_PAD = 6;
+/** The docked card's distance from the screen's edges: desk, phone. */
+const DOCK_DESK = 24;
+const DOCK_PHONE = 12;
+/** Room kept clear of the shell's top bar when an element is scrolled to. */
+const TOP_CLEAR = 72;
+/** Nested scroll containers settle late: look again this long after a scroll. */
+const RECHECK_MS = 350;
+/** The frame glides between steps, never while the page scrolls. */
+const SCROLL_QUIET_MS = 120;
 
 const PATH_LINE: Record<TourPathId, string> = {
   roof: "Type an address and the roof is measured from the aerial — squares, pitch and a priced proposal in about two minutes.",
@@ -99,28 +110,27 @@ function foreignModal(root: HTMLElement | null): boolean {
   return false;
 }
 
-function scrollParentOf(el: HTMLElement): HTMLElement | null {
-  for (let p = el.parentElement; p; p = p.parentElement) {
-    const oy = getComputedStyle(p).overflowY;
-    if ((oy === "auto" || oy === "scroll") && p.scrollHeight > p.clientHeight + 1) return p;
+/** A bar fixed to the screen (Save & send, a sticky total): scrolling cannot move it. Read up to
+ *  the first scroll container only — the phone shell itself is a fixed box round a scrolling page. */
+function pinned(el: HTMLElement): boolean {
+  for (let e: HTMLElement | null = el; e; e = e.parentElement) {
+    const cs = getComputedStyle(e);
+    if (cs.position === "fixed" || cs.position === "sticky") return true;
+    if ((cs.overflowY === "auto" || cs.overflowY === "scroll") && e.scrollHeight > e.clientHeight + 1) return false;
   }
-  return document.scrollingElement as HTMLElement | null;
+  return false;
 }
 
-/** Bring the lit element into the part of the screen the card does not cover. */
-function bringIntoView(el: HTMLElement, bottomInset: number, align?: "end") {
-  const behavior: ScrollBehavior = prefersReducedMotion() ? "auto" : "smooth";
-  const top = 64;
-  const bottom = window.innerHeight - bottomInset - 12;
-  const r = el.getBoundingClientRect();
-  const tall = r.height > bottom - top;
-  if (!tall && r.top >= top && r.bottom <= bottom) return;
-  if (tall && align !== "end" && r.top >= top && r.top <= bottom - 120) return;
-  if (tall && align === "end" && r.bottom <= bottom && r.bottom >= top + 120) return;
-  const parent = scrollParentOf(el);
-  if (!parent) return;
-  const want = !tall ? top + (bottom - top - r.height) / 2 : align === "end" ? bottom - r.height - 8 : top + 8;
-  parent.scrollBy({ top: r.top - want, behavior });
+/** Where the step card sits when docked, from its size alone (never its live box, which may be lifted). */
+function dockBox(handheld: boolean, w: number, h: number): Box {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  if (handheld) return { top: vh - DOCK_PHONE - h, left: DOCK_PHONE, width: vw - DOCK_PHONE * 2, height: h };
+  return { top: vh - DOCK_DESK - h, left: vw - DOCK_DESK - w, width: w, height: h };
+}
+
+function overlaps(a: Box, b: Box): boolean {
+  return a.left < b.left + b.width && a.left + a.width > b.left && a.top < b.top + b.height && a.top + a.height > b.top;
 }
 
 function framed(r: DOMRect): Box | null {
@@ -132,26 +142,6 @@ function framed(r: DOMRect): Box | null {
   const right = Math.min(r.right + FRAME_PAD, vw - 4);
   if (bottom - top < 8 || right - left < 8) return null;
   return { top, left, width: right - left, height: bottom - top };
-}
-
-/** Beside the frame on the desk: below, above, right, left — else docked bottom-right. While a field
- *  in the frame is being typed in, its suggestion list opens below it: then right, left, above first. */
-function placeCard(frame: Box | null, w: number, h: number, typing = false): { top: number; left: number } {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const m = 12;
-  const gap = 14;
-  const dock = { top: vh - h - 24, left: vw - w - 24 };
-  if (!frame) return dock;
-  const clampX = (x: number) => Math.min(Math.max(x, m), vw - w - m);
-  const clampY = (y: number) => Math.min(Math.max(y, m), vh - h - m);
-  const fBottom = frame.top + frame.height;
-  const fRight = frame.left + frame.width;
-  const below = fBottom + gap + h <= vh - m ? { top: fBottom + gap, left: clampX(frame.left) } : null;
-  const above = frame.top - gap - h >= m ? { top: frame.top - gap - h, left: clampX(frame.left) } : null;
-  const right = fRight + gap + w <= vw - m ? { top: clampY(frame.top), left: fRight + gap } : null;
-  const left = frame.left - gap - w >= m ? { top: clampY(frame.top), left: frame.left - gap - w } : null;
-  return (typing ? right ?? left ?? above ?? below : below ?? above ?? right ?? left) ?? dock;
 }
 
 export function OnboardingTour({ view }: { view: TourView }) {
@@ -174,19 +164,21 @@ export function OnboardingTour({ view }: { view: TourView }) {
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
   const [blocked, setBlocked] = useState(false);
   const [target, setTarget] = useState<{ el: HTMLElement; name: string } | null>(null);
-  const [liveFrame, setFrame] = useState<Box | null>(null);
   const [focusIn, setFocusIn] = useState(false);
-  const [cardSize, setCardSize] = useState({ w: 340, h: 200 });
+  /** The card's bottom (px) when the lit element is a bar fixed under the docked card; else docked. */
+  const [lift, setLift] = useState<number | null>(null);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLHeadingElement>(null);
+  /** The step card's last measured size (a hidden card measures 0 and is not counted). */
+  const cardSizeRef = useRef({ w: 340, h: 200 });
   /** Left the step's page mid-run: coming back asks first. A reload mid-run counts as coming back. */
   const awayRef = useRef(view.status === "active" && view.step > 0);
   const interactedRef = useRef(false);
   const seenRef = useRef(false);
   const stepSinceRef = useRef(0);
-  const scrolledForRef = useRef("");
   const lastFocusRef = useRef<HTMLElement | null>(null);
 
   const persist = useCallback(
@@ -356,53 +348,126 @@ export function OnboardingTour({ view }: { view: TourView }) {
 
   // A conditional step (the roof's pitch) says nothing until its element is on the page.
   const showing = ((mode === "run" && status === "active") || nextSpot) && !(runStep?.when && !target);
-  const sheetInset = handheld ? Math.min(window.innerHeight * 0.46, cardSize.h) : 0;
+  const align = runStep?.align;
 
-  // ── Measure the lit element ────────────────────────────────────────────
-  useEffect(() => {
-    if (!showing || !target) return;
-    let raf = 0;
-    const measure = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        setFrame(framed(target.el.getBoundingClientRect()));
-        setFocusIn(target.el.contains(document.activeElement));
-      });
+  /** The docked card's box, when the lit element would sit under it. */
+  const dockedOver = useCallback(
+    (b: Box | null) => {
+      if (!b) return false;
+      const { w, h } = cardSizeRef.current;
+      return overlaps(b, dockBox(handheld, w, h));
+    },
+    [handheld],
+  );
+
+  // ── The frame: written straight to its style, 1:1 with the page ──────
+  useLayoutEffect(() => {
+    if (!showing || !target || blocked) return;
+    const el = target.el;
+    const fixed = pinned(el);
+    let quiet = 0;
+    const paint = () => {
+      let b = framed(el.getBoundingClientRect());
+      // Taller than the room above the card (the roof report on a phone): the frame ends at the card.
+      if (b && !fixed && cardRef.current?.getClientRects().length) {
+        const { w, h } = cardSizeRef.current;
+        const dock = dockBox(handheld, w, h);
+        const cut = dock.top - 8 - b.top;
+        if (overlaps(b, dock) && cut >= 24) b = { ...b, height: cut };
+      }
+      const f = frameRef.current;
+      if (f) {
+        if (b) {
+          f.style.top = `${b.top}px`;
+          f.style.left = `${b.left}px`;
+          f.style.width = `${b.width}px`;
+          f.style.height = `${b.height}px`;
+          f.style.visibility = "";
+        } else {
+          f.style.visibility = "hidden";
+        }
+      }
+      return b;
     };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(target.el);
+    const onScroll = () => {
+      paint();
+      const f = frameRef.current;
+      if (!f) return;
+      f.dataset.scrolling = "";
+      window.clearTimeout(quiet);
+      quiet = window.setTimeout(() => delete f.dataset.scrolling, SCROLL_QUIET_MS);
+    };
+    // The slow half: the dim (typing in the lit field), and the card's lift off a fixed bar.
+    const settle = () => {
+      const b = paint();
+      setFocusIn(el.contains(document.activeElement));
+      const vh = window.innerHeight;
+      const up = b && fixed && dockedOver(b) ? vh - b.top + DOCK_PHONE : null;
+      setLift(up !== null && up + cardSizeRef.current.h <= vh - DOCK_PHONE ? Math.round(up) : null);
+    };
+    settle();
+    const ro = new ResizeObserver(settle);
+    ro.observe(el);
     ro.observe(document.body);
-    window.addEventListener("scroll", measure, true);
-    window.addEventListener("resize", measure);
-    document.addEventListener("focusin", measure);
-    document.addEventListener("focusout", measure);
-    const id = window.setInterval(measure, 500);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    document.addEventListener("focusin", settle);
+    document.addEventListener("focusout", settle);
+    const id = window.setInterval(settle, 500);
     return () => {
-      cancelAnimationFrame(raf);
       ro.disconnect();
-      window.removeEventListener("scroll", measure, true);
-      window.removeEventListener("resize", measure);
-      document.removeEventListener("focusin", measure);
-      document.removeEventListener("focusout", measure);
+      window.clearTimeout(quiet);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+      document.removeEventListener("focusin", settle);
+      document.removeEventListener("focusout", settle);
       window.clearInterval(id);
     };
-  }, [showing, target]);
+  }, [showing, target, blocked, handheld, dockedOver]);
 
-  // Scroll the lit element into the uncovered part of the screen — once per step and target.
+  // ── Scroll the lit element clear of the card: every step, every new target ──
+  const reveal = useCallback(
+    (el: HTMLElement) => {
+      const r = el.getBoundingClientRect();
+      const { w, h } = cardSizeRef.current;
+      const dock = dockBox(handheld, w, h);
+      // The element lands above the card when it shares the card's column (always on a phone).
+      const sharesColumn = r.left < dock.left + dock.width && r.right > dock.left;
+      const inset = sharesColumn ? window.innerHeight - dock.top + DOCK_PHONE : DOCK_PHONE;
+      const room = window.innerHeight - TOP_CLEAR - inset;
+      const block: ScrollLogicalPosition = r.height <= room ? "center" : align === "end" ? "end" : "start";
+      // scroll-margin widens the box scrollIntoView centres; read at the call, so put back straight after.
+      const was = { top: el.style.scrollMarginTop, bottom: el.style.scrollMarginBottom };
+      el.style.scrollMarginTop = `${TOP_CLEAR}px`;
+      el.style.scrollMarginBottom = `${inset}px`;
+      el.scrollIntoView({ block, inline: "nearest", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+      el.style.scrollMarginTop = was.top;
+      el.style.scrollMarginBottom = was.bottom;
+    },
+    [handheld, align],
+  );
+
   useEffect(() => {
-    if (!showing || !target) return;
-    const key = `${step}:${target.name}:${nextSpot}`;
-    if (scrolledForRef.current === key) return;
-    scrolledForRef.current = key;
-    bringIntoView(target.el, sheetInset, runStep?.align);
-  }, [showing, target, step, nextSpot, sheetInset, runStep]);
+    if (!showing || !target || blocked) return;
+    const el = target.el;
+    if (pinned(el)) return;
+    reveal(el);
+    const again = window.setTimeout(() => {
+      if (!el.isConnected) return;
+      const r = el.getBoundingClientRect();
+      const off = r.bottom <= TOP_CLEAR || r.top >= window.innerHeight;
+      if (off || dockedOver(framed(r))) reveal(el);
+    }, RECHECK_MS);
+    return () => window.clearTimeout(again);
+  }, [showing, target, step, nextSpot, blocked, reveal, dockedOver]);
 
-  // The card's own size, for placing it.
+  // The card's own size, for the dock and the scroll inset.
   useLayoutEffect(() => {
     const el = cardRef.current;
     if (!el) return;
-    const read = () => setCardSize((s) => (s.w === el.offsetWidth && s.h === el.offsetHeight ? s : { w: el.offsetWidth, h: el.offsetHeight }));
+    const read = () => {
+      if (el.offsetWidth && el.offsetHeight) cardSizeRef.current = { w: el.offsetWidth, h: el.offsetHeight };
+    };
     read();
     const ro = new ResizeObserver(read);
     ro.observe(el);
@@ -469,7 +534,7 @@ export function OnboardingTour({ view }: { view: TourView }) {
   }, [anyCard, modalOpen, blocked, notNow]);
 
   if (!mounted) return null;
-  const frame = showing && target ? liveFrame : null;
+  const lit = showing && !!target;
 
   // ── What to draw ───────────────────────────────────────────────────────
   const count = tourCount(view.path, step);
@@ -588,35 +653,30 @@ export function OnboardingTour({ view }: { view: TourView }) {
   const stepAside = handheld && showing && focusIn;
 
   const modal = mode === "welcome" || nextOpen;
-  const dim = showing && !!frame && !focusIn;
-  const pos = !handheld && !modal ? placeCard(showing ? frame : null, cardSize.w, cardSize.h, focusIn) : null;
-  // A phone: the sheet hangs from the top when the lit control is a bar fixed to the foot of the screen.
-  // Read against a fixed share of the screen, never the card's own height: the card's height
-  // changes with where it hangs, and the two would chase each other.
-  const sheetTop = handheld && !modal && !!frame && frame.top > window.innerHeight * 0.55;
+  const dim = lit && !focusIn;
+  // The welcome and the next steps: centred on the desk, the handheld sheet on a phone.
+  // Every other card: docked bottom-right on the desk, across the foot on a phone.
+  const place = modal ? (handheld ? styles.sheet : styles.center) : handheld ? `${styles.pop} ${styles.popPhone}` : styles.pop;
 
   return createPortal(
     <div className={styles.root} ref={rootRef} data-tour-root="">
       {modal && <div className={styles.scrim} onClick={notNow} aria-hidden="true" />}
-      {showing && frame && (
-        <div
-          className={`${styles.frame} ${dim ? styles.frameDim : ""}`}
-          style={{ top: frame.top, left: frame.left, width: frame.width, height: frame.height }}
-          aria-hidden="true"
-        >
+      {lit && (
+        // Positioned by the measuring effect, straight on its style.
+        <div ref={frameRef} className={`${styles.frame} ${dim ? styles.frameDim : ""}`} aria-hidden="true">
           {!nextSpot && step < last && <span className={styles.tag}>{count.done + 1}/{count.total}</span>}
         </div>
       )}
       <div className={handheld ? styles.layer : styles.deskLayer} hidden={stepAside}>
         <div
           ref={cardRef}
-          className={`${styles.card} ${handheld ? `${styles.sheet}${sheetTop ? ` ${styles.sheetTop}` : ""}` : modal ? styles.center : styles.pop}`}
-          style={pos ? { top: pos.top, left: pos.left } : undefined}
+          className={`${styles.card} ${place}`}
+          style={!modal && lit && lift !== null ? { bottom: lift } : undefined}
           role="dialog"
           aria-modal={modal ? "true" : "false"}
           aria-labelledby="tour-h"
         >
-          {handheld && <span className={styles.grab} aria-hidden="true" />}
+          {handheld && modal && <span className={styles.grab} aria-hidden="true" />}
           {card}
         </div>
       </div>

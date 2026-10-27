@@ -76,10 +76,26 @@
   border-radius: var(--r-sm);
   color: var(--ink);
 }
+/* The step card: docked bottom-right, never moved beside the element — the page
+   scrolls the element clear of it instead. Lifted (inline bottom) only off a bar
+   fixed to the screen's foot, which no scroll can move. */
 .pop {
-  position: absolute;
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
   width: min(var(--tour-pop-w), calc(100% - 24px));
   padding: 16px 18px 16px;
+}
+/* A phone: the same card across the foot. */
+.popPhone {
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + var(--msheet-safe-b));
+  width: auto;
+  max-height: var(--tour-sheet-max-h);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px var(--msheet-pad-x);
 }
 .center {
   position: absolute;
@@ -102,14 +118,6 @@
   border-width: 2px 0 0;
   border-radius: 0;
   padding: 22px var(--msheet-pad-x) calc(var(--msheet-foot-pad-y) + var(--msheet-safe-b));
-}
-/* The lit control is a bar on the screen's foot (Save & send, a sticky total): the sheet hangs from the top. */
-.sheetTop {
-  top: 0;
-  bottom: auto;
-  border-width: 0 0 2px;
-  padding-top: calc(18px + env(safe-area-inset-top, 0px));
-  padding-bottom: 16px;
 }
 /* The welcome and the next steps are taller: the sheet's own ceiling. */
 .sheet[aria-modal="true"] {
@@ -345,25 +353,34 @@
   outline-offset: 2px;
 }
 
-/* A phone: 44px targets, the main action across the sheet. */
-.sheet .close {
+/* A phone: 44px targets, the main action across the card. */
+.sheet .close,
+.popPhone .close {
   top: 12px;
   right: 8px;
   width: 44px;
   height: 44px;
 }
-.sheet .acts {
+.popPhone .close {
+  top: 4px;
+  right: 4px;
+}
+.sheet .acts,
+.popPhone .acts {
   gap: 4px 16px;
 }
-.sheet .primary {
+.sheet .primary,
+.popPhone .primary {
   flex: 1 1 100%;
   min-height: 48px;
   font-size: 14px;
 }
-.sheet .link {
+.sheet .link,
+.popPhone .link {
   min-height: 44px;
 }
-.sheet .small {
+.sheet .small,
+.popPhone .small {
   min-height: 44px;
 }
 .sheet .plan li {
@@ -375,8 +392,12 @@
   .frame {
     transition: top 220ms var(--ease-out), left 220ms var(--ease-out), width 220ms var(--ease-out), height 220ms var(--ease-out), box-shadow 180ms var(--ease-out);
   }
+  /* While the page scrolls the frame is the element's, 1:1 — no glide trailing behind it. */
+  .frame[data-scrolling] {
+    transition: box-shadow 180ms var(--ease-out);
+  }
   .pop {
-    transition: top 220ms var(--ease-out), left 220ms var(--ease-out);
+    transition: bottom 220ms var(--ease-out);
     animation: tourIn 180ms var(--ease-out);
   }
   .sheet {
@@ -408,10 +429,4 @@
 @keyframes tourFade {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-.sheet.sheetTop {
-  animation: none;
-}
-.sheetTop .grab {
-  display: none;
 }
