@@ -26,6 +26,7 @@ import { PricingPlans } from "@/components/v3/landing-e/pricing-plans";
 import type { SpotlightTool } from "@/lib/planSpotlight";
 import { PricingVisit } from "./pricing-visit";
 import { CustomPlanBlock } from "./custom-plan-block";
+import { DeckAddonPlate } from "./deck-addon-plate";
 import type { PlanDTO } from "@/lib/planCatalog";
 import "@/components/v3/landing-e/landing-e.css";
 import "./pricing.css";
@@ -70,9 +71,15 @@ export function PricingPage({
           <div className="mx-auto lp-wrap">
             <div className="border-t border-slate-900/10 pt-[6vmin]">
               {sellable.length > 0 ? (
-                <Reveal className="pr-plans">
-                  <PricingPlans plans={sellable} registerHref={REGISTER} spotlight={spotlight} />
-                </Reveal>
+                <>
+                  <Reveal className="pr-plans">
+                    <PricingPlans plans={sellable} registerHref={REGISTER} spotlight={spotlight} />
+                  </Reveal>
+                  {/* The Deck Studio add-on (owner, 2026-10-26): on any plan, in the trial. */}
+                  <div className="mt-10 sm:mt-12">
+                    <DeckAddonPlate registerHref={REGISTER} cta="pricing-deck" delay={120} />
+                  </div>
+                </>
               ) : (
                 <p className="py-12 text-center text-[15px] text-slate-500">
                   Plans are being updated. Check back shortly.

@@ -1,13 +1,13 @@
 // THE EDITIONS (2026-10-11, lib/editions): the doors of one platform. The
 // cookie's values, who holds the Deck Studio (owner-locked 2026-10-20: the
-// trial, the $49/mo add-on, a grant, a platform admin — never a plan), how far
+// trial, the $79/mo add-on — $49 for lines bought before 2026-10-26 — a grant, a platform admin — never a plan), how far
 // the studio opens to everyone else, who may switch, where a sign-in lands,
 // what the deck workspace's sidebar keeps and drops (one door since 2026-10-21 — nobody switches), and the sign-up link each
 // door writes. Pure.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/billing/editions.check.ts
 import * as editions from "../../../src/lib/editions";
 import { EDITIONS, canSwitch, editionLevel, hasEdition, homeFor, navAllowed, parseDoor, registerHref, unlockedByEdition, workspaceFor, type AccessFacts } from "../../../src/lib/editions";
-import { DECK_ADDON_CENTS, addonHeld, deckAddonCents, deckAddonPriceWords, deckAddonShortWords, deckTrialWords, isDeckAddonLine, parseDeckAddonRecord, planLine, planLines } from "../../../src/lib/deckAddon";
+import { DECK_ADDON_CENTS, DECK_PICK_TRIAL_WORDS, addonHeld, deckAddonCents, deckAddonHeldWords, deckAddonPriceWords, deckAddonShortWords, deckTrialWords, isDeckAddonLine, parseDeckAddonRecord, planLine, planLines } from "../../../src/lib/deckAddon";
 import { annualDeal, dealWords, savedWords } from "../../../src/lib/planDeal";
 import { autoPlanFor } from "../../../src/lib/signupAutoPlan";
 import { isAddOnTool, spotlightLine, spotlightRow } from "../../../src/lib/planSpotlight";
@@ -63,7 +63,7 @@ const signupPlans = [
 ];
 const deckPick = autoPlanFor({ plans: signupPlans, tool: "deck" });
 check("a deck ad never moves the sign-up off Professional, even onto a plan whose features name Deck Studio", deckPick?.slug === "professional" && deckPick?.why === "default", JSON.stringify(deckPick));
-check("Deck Studio is an add-on tool: never marked on a plan's row, and the line says the trial includes it", isAddOnTool("deck") && !isAddOnTool("roof") && spotlightRow(["Deck Studio", "Roof estimator"], "deck") === null && spotlightRow(["Roof estimator"], "roof") === "Roof estimator" && spotlightLine("deck", true) === "You came for Deck Studio — the trial includes it, then it's $49/month on any plan.");
+check("Deck Studio is an add-on tool: never marked on a plan's row, and the line says the trial includes it", isAddOnTool("deck") && !isAddOnTool("roof") && spotlightRow(["Deck Studio", "Roof estimator"], "deck") === null && spotlightRow(["Roof estimator"], "roof") === "Roof estimator" && spotlightLine("deck", true) === "You came for Deck Studio — the trial includes it, then it's $79/month on any plan.");
 
 console.log("── Before you go names the add-on when it is on the plan");
 const withDeck = freePlanLosses({ pages: null, planProposals: null, freeProposals: 5, deckAddon: "$49/mo" });
@@ -98,8 +98,12 @@ check("a year that is not a whole number of months off gets no stamp, not a perc
 check("no yearly price, a dearer year, or a free plan: no deal", annualDeal(8900, null) === null && annualDeal(8900, 106800) === null && annualDeal(8900, 120000) === null && annualDeal(0, 1000) === null);
 
 console.log("── THE ADD-ON (lib/deckAddon)");
-check("$49 a month; $490 a year (ten months for twelve, the custom plan's rule)", DECK_ADDON_CENTS === 4900 && deckAddonCents("MONTH") === 4900 && deckAddonCents("YEAR") === 49000 && deckAddonPriceWords("MONTH") === "$49/month" && deckAddonPriceWords("YEAR") === "$490/year" && deckAddonShortWords("MONTH") === "$49/mo" && deckAddonShortWords("YEAR") === "$490/yr");
-check("the trial's words, as the owner wrote them", deckTrialWords() === "Included in your trial. After the trial, Deck Studio is a $49/mo add-on." && deckTrialWords("YEAR") === "Included in your trial. After the trial, Deck Studio is a $490/yr add-on.");
+check("$79 a month; $790 a year (ten months for twelve, the custom plan's rule) — owner, 2026-10-26", DECK_ADDON_CENTS === 7900 && deckAddonCents("MONTH") === 7900 && deckAddonCents("YEAR") === 79000 && deckAddonPriceWords("MONTH") === "$79/month" && deckAddonPriceWords("YEAR") === "$790/year" && deckAddonShortWords("MONTH") === "$79/mo" && deckAddonShortWords("YEAR") === "$790/yr");
+check("the trial's words, as the owner wrote them", deckTrialWords() === "Included in your trial. After the trial, Deck Studio is a $79/mo add-on." && deckTrialWords("YEAR") === "Included in your trial. After the trial, Deck Studio is a $790/yr add-on." && DECK_PICK_TRIAL_WORDS === "Included in your trial, billed after it");
+check(
+  "a line bought at $49 keeps its words, marked \"your price\"; today's price is not marked; no price read says today's",
+  deckAddonHeldWords(4900) === "$49/mo (your price)" && deckAddonHeldWords(49000, "YEAR") === "$490/yr (your price)" && deckAddonHeldWords(7900) === "$79/mo" && deckAddonHeldWords(null) === "$79/mo" && deckAddonHeldWords(4900, "MONTH", { long: true }) === "$49/month (your price)" && deckAddonHeldWords(4900, "MONTH", { mark: false }) === "$49/mo",
+);
 const planItem = { id: "si_plan", price: { id: "price_pro", metadata: { planSlug: "professional" } } };
 const addonItem = { id: "si_deck", price: { id: "price_deck", metadata: { jfKind: "deck-addon", interval: "MONTH" } } };
 const pageItem = { id: "si_page", price: { id: "price_page", metadata: { jfKind: "custom-page" } } };
@@ -107,6 +111,11 @@ check("the add-on's line is told by its price's kind; the plan's line is never t
 check("a line that is all there is stays the plan's line (nothing else to read)", planLine([addonItem])?.id === "si_deck" && planLine([]) === undefined);
 const rec = parseDeckAddonRecord(JSON.stringify({ subId: "sub_1", itemId: "si_deck", interval: "MONTH", since: "2026-10-19T00:00:00Z" }));
 check("a record reads back; a broken one reads as none", rec?.subId === "sub_1" && rec.itemId === "si_deck" && parseDeckAddonRecord("{") === null && parseDeckAddonRecord(JSON.stringify({ subId: "sub_1" })) === null && parseDeckAddonRecord(null) === null);
+check(
+  "a record carries the price its line bills (2026-10-26); one from before has none — read off the line once",
+  rec?.cents === undefined && parseDeckAddonRecord(JSON.stringify({ subId: "sub_1", itemId: "si_deck", interval: "MONTH", since: "", cents: 4900 }))?.cents === 4900 && parseDeckAddonRecord(JSON.stringify({ subId: "sub_1", itemId: "si_deck", cents: "x" }))?.cents === undefined,
+);
+check("a grandfathered $49 line is still the add-on: told by its kind, never by its amount", isDeckAddonLine({ price: { unit_amount: 4900, metadata: { jfKind: "deck-addon" } } } as never) && !isDeckAddonLine({ price: { unit_amount: 7900, metadata: { jfKind: "professional" } } } as never));
 check("the record holds only on the subscription it was bought on", addonHeld(rec, "sub_1") && !addonHeld(rec, "sub_2") && !addonHeld(rec, null) && !addonHeld(null, "sub_1"));
 
 console.log(bad ? `\n${bad} FAILED` : "\nALL PASS");

@@ -5,7 +5,7 @@
 
 import { revalidatePath } from "next/cache";
 import { isOwnerRole, NoOrgError, requireOrg, UnauthorizedError } from "@/lib/orgContext";
-import { addDeckAddon, deckAddonOffer, removeDeckAddon, type DeckAddonOffer } from "@/lib/deckAddonBilling";
+import { addDeckAddon, deckAddonOffer, deckAddonPick, removeDeckAddon, type DeckAddonOffer, type DeckAddonPick } from "@/lib/deckAddonBilling";
 import { deckAddonPriceWords, type AddonInterval } from "@/lib/deckAddon";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { logServerError } from "@/lib/server-events";
@@ -41,6 +41,18 @@ export async function getDeckAddonOffer(): Promise<{ ok: true; offer: DeckAddonV
     return { ok: true, offer: { ...offer, owner: w.owner } };
   } catch (err) {
     logServerError("deckAddon.offer", err, { kind: "action", organizationId: w.organizationId });
+    return { ok: false, error: "Couldn't read your plan. Try again." };
+  }
+}
+
+/** What the plan cards show for "Add Deck Studio" (owner, 2026-10-26): the box, or the add-on at its own price. */
+export async function getDeckAddonPick(): Promise<{ ok: true; pick: DeckAddonPick } | { ok: false; error: string }> {
+  const w = await who();
+  if (!w.ok) return w;
+  try {
+    return { ok: true, pick: await deckAddonPick(w.organizationId) };
+  } catch (err) {
+    logServerError("deckAddon.pick", err, { kind: "action", organizationId: w.organizationId });
     return { ok: false, error: "Couldn't read your plan. Try again." };
   }
 }

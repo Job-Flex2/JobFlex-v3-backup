@@ -7,6 +7,7 @@ import { rowUsage } from "@/lib/planRowUsage";
 import { annualDeal, offersYearly, sharedDealWords, withBillingTerm, type BillingTerm } from "@/lib/planDeal";
 import { PlanCardHead, PlanDealSlot, PlanPrice, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
 import { SPOTLIGHT, SPOTLIGHT_MISSING, SPOTLIGHT_TAG, spotlightLine, spotlightRow, withSpotlightFirst, type SpotlightTool } from "@/lib/planSpotlight";
+import { deckAddonShortWords } from "@/lib/deckAddon";
 import "./pricing-faq.css";
 
 /* THE REGISTER'S PLAN CARDS ON THE LANDING (owner, 2026-09-26). A port of
@@ -40,6 +41,14 @@ function Check() {
   return (
     <svg className="lp-pw-ic" viewBox="0 0 24 24" aria-hidden>
       <path d="M4 12.5l5 5L20 6.5" />
+    </svg>
+  );
+}
+/** The add-on's row: a plus, on every plan alike. */
+function Plus() {
+  return (
+    <svg className="lp-pw-ic" viewBox="0 0 24 24" aria-hidden>
+      <path d="M12 5v14M5 12h14" />
     </svg>
   );
 }
@@ -224,6 +233,15 @@ export function PricingPlans({
                     </li>
                   );
                 })}
+                {/* DECK STUDIO (owner, 2026-10-26): on no plan — the same add-on on every one (lib/deckAddon). */}
+                <li className="lp-pw-f lp-pw-f--addon" data-plan-addon="deck">
+                  <Plus />
+                  <span className="sr-only">Add-on: </span>
+                  <span className="lp-pw-ft">
+                    <span className="lp-pw-fn">Deck Studio</span>
+                    <b className="lp-pw-addon">Add-on {deckAddonShortWords(term === "YEAR" && p.yearlyPriceCents ? "YEAR" : "MONTH")}</b>
+                  </span>
+                </li>
               </ul>
               <a href={startHref} className="lp-pw-go" data-cta="pricing" data-cta-button={`plan-${p.slug}`}>
                 Start {days}-day free trial

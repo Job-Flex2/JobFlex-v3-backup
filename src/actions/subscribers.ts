@@ -23,6 +23,7 @@ import {
 } from "@/components/v3/admin-subscribers/billing-metrics";
 import { customPriceCents, normalizeCustomPages } from "@/lib/customPlan";
 import { CARD_EXPAND, expandedCustomer, NO_CARD, paymentCardOf, paymentCardsFor, type PaymentCard } from "@/lib/paymentCard";
+import { planLine } from "@/lib/deckAddon";
 
 // The MRR rule itself lives in that module — see its header. This file only
 // establishes the FACTS each rule reads: which organization a subscription
@@ -274,7 +275,7 @@ function lastEventOf(sub: Stripe.Subscription): { at: Date; kind: ChangeKind } {
  * a price the ledger has never seen falls through to the checkout metadata.
  */
 function planFor(sub: Stripe.Subscription, slugByPrice: ReadonlyMap<string, string>): string {
-  const priceId = sub.items.data[0]?.price?.id;
+  const priceId = planLine(sub.items.data)?.price?.id;
   const ledgerSlug = priceId ? slugByPrice.get(priceId) : undefined;
   if (ledgerSlug) return ledgerSlug;
   const m = sub.metadata ?? {};
@@ -283,7 +284,7 @@ function planFor(sub: Stripe.Subscription, slugByPrice: ReadonlyMap<string, stri
   if (m.planTier) return m.planTier.toUpperCase();
   if (m.planName) return m.planName.toUpperCase();
   if (m.planSlug) return m.planSlug.toUpperCase();
-  const price = sub.items.data[0]?.price;
+  const price = planLine(sub.items.data)?.price;
   const pm = price?.metadata ?? {};
   if (pm.planName) return pm.planName.toUpperCase();
   if (pm.planSlug) return pm.planSlug.toUpperCase();

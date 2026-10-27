@@ -61,6 +61,9 @@ import {
 import type { UpgradePlan } from "@/components/v3/upgrade-blueprint/upgrade-content";
 import { dealDollars, offersYearly, planTerm, sharedDealWords, annualDeal, type BillingTerm } from "@/lib/planDeal";
 import { PlanCardHead, PlanDealSlot, PlanPrice, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
+import { DeckAddonPickBox } from "@/components/v3/deck-addon/deck-addon-pick";
+import { getDeckAddonPick } from "@/actions/deckAddon";
+import type { DeckAddonPick } from "@/lib/deckAddon";
 import "./mobile-upgrade.css";
 
 /** How long the sheets take to leave. Must match the transition in the CSS. */
@@ -157,6 +160,25 @@ export function MobileUpgradeContent({
   const [err, setErr] = useState<string | null>(null);
   /** "Card declined — update your card" after a change the card did not pay for. */
   const [declined, setDeclined] = useState<string | null>(null);
+  /* "ADD DECK STUDIO" (owner, 2026-10-26) — the desk build's box (upgrade-content), under the switch. */
+  const [deckPick, setDeckPick] = useState<DeckAddonPick | null>(null);
+  const [withDeck, setWithDeck] = useState(false);
+  useEffect(() => {
+    if (!isOwner || !checkoutReady) return;
+    let live = true;
+    void getDeckAddonPick()
+      .then((res) => {
+        if (live && res.ok) setDeckPick(res.pick);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [isOwner, checkoutReady, upgradedTo]);
+  const deckFor = useCallback(
+    (term: BillingTerm) => withDeck && !!deckPick && !deckPick.included && !(deckPick.held && deckPick.held.interval === term),
+    [withDeck, deckPick],
+  );
 
   // The current plan as the page knows it; moved locally after an in-place
   // switch so the labels flip before the refresh lands. Overrides win until the
@@ -306,6 +328,10 @@ export function MobileUpgradeContent({
   const termSwitch = showTerms ? (
     <PlanTermSwitch className="mu-termsw" value={interval} onChange={setInterval} tag={termTag} />
   ) : null;
+  const deckBox =
+    isOwner && checkoutReady ? (
+      <DeckAddonPickBox className="mu-deckpick" checked={withDeck} onChange={setWithDeck} pick={deckPick} interval={interval} disabled={busy !== null} />
+    ) : null;
   /* A change to the pages of a Custom plan — added, removed or both — is made
      on the subscription the shop already has (actions/billing.updateCustomPages,
      lib/customBilling): added pages are charged now, prorated (nothing in a
@@ -344,7 +370,7 @@ export function MobileUpgradeContent({
     const res = await fetch("/api/checkout/subscription", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ planSlug: slug, interval: termFor(slug), customPages: customPagesToBuy }),
+      body: JSON.stringify({ planSlug: slug, interval: termFor(slug), customPages: customPagesToBuy, deckAddon: deckFor(termFor(slug)) }),
     });
     const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
     if (!res.ok || !body.url) throw new Error(body.error ?? "Couldn't open checkout.");
@@ -382,7 +408,7 @@ export function MobileUpgradeContent({
       setDeclined(null);
       setBusy(p.slug);
       try {
-        const res = await changePlan(p.slug, preview.interval, preview.prorationDate);
+        const res = await changePlan(p.slug, preview.interval, preview.prorationDate, preview.addon !== null);
         if (!res.ok) {
           if (res.code === "card_declined" || res.code === "past_due") setDeclined(res.error);
           else setErr(res.error);
@@ -404,7 +430,9 @@ export function MobileUpgradeContent({
                 ? "Nothing was charged. Your trial runs on."
                 : "Nothing was charged.",
           );
+          if (res.addonError) toast.error("Deck Studio wasn't added", res.addonError);
         }
+        if (preview.addon) setWithDeck(false);
         // The layout re-renders with the new plan's locks and quota pills.
         router.refresh();
       } catch (e) {
@@ -428,7 +456,7 @@ export function MobileUpgradeContent({
     setDeclined(null);
     setBusy(p.slug);
     try {
-      const preview = await previewPlanChange(p.slug, termFor(p.slug));
+      const preview = await previewPlanChange(p.slug, termFor(p.slug), deckFor(termFor(p.slug)));
       if (!preview.ok) {
         if (preview.code === "past_due") setDeclined(preview.error);
         else setErr(preview.error);
@@ -461,7 +489,7 @@ export function MobileUpgradeContent({
           ? `Downgrade to ${p.name}?`
           : `Switch to ${p.name}?`;
   const changeLabel = (p: UpgradePlan, v: Extract<PlanChangePreviewResult, { ok: true }>) =>
-    v.route === "charge"
+    v.route === "charge" || (v.addon && (v.dueNowCents ?? 0) > 0)
       ? `Pay ${money(v.dueNowCents ?? 0)} and switch`
       : v.route === "schedule"
         ? `Switch on ${longDay(v.switchAt)}`
@@ -1079,6 +1107,7 @@ export function MobileUpgradeContent({
           <div className="mu-embed-lbl">Plans</div>
           {termSwitch}
         </div>
+        {deckBox}
         {declined ? <CardDeclinedNote className="mu-pcn" message={declined} /> : null}
         {scheduledSwitch ? (
           <ScheduledSwitchNote className="mu-pcn" at={scheduledSwitch.at} planName={scheduledSwitch.planName} interval={scheduledSwitch.interval} />
@@ -1176,6 +1205,7 @@ export function MobileUpgradeContent({
               subscription page embeds, instead of a tall stack of cards —
               under the one Monthly | Annual switch (2026-10-12). */}
           {termSwitch}
+          {deckBox}
           <div className="mu-rail">
             {plans.map(planCard)}
             {onCustom || customOffered ? customCard : null}

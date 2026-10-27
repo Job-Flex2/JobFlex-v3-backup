@@ -1542,6 +1542,9 @@
    ══════════════════════════════════════════════════════════════════════ */
 .bp :global(.plan-sheet-in) { height: auto; min-height: 100%; }
 .bp :global(.pw-termsw) { margin: 0; }
+/* "Add Deck Studio" between the head and the cards (owner, 2026-10-26; components/v3/deck-addon .pick): as wide as
+   its words on a desk, the row's width on a phone. Tag + class outranks the plate's own `margin: 0`. */
+.bp :global(label.pw-deckpick), .bp :global(p.pw-deckpick) { width: fit-content; max-width: 100%; margin: 0 0 14px; }
 .bp :global(.pw-plans) {
   grid-template-rows: repeat(var(--pw-rows, 5), auto);
   grid-auto-rows: auto;
@@ -1572,6 +1575,7 @@
 
 @media (max-width: 768px) {
   .bp :global(.pw-termsw) { margin: 0 18px; }
+  .bp :global(label.pw-deckpick), .bp :global(p.pw-deckpick) { width: auto; margin: 0 18px 14px; }
   /* The carousel is the same grid, its columns a card wide, swiped. */
   .bp :global(.pw-plans) {
     display: grid;

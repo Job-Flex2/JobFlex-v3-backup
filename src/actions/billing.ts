@@ -386,11 +386,12 @@ async function sendFreeSwitchEmail(organizationId: string, plan: string, endsAt:
 export type ChangePlanResult = PlanChangeDone;
 export type PlanChangePreviewResult = PlanChangePreview | PlanChangeRefusal;
 
-export async function previewPlanChange(planSlug: string, interval: "MONTH" | "YEAR" = "MONTH"): Promise<PlanChangePreviewResult> {
+/** `deckAddon`: "Add Deck Studio" ticked beside the plan cards — the add-on goes on with the change (lib/planChange). */
+export async function previewPlanChange(planSlug: string, interval: "MONTH" | "YEAR" = "MONTH", deckAddon = false): Promise<PlanChangePreviewResult> {
   const { organizationId } = await requireOwner();
   if (!isStripeEnabled()) return { ok: false, error: "Checkout is not configured." };
   try {
-    return await previewPlanChangeFor(organizationId, String(planSlug), interval === "YEAR" ? "YEAR" : "MONTH");
+    return await previewPlanChangeFor(organizationId, String(planSlug), interval === "YEAR" ? "YEAR" : "MONTH", undefined, deckAddon === true);
   } catch (err) {
     logServerError("billing.previewPlanChange", err, { kind: "action", organizationId });
     return { ok: false, error: "Couldn't price the change. Try again." };
@@ -401,13 +402,14 @@ export async function changePlan(
   planSlug: string,
   interval: "MONTH" | "YEAR" = "MONTH",
   prorationDate?: number | null,
+  deckAddon = false,
 ): Promise<ChangePlanResult> {
   const { organizationId, user } = await requireOwner();
   if (!isStripeEnabled()) return { ok: false, error: "Checkout is not configured." };
   const planWas = await planSnapshot(organizationId);
   let res: PlanChangeDone;
   try {
-    res = await applyPlanChange(organizationId, String(planSlug), interval === "YEAR" ? "YEAR" : "MONTH", typeof prorationDate === "number" ? prorationDate : null);
+    res = await applyPlanChange(organizationId, String(planSlug), interval === "YEAR" ? "YEAR" : "MONTH", typeof prorationDate === "number" ? prorationDate : null, undefined, deckAddon === true);
   } catch (err) {
     logServerError("billing.changePlan", err, { kind: "action", organizationId });
     return { ok: false, error: "Couldn't switch the plan. Try again." };
@@ -423,7 +425,7 @@ export async function changePlan(
     res.mode === "scheduled"
       ? `Updated billing settings — switch to ${res.planName} (${res.interval === "YEAR" ? "annual" : "monthly"}) booked for ${new Date(res.switchAt).toLocaleDateString("en-US")}`
       : `Updated billing settings — plan changed to ${res.planName} (${res.interval === "YEAR" ? "annual" : "monthly"})${res.chargedCents > 0 ? `, $${(res.chargedCents / 100).toFixed(2)} charged` : ""}`,
-    { plan: planSlug, interval, mode: res.mode, ...(res.mode === "switched" ? { route: res.route, chargedCents: res.chargedCents } : { switchAt: res.switchAt }) },
+    { plan: planSlug, interval, mode: res.mode, ...(deckAddon === true ? { deckAddon: true } : {}), ...(res.mode === "switched" ? { route: res.route, chargedCents: res.chargedCents } : { switchAt: res.switchAt }) },
   );
   return res;
 }

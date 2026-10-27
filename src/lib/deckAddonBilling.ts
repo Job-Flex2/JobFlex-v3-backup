@@ -1,18 +1,26 @@
 import "server-only";
 // THE DECK STUDIO ADD-ON ON STRIPE (owner, 2026-10-19 — lib/deckAddon for the rules): one more line on the
-// subscription the shop already has, $49 a month ($490 on a yearly plan). The same ways as the custom plan's pages
-// (lib/customBilling):
+// subscription the shop already has, $79 a month ($790 on a yearly plan; $49/$490 before 2026-10-26 — those lines keep
+// their price, lib/deckAddon). The same ways as the custom plan's pages (lib/customBilling):
 //
 //   · ADD — proration_behavior "always_invoice": the rest of this period is invoiced and charged at once, under
 //     payment_behavior "pending_if_incomplete", so a declined card adds NOTHING (the pending update's invoice is
-//     voided). Never in a trial (owner, 2026-10-20): the trial holds the studio already, so the add is refused with
-//     "Included in your trial" and no line is made — a $49 line left from the trial would be billed unnoticed.
+//     voided). Never from the add-on button in a trial (owner, 2026-10-20): the trial holds the studio already, so the
+//     add is refused with "Included in your trial" and no line is made — a line left from the trial would be billed
+//     unnoticed.
+//   · WITH A PLAN (owner, 2026-10-26): picked with the plan — "Add Deck Studio" ticked beside the plan cards, or
+//     switched on on Stripe's own checkout page (optional_items) — the line goes on with the plan, in the trial too,
+//     and is billed when the trial ends. That is the one way the add-on rides a trial: the person chose it, beside
+//     the words "billed after it".
 //   · REMOVE — Stripe's own proration (owner, 2026-10-20): proration_behavior "create_prorations", so the unused
 //     rest of the period comes back as a credit on the next bill. The studio goes back to preview now.
 //
 // WHAT OPENS THE STUDIO is our record, SyncState `deckAddon:<orgId>` ({ subId, itemId }), written when the line is
 // added and kept to Stripe by the webhook (mirrorDeckAddon): a line removed in Stripe, or a subscription replaced by
 // a new Checkout, takes the record with it — and a record names its subscription, so a new one never inherits it.
+//
+// A LINE KEEPS THE PRICE IT WAS BOUGHT AT: the record carries the line's own price (`cents`), and every word that
+// names what the shop pays is read from it, never from DECK_ADDON_CENTS.
 
 import type Stripe from "stripe";
 import { db } from "@/lib/db";
@@ -27,13 +35,17 @@ import {
   DECK_ADDON_NAME,
   addonHeld,
   deckAddonCents,
+  deckAddonHeldWords,
   deckTrialWords,
   isDeckAddonLine,
   parseDeckAddonRecord,
   planLine,
   type AddonInterval,
+  type DeckAddonPick,
   type DeckAddonRecord,
 } from "@/lib/deckAddon";
+
+export type { DeckAddonPick };
 
 const keyOf = (organizationId: string) => `deckAddon:${organizationId}`;
 const LIVE = new Set(["active", "trialing"]);
@@ -76,13 +88,13 @@ const customerOf = (sub: Stripe.Subscription) => (typeof sub.customer === "strin
 type Ready = { ok: true; stripe: Stripe; mode: StripeMode; sub: Stripe.Subscription } | { ok: false; error: string; code: DeckAddonFailure };
 export type DeckAddonFailure = "no-subscription" | "unreachable" | "not-live" | "trial" | "included" | "past-due" | "booked-switch" | "declined" | "failed";
 
-/** A Custom plan that bought the Deck estimator page holds the studio: never a second $49 line (owner, 2026-10-20). */
+/** A Custom plan that bought the Deck estimator page holds the studio: never a second add-on line (owner, 2026-10-20). */
 export const CUSTOM_INCLUDED_WORDS = "Included in your Custom plan.";
 
 const NO_PAID_PLAN = "Deck Studio goes on a paid plan. Pick a plan on Subscription first, then add it here.";
 
 /** The organization's live Stripe subscription, or why the add-on cannot be put on it. */
-async function liveSubscription(organizationId: string, forChange: boolean): Promise<Ready> {
+async function liveSubscription(organizationId: string, forChange: boolean, deps?: { stripe: Stripe; mode: StripeMode }): Promise<Ready> {
   const row = await db.subscription.findUnique({ where: { organizationId } });
   // The Free plan (an ended trial, a cancelled plan — lib/freePlan) has nothing to add a line to.
   if (!row || onFreePlan(row)) return { ok: false, code: "not-live", error: NO_PAID_PLAN };
@@ -98,7 +110,7 @@ async function liveSubscription(organizationId: string, forChange: boolean): Pro
       return { ok: false, code: "booked-switch", error: `A switch to ${booked.planName} is booked for ${new Date(booked.at).toLocaleDateString("en-US")}. Cancel it on Subscription first, or add Deck Studio after it.` };
     }
   }
-  const { stripe, mode } = await getStripeClient();
+  const { stripe, mode } = deps ?? (await getStripeClient());
   let sub: Stripe.Subscription;
   try {
     sub = await stripe.subscriptions.retrieve(row.externalSubId);
@@ -128,14 +140,38 @@ export type DeckAddonChange =
   | { ok: false; error: string; code: DeckAddonFailure };
 
 function recordOf(sub: Stripe.Subscription, line: Stripe.SubscriptionItem, since?: string): DeckAddonRecord {
-  return { subId: sub.id, itemId: line.id, interval: termOf(sub), since: since ?? new Date().toISOString() };
+  const cents = line.price?.unit_amount ?? null;
+  return { subId: sub.id, itemId: line.id, interval: termOf(sub), since: since ?? new Date().toISOString(), ...(cents ? { cents } : {}) };
+}
+
+/** The add-on this organization holds now, with the price its line bills — a record from before 2026-10-26 has no
+ *  price, so it is read off the line once and kept. Null when it is not held. */
+export async function readHeldDeckAddon(organizationId: string, externalSubId?: string | null): Promise<DeckAddonRecord | null> {
+  const subId =
+    externalSubId !== undefined
+      ? externalSubId
+      : (await db.subscription.findUnique({ where: { organizationId }, select: { externalSubId: true } }))?.externalSubId ?? null;
+  const record = await readDeckAddonRecord(organizationId);
+  if (!record || !addonHeld(record, subId)) return null;
+  if (record.cents || !isStripeEnabled()) return record;
+  try {
+    const { stripe } = await getStripeClient();
+    const cents = (await stripe.subscriptionItems.retrieve(record.itemId)).price?.unit_amount ?? null;
+    if (!cents) return record;
+    const next = { ...record, cents };
+    await writeRecord(organizationId, next);
+    return next;
+  } catch (err) {
+    console.warn("[deckAddon] the held line's price could not be read:", err);
+    return record;
+  }
 }
 
 /** PUT THE ADD-ON ON THE PLAN: prorated and charged now, all or nothing on the card. Never in a trial: the trial
  *  holds the studio, and nothing is put on the subscription for after it. */
-export async function addDeckAddon(organizationId: string): Promise<DeckAddonChange> {
+export async function addDeckAddon(organizationId: string, deps?: { stripe: Stripe; mode: StripeMode }): Promise<DeckAddonChange> {
   if (await customDeckPageHeld(organizationId)) return { ok: false, code: "included", error: CUSTOM_INCLUDED_WORDS };
-  const ready = await liveSubscription(organizationId, true);
+  const ready = await liveSubscription(organizationId, true, deps);
   if (!ready.ok) return ready;
   const { stripe, mode } = ready;
   let sub = ready.sub;
@@ -223,6 +259,8 @@ export async function removeDeckAddon(organizationId: string): Promise<{ ok: tru
 export interface DeckAddonOffer {
   /** On the plan now. */
   held: boolean;
+  /** What the held line bills per term — its own price, which a line bought before 2026-10-26 keeps ($49). */
+  heldCents: number | null;
   /** It can be added from here (a live card subscription with nothing booked). */
   canAdd: boolean;
   /** Why it can't, in the shop's words. */
@@ -242,9 +280,11 @@ export interface DeckAddonOffer {
 /** What adding it would cost, before it is added. */
 export async function deckAddonOffer(organizationId: string): Promise<DeckAddonOffer> {
   const row = await db.subscription.findUnique({ where: { organizationId } });
-  const held = addonHeld(await readDeckAddonRecord(organizationId), row?.externalSubId);
+  const record = await readHeldDeckAddon(organizationId, row?.externalSubId ?? null);
+  const held = !!record;
   const base: DeckAddonOffer = {
     held,
+    heldCents: record?.cents ?? null,
     canAdd: false,
     reason: null,
     interval: "MONTH",
@@ -254,7 +294,7 @@ export async function deckAddonOffer(organizationId: string): Promise<DeckAddonO
     trialEndsAt: row?.status === "TRIALING" && row.trialEndsAt ? row.trialEndsAt.toISOString() : null,
     included: null,
   };
-  if (held) return base;
+  if (record) return { ...base, interval: record.interval, termCents: record.cents ?? deckAddonCents(record.interval) };
   // A complimentary plan holds the studio (lib/editions): nothing to add.
   if (row?.provider === "MANUAL" && !onFreePlan(row)) return { ...base, included: "grant", reason: "Deck Studio is included in your complimentary plan." };
   // The Custom plan's deck page, bought: the add-on as a page — it outlasts the trial, so it is said before it.
@@ -270,24 +310,71 @@ export async function deckAddonOffer(organizationId: string): Promise<DeckAddonO
   }
   const out: DeckAddonOffer = { ...base, canAdd: true, interval, termCents: deckAddonCents(interval), trialing: false };
   try {
-    const price = await deckAddonPrice(stripe, mode, interval);
-    const pre = await stripe.invoices.createPreview({
-      customer: customerOf(sub),
-      subscription: sub.id,
-      subscription_details: { items: [{ price, quantity: 1 }], proration_behavior: "always_invoice" },
-    });
-    const proration = pre.lines.data
-      .filter((l) => {
-        // Both shapes (lib/stripeCompat): today's `parent.subscription_item_details.proration`, the 2024-06-20 line's
-        // own `proration`. Read loosely: `parent` is newer than some Stripe type versions in use.
-        const line = l as unknown as { proration?: boolean; parent?: { subscription_item_details?: { proration?: boolean } } | null };
-        return Boolean(line.parent?.subscription_item_details?.proration ?? line.proration);
-      })
-      .reduce((sum, l) => sum + l.amount, 0);
-    return { ...out, dueNowCents: Math.max(0, proration) };
+    return { ...out, dueNowCents: await deckAddonDueNow(stripe, sub, await deckAddonPrice(stripe, mode, interval)) };
   } catch (err) {
     console.warn("[deckAddon] preview failed:", err);
     return out;
+  }
+}
+
+/** What putting the add-on on `sub` charges today: the rest of the period, prorated — Stripe's own preview. */
+export async function deckAddonDueNow(stripe: Stripe, sub: Stripe.Subscription, price: string): Promise<number> {
+  const pre = await stripe.invoices.createPreview({
+    customer: customerOf(sub),
+    subscription: sub.id,
+    subscription_details: { items: [{ price, quantity: 1 }], proration_behavior: "always_invoice" },
+  });
+  const proration = pre.lines.data
+    .filter((l) => {
+      // Both shapes (lib/stripeCompat): today's `parent.subscription_item_details.proration`, the 2024-06-20 line's
+      // own `proration`. Read loosely: `parent` is newer than some Stripe type versions in use.
+      const line = l as unknown as { proration?: boolean; parent?: { subscription_item_details?: { proration?: boolean } } | null };
+      return Boolean(line.parent?.subscription_item_details?.proration ?? line.proration);
+    })
+    .reduce((sum, l) => sum + l.amount, 0);
+  return Math.max(0, proration);
+}
+
+export async function deckAddonPick(organizationId: string): Promise<DeckAddonPick> {
+  const row = await db.subscription.findUnique({ where: { organizationId } });
+  const free = !row || onFreePlan(row);
+  const trialing = !free && row?.status === "TRIALING";
+  const record = free ? null : await readHeldDeckAddon(organizationId, row?.externalSubId ?? null);
+  if (record) return { offer: false, held: { words: deckAddonHeldWords(record.cents, record.interval), interval: record.interval }, included: null, trialing };
+  if (row && !free && row.provider === "MANUAL") return { offer: false, held: null, included: "grant", trialing };
+  if (row && !free && (await customDeckPageHeld(organizationId, row.plan))) return { offer: false, held: null, included: "custom", trialing };
+  return { offer: true, held: null, included: null, trialing };
+}
+
+/**
+ * THE ADD-ON ON A PLAN CHECKOUT (owner, 2026-10-26). Every subscription Checkout carries it:
+ *   · ticked beside the plan cards ("Add Deck Studio") — a line of the order, like the plan's;
+ *   · not ticked — an OPTIONAL item: Stripe's page shows a Deck Studio row the person can switch on;
+ *   · the subscription this checkout replaces holds it on the same term — that line's OWN price goes on as a line of
+ *     the order, so a shop that bought it at $49 keeps $49 on the plan it moves to.
+ * The trial (trial_period_days) covers every line of the subscription.
+ */
+export async function deckAddonCheckoutItems(opts: {
+  stripe: Stripe;
+  mode: StripeMode;
+  interval: AddonInterval;
+  chosen: boolean;
+  /** The held line's price on the subscription this checkout replaces (same term only). */
+  keepPriceId?: string | null;
+}): Promise<{ lineItems: Stripe.Checkout.SessionCreateParams.LineItem[]; optionalItems: Stripe.Checkout.SessionCreateParams.OptionalItem[] }> {
+  if (opts.keepPriceId) return { lineItems: [{ price: opts.keepPriceId, quantity: 1 }], optionalItems: [] };
+  const price = await deckAddonPrice(opts.stripe, opts.mode, opts.interval);
+  return opts.chosen ? { lineItems: [{ price, quantity: 1 }], optionalItems: [] } : { lineItems: [], optionalItems: [{ price, quantity: 1 }] };
+}
+
+/** The add-on line's price on a subscription, when it bills on `interval` — what a replacement checkout carries on. */
+export async function heldDeckAddonPrice(stripe: Stripe, subId: string, interval: AddonInterval): Promise<string | null> {
+  try {
+    const sub = await stripe.subscriptions.retrieve(subId);
+    const line = sub.items.data.find(isDeckAddonLine);
+    return line && termOf(sub) === interval ? line.price.id : null;
+  } catch {
+    return null;
   }
 }
 
@@ -296,8 +383,9 @@ export async function deckAddonOffer(organizationId: string): Promise<DeckAddonO
  * that returned before its write, a line an admin put on in Stripe); a line gone — removed in Stripe, dropped by a
  * plan switch — or the subscription ended takes it away. `sub` is Stripe's current copy (the webhook reads it).
  */
-export async function mirrorDeckAddon(sub: Stripe.Subscription, ended = false): Promise<void> {
+export async function mirrorDeckAddon(sub: Stripe.Subscription, ended = false, knownOrganizationId?: string | null): Promise<void> {
   const organizationId =
+    knownOrganizationId ||
     sub.metadata?.organizationId ||
     (await db.subscription.findFirst({ where: { externalSubId: sub.id }, select: { organizationId: true } }))?.organizationId;
   if (!organizationId) return;
@@ -311,6 +399,6 @@ export async function mirrorDeckAddon(sub: Stripe.Subscription, ended = false): 
   // Only the subscription the organization is on carries it (a second, stray subscription never does).
   const current = await db.subscription.findUnique({ where: { organizationId }, select: { externalSubId: true } });
   if (current?.externalSubId && current.externalSubId !== sub.id) return;
-  if (record?.subId === sub.id && record.itemId === line.id) return;
+  if (record?.subId === sub.id && record.itemId === line.id && record.cents === (line.price?.unit_amount ?? undefined)) return;
   await writeRecord(organizationId, recordOf(sub, line, record?.subId === sub.id ? record.since : undefined));
 }

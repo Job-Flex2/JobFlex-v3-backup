@@ -4,6 +4,7 @@ import { Reveal } from "./reveal";
 import { REGISTER } from "./routes";
 import "./pricing-faq.css";
 import { CustomPlanBlock } from "@/components/v3/pricing-d/custom-plan-block";
+import { DeckAddonPlate } from "@/components/v3/pricing-d/deck-addon-plate";
 import type { SpotlightTool } from "@/lib/planSpotlight";
 
 /* The price anchor before the footer (CRO stage 2, 2026-09-09). The plans
@@ -47,6 +48,11 @@ export function LandingPricing({
         <Reveal delay={120} className="mt-9 sm:mt-11">
           <PricingPlans plans={sellable} registerHref={registerHref} tone="ink" spotlight={spotlight} />
         </Reveal>
+
+        {/* The Deck Studio add-on (owner, 2026-10-26): on any plan, in the trial. */}
+        <div className="mt-8 sm:mt-10">
+          <DeckAddonPlate registerHref={registerHref} cta="landing-deck" delay={150} />
+        </div>
 
         {customOffered ? (
           <div className="mt-10 sm:mt-14">

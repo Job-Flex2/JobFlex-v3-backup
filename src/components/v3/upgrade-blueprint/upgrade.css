@@ -671,6 +671,10 @@
    row's height and its button sits at the foot. Nothing scrolls or folds
    inside a card any more: the fixed card heights are gone. */
 .jf-upgrade .jf-up-termsw { margin: 0; }
+/* "Add Deck Studio" under the switch (owner, 2026-10-26; components/v3/deck-addon .pick): a plate as wide as its
+   words, the row's own gap under it. Tag + class so it outranks the plate's own `margin: 0`. */
+.jf-upgrade label.jf-up-deckpick,
+.jf-upgrade p.jf-up-deckpick { width: fit-content; max-width: 100%; margin: 14px 0 18px; }
 .jf-upgrade .jf-up-plans,
 .jf-upgrade .jf-up-plans.has-custom {
   grid-template-rows: repeat(5, auto);

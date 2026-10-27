@@ -399,6 +399,12 @@ export async function syncSubscriptionFromStripe(
     });
     reportPlanChange(organizationId, "stripe", planWas);
     await recordMirrorReference(organizationId, subCreatedMs);
+    /* THE DECK STUDIO ADD-ON'S RECORD FOLLOWS THE LINES (lib/deckAddonBilling) — here, where the organization is
+       known: a sign-up's subscription names none in its metadata, so the webhook's own mirror could not place an
+       add-on bought on the sign-up's checkout page (owner, 2026-10-26). Loaded late: that module reaches back here. */
+    await import("@/lib/deckAddonBilling")
+      .then((m) => m.mirrorDeckAddon(sub, false, organizationId))
+      .catch((err) => console.warn("[stripe-sync] deck add-on mirror:", err));
 
     // The team's alert texts (lib/adminAlerts), best effort, never the sync's problem:
     //  · a trial that now pays — the mirror moved TRIALING → ACTIVE;

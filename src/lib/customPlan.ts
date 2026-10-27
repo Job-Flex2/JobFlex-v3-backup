@@ -121,9 +121,9 @@ export const CUSTOM_BASE_FEATURES = [
 ];
 
 /** Pages no longer sold but still read off a stored selection, so a plan that holds one keeps its price.
- *  The Deck estimator (2026-10-19): not sold as a page any more — Deck Studio is its own $49/month add-on on
+ *  The Deck estimator (2026-10-19): not sold as a page any more — Deck Studio is its own $79/month add-on on
  *  any plan (lib/deckAddon). A stored selection still reads (the plan keeps its price) and counts as the add-on
- *  bought as a page: the whole Deck Studio, no second $49 line (owner, 2026-10-20 — lib/editions). */
+ *  bought as a page: the whole Deck Studio, no second add-on line (owner, 2026-10-20 — lib/editions). */
 export const CUSTOM_DECK_PAGE: CustomPageId = "deck-estimator";
 const RETIRED_PAGES: readonly CustomPageId[] = [CUSTOM_DECK_PAGE];
 

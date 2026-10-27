@@ -1067,6 +1067,10 @@ body:has(.jf-mobile-upgrade.mu-shell) .jf-blueprint > .jfsup {
    card, every card is the rail's height and its action sits at the foot.
    The disclosure is gone: every list is open. */
 .jf-mobile-upgrade .mu-termsw { margin: 0; }
+/* "Add Deck Studio" under the switch (owner, 2026-10-26; components/v3/deck-addon .pick): the row's width on a phone,
+   on the switch's left edge; the plate is the touch target. Tag + class so it outranks the plate's own `margin: 0`. */
+.jf-mobile-upgrade label.mu-deckpick,
+.jf-mobile-upgrade p.mu-deckpick { margin: 12px 0 14px; }
 .jf-mobile-upgrade .mu-rail {
   display: grid;
   grid-auto-flow: column;

@@ -16,6 +16,7 @@ import { CUSTOM_PLAN_SLUG, customPriceCents, normalizeCustomPages } from "@/lib/
 import { getCustomPlanTrialDays } from "@/lib/customPlanConfig";
 import { customLineItems, customMetadata } from "@/lib/customBilling";
 import { CUSTOM_PLAN_OFF_SALE, customPlanOffered } from "@/lib/customPlanFlag";
+import { deckAddonCheckoutItems, heldDeckAddonPrice } from "@/lib/deckAddonBilling";
 
 // Real SaaS subscription checkout. A captured influencer promo (the org's
 // permanent signup stamp, falling back to the 30-day capture cookie) is
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Stripe is not configured." }, { status: 503 });
   }
 
-  const { planSlug, interval, customPages } = await req.json().catch(() => ({}));
+  const { planSlug, interval, customPages, deckAddon } = await req.json().catch(() => ({}));
   if (!planSlug || !interval) {
     return NextResponse.json({ error: "planSlug and interval are required." }, { status: 400 });
   }
@@ -263,9 +264,15 @@ export async function POST(req: Request) {
      again. Until this, "Restart subscription" after a cancellation (even one
      for not paying) opened Checkout with the catalog's trial again. */
   const trialDays = replacesSubId ? 0 : await trialDaysFor(organizationId, plan.trialDays);
+  /* DECK STUDIO ON STRIPE'S PAGE (owner, 2026-10-26; lib/deckAddonBilling): "Add Deck Studio" ticked puts the add-on
+     on the order; otherwise it is an optional row Stripe's page lets the owner switch on. A replaced subscription
+     that holds it on this term passes ITS line's price on — a shop that bought it at $49 keeps $49. */
+  const keepDeckPrice = replacesSubId ? await heldDeckAddonPrice(stripe, replacesSubId, interval) : null;
+  const deck = await deckAddonCheckoutItems({ stripe, mode, interval, chosen: deckAddon === true, keepPriceId: keepDeckPrice });
   const baseParams = {
     mode: "subscription" as const,
-    line_items: lineItems,
+    line_items: [...lineItems, ...deck.lineItems],
+    ...(deck.optionalItems.length ? { optional_items: deck.optionalItems } : {}),
     ...(sub?.externalCustomerId && mode === "live"
       ? { customer: sub.externalCustomerId }
       : { customer_email: user.email ?? undefined }),
@@ -283,6 +290,7 @@ export async function POST(req: Request) {
       planSlug: plan.slug,
       interval,
       replacesSubId: replacesSubId ?? "",
+      ...(deck.lineItems.length ? { deckAddon: keepDeckPrice ? "kept" : "1" } : {}),
       ...(isCustom ? { customPages: pages.join(",") } : {}),
     },
     success_url: `${origin}/dashboard/upgrade?session_id={CHECKOUT_SESSION_ID}`,

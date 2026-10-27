@@ -21,6 +21,7 @@ import { phraseKey } from "@/lib/deck/voice/words";
 import { db } from "@/lib/db";
 import { clientIp } from "@/lib/rateLimit";
 import { CLIENT_TOKEN_RE, clientLinkKey, parseClientLink } from "@/lib/deck/clientDesign";
+import { deckAddonShortWords } from "@/lib/deckAddon";
 
 type Gate = { ok: true; organizationId: string } | { ok: false; error: string };
 
@@ -29,7 +30,7 @@ async function gate(): Promise<Gate> {
     const ctx = await requireEstimatorOrManager();
     const level = await deckStudioAccess(ctx.user, ctx.organizationId);
     if (level === "none") return { ok: false, error: "Deck Studio isn't open on this account." };
-    if (level !== "full") return { ok: false, error: "Talking to Deck Studio is part of Deck Studio — add it to your plan ($49/mo) from the Deck estimator." };
+    if (level !== "full") return { ok: false, error: `Talking to Deck Studio is part of Deck Studio — add it to your plan (${deckAddonShortWords()}) from the Deck estimator.` };
     return { ok: true, organizationId: ctx.organizationId };
   } catch (err) {
     if (err instanceof UnauthorizedError) return { ok: false, error: "Only an estimator, a manager or the owner can do this." };

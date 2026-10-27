@@ -14,7 +14,7 @@
 // the same number — it is one pool, not five. HVAC has its own key. Lawn and
 // the design studio are not metered yet (no key): "Unlimited" until a key
 // exists and the owner sets a cap. Deck Studio is no plan's resource at all —
-// the trial's, then the $49/mo add-on (owner-locked 2026-10-20, lib/editions):
+// the trial's, then the $79/mo add-on (owner-locked 2026-10-20, lib/editions):
 // a row naming it never gets an amount (getPlanCatalog drops such rows too).
 
 import { LIMIT_DEFS, isUnlimited, type LimitKey, type PlanLimits } from "@/lib/planLimits";

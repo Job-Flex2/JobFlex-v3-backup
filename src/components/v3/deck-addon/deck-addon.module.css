@@ -121,3 +121,50 @@
   .da.banner .btn { flex: 1 1 100%; min-height: 44px; }
   .da .prints a { flex: 1 1 100%; justify-content: center; }
 }
+
+/* "Add Deck Studio" beside the plan cards (owner, 2026-10-26): one square box on a hair-framed plate, flat (no shadow
+   behind a square — owner, 2026-10-18), the whole plate the touch target (>= 44px). Ticked: the blueprint-blue frame. */
+.da.pick {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 44px;
+  margin: 0;
+  padding: 11px 14px;
+  border: 1.5px solid var(--ink-line, rgba(10, 10, 10, 0.12));
+  border-radius: var(--r-sm, 2px);
+  background: #fff;
+  color: var(--ink, #0a0a0a);
+  font-family: var(--font-sans, system-ui, sans-serif);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease;
+}
+.da.pick:hover { border-color: var(--ink, #0a0a0a); }
+.da.pick.pickOn { border-color: var(--accent, #1854a0); }
+.da.pick:focus-within { outline: 2px solid var(--accent, #1854a0); outline-offset: 2px; }
+.da .pickBox {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--accent, #1854a0);
+  cursor: pointer;
+}
+.da .pickBox:focus-visible { outline: none; }
+.da .pickText { display: grid; gap: 2px; min-width: 0; }
+.da .pickTitle { font-size: 14px; font-weight: 800; line-height: 1.3; }
+.da .pickNote { font-size: 12.5px; line-height: 1.4; color: var(--ink-muted, #555); }
+.da.pickHeld {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--ink-soft, #2a2a2a);
+}
+@media (max-width: 768px) {
+  .da.pick { padding: 12px 14px; }
+}

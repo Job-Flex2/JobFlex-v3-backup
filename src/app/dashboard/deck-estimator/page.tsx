@@ -59,7 +59,7 @@ export default async function DeckEstimatorPage({ searchParams }: { searchParams
     viaEdition = !!facts && hasEdition({ ...facts, fullAccess: false }, "deck");
     // Held by the free trial alone: the studio says, once, what the studio is after the trial.
     if (facts?.trialing && !hasEdition({ ...facts, trialing: false }, "deck")) trialEndsAt = sub?.trialEndsAt?.toISOString() ?? "";
-    // The add-on follows the plan's term ($490 a year on a yearly plan — lib/deckAddon).
+    // The add-on follows the plan's term ($790 a year on a yearly plan — lib/deckAddon).
     if (sub?.stripePriceId) {
       const price = await db.planPrice.findUnique({ where: { stripePriceId: sub.stripePriceId }, select: { interval: true } }).catch(() => null);
       if (price?.interval === "YEAR") addonInterval = "YEAR";

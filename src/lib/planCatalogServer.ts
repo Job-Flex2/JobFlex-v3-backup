@@ -70,7 +70,7 @@ export async function getPlanCatalog(opts?: { includeInactive?: boolean }): Prom
   return opts?.includeInactive ? rows.map(toPlanDTO) : rows.map(toPlanDTO).map(withoutDeckRows);
 }
 
-/** NO DECK LINE ON A PLAN (owner-locked 2026-10-20, CLAUDE.md): Deck Studio is the trial's, then the $49/mo add-on —
+/** NO DECK LINE ON A PLAN (owner-locked 2026-10-20, CLAUDE.md): Deck Studio is the trial's, then the $79/mo add-on —
  *  no plan carries it, so a feature row naming it (one typed in /admin/plans) is never shown on a plan card. The
  *  admin's own list (includeInactive) keeps the rows as stored. */
 function withoutDeckRows(p: PlanDTO): PlanDTO {

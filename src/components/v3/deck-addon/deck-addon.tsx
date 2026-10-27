@@ -5,6 +5,7 @@
 //   · DeckAddonDialog — what it adds, what it costs today, and the button that puts it on the plan;
 //   · DeckPreviewBanner — the studio's band while it is a preview, and the trial's one line;
 //   · DeckAddonCard — the Subscription page's row: on the plan (with Remove) or the way to add it.
+// "Add Deck Studio" beside the plan cards is ./deck-addon-pick (no server actions, no toast: the sign-up loads it).
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -12,7 +13,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { Check } from "lucide-react";
 import { addDeckStudio, getDeckAddonOffer, removeDeckStudio, type DeckAddonView } from "@/actions/deckAddon";
-import { deckAddonCents, deckAddonPriceWords, deckAddonShortWords, deckTrialWords, type AddonInterval } from "@/lib/deckAddon";
+import { deckAddonCents, deckAddonHeldWords, deckAddonPriceWords, deckAddonShortWords, deckTrialWords, type AddonInterval } from "@/lib/deckAddon";
 import { toast } from "@/components/ui/Toast";
 import s from "./deck-addon.module.css";
 
@@ -210,7 +211,7 @@ export function DeckAddonCard() {
       <div className={s.cardHead}>
         <h3 className={s.cardTitle}>Deck Studio add-on</h3>
         <span className={`${s.cardState} ${offer?.held || offer?.included ? s.cardOn : ""}`} data-deck-addon-state>
-          {offer?.held ? `On your plan · ${deckAddonPriceWords(offer.interval)}` : offer?.included === "trial" ? "Included in your trial" : offer?.included === "custom" ? "Included in your Custom plan" : offer?.included === "grant" ? "Included in your plan" : `${deckAddonPriceWords(offer?.interval ?? "MONTH")} · not added`}
+          {offer?.held ? `On your plan · ${deckAddonHeldWords(offer.heldCents, offer.interval, { long: true })}` : offer?.included === "trial" ? "Included in your trial" : offer?.included === "custom" ? "Included in your Custom plan" : offer?.included === "grant" ? "Included in your plan" : `${deckAddonPriceWords(offer?.interval ?? "MONTH")} · not added`}
         </span>
       </div>
       {error ? <p className={s.error} role="alert">{error}</p> : null}
@@ -282,3 +283,4 @@ export function DeckAddonButton({ label = "Add Deck Studio", className }: { labe
     </>
   );
 }
+

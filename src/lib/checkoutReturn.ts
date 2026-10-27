@@ -25,6 +25,7 @@ import { CUSTOM_PLAN_SLUG, normalizeCustomPages } from "@/lib/customPlan";
 import { billedPageCount, writeOrgPages } from "@/lib/customBilling";
 import { recordPlanChange } from "@/lib/subscriptionRecord";
 import { releaseAttachedSchedule } from "@/lib/scheduleRelease";
+import { mirrorDeckAddon } from "@/lib/deckAddonBilling";
 
 const claimKey = (sessionId: string) => `checkoutReturn:${sessionId}`;
 
@@ -115,7 +116,10 @@ export async function applyCheckoutReturn(organizationId: string, sessionId: str
       const pages = fromSub.length === qty ? fromSub : fromSession.length === qty ? fromSession : fromSub.slice(0, qty);
       await writeOrgPages(organizationId, pages);
     }
-    return await recordPlanChange({ organizationId, planSlug, status, customerId, subId: sub.id, trialEnd, periodEnd });
+    const recorded = await recordPlanChange({ organizationId, planSlug, status, customerId, subId: sub.id, trialEnd, periodEnd });
+    // The Deck Studio add-on, ticked on the plan card or switched on on Stripe's page (lib/deckAddonBilling).
+    await mirrorDeckAddon(sub, false, organizationId).catch((err) => console.warn(`[${tag}] deck add-on mirror:`, err));
+    return recorded;
   } catch (err) {
     console.warn(`[${tag}] checkout verify failed:`, err);
     return null;

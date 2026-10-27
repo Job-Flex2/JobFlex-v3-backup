@@ -64,3 +64,42 @@
   font-weight: 700;
   color: rgba(15, 23, 42, 0.5);
 }
+
+/* ── The Deck Studio add-on plate (owner, 2026-10-26; deck-addon-plate.tsx) ──
+   The plan cards' frame — white on a 2px ink line, 2px corners — flat: no
+   offset behind it. Its start button is the cards' own .lp-pw-go. */
+.jf-lp .pr-deck {
+  border: 2px solid #0a0a0a;
+  border-radius: 2px;
+  background: #fff;
+  color: #0a0a0a;
+}
+.jf-lp .pr-deck-list {
+  display: grid;
+  gap: 10px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: rgba(15, 23, 42, 0.72);
+}
+.jf-lp .pr-deck-list li { display: flex; align-items: flex-start; gap: 10px; }
+.jf-lp .pr-deck-list b { color: #0a0a0a; font-weight: 700; }
+.jf-lp .pr-deck-ic {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  fill: none;
+  stroke: #1854a0;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.jf-lp .pr-deck .lp-pw-go { min-height: 46px; }
+
+/* The cards' comparison row for the add-on: every plan, the same words. */
+.jf-lp .lp-pw-f--addon { color: #0a0a0a; }
+.jf-lp .lp-pw-f--addon .lp-pw-ic { color: #1854a0; }
+.jf-lp .lp-pw-addon { flex: none; color: #1854a0; font-weight: 800; white-space: nowrap; }

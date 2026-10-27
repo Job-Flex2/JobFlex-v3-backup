@@ -26,6 +26,13 @@ import "server-only";
 // What the dialog shows as "today" is Stripe's own preview of the invoice
 // (invoices.createPreview with the same items, proration and proration date
 // the change is then made with) — never a sum worked out here.
+//
+// "ADD DECK STUDIO" TICKED WITH THE PLAN (owner, 2026-10-26): the add-on's line
+// goes on with the change — in the trial and on a "charge" as one of the
+// change's items; on a "free" switch it is added right after it, the add-on's
+// own way (the rest of the period charged, lib/deckAddonBilling); on a booked
+// switch it starts with the new term. A line the shop holds is never touched
+// on the same term: it keeps the price it was bought at.
 import type Stripe from "stripe";
 import { db } from "@/lib/db";
 import { getStripeClient } from "@/lib/sdk/stripe";
@@ -35,7 +42,8 @@ import { getPlanBySlug, getPlanCatalog } from "@/lib/planCatalogServer";
 import { SubscriptionStatus } from "@/lib/prismaEnums";
 import { subscriptionPeriodEnd, subscriptionPeriodEndDate } from "@/lib/stripeCompat";
 import { CUSTOM_PLAN_SLUG } from "@/lib/customPlan";
-import { isDeckAddonLine, planLines } from "@/lib/deckAddon";
+import { DECK_ADDON_KIND, DECK_ADDON_NAME, deckAddonCents, isDeckAddonLine, planLines } from "@/lib/deckAddon";
+import { customDeckPageHeld } from "@/lib/customPageAccess";
 import { changeRoute, type BillingTermName, type ChangeRoute } from "@/lib/planChangeRoute";
 import { priceInterval } from "@/lib/priceInterval";
 import { ensureYearFirstMonthCoupon } from "@/lib/yearDiscount";
@@ -67,11 +75,14 @@ export type PlanChangePreview = {
   switchAt: string | null;
   /** Passed back to the change so it is made on the previewed proration. */
   prorationDate: number | null;
+  /** "Add Deck Studio" ticked: the add-on goes on with the change — its price per term, and what it adds today when
+   *  Stripe said so apart from the plan (a "free" switch). Null when not asked for, or held on this term already. */
+  addon: { termCents: number; dueNowCents: number | null } | null;
 };
 export type PlanChangeRefusal = { ok: false; error: string; code?: "card_declined" | "past_due" | "same_plan" };
 
 export type PlanChangeDone =
-  | { ok: true; mode: "switched"; route: "charge" | "free" | "trial"; planName: string; interval: Term; chargedCents: number }
+  | { ok: true; mode: "switched"; route: "charge" | "free" | "trial"; planName: string; interval: Term; chargedCents: number; addonError?: string }
   | { ok: true; mode: "scheduled"; planName: string; interval: Term; switchAt: string }
   | { ok: true; mode: "checkout" }
   | PlanChangeRefusal;
@@ -86,6 +97,8 @@ export type ScheduledSwitch = {
   at: string;
   /** The price the switch moves to (records from before 2026-10-12 have none: it is looked up). */
   priceId?: string;
+  /** The Deck Studio add-on ticked with the switch: it starts with the new term. */
+  addonPriceId?: string;
 };
 const switchKey = (orgId: string) => `planSwitch:${orgId}`;
 
@@ -139,6 +152,8 @@ type Resolved = {
   route: Exclude<ChangeRoute, "checkout">;
   anchorNow: boolean;
   termCents: number;
+  /** The Deck Studio add-on's price at the target term, when it was ticked and no line bills on that term. */
+  addonPrice: string | null;
 };
 
 /** Where a change goes, or why it can't. "checkout" when Stripe's page has to take it. */
@@ -147,6 +162,7 @@ async function resolve(
   planSlug: string,
   wanted: Term,
   deps?: PlanChangeDeps,
+  addon = false,
 ): Promise<Resolved | Already | { ok: true; route: "checkout"; plan: { slug: string; name: string }; interval: Term } | PlanChangeRefusal> {
   const plan = await getPlanBySlug(planSlug);
   if (!plan || !plan.active) return { ok: false, error: "That plan is not available." };
@@ -195,7 +211,14 @@ async function resolve(
     lines: own.length,
   });
   if (route === "checkout") return { ok: true, route: "checkout", plan, interval };
-  return { stripe, mode, sub, priceId, plan, interval, fromInterval, termCents, route, anchorNow: route === "charge" && fromInterval !== interval };
+  // The add-on, ticked: wanted unless a line bills on the target term already (a change of term takes the old one
+  // off), or the Custom plan's deck page holds the studio.
+  const holdsLine = sub.items.data.some(isDeckAddonLine) && fromInterval === interval;
+  const addonPrice =
+    addon && !holdsLine && !(await customDeckPageHeld(organizationId).catch(() => false))
+      ? await ensureRecurringPrice({ stripe, mode, kind: DECK_ADDON_KIND, name: DECK_ADDON_NAME, interval, cents: deckAddonCents(interval) })
+      : null;
+  return { stripe, mode, sub, priceId, plan, interval, fromInterval, termCents, route, anchorNow: route === "charge" && fromInterval !== interval, addonPrice };
 }
 
 /* A FIRST-MONTH CODE ON A TERM CHANGE (2026-10-12, lib/firstMonthDiscount).
@@ -255,7 +278,9 @@ function itemsFor(r: Resolved): Stripe.SubscriptionUpdateParams.Item[] {
   // price is the old term's and Stripe bills one term per subscription — and the webhook takes its record with it
   // (lib/deckAddonBilling mirrorDeckAddon): the studio offers it again at the new term.
   const addon = r.interval === r.fromInterval ? [] : r.sub.items.data.filter(isDeckAddonLine);
-  return [{ id: first.id, price: r.priceId, quantity: 1 }, ...[...rest, ...addon].map((i) => ({ id: i.id, deleted: true as const }))];
+  // Ticked with the plan: one of the change's items in a trial and on a charge; a "free" switch adds it after.
+  const added = r.addonPrice && (r.route === "trial" || r.route === "charge") ? [{ price: r.addonPrice, quantity: 1 }] : [];
+  return [{ id: first.id, price: r.priceId, quantity: 1 }, ...[...rest, ...addon].map((i) => ({ id: i.id, deleted: true as const })), ...added];
 }
 
 function metadataFor(r: Resolved, organizationId: string): Record<string, string> {
@@ -263,12 +288,12 @@ function metadataFor(r: Resolved, organizationId: string): Record<string, string
 }
 
 /** What the change would do, from Stripe's own preview. */
-export async function previewPlanChange(organizationId: string, planSlug: string, wanted: Term, deps?: PlanChangeDeps): Promise<PlanChangePreview | PlanChangeRefusal> {
-  const r = await resolve(organizationId, planSlug, wanted, deps);
+export async function previewPlanChange(organizationId: string, planSlug: string, wanted: Term, deps?: PlanChangeDeps, addon = false): Promise<PlanChangePreview | PlanChangeRefusal> {
+  const r = await resolve(organizationId, planSlug, wanted, deps, addon);
   if ("already" in r) {
     return {
       ok: true, route: "free", planSlug: r.plan.slug, planName: r.plan.name, interval: r.interval, fromInterval: r.interval,
-      dueNowCents: 0, creditCents: 0, termCents: r.termCents, nextBillAt: iso(subscriptionPeriodEnd(r.sub)), switchAt: null, prorationDate: null,
+      dueNowCents: 0, creditCents: 0, termCents: r.termCents, nextBillAt: iso(subscriptionPeriodEnd(r.sub)), switchAt: null, prorationDate: null, addon: null,
     };
   }
   if ("ok" in r) {
@@ -276,17 +301,27 @@ export async function previewPlanChange(organizationId: string, planSlug: string
     return {
       ok: true, route: "checkout", planSlug: r.plan.slug, planName: r.plan.name, interval: r.interval, fromInterval: null,
       dueNowCents: null, creditCents: 0, termCents: 0, nextBillAt: null, switchAt: null, prorationDate: null,
+      addon: addon ? { termCents: deckAddonCents(r.interval), dueNowCents: null } : null,
     };
   }
   const out: PlanChangePreview = {
     ok: true, route: r.route, planSlug: r.plan.slug, planName: r.plan.name, interval: r.interval, fromInterval: r.fromInterval,
     dueNowCents: 0, creditCents: 0, termCents: r.termCents, nextBillAt: null, switchAt: null, prorationDate: null,
+    addon: r.addonPrice ? { termCents: deckAddonCents(r.interval), dueNowCents: r.route === "trial" || r.route === "schedule" ? 0 : null } : null,
   };
   const periodEnd = subscriptionPeriodEnd(r.sub);
   if (r.route === "trial") out.nextBillAt = iso(r.sub.trial_end);
   else if (r.route === "schedule") out.switchAt = out.nextBillAt = iso(periodEnd);
-  else if (r.route === "free") out.nextBillAt = iso(periodEnd);
-  else {
+  else if (r.route === "free") {
+    out.nextBillAt = iso(periodEnd);
+    // After a free switch the add-on is charged by itself, for the rest of the period (lib/deckAddonBilling).
+    if (r.addonPrice && out.addon) {
+      const { deckAddonDueNow } = await import("@/lib/deckAddonBilling");
+      const due = await deckAddonDueNow(r.stripe, r.sub, r.addonPrice).catch(() => null);
+      out.addon.dueNowCents = due;
+      out.dueNowCents = due ?? 0;
+    }
+  } else {
     const prorationDate = Math.floor(Date.now() / 1000);
     const year = await discountsForYear(r);
     const pre = await r.stripe.invoices.createPreview({
@@ -318,12 +353,13 @@ export async function applyPlanChange(
   wanted: Term,
   prorationDate?: number | null,
   deps?: PlanChangeDeps,
+  addon = false,
 ): Promise<PlanChangeDone> {
   /* ONE CHANGE AT A TIME per company: a double click must not run two
      charges side by side. The lock is a row that lives two minutes at most. */
   if (!(await takeLock(organizationId))) return { ok: false, error: "A plan change is already under way. Wait a moment and look again." };
   try {
-    return await applyLocked(organizationId, planSlug, wanted, prorationDate ?? null, deps);
+    return await applyLocked(organizationId, planSlug, wanted, prorationDate ?? null, deps, addon);
   } finally {
     await db.syncState.deleteMany({ where: { key: lockKey(organizationId) } }).catch(() => {});
   }
@@ -350,8 +386,9 @@ async function applyLocked(
   wanted: Term,
   prorationDate: number | null,
   deps?: PlanChangeDeps,
+  addon = false,
 ): Promise<PlanChangeDone> {
-  const r = await resolve(organizationId, planSlug, wanted, deps);
+  const r = await resolve(organizationId, planSlug, wanted, deps, addon);
   if ("already" in r) {
     // An earlier press went through at Stripe: no second charge, the row is aligned.
     await alignRow(r.stripe, r.sub.id, organizationId, "already at the target price");
@@ -391,6 +428,22 @@ async function applyLocked(
     return done;
   }
   await db.syncState.deleteMany({ where: { key: switchKey(organizationId) } }).catch(() => {});
+  /* A "free" switch with the add-on ticked: the plan is switched, then the add-on goes on its own way — the rest of
+     the period charged at once, nothing added on a declined card. The plan change stands either way. */
+  if (r.addonPrice && (r.route === "trial" || r.route === "charge") && done.ok) {
+    // The line went on with the change: the record that opens the studio follows it now, not on the webhook's time.
+    const { mirrorDeckAddon } = await import("@/lib/deckAddonBilling");
+    await stripe.subscriptions
+      .retrieve(sub.id)
+      .then((fresh) => mirrorDeckAddon(fresh, false, organizationId))
+      .catch((err) => console.warn(`[planChange] ${sub.id}: deck add-on mirror:`, err));
+  }
+  if (r.addonPrice && r.route === "free" && done.ok && done.mode === "switched") {
+    const { addDeckAddon } = await import("@/lib/deckAddonBilling");
+    const added = await addDeckAddon(organizationId, deps).catch(() => null);
+    if (added?.ok) return { ...done, chargedCents: done.chargedCents + added.chargedCents };
+    return { ...done, addonError: added && !added.ok ? added.error : "Deck Studio couldn't be added. Add it from Subscription." };
+  }
   return done;
 }
 
@@ -497,9 +550,12 @@ async function bookSwitch(organizationId: string, r: Resolved): Promise<PlanChan
   const { stripe, sub } = r;
   const end = subscriptionPeriodEnd(sub);
   if (!end) return { ok: false, error: "Couldn't read the end of your paid year. Try again." };
-  const booked = await writeSchedule(stripe, sub, end, r.priceId, metadataFor(r, organizationId));
+  const booked = await writeSchedule(stripe, sub, end, r.priceId, metadataFor(r, organizationId), r.addonPrice);
   if (!booked.ok) return { ok: false, error: "Couldn't book the switch. Try again." };
-  const record: ScheduledSwitch = { scheduleId: booked.scheduleId, subId: sub.id, planSlug: r.plan.slug, planName: r.plan.name, interval: r.interval, at: new Date(end * 1000).toISOString(), priceId: r.priceId };
+  const record: ScheduledSwitch = {
+    scheduleId: booked.scheduleId, subId: sub.id, planSlug: r.plan.slug, planName: r.plan.name, interval: r.interval, at: new Date(end * 1000).toISOString(), priceId: r.priceId,
+    ...(r.addonPrice ? { addonPriceId: r.addonPrice } : {}),
+  };
   await db.syncState.upsert({ where: { key: switchKey(organizationId) }, update: { cursor: JSON.stringify(record) }, create: { key: switchKey(organizationId), cursor: JSON.stringify(record) } });
   return { ok: true, mode: "scheduled", planName: r.plan.name, interval: r.interval, switchAt: record.at };
 }
@@ -510,6 +566,7 @@ async function writeSchedule(
   end: number,
   priceId: string,
   metadata: Record<string, string>,
+  addonPriceId?: string | null,
 ): Promise<{ ok: true; scheduleId: string } | { ok: false }> {
   const fresh = await stripe.subscriptions.retrieve(sub.id);
   const existing = typeof fresh.schedule === "string" ? fresh.schedule : fresh.schedule?.id;
@@ -533,7 +590,7 @@ async function writeSchedule(
           end_date: end,
           proration_behavior: "none",
         },
-        { items: [{ price: priceId, quantity: 1 }], proration_behavior: "none", metadata },
+        { items: [{ price: priceId, quantity: 1 }, ...(addonPriceId ? [{ price: addonPriceId, quantity: 1 }] : [])], proration_behavior: "none", metadata },
       ],
     });
     return { ok: true, scheduleId: schedule.id };
@@ -553,7 +610,7 @@ async function restoreBooking(organizationId: string, r: Resolved, booked: Sched
   if (!priceId) throw new Error(`no price for ${booked.planSlug}/${booked.interval}`);
   const end = Math.floor(Date.parse(booked.at) / 1000);
   const metadata = { ...(r.sub.metadata ?? {}), organizationId, planSlug: booked.planSlug, interval: booked.interval, customPages: "" };
-  const done = await writeSchedule(stripe, r.sub, end, priceId, metadata);
+  const done = await writeSchedule(stripe, r.sub, end, priceId, metadata, booked.addonPriceId);
   if (!done.ok) throw new Error("the schedule could not be written again");
   const record: ScheduledSwitch = { ...booked, scheduleId: done.scheduleId, priceId };
   await db.syncState.upsert({ where: { key: switchKey(organizationId) }, update: { cursor: JSON.stringify(record) }, create: { key: switchKey(organizationId), cursor: JSON.stringify(record) } });
@@ -573,7 +630,7 @@ export async function rebookScheduledSwitch(organizationId: string, held: Schedu
   const priceId = held.priceId ?? (plan ? await priceFor(d, plan, held.interval) : null);
   if (!priceId) return false;
   const metadata = { ...(sub.metadata ?? {}), organizationId, planSlug: held.planSlug, interval: held.interval, customPages: "" };
-  const done = await writeSchedule(d.stripe, sub, end, priceId, metadata);
+  const done = await writeSchedule(d.stripe, sub, end, priceId, metadata, held.addonPriceId);
   if (!done.ok) return false;
   const record: ScheduledSwitch = { ...held, scheduleId: done.scheduleId, priceId };
   await db.syncState.upsert({ where: { key: switchKey(organizationId) }, update: { cursor: JSON.stringify(record) }, create: { key: switchKey(organizationId), cursor: JSON.stringify(record) } });

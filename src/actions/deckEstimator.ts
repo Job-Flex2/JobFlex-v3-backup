@@ -52,6 +52,7 @@ import { fitGround } from "@/lib/deck/site";
 import { geocode, isMapsEnabled } from "@/lib/maps";
 import { appBaseUrl } from "@/lib/appUrl";
 import { in3depCoverage, sample3depElevations } from "@/lib/elevation3dep";
+import { deckAddonShortWords } from "@/lib/deckAddon";
 
 type Gate = { ok: true; organizationId: string; userId: string; role: string } | { ok: false; error: string };
 
@@ -62,7 +63,7 @@ async function gate(need: "full" | "design" = "full"): Promise<Gate> {
     const ctx = await requireEstimatorOrManager();
     const level = await deckStudioAccess(ctx.user, ctx.organizationId);
     if (level === "none") return { ok: false, error: "Deck Studio isn't open yet." };
-    if (level === "preview" && need === "full") return { ok: false, error: "Saving, sending and printing are part of Deck Studio — add it to your plan ($49/mo) from the Deck estimator." };
+    if (level === "preview" && need === "full") return { ok: false, error: `Saving, sending and printing are part of Deck Studio — add it to your plan (${deckAddonShortWords()}) from the Deck estimator.` };
     return { ok: true, organizationId: ctx.organizationId, userId: ctx.user.id, role: ctx.role };
   } catch (err) {
     if (err instanceof UnauthorizedError) return { ok: false, error: "Only an estimator, a manager or the owner can do this." };

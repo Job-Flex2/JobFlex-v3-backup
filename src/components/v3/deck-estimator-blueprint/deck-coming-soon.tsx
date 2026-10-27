@@ -2,7 +2,7 @@
 // edition, lib/editions) — what an account WITHOUT the whole Deck Studio sees
 // where the studio's pages would be (lib/deck/access). Since 2026-10-19 the
 // studio itself opens as a PREVIEW to every account (2026-10-20: the Free plan
-// too), so this is the deck inventory's page for a preview (the $49/month
+// too), so this is the deck inventory's page for a preview (the $79/month
 // add-on), and the studio's page while the edition is coming soon.
 import Link from "next/link";
 import type { Route } from "next";

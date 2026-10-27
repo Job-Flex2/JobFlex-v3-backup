@@ -16,6 +16,7 @@ import { planSnapshot, reportPlanChange } from "@/lib/activation-events";
 import { readGrantsAndMarks, type PlanGrant, type SyncingMark } from "@/lib/planGrant";
 import { accountDeletionPlan, removeUserRow, retireOrganization } from "@/lib/accountDeletion";
 import { refused, type ActionResult } from "@/lib/actionResult";
+import { planLine } from "@/lib/deckAddon";
 
 export interface AdminUserRow {
   id: string;
@@ -638,7 +639,7 @@ export async function syncSubscriptionsFromStripe(): Promise<StripeSyncResult> {
     if (uid) metaUserIds.add(uid);
     subIds.push(sub.id);
     custIds.add(stripeCustomerId(sub));
-    const priceId = sub.items.data[0]?.price?.id;
+    const priceId = planLine(sub.items.data)?.price?.id;
     if (priceId) priceIds.add(priceId);
   }
 
@@ -777,7 +778,7 @@ export async function syncSubscriptionsFromStripe(): Promise<StripeSyncResult> {
       }
     }
 
-    const priceId = sub.items.data[0]?.price?.id ?? null;
+    const priceId = planLine(sub.items.data)?.price?.id ?? null;
     const namedPlan = planForStripeSub(sub, priceId, slugByPrice, catalogSlugs);
     if (!existing && !namedPlan) {
       // plan "" prices at nothing behind an ACTIVE badge. Refuse, and say so.
@@ -957,7 +958,7 @@ function planForStripeSub(
     const fromLedger = slugByPrice.get(priceId);
     if (fromLedger) return fromLedger;
   }
-  const price = sub.items.data[0]?.price;
+  const price = planLine(sub.items.data)?.price;
   const candidates = [
     sub.metadata?.planTier,
     sub.metadata?.planName,

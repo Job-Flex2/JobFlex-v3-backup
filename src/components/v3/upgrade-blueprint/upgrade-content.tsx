@@ -43,6 +43,9 @@ import { changePlan, previewPlanChange, updateCustomPages, type PlanChangePrevie
 import { CardDeclinedNote, PlanChangeMoney, ScheduledSwitchNote, longDay, money } from "@/components/billing/PlanChangeNotes";
 import { CustomChangeNote } from "./custom-change-note";
 import { ConfirmPlanChange } from "@/components/billing/ConfirmPlanChange";
+import { DeckAddonPickBox } from "@/components/v3/deck-addon/deck-addon-pick";
+import { getDeckAddonPick } from "@/actions/deckAddon";
+import type { DeckAddonPick } from "@/lib/deckAddon";
 import { toast } from "@/components/ui/Toast";
 import {
   CUSTOM_BASE_CENTS,
@@ -222,6 +225,28 @@ export function UpgradeContent({
   const [ownedOverride, setOwned] = useState<string[] | null>(null);
   const owned = ownedOverride ?? customPages;
 
+  /* "ADD DECK STUDIO" (owner, 2026-10-26): one box over the cards, off until ticked; ticked, the plan picked goes on
+     with the add-on (lib/planChange) or to Stripe with it on the order. Read for the owner only — billing is theirs. */
+  const [deckPick, setDeckPick] = useState<DeckAddonPick | null>(null);
+  const [withDeck, setWithDeck] = useState(false);
+  useEffect(() => {
+    if (!isOwner || !checkoutReady) return;
+    let live = true;
+    void getDeckAddonPick()
+      .then((res) => {
+        if (live && res.ok) setDeckPick(res.pick);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [isOwner, checkoutReady, upgradedTo]);
+  /** The box is ticked and means something on this term (held on it already, or included: nothing to add). */
+  const deckFor = useCallback(
+    (term: BillingTerm) => withDeck && !!deckPick && !deckPick.included && !(deckPick.held && deckPick.held.interval === term),
+    [withDeck, deckPick],
+  );
+
   /* THE RETURN FROM STRIPE (and the dev simulator's ?simulated= twin). The
      layout that draws the sidebar rendered BEFORE verifyReturn wrote the new
      plan, so locks and quota pills were stale until a manual reload: refresh
@@ -292,13 +317,13 @@ export function UpgradeContent({
       const res = await fetch("/api/checkout/subscription", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planSlug: slug, interval: termFor(slug), customPages: customPagesToBuy }),
+        body: JSON.stringify({ planSlug: slug, interval: termFor(slug), customPages: customPagesToBuy, deckAddon: deckFor(termFor(slug)) }),
       });
       const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
       if (!res.ok || !body.url) throw new Error(body.error ?? "Couldn't open checkout.");
       window.location.assign(body.url);
     },
-    [termFor],
+    [termFor, deckFor],
   );
 
   /* An upgrade (or a custom plan) is PAID on Stripe: confirm, then checkout.
@@ -331,7 +356,7 @@ export function UpgradeContent({
       setDeclined(null);
       setBusy(p.slug);
       try {
-        const res = await changePlan(p.slug, preview.interval, preview.prorationDate);
+        const res = await changePlan(p.slug, preview.interval, preview.prorationDate, preview.addon !== null);
         if (!res.ok) {
           if (res.code === "card_declined" || res.code === "past_due") setDeclined(res.error);
           else setErr(res.error);
@@ -353,7 +378,9 @@ export function UpgradeContent({
                 ? "Nothing was charged. Your trial runs on."
                 : "Nothing was charged.",
           );
+          if (res.addonError) toast.error("Deck Studio wasn't added", res.addonError);
         }
+        if (preview.addon) setWithDeck(false);
         // The layout re-renders with the new plan's locks and quota pills.
         router.refresh();
       } catch (e) {
@@ -376,7 +403,7 @@ export function UpgradeContent({
     setDeclined(null);
     setBusy(p.slug);
     try {
-      const preview = await previewPlanChange(p.slug, termFor(p.slug));
+      const preview = await previewPlanChange(p.slug, termFor(p.slug), deckFor(termFor(p.slug)));
       if (!preview.ok) {
         if (preview.code === "past_due") setDeclined(preview.error);
         else setErr(preview.error);
@@ -409,7 +436,7 @@ export function UpgradeContent({
           ? `Downgrade to ${p.name}?`
           : `Switch to ${p.name}?`;
   const changeLabel = (p: UpgradePlan, v: Extract<PlanChangePreviewResult, { ok: true }>) =>
-    v.route === "charge"
+    v.route === "charge" || (v.addon && (v.dueNowCents ?? 0) > 0)
       ? `Pay ${money(v.dueNowCents ?? 0)} and switch`
       : v.route === "schedule"
         ? `Switch on ${longDay(v.switchAt)}`
@@ -601,6 +628,9 @@ export function UpgradeContent({
       {focusWords ? <p className="jf-up-focus" data-upgrade-focus-words>{focusWords}</p> : null}
       {showTerms ? (
         <PlanTermSwitch className="jf-up-termsw" value={interval} onChange={setInterval} tag={termTag} />
+      ) : null}
+      {isOwner && checkoutReady ? (
+        <DeckAddonPickBox className="jf-up-deckpick" checked={withDeck} onChange={setWithDeck} pick={deckPick} interval={interval} disabled={busy !== null} />
       ) : null}
       {spotlight ? (
         <p className="jf-up-spot" data-plan-spotlight={spotlight} data-plan-spotlight-row={spotRow ?? ""}>

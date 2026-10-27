@@ -27,30 +27,46 @@ const per = (t: "MONTH" | "YEAR") => (t === "YEAR" ? "/yr" : "/mo");
 /** The dialog's one sentence about the money, per route. */
 export function PlanChangeMoney({ preview }: { preview: Preview }) {
   const p = preview;
+  // "Add Deck Studio" ticked (lib/planChange): the add-on's own price beside the plan's.
+  const deck = p.addon ? <> + Deck Studio {money(p.addon.termCents)}{per(p.interval)}</> : null;
   if (p.route === "charge") {
     return (
-      <p className="jf-pcn" data-plan-change-route="charge" data-due-now-cents={p.dueNowCents ?? 0}>
+      <p className="jf-pcn" data-plan-change-route="charge" data-due-now-cents={p.dueNowCents ?? 0} data-deck-addon={p.addon ? "1" : undefined}>
         <b>Charged today: {money(p.dueNowCents ?? 0)}</b>
         {p.creditCents > 0 ? <> · includes {money(p.creditCents)} back for the unused part of your current plan</> : null}
         {" "}· then {money(p.termCents)}
-        {per(p.interval)} from {longDay(p.nextBillAt)} · paid with your card on file
+        {per(p.interval)}
+        {deck} from {longDay(p.nextBillAt)} · paid with your card on file
       </p>
     );
   }
   if (p.route === "schedule") {
     return (
-      <p className="jf-pcn" data-plan-change-route="schedule" data-due-now-cents="0">
+      <p className="jf-pcn" data-plan-change-route="schedule" data-due-now-cents="0" data-deck-addon={p.addon ? "1" : undefined}>
         <b>Nothing is charged today.</b> Your paid year runs to {longDay(p.switchAt)}; on that day you move to {p.planName} at{" "}
         {money(p.termCents)}
-        {per(p.interval)}. You can cancel the switch until then.
+        {per(p.interval)}
+        {deck}. You can cancel the switch until then.
       </p>
     );
   }
   if (p.route === "trial") {
     return (
-      <p className="jf-pcn" data-plan-change-route="trial" data-due-now-cents="0">
+      <p className="jf-pcn" data-plan-change-route="trial" data-due-now-cents="0" data-deck-addon={p.addon ? "1" : undefined}>
         <b>Nothing is charged today.</b> Your trial runs on; the first bill is {money(p.termCents)}
-        {per(p.interval)} on {longDay(p.nextBillAt)}.
+        {per(p.interval)}
+        {deck} on {longDay(p.nextBillAt)}.
+      </p>
+    );
+  }
+  if (p.addon) {
+    // A cheaper plan is switched free; the add-on is charged by itself for the rest of the period.
+    return (
+      <p className="jf-pcn" data-plan-change-route="free" data-due-now-cents={p.dueNowCents ?? 0} data-deck-addon="1">
+        <b>{p.addon.dueNowCents ? `Charged today: ${money(p.addon.dueNowCents)} for Deck Studio` : "Deck Studio is charged today for the rest of this period"}</b>
+        {" "}· the plan switches now, this cycle is not refunded · then {money(p.termCents)}
+        {per(p.interval)}
+        {deck} from {longDay(p.nextBillAt)}
       </p>
     );
   }

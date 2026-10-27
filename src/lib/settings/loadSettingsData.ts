@@ -21,8 +21,8 @@
 
 import { trialExtensionOffer } from "@/lib/trialExtensionServer";
 import { db } from "@/lib/db";
-import { deckAddonHeld, readDeckAddonRecord } from "@/lib/deckAddonBilling";
-import { deckAddonShortWords } from "@/lib/deckAddon";
+import { readHeldDeckAddon } from "@/lib/deckAddonBilling";
+import { deckAddonHeldWords } from "@/lib/deckAddon";
 import { appBaseUrl } from "@/lib/appUrl";
 import { longDate } from "@/lib/format";
 import { isOwnerOrManager, isOwnerRole, type requireOrg } from "@/lib/orgContext";
@@ -485,8 +485,9 @@ async function cancelOffer(organizationId: string, plan: string, keepsUntil: Dat
     db.pricingPlan.findMany({ select: { slug: true, limitsJson: true } }),
     db.proposal.groupBy({ by: ["currency"], where: { organizationId, sentAt: { not: null } }, _count: { _all: true }, _sum: { total: true } }),
     db.client.count({ where: { organizationId, deletedAt: null } }),
-    // The Deck Studio add-on on the subscription (lib/deckAddonBilling): the cancel ends it with the plan.
-    deckAddonHeld(organizationId).then((held) => (held ? readDeckAddonRecord(organizationId) : null)).catch(() => null),
+    // The Deck Studio add-on on the subscription (lib/deckAddonBilling): the cancel ends it with the plan — named at
+    // the price its line bills ($49/mo for one bought before 2026-10-26).
+    readHeldDeckAddon(organizationId).catch(() => null),
   ]);
   const limitsOf = (s: string) => {
     const row = catalog.find((p) => p.slug.toLowerCase() === s);
@@ -498,7 +499,7 @@ async function cancelOffer(organizationId: string, plan: string, keepsUntil: Dat
   return {
     planName,
     keepsUntil: keepsUntil?.toISOString() ?? null,
-    losses: freePlanLosses({ pages, planProposals: cap(own?.proposalsCreated), freeProposals: cap(free.proposalsCreated), deckAddon: deck ? deckAddonShortWords(deck.interval) : null }),
+    losses: freePlanLosses({ pages, planProposals: cap(own?.proposalsCreated), freeProposals: cap(free.proposalsCreated), deckAddon: deck ? deckAddonHeldWords(deck.cents, deck.interval, { mark: false }) : null }),
     tally: {
       proposalsSent: sent.reduce((n, g) => n + g._count._all, 0),
       quoted: sent.length === 1 ? { amount: sent[0]._sum.total ?? 0, currency: sent[0].currency.toUpperCase() } : null,

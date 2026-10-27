@@ -1,6 +1,6 @@
 import "server-only";
 // WHO MAY USE THE DECK STUDIO (owner-locked 2026-10-20, CLAUDE.md; the rule is lib/editions hasEdition): the free
-// trial, the $49/month add-on, a complimentary grant and a platform admin (hasFullAccess) get the whole studio;
+// trial, the $79/month add-on, a complimentary grant and a platform admin (hasFullAccess) get the whole studio;
 // every other account previews it. The page, the print sheets and every server action ask this one function.
 import { hasFullAccess } from "@/lib/fullAccess";
 import { editionFacts } from "@/lib/editionAccess";
