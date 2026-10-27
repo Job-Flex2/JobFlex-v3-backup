@@ -5,6 +5,7 @@
 // the action keeps the rate limits and the address check in front of it.
 //
 // Plain server module (NOT "use server").
+import { writeLeadEstimate, type LeadEstimate } from "@/lib/leadCenter/estimate";
 import { randomBytes } from "crypto";
 import { db } from "@/lib/db";
 import { detectTrade, routeDecision } from "@/lib/ai/detectTrade";
@@ -86,6 +87,8 @@ export interface IntakeOptions {
   source?: string | null;
   /** The TCPA consent the request was sent with (lib/leadConsent), kept on the LeadSource row. */
   consent?: { text: string; at: Date; ip: string | null; page: string | null } | null;
+  /** The range the homeowner priced in the home portal and the whole estimate under it (lib/leadCenter/estimate). */
+  estimate?: LeadEstimate | null;
 }
 
 export async function createHomeownerLead(data: HomeownerIntake, opts: IntakeOptions) {
@@ -169,6 +172,14 @@ export async function createHomeownerLead(data: HomeownerIntake, opts: IntakeOpt
       .catch((err: unknown) => {
         console.error("[homeowner] lead source and consent not kept — the request stands:", err);
       });
+  }
+
+  // The estimate the homeowner priced (2026-10-27): kept beside the lead for the Lead Center, the offer card and the
+  // contractor who buys it. Best-effort — without it the request still goes, loudly.
+  if (opts.estimate) {
+    await writeLeadEstimate(platformLead.id, opts.estimate).catch((err: unknown) => {
+      console.error("[homeowner] the lead's estimate not kept — the request stands:", err);
+    });
   }
 
   // THE HOME DASHBOARD (2026-10-03): the request joins the home that carries
