@@ -268,6 +268,8 @@ export default async function DashboardBlueprintLayout({
       {/* Outside the shell: on a phone the mapped handheld pages replace `children`, and this must mount on both. */}
       {startTrial ? <MetaStartTrial event={startTrial} /> : null}
       {registered ? <MetaPixelOnce name="CompleteRegistration" organizationId={registered.organizationId} /> : null}
+      {/* Meta Lead = a finished sign-up (owner, 2026-10-26: "leads = signups"), not the email step it was. */}
+      {registered ? <MetaPixelOnce name="Lead" organizationId={registered.organizationId} /> : null}
       {/* Outside the shell for the same reason: the desk and the handheld trees both carry the tour. */}
       {tour ? <OnboardingTour view={tour} /> : null}
       <ResponsiveDashboardShell
