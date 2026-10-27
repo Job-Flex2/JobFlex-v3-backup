@@ -26,6 +26,7 @@ import type { ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { ensureBuild, playwright, startServer, stopServer } from "../_lib/_prod-server";
+import { fillStepOne, openStepOneSheet } from "../_lib/_step1";
 
 const PORT = Number(process.env.QA_SIGNUP_PORT || 3312);
 const BASE = (process.env.QA_SIGNUP_URL || `http://localhost:${PORT}`).replace(/\/$/, "");
@@ -97,8 +98,8 @@ async function step1(v: Awaited<ReturnType<typeof visitor>>, email: string) {
   await page.locator("#nextBtn").waitFor({ timeout: 120000 });
   await page.waitForTimeout(800);
   const google = await page.locator("#googleBtn").filter({ visible: true }).count();
-  await page.getByPlaceholder("First and last").fill("Signup Check");
-  await page.getByPlaceholder("you@yourshop.com").fill(email);
+  // The email first: on a phone the sheet shows the name (and password) fields once it is typed (../_lib/_step1).
+  await fillStepOne(page, { name: "Signup Check", email });
   const pw = page.locator('input[autocomplete="new-password"]');
   for (let i = 0; i < (await pw.count()); i++) if (await pw.nth(i).isVisible()) await pw.nth(i).fill("SignupCheck-2026!");
   await page.locator("#nextBtn").click();
@@ -218,7 +219,11 @@ async function google(browser: any) {
         await landingToRegister(v, "");
         const ghost = await v.page.locator("button.lp-cta--ghost").count();
         check("landing hero (1440): one CTA, no Google button", ghost === 0, `${ghost} found`);
-      } else await v.page.goto(`${BASE}/auth/register`, { waitUntil: "load", timeout: 180000 });
+      } else {
+        await v.page.goto(`${BASE}/auth/register`, { waitUntil: "load", timeout: 180000 });
+        // The phone's sheet opens at a peek; a tap into the email opens it, and the Google button is in view.
+        await openStepOneSheet(v.page);
+      }
       v.step(`${where} Google`);
       const btn = v.page.locator("#googleBtn").filter({ visible: true }).first();
       await btn.waitFor({ timeout: 60000 });

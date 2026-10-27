@@ -2,7 +2,7 @@
 // app/(auth)/auth/register/checkout). With the admin switch on (Admin → Trials → "Plan at sign-up": Straight to
 // Professional, SyncState `signupPlan`) and a card required, the sign-up never draws a screen of its own between step 1
 // and Stripe: the next document after step 1 is Stripe's card page for Professional, monthly — a 303 from the server.
-// On a production build, at 390 (iPhone):
+// On a production build, at 390 (iPhone) — or at 1440 (a desk, QA_AUTO_WIDTH=1440):
 //   · step 1 (name + email) → checkout.stripe.com, with JavaScript and without it;
 //   · a returning visitor (a live proven draft in its cookie, the landing's "Start my 7-day FREE TRIAL"; the plan
 //     step's own address ?signup=<token> in a new tab) → checkout.stripe.com, no plan cards;
@@ -25,11 +25,15 @@ import { PrismaClient } from "@prisma/client";
 import fs from "node:fs";
 import path from "node:path";
 import { ROOT, ensureBuild, playwright, startServer, stopServer } from "../_lib/_prod-server";
+import { fillStepOne } from "../_lib/_step1";
 
 const PORT = Number(process.env.QA_AUTO_PORT || 3314);
 const BASE = (process.env.QA_AUTO_URL || `http://localhost:${PORT}`).replace(/\/$/, "");
 const DB_URL = process.env.QA_DATABASE_URL || "";
 const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1";
+// QA_AUTO_WIDTH=1440: the same journeys on a desk (the full step 1 form, not the phone's sheet).
+const DESK = Number(process.env.QA_AUTO_WIDTH) > 768;
+const DESK_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
 const STAMP = Date.now();
 const MAIL_DOMAIN = `autoreturn${STAMP}.test`;
 const CODE = "864213";
@@ -68,7 +72,7 @@ async function visitor(browser: Browser, opts: { js?: boolean } = {}) {
   const ip = `10.${octet()}.${octet()}.${octet()}`;
   IPS.push(ip);
   const js = opts.js !== false;
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, userAgent: IPHONE, locale: "en-US", javaScriptEnabled: js });
+  const ctx = await browser.newContext({ ...(DESK ? { viewport: { width: 1440, height: 900 }, userAgent: DESK_UA } : { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2, userAgent: IPHONE }), locale: "en-US", javaScriptEnabled: js });
   const out: { stripe: string | null; docs: string[]; cardsSeen: number; autoSeen: number } = { stripe: null, docs: [], cardsSeen: 0, autoSeen: 0 };
   if (js) {
     await ctx.addInitScript({ content: "window.__name = function (f) { return f; };" });
@@ -228,8 +232,8 @@ async function stepOne(v: V, email: string, js = true) {
   await v.page.goto(`${BASE}/auth/register?industry=hvac`, { waitUntil: "load", timeout: 180000 });
   await v.page.locator("#nextBtn").waitFor({ timeout: 120000 });
   if (js) await v.page.waitForFunction(() => (window as unknown as { __jfStep1?: { ready: boolean } }).__jfStep1?.ready, null, { timeout: 60000 }).catch(() => {});
-  await v.page.fill("#name", "Straight Through");
-  await v.page.fill("#email", email);
+  // The email first: on a phone the sheet shows the name field once it is typed (../_lib/_step1).
+  await fillStepOne(v.page, { name: "Straight Through", email });
   await v.page.click("#nextBtn");
 }
 
@@ -294,7 +298,8 @@ async function main() {
         await holdDraft(v, draft);
         await tabMemory(v, { jf_signup_plan: "starter" });
         await v.page.goto(`${BASE}/`, { waitUntil: "load", timeout: 180000 });
-        const cta = v.page.locator('[data-cta="hero"]').first();
+        // The visible one: a desk draws the hero's phone button too, hidden.
+        const cta = v.page.locator('[data-cta="hero"]').filter({ visible: true }).first();
         await cta.waitFor({ timeout: 120000 });
         check("the landing's hero button says the trial", /Start my \d+-day FREE TRIAL/.test((await cta.innerText()).trim()), (await cta.innerText()).trim());
         await cta.click();
@@ -338,8 +343,7 @@ async function main() {
         await stale.page.goto(`${BASE}/auth/register?flow=otp`, { waitUntil: "load", timeout: 180000 });
         await stale.page.locator("#nextBtn").waitFor({ timeout: 120000 });
         await stale.page.waitForTimeout(800);
-        await stale.page.fill("#name", "Stale Tab");
-        await stale.page.fill("#email", `stale.${STAMP}@${MAIL_DOMAIN}`);
+        await fillStepOne(stale.page, { name: "Stale Tab", email: `stale.${STAMP}@${MAIL_DOMAIN}` });
         await stale.page.click("#nextBtn");
         await stale.page.locator("#otpCode").waitFor({ timeout: 60000 });
         await plantCode(stale.page.url());
