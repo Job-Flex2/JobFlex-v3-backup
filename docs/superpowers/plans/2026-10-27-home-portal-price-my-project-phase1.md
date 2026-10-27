@@ -27,7 +27,8 @@
 - A visitor who scripts `/price/roof`: the 11th Solar read in an hour from one IP is refused with words, and the honeypot field filled refuses before any Solar call. (Task 2 tests.)
 - The same address twice within 30 days costs one Solar call: the second answer comes from `pubroof:<addressKey>`. (Task 2 test.)
 - A lead submitted without the consent box ticked is refused with the intake's own words and no `PlatformLead` is written. (Task 3 behaviour, Task 7 walk.)
-- A contractor who accepts a priced lead sees the range and the summary on the offer card and in the lead's description; opening the roof estimator lands on the right building (lat/lng in the seed). (Tasks 10–11.)
+- A contractor who accepts a priced lead sees the range and the summary on the offer card and in the lead's description; opening the roof estimator shows the whole hidden estimate and lands on the right building (lat/lng in the seed). (Tasks 10–11.)
+- A homeowner's browser or a scripted request sends a doctored `estimate` with a tiny range or a padded `hidden` package: the server re-prices from the facts and answers and keeps its own result. (Task 3 rule; Task 13 walk asserts the stored `range.mid` equals the server's, not the posted one.)
 
 ---
 
@@ -162,7 +163,9 @@ check("a row is fresh for 30 days, stale after", cacheFresh({ v: 1, at: d(-29), 
 
 ```ts
 // lib/leadCenter/estimate.ts (pure parts first, then the two db helpers)
-export type LeadEstimate = { v: 1; trade: "roof"; range: { low: number; mid: number; high: number }; material: MaterialId; materialLabel: string; tearOffLayers: 0 | 1 | 2; storeys: 1 | 2 | 3; squares: number; pitchLabel: string; basis: "solar" | "size"; budgetCents: number | null; answers: RoofAnswers; cityFactor: number; guideRange: { low: number; high: number } | null; at: string; measurementId?: string | null };
+export type LeadEstimate = { v: 1; trade: "roof"; range: { low: number; mid: number; high: number }; material: MaterialId; materialLabel: string; tearOffLayers: 0 | 1 | 2; storeys: 1 | 2 | 3; squares: number; pitchLabel: string; basis: "solar" | "size"; budgetCents: number | null; answers: RoofAnswers; cityFactor: number; guideRange: { low: number; high: number } | null; at: string; measurementId?: string | null;
+  /** THE WHOLE ESTIMATE, hidden from the homeowner (owner, 2026-10-27: "pre-estimated, but hidden"): what the contractor who buys the lead opens. Priced at the default catalog × the city factor; their own rates apply once opened. */
+  hidden: { facts: RoofFacts; spec: RoofPackageSpec; materials: RoofPackageLine[]; labor: RoofPackageLine[]; assumptions: string[]; scopeText: string } };
 export const LEAD_ESTIMATE_KEY = (leadId: string) => `leadestimate:${leadId}`;
 export const PRICE_PLAN_TAG = "price:roof"; // the first line of a HomePlan.notes that holds a saved range
 export function estimateWords(e: LeadEstimate): string; // one paragraph: "Roof replacement, architectural shingle, tear-off 1 layer, about 2,100 sq ft of roof at 6/12, 2 floors; leaks noted. Range shown: $14,200–$19,800 (read from aerial data). Budget: about $18,000."
@@ -179,7 +182,7 @@ export type PublicRoofEmailInput = { email: string; name?: string; website?: str
 export async function publicRoofEmail(raw: unknown): Promise<{ ok: true; homePath: string } | { ok: false; error: string }>;
 ```
 
-Rules: `publicRoofLead` refuses `consent !== true` with the intake's words (`"Please tick the box to agree to be contacted about your request, then send again."`), runs the intake's own limits (`homeowner:${ip}` 3/10 min, global 60/min), builds `description = estimateWords(estimate)`, `scope = description` (≥ 20 chars, so the scope writer is skipped), `projectType: "roofing"`, and calls `createHomeownerLead(data, { isTest: false, source: "price:roof", consent: { text: LEAD_CONSENT_TEXT, at: new Date(), ip, page }, estimate })`; `createHomeownerLead` writes `writeLeadEstimate(platformLead.id, opts.estimate)` right after the `leadSource` write (best-effort, logged). `publicRoofEmail`: `findOrCreateHome({ name: name ?? "Homeowner", email, address, city, state, zip })`, then `db.homePlan.create({ homeId, title: "Roof · <address>", notes: PRICE_PLAN_TAG + "\n" + JSON.stringify(estimate), plannedFor: first day of next month, wholeMonth: true, remindAt: now + 2 days })` — the existing plan reminder (`lib/home/reminders`, cron `/api/cron/home-plans`) sends the nudge; then the range email (Task 7) and `homePath = await homeUrl(key)`. Limit: `enforceRateLimit(\`pubemail:${ip}\`, 5, 10 * MINUTE, "emails")`.
+Rules: the browser builds `estimate.hidden` from the same pure engine it priced the range with (`roofRange` is extended to also return `spec`, `materials`, `labor`, `assumptions` — add `hidden: LeadEstimate["hidden"]` to `RoofRange` in Task 1; the homeowner view reads only `low/mid/high/scope`); the server re-runs `roofRange` on the submitted facts and answers and **replaces** `hidden` and `range` with its own result (a doctored request prices nothing). `publicRoofLead` refuses `consent !== true` with the intake's words (`"Please tick the box to agree to be contacted about your request, then send again."`), runs the intake's own limits (`homeowner:${ip}` 3/10 min, global 60/min), builds `description = estimateWords(estimate)`, `scope = description` (≥ 20 chars, so the scope writer is skipped), `projectType: "roofing"`, and calls `createHomeownerLead(data, { isTest: false, source: "price:roof", consent: { text: LEAD_CONSENT_TEXT, at: new Date(), ip, page }, estimate })`; `createHomeownerLead` writes `writeLeadEstimate(platformLead.id, opts.estimate)` right after the `leadSource` write (best-effort, logged). `publicRoofEmail`: `findOrCreateHome({ name: name ?? "Homeowner", email, address, city, state, zip })`, then `db.homePlan.create({ homeId, title: "Roof · <address>", notes: PRICE_PLAN_TAG + "\n" + JSON.stringify(estimate), plannedFor: first day of next month, wholeMonth: true, remindAt: now + 2 days })` — the existing plan reminder (`lib/home/reminders`, cron `/api/cron/home-plans`) sends the nudge; then the range email (Task 7) and `homePath = await homeUrl(key)`. Limit: `enforceRateLimit(\`pubemail:${ip}\`, 5, 10 * MINUTE, "emails")`.
 
 - [ ] **Step 1: Write the failing check** (pure parts):
 
@@ -334,19 +337,24 @@ export function moneyRange(r: RoofRange): string; // "$14,200–$19,800"
 
 ---
 
-### Task 11: Open in the roof estimator on the right building
+### Task 11: Open in the roof estimator — the whole hidden estimate, on the right building
 
 **Files:**
-- Modify: `src/lib/estimateSeed.ts:17` (`EstimateSeed.lat?: number | null; lng?: number | null`)
-- Modify: `src/actions/leadEstimate.ts:23` (`startEstimateFromLead`: `db.platformLead.findFirst({ where: { matchedLeadId: lead.id }, select: { lat: true, lng: true } })` → the seed's `lat`/`lng`)
-- Modify: `src/app/dashboard/roof-estimator/page.tsx:32` and the data form's seed consumer (`roof-estimator-data-form.tsx`, where the seed's `address` prefills the intake): when the seed has `lat`/`lng`, set `picked = { address, lat, lng }` so `orderInput()` sends the pin and the 2026-10-26 at-pin rule picks the building
+- Modify: `src/lib/estimateSeed.ts:17` (`EstimateSeed.lat?: number | null; lng?: number | null; platformLeadId?: string | null`)
+- Modify: `src/actions/leadEstimate.ts:23` (`startEstimateFromLead`: `db.platformLead.findFirst({ where: { matchedLeadId: lead.id }, select: { id: true, lat: true, lng: true } })` → the seed's `lat`/`lng`/`platformLeadId`)
+- Modify: `src/actions/roofEstimator.ts` (new `openRoofLeadEstimate(platformLeadId)`: `requireEstimatorOrManager`, the lead must be `matchedOrgId === organizationId`, reads the `LeadEstimate`, returns the same shape the proposal-reopen action returns — `{ ok: true, proposal: null, measurementId: null, manual: { squares, pitchLabel, address }, spec: hidden.spec, factsKey: null, extra: [], mainIndex: null, pitchEntered: hidden.facts.pitch label, address, title: "Roof · <address>", scope: hidden.scopeText, assumptions: hidden.assumptions, materials: hidden.materials, labor: hidden.labor, others: [], older: false }` plus `lat`/`lng`)
+- Modify: `src/app/dashboard/roof-estimator/page.tsx` + `roof-estimator-data-form.tsx` (the seed's `platformLeadId` → the form calls `openRoofLeadEstimate` on mount and applies the result through the SAME code path the `?proposal=` reopen uses — the manual takeoff, `seedSpec`, the lines, the scope — with no linked proposal, so Convert stays "Convert" and makes a new proposal; the seed's `lat`/`lng` set `picked = { address, lat, lng }` so a Measure click sends the pin and the 2026-10-26 at-pin rule picks the building)
+- Test: `qa/tests/logic/lead-estimate.check.ts` (extend: `reopenFromEstimate(e, address)` is a pure export of `lib/leadCenter/estimate.ts` that builds the reopen shape; check it carries every hidden line and the manual takeoff)
 
 **Interfaces:**
-- Consumes: `PlatformLead.matchedLeadId` (schema:591).
+- Consumes: `PlatformLead.matchedLeadId` (schema:591), `readLeadEstimates`, the proposal-reopen result type in `actions/roofEstimator.ts:494-513`.
+- Produces: `openRoofLeadEstimate(platformLeadId: string)`; `reopenFromEstimate(e: LeadEstimate, address: string | null): RoofReopen` (the result type above, exported from `lib/roofPackage/proposalEdit.ts` as `RoofReopen` if it is not already named).
 
-- [ ] **Step 1: Implement the three changes.**
-- [ ] **Step 2: Verify**: `qa/tests/logic/roof-structures.check.ts` and `roof-mansard.check.ts` still pass; on the stand, "Roof estimator — start estimate" from the accepted lead lands on the form with the address filled and, in the console's `[roof:debug]` line, `lat/lng` present in the measure input.
-- [ ] **Step 3: Commit** `feat(roof): a Lead Center lead opens the estimator on its own pin`
+- [ ] **Step 1: Write the failing check**: `check("the hidden estimate reopens whole: the manual takeoff, the spec, every line, the scope", r.manual?.squares === 21 && r.manual?.pitchLabel === "6/12" && r.spec?.systemId === "architectural" && r.materials.length === e.hidden.materials.length && r.labor.length === e.hidden.labor.length && r.scope === e.hidden.scopeText && r.proposal === null)`.
+- [ ] **Step 2: Run — FAIL.**
+- [ ] **Step 3: Implement the five changes.**
+- [ ] **Step 4: Verify**: the check passes; `qa/tests/logic/roof-structures.check.ts`, `roof-mansard.check.ts`, `roof-proposal-edit.check.ts` still pass; on the stand, "Roof estimator — start estimate" from the accepted lead opens the form with the address, the takeoff (21 sq · 6/12), the package's lines and the scope already there, the console's `[roof:debug]` line shows `lat/lng` in the measure input when Measure is clicked.
+- [ ] **Step 5: Commit** `feat(roof): a bought lead opens the estimator with its whole hidden estimate, on its own pin`
 
 ---
 
