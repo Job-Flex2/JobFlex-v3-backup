@@ -6,7 +6,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { webPageModel } from "@/actions/webEstimator";
+import { webPageModel, webPageOffReason } from "@/actions/webEstimator";
 import { WebEstimate } from "@/components/v3/web-estimate/web-estimate";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +31,20 @@ export default async function WebEstimatePage({ params, searchParams }: { params
   try { refHost = referer ? new URL(referer).host : null; } catch { refHost = null; }
   const host = typeof sp.host === "string" ? sp.host : refHost;
   const m = await webPageModel(slug, trade, embed ? host : null);
-  if (!m) notFound();
+  if (!m) {
+    // The shop's own people, signed in, asked for their own page while the trade is off (or unsaved): say so plainly.
+    // Everyone else gets the 404 — an off trade is not a page.
+    const why = await webPageOffReason(slug, trade).catch(() => null);
+    if (why) {
+      return (
+        <main className="we" style={{ padding: 24, fontFamily: "Inter, -apple-system, sans-serif", maxWidth: 640, margin: "0 auto" }} data-web-off>
+          <h1 style={{ fontSize: 22, margin: "0 0 10px" }}>{why.title}</h1>
+          <p style={{ margin: 0, fontSize: 16, lineHeight: 1.5, color: "#3b4150" }}>{why.text}</p>
+        </main>
+      );
+    }
+    notFound();
+  }
   if (embed && !m.hostOk) {
     return (
       <main className="we" style={{ padding: 24, fontFamily: "Inter, -apple-system, sans-serif" }}>

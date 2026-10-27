@@ -66,6 +66,8 @@ export function WebEstimatorForm() {
   const flipOpen = (on: boolean) => start(async () => { const r = await setWebEstimatorOpenAction(on); if (r.ok) { const v = await loadWebEstimator(); if (v.ok) { setView(v.view); setSettings(v.view.settings); } else setView({ ...view, open: r.open }); } else setError(r.error); });
 
   const onTrades = WEB_TRADES.filter((t) => settings.trades[t].on);
+  // unsaved changes: the Preview opens the SAVED page, so it waits for Save
+  const dirty = JSON.stringify(settings) !== JSON.stringify(view.settings) || domainsText.split(/[,\s]+/).filter(Boolean).join(",") !== view.settings.domains.join(",");
   const adding = bills ? WEB_TRADES.filter((t) => settings.trades[t].on && !billing.held[t]) : [];
   const removing = bills ? WEB_TRADES.filter((t) => !settings.trades[t].on && billing.held[t]) : [];
   const cannot = view.open && (billing.mode === "free" || billing.mode === "offline");
@@ -150,7 +152,7 @@ export function WebEstimatorForm() {
                     <span>Under the price <small>your own words, or leave the standard line</small></span>
                     <input value={ts.note} placeholder={info.basis} maxLength={200} onChange={(e) => setTrade(t, { note: e.target.value })} data-web-note={t} />
                   </label>
-                  <Snippets base={view.base} slug={view.slug} trade={t} copied={copied} onCopy={copy} />
+                  <Snippets base={view.base} slug={view.slug} trade={t} copied={copied} onCopy={copy} saved={view.settings.trades[t].on && !dirty} />
                 </div>
               ) : null}
             </section>
@@ -188,7 +190,7 @@ export function WebEstimatorForm() {
   );
 }
 
-function Snippets({ base, slug, trade, copied, onCopy }: { base: string; slug: string; trade: WebTrade; copied: string | null; onCopy: (what: string, text: string) => void }) {
+function Snippets({ base, slug, trade, copied, onCopy, saved }: { base: string; slug: string; trade: WebTrade; copied: string | null; onCopy: (what: string, text: string) => void; saved: boolean }) {
   const s = embedSnippets(base, slug, trade);
   const rows: Array<[string, string, string, string]> = [
     ["link", "The link", "Paste it in a button on your site, Google Business Profile, Facebook, an email, a QR code.", s.link],
@@ -206,7 +208,7 @@ function Snippets({ base, slug, trade, copied, onCopy }: { base: string; slug: s
           <div className={styles.snipRow}>
             <input readOnly value={code} onFocus={(e) => e.currentTarget.select()} data-web-snippet={k} />
             <button type="button" className={styles.btnGhost} onClick={() => onCopy(`${trade}:${k}`, code)}>{copied === `${trade}:${k}` ? "Copied" : "Copy"}</button>
-            {k === "link" ? <a className={styles.btnGhost} href={code} target="_blank" rel="noreferrer" data-web-preview={trade}>Preview</a> : null}
+            {k === "link" ? (saved ? <a className={styles.btnGhost} href={code} target="_blank" rel="noreferrer" data-web-preview={trade}>Preview</a> : <span className={styles.btnGhost + " " + styles.btnOff} title="The page answers once this is saved as On" data-web-preview-wait={trade}>Save first</span>) : null}
           </div>
         </div>
       ))}

@@ -11,7 +11,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { appBaseUrl } from "@/lib/appUrl";
 import { NoOrgError, UnauthorizedError, isOwnerRole, requireEstimatorOrManager, requireManager, requireOrg, requirePlatformAdmin } from "@/lib/orgContext";
-import { dollars, webAddonPriceWords, webModeBills, type AddonInterval, type WebAddonLine, type WebBillingMode } from "@/lib/webAddon";
+import { dollars, webAddonPriceWords, webModeBills, webTradeServes, type AddonInterval, type WebAddonLine, type WebBillingMode } from "@/lib/webAddon";
 import { addWebAddon, quoteWebAddon as quoteWebLine, removeWebAddon, webAddonLines, webBilling, webTradeLive } from "@/lib/webAddonBilling";
 import { HOUR, MINUTE, RateLimitError, clientIp, enforceRateLimit } from "@/lib/rateLimit";
 import { noteRequestOrg } from "@/lib/trialMeter";
@@ -301,6 +301,25 @@ export async function webLead(slug: unknown, trade: unknown, token: unknown, raw
   if (typeof c.company === "string" && c.company.trim()) return { ok: true, leadId: "ok" };   // the honeypot: a bot filled the hidden field
   const { leadId } = await createWebLead(shop, est, { name, phone, email, note });
   return { ok: true, leadId };
+}
+
+/** Why this page is off, for the shop's OWN people when signed in (null for everyone else — they get the 404). */
+export async function webPageOffReason(slug: string, trade: string): Promise<{ title: string; text: string } | null> {
+  let ctx;
+  try { ctx = await requireOrg(); } catch { return null; }
+  const org = await db.organization.findUnique({ where: { id: ctx.organizationId }, select: { slug: true } });
+  if (!org || org.slug !== slug) return null;
+  if (!isWebTrade(trade)) return { title: "No such estimator.", text: "The address ends in roof, hvac, fence or deck." };
+  const name = tradeLabel(trade);
+  const [settings, open] = await Promise.all([readWebSettings(ctx.organizationId), webEstimatorOpen()]);
+  if (!settings.trades[trade].on) return { title: `The ${name} is off on your website.`, text: `Turn it on under Settings → Website estimators and press Save — then this page answers. Only you see this note; a homeowner would see a plain "not found".` };
+  if (open) {
+    const b = await webBilling(ctx.organizationId, open);
+    if (!webTradeServes({ open, on: true, mode: b.mode, held: !!b.held[trade] })) {
+      return { title: `The ${name} is on, but not on your plan.`, text: b.mode === "free" ? "Website estimators go on a paid plan. Pick a plan on Subscription, then turn the trade on again and Save." : b.mode === "offline" ? "Your plan isn't billed to a card here. Write to us from Help and we'll add it." : "Its line isn't on your subscription. Open Settings → Website estimators and press Save to add it." };
+    }
+  }
+  return { title: `The ${name} is on.`, text: "If this page still says not found, press Save on Settings → Website estimators once more." };
 }
 
 // ── what the public page needs to draw (server component helper, not an action-only export)
