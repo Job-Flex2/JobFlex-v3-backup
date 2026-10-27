@@ -54,6 +54,7 @@ import { needsAddressFor } from "@/lib/leadRules";
 /** The street address is CONTACT_FIELDS[4]; required only when lib/leadRules says the job is measured at the property. */
 const ADDRESS_FIELD = 4;
 import { submitHomeownerRequest, suggestHomeownerQuestions, suggestHomeownerScope } from "@/actions/homeowner";
+import { LEAD_CONSENT_MISSING, LEAD_CONSENT_TEXT, consentPageFromLocation } from "@/lib/leadConsent";
 import { browserTimeZone, type WizardPrefill } from "@/lib/home/prefill";
 import { prefersReducedMotion, referralCodeFromUrl, testKeyFromUrl } from "../homeowner-landing/use-homeowner-behavior";
 import { usePlaceholderCycle } from "../homeowner-landing/wizard/use-placeholder-cycle";
@@ -96,6 +97,9 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
      nothing — no lead, no confirmation email, nothing in the Lead Center. */
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState("");
+  /* The TCPA box under "Send my project" (lib/leadConsent): nothing is sent unticked. */
+  const [consent, setConsent] = useState(false);
+  const consentRef = useRef<HTMLInputElement | null>(null);
   /* The status page (/request/[token]) the submission hands back — the done
      pane links it, as the confirmation email does. */
   const [statusPath, setStatusPath] = useState<string | null>(null);
@@ -290,6 +294,11 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
       setSendErr("This job is measured at the property — please add the street address.");
       return;
     }
+    if (!consent) {
+      setSendErr(LEAD_CONSENT_MISSING);
+      consentRef.current?.focus();
+      return;
+    }
     setSendErr("");
     setSending(true);
     try {
@@ -310,6 +319,9 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
         planId: prefill?.planId ?? undefined,
         // Started on a cost guide (/cost): the guide, kept with the lead.
         source: prefill?.source,
+        // The ticked TCPA box and where it was ticked; the server keeps its own copy of the words.
+        consent,
+        page: consentPageFromLocation(),
         // The browser's zone, for a new home's reminders.
         timezone: browserTimeZone() || undefined,
       });
@@ -340,6 +352,7 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
     setStep(0);
     setStatusPath(null);
     setSendErr("");
+    setConsent(false);
     setDesc("");
     clearAttachments();
     answers.current = [];
@@ -597,6 +610,20 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
           </svg>
         </button>
       </div>
+      <label className="consent">
+        <input
+          ref={consentRef}
+          className="consent-box"
+          type="checkbox"
+          checked={consent}
+          aria-required="true"
+          onChange={(e) => {
+            setConsent(e.target.checked);
+            if (e.target.checked && sendErr === LEAD_CONSENT_MISSING) setSendErr("");
+          }}
+        />
+        <span>{LEAD_CONSENT_TEXT}</span>
+      </label>
     </div>
   );
 

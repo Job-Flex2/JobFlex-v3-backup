@@ -317,6 +317,20 @@ Long names must wrap or have an accessible way to view the full value. Use
 `min-width: 0` on flex/grid children and `overflow-wrap: anywhere` where needed.
 Keep key mobile data available; do not hide functionality to make a layout fit.
 
+Public SEO pages (owner, 2026-10-26) — the cost guides `/cost`,
+`/cost/<work>` and `/cost/<work>/<city>`
+([cost.module.css](src/components/seo-cost/cost.module.css)) — are the one
+approved exception to the viewport switch. They render on the server as one
+layout tree that a search engine reads whole, so the phone layout is the
+default CSS and a single `@media (min-width: 769px)` query widens it for the
+desk; no dynamically imported mobile component, no `md:`/`lg:` variants, no
+UA detection. The Blueprint holds: drafting-paper page, white cards in ink
+frames, uppercase headings, the answer card first, one blue primary action
+per block, 44px touch targets, and no framer-motion — the only client code
+is the small calculator and the page-view event. The exception covers
+content-only public pages with no app state; anything with a signed-in
+shell keeps the switch.
+
 ## Implementation and review
 
 Deck estimator (owner refinements, 2026-10-18): use one continuous scrolling

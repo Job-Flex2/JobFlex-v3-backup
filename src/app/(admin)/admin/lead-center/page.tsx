@@ -12,6 +12,9 @@ import { purchasesByPlatformLead } from "@/lib/leadCenter/purchase";
 import { readTestKey } from "@/lib/leadCenter/testLeads";
 import { appBaseUrl } from "@/lib/appUrl";
 import { orgRatingsByIds } from "@/lib/reviews/publicSummary";
+import { SEO_SOURCE_RE } from "@/lib/seo/links";
+import { seoTrade } from "@/lib/seo/trades";
+import { seoCity } from "@/lib/seo/cities";
 import {
   AdminLeadCenterContent,
   type PlatformLeadDTO,
@@ -19,6 +22,18 @@ import {
   type RankEntry,
   type StatsDTO,
 } from "@/components/v3/admin-lead-center/lead-center-content";
+
+/** The Source column: a cost guide by its work and city, any other start by the page it was sent from. */
+function sourceOf(row: { source: string | null; consentPage: string | null } | undefined): PlatformLeadDTO["source"] {
+  if (!row) return null;
+  if (row.source && SEO_SOURCE_RE.test(row.source)) {
+    const [, work, city] = row.source.split(":");
+    const t = seoTrade(work);
+    const c = seoCity(city);
+    return { label: "Cost guide", detail: t && c ? `${t.name} · ${c.place}` : row.source };
+  }
+  return { label: "Direct", detail: row.consentPage?.split("?")[0] ?? null };
+}
 
 /** A hand-sent offer carries `manual: true` in its breakdown (lib/leadCenter/route). */
 function isManualOffer(o: { scoreBreakdownJson: string | null }): boolean {
@@ -112,6 +127,16 @@ export default async function AdminLeadCenterPage() {
   const tradesByOrg = new Map(rankingInputs.orgs.map((o) => [o.id, parseTradeTypes(o.tradeTypesJson)]));
   // What shops paid for their leads (lib/leadCenter/purchase) — the Paid column.
   const purchases = await purchasesByPlatformLead(platformLeads.map((p) => p.id));
+  // Where each request started and the consent it was sent with (LeadSource,
+  // 2026-10-26) — the Source column and the sheet's consent line. A database
+  // without the table yet reads as no rows.
+  const leadSources = new Map(
+    (
+      await db.leadSource
+        .findMany({ where: { platformLeadId: { in: platformLeads.map((p) => p.id) } } })
+        .catch(() => [] as Array<{ platformLeadId: string; source: string | null; consentText: string | null; consentAt: Date | null; consentIp: string | null; consentPage: string | null }>)
+    ).map((r) => [r.platformLeadId, r]),
+  );
 
   // ── ledger DTO ──────────────────────────────────────────────────────────
   const orgName = new Map(orgs.map((o) => [o.id, o.name]));
@@ -200,6 +225,11 @@ export default async function AdminLeadCenterPage() {
       ranking,
       shopOrder,
       priceCents: p.priceCents && p.priceCents > 0 ? p.priceCents : null,
+      source: sourceOf(leadSources.get(p.id)),
+      consent: (() => {
+        const r = leadSources.get(p.id);
+        return r?.consentAt && r.consentText ? { at: r.consentAt.toISOString(), ip: r.consentIp, page: r.consentPage, text: r.consentText } : null;
+      })(),
       paid: (() => {
         const rec = purchases.get(p.id);
         if (!rec) return null;

@@ -775,6 +775,20 @@ body:has(.jf-homeowner-landing)::before { content: none; }
   background: rgba(168,50,50,.08); color: var(--danger, #a83232);
   font-size: calc(12.5px * var(--s)); font-weight: 600; line-height: 1.45; }
 
+/* TCPA consent under "Send my project" (owner, 2026-10-26; lib/leadConsent):
+   a square box, the words beside it; the whole line is the hit area. The send
+   refuses until it is ticked and focuses the box. */
+.jf-homeowner-landing .consent { display: flex; align-items: flex-start; gap: calc(10px * var(--s)); margin-top: calc(16px * var(--s));
+  font-size: calc(11.5px * var(--s)); line-height: 1.5; color: var(--muted); cursor: pointer; }
+.jf-homeowner-landing .consent-box { flex: 0 0 auto; display: grid; place-content: center; width: calc(18px * var(--s)); height: calc(18px * var(--s));
+  margin: calc(1px * var(--s)) 0 0; border: calc(1.5px * var(--s)) solid var(--ink); border-radius: var(--radius); background: var(--paper);
+  appearance: none; -webkit-appearance: none; cursor: pointer; transition: background .15s var(--ease), border-color .15s var(--ease); }
+.jf-homeowner-landing .consent-box::after { content: ""; width: calc(9px * var(--s)); height: calc(5px * var(--s)); border: solid var(--paper);
+  border-width: 0 0 calc(2px * var(--s)) calc(2px * var(--s)); transform: translateY(calc(-1px * var(--s))) rotate(-45deg); opacity: 0; }
+.jf-homeowner-landing .consent-box:checked { background: var(--blueprint); border-color: var(--blueprint); }
+.jf-homeowner-landing .consent-box:checked::after { opacity: 1; }
+.jf-homeowner-landing .consent-box:focus-visible { outline: calc(2px * var(--s)) solid var(--blueprint); outline-offset: calc(2px * var(--s)); }
+
 /* ── Brand mark: the shared house asset (/jobflex-mark.png), replacing the
    donor's "JF" plate. Same clip geometry as landing-d.css .lp-mark-box /
    .lp-mark-img (the asset carries a wide transparent margin, so the box crops

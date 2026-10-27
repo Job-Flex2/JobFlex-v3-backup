@@ -14,6 +14,14 @@
 // (lib/estimate/trade-knowledge). Nothing is priced here; a step whose text
 // no longer matches throws, so the build fails instead of a guide going stale.
 //
+// One check against the outside (owner, 2026-10-26): an option's average
+// must stay within 20% of the installed price the source the page cites gives
+// for the whole job (SeoVariant.cited, read from the benchmark's own source
+// lines). Where the book's steps add up to more, every step of the option but
+// a fee is scaled down by one factor, to the middle of that range; an option
+// with no source of its own follows its trade's default option. The factor
+// and why are printed on the page (lib/seo/content).
+//
 // Server-side (the pages render at build time); the browser only ever gets
 // the finished model (lib/seo/calc). Plain module, no I/O.
 
@@ -24,7 +32,7 @@ import { ROOF_SYSTEMS } from "@/lib/roofPackage/catalog";
 import { DEFAULT_RATE_CARD } from "@/lib/hvac/ledger";
 import { calculate, type CalcLine, type CalcModel, type CalcResult } from "./calc";
 import type { SeoCity } from "./cities";
-import type { SeoLine, SeoRatio, SeoSwap, SeoTrade, SeoVariant } from "./trades";
+import type { SeoCited, SeoLine, SeoRatio, SeoSwap, SeoTrade, SeoVariant } from "./trades";
 
 type Step = StepPrice & { item: string; unit: string };
 
@@ -129,11 +137,57 @@ function variantLines(trade: SeoTrade, v: SeoVariant) {
   });
 }
 
-/** National line → this city's line: everything but a fee follows the city's index. */
-function priced(l: ReturnType<typeof resolveLine>, factor: number): CalcLine {
-  const k = l.fee ? 1 : factor;
+/** National line → this city's line: everything but a fee follows the city's index, and the option's calibration. */
+function priced(l: ReturnType<typeof resolveLine>, factor: number, calibrate = 1): CalcLine {
+  const k = l.fee ? 1 : factor * calibrate;
   const { price, ...rest } = l;
   return { ...rest, lo: price[0] * k, hi: price[1] * k };
+}
+
+/** "Homewyse 2026: 6 ft wood privacy fence $33-$53/linear ft installed" → [33, 53]; "$7,000-$14,000" reads too. */
+function citedPart(trade: SeoTrade, part: SeoCited["parts"][number]): { range: [number, number]; line: string } {
+  const line = SPECIALTY_PRICES[trade.specialty].benchmark.sources.find((s) => s.startsWith(part.source) && s.includes(part.label));
+  const m = line?.slice(line.indexOf(part.label) + part.label.length).match(/^[^$]{0,80}?\$([\d,]+(?:\.\d+)?)-\$([\d,]+(?:\.\d+)?)/);
+  if (!line || !m) throw new Error(`cost guides: no "${part.source} … ${part.label} $a-$b" among the ${trade.specialty} benchmark's sources.`);
+  const n = (x: string) => Number(x.replace(/,/g, "")) * (part.scale ?? 1);
+  return { range: [n(m[1]), n(m[2])], line };
+}
+
+export type Calibration = {
+  /** The factor every step but a fee is multiplied by; 1 = within 20%, left as the book builds it. */
+  k: number;
+  /** The option whose cited range set it (itself, or the trade's default option). */
+  from: string;
+  per: "unit" | "job";
+  /** The book's national average for the typical job, per unit or for the job. */
+  book: number;
+  /** The cited installed range, summed over its parts, and the source lines it was read from. */
+  cited: [number, number];
+  sources: string[];
+};
+
+const calCache = new Map<string, Calibration | null>();
+
+/** How an option's steps are scaled to the source the page cites (null: no cited range for it or its trade's default). */
+export function calibration(trade: SeoTrade, variantId: string): Calibration | null {
+  const key = `${trade.slug}|${variantId}`;
+  if (calCache.has(key)) return calCache.get(key) ?? null;
+  const own = trade.variants.find((v) => v.id === variantId);
+  const ref = own?.cited ? own : trade.variants.find((v) => v.id === trade.defaultVariant);
+  let out: Calibration | null = null;
+  if (ref?.cited) {
+    const parts = ref.cited.parts.map((p) => citedPart(trade, p));
+    const cited: [number, number] = [parts.reduce((a, p) => a + p.range[0], 0), parts.reduce((a, p) => a + p.range[1], 0)];
+    const size = trade.size.typical;
+    const per = ref.cited.per === "unit" ? size : 1;
+    // The book as is, nationally, for the typical job.
+    const raw = calculate({ variants: [{ id: ref.id, label: ref.label, lines: variantLines(trade, ref).map((l) => priced(l, 1)) }], extras: [], minJob: 0 }, ref.id, size);
+    const mid = (cited[0] + cited[1]) / 2;
+    const k = raw.avg / per > mid * 1.2 ? (mid * per - raw.fees) / (raw.avg - raw.fees) : 1;
+    out = { k, from: ref.id, per: ref.cited.per, book: raw.avg / per, cited, sources: parts.map((p) => p.line) };
+  }
+  calCache.set(key, out);
+  return out;
 }
 
 const modelCache = new Map<string, CalcModel>();
@@ -145,7 +199,10 @@ export function costModel(trade: SeoTrade, factor: number): CalcModel {
   if (hit) return hit;
   const bench = SPECIALTY_PRICES[trade.specialty].benchmark;
   const model: CalcModel = {
-    variants: trade.variants.map((v) => ({ id: v.id, label: v.label, lines: variantLines(trade, v).map((l) => priced(l, factor)) })),
+    variants: trade.variants.map((v) => {
+      const k = calibration(trade, v.id)?.k ?? 1;
+      return { id: v.id, label: v.label, lines: variantLines(trade, v).map((l) => priced(l, factor, k)) };
+    }),
     extras: trade.extras.map((e) => {
       const lines: CalcLine[] = (e.add ?? []).map((line) => priced(resolveLine(trade, line), factor));
       if (e.noteLine) {

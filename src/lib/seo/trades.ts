@@ -42,11 +42,28 @@ export type SeoRatio =
   | { kind: "roof"; system: string; part: "material" | "labor" | "cap" }
   | { kind: "hvac"; part: "outdoor" | "indoor"; equipment: "airConditioner" | "heatPump" | "coldClimateHeatPump" };
 
+/**
+ * The installed price for the whole job that a public source the page cites
+ * gives (owner, 2026-10-26: the guide's average stays within 20% of it). Read
+ * from the price book benchmark's own source lines, never written here: each
+ * part names a source line by its start and the words its "$a-$b" follows;
+ * the parts add up (an installed price plus the tear-off the job includes).
+ * lib/seo/pricing scales the option's steps down to the middle of the range
+ * when the book's steps add up to more than 20% over it.
+ */
+export type SeoCited = {
+  parts: Array<{ source: string; label: string; /** A per-square price read per sq ft: 0.01. */ scale?: number }>;
+  /** Per unit of the job's size, or for the typical job as a whole. */
+  per: "unit" | "job";
+};
+
 export type SeoVariant = {
   id: string;
   label: string;
   /** Under the label in the tables. */
   detail: string;
+  /** What a cited source says the installed job costs; an option without one follows its trade's default option. */
+  cited?: SeoCited;
   swaps?: SeoSwap[];
   /** Lines this option leaves out, by step. */
   drop?: string[];
@@ -165,6 +182,13 @@ const ROOF: SeoTrade = {
       id: "architectural",
       label: "Architectural asphalt shingles",
       detail: "30-year laminated shingle, the most common re-roof",
+      cited: {
+        parts: [
+          { source: "HomeGuide 2026", label: "architectural shingles", scale: 0.01 },
+          { source: "Roof tear-off guides 2026", label: "tear-off" },
+        ],
+        per: "unit",
+      },
     },
     {
       id: "three-tab",
@@ -240,11 +264,17 @@ const FENCE: SeoTrade = {
     { step: "Cleanup: hole spoils", label: "Cleanup and haul-off", scale: "fixed" },
   ],
   variants: [
-    { id: "wood", label: "Wood privacy fence", detail: "6 ft cedar or treated pine pickets on treated posts" },
+    {
+      id: "wood",
+      label: "Wood privacy fence",
+      detail: "6 ft cedar or treated pine pickets on treated posts",
+      cited: { parts: [{ source: "Homewyse 2026", label: "wood privacy fence" }], per: "unit" },
+    },
     {
       id: "vinyl",
       label: "Vinyl or aluminum panels",
       detail: "prefabricated panels between the posts",
+      cited: { parts: [{ source: "HomeGuide 2026", label: "vinyl" }], per: "unit" },
       drop: ["Rails and pickets:"],
       add: [{ step: "Prefabricated panels:", label: "Prefabricated panels", scale: "size", perUnit: 1 }],
     },
@@ -309,6 +339,7 @@ const HVAC: SeoTrade = {
       id: "ac-furnace",
       label: "Central AC + gas furnace",
       detail: "split AC, matched coil and an 80,000 BTU furnace",
+      cited: { parts: [{ source: "HomeCostCalcs 2026", label: "furnace + AC replacement" }], per: "job" },
       swaps: [
         { step: "Air conditioner or heat pump condenser", ratio: { kind: "hvac", part: "outdoor", equipment: "airConditioner" } },
         { step: "Matched cased evaporator coil", ratio: { kind: "hvac", part: "indoor", equipment: "airConditioner" } },
@@ -382,6 +413,7 @@ const DECK: SeoTrade = {
       id: "treated",
       label: "Pressure-treated wood",
       detail: "treated pine or fir boards, stained and sealed",
+      cited: { parts: [{ source: "HomeGuide 2026", label: "pressure-treated deck" }], per: "unit" },
       swaps: [{ step: "Decking laid:", note: { label: "PT or cedar" } }],
       add: [{ step: "Stain and seal: penetrating oil-based stain", label: "Stain and seal, two coats", scale: "size", perUnit: 1 }],
     },
@@ -389,6 +421,7 @@ const DECK: SeoTrade = {
       id: "composite",
       label: "Capped composite",
       detail: "hidden fasteners and a picture-frame border",
+      cited: { parts: [{ source: "Ergeon 2026", label: "composite deck" }], per: "unit" },
       swaps: [{ step: "Decking laid:", note: { label: "capped composite with hidden fasteners" } }],
     },
   ],
@@ -436,8 +469,21 @@ const SIDING: SeoTrade = {
     { step: "Final cleanup: magnetic nail sweep, debris hauled, walk-through of every elevation", label: "Cleanup and warranty registration", scale: "fixed" },
   ],
   variants: [
-    { id: "vinyl", label: "Vinyl siding", detail: "double-4 lap, factory color", swaps: [{ step: "Siding installed:", note: { after: "siding-only share", label: "vinyl" } }] },
-    { id: "fiber-cement", label: "Fiber-cement siding", detail: "lap board, blind-nailed into studs", swaps: [{ step: "Siding installed:", note: { after: "siding-only share", label: "fiber-cement" } }] },
+    // The job includes taking the old siding off, so the cited installed price gets the cited removal added.
+    {
+      id: "vinyl",
+      label: "Vinyl siding",
+      detail: "double-4 lap, factory color",
+      cited: { parts: [{ source: "HomeGuide/This Old House 2026", label: "vinyl siding" }, { source: "Modernize/Dropcurb 2026", label: "siding removal" }], per: "unit" },
+      swaps: [{ step: "Siding installed:", note: { after: "siding-only share", label: "vinyl" } }],
+    },
+    {
+      id: "fiber-cement",
+      label: "Fiber-cement siding",
+      detail: "lap board, blind-nailed into studs",
+      cited: { parts: [{ source: "HomeGuide 2026", label: "fiber-cement siding" }, { source: "Modernize/Dropcurb 2026", label: "siding removal" }], per: "unit" },
+      swaps: [{ step: "Siding installed:", note: { after: "siding-only share", label: "fiber-cement" } }],
+    },
   ],
   defaultVariant: "vinyl",
   extras: [{ id: "insulation", label: "Add exterior insulation board", add: [{ step: "Continuous exterior insulation", label: "1 in. exterior insulation board", scale: "size", perUnit: 1 }] }],
@@ -487,9 +533,28 @@ const PAINT: SeoTrade = {
     { step: "Walk-through with the client", label: "Walk-through and touch-ups", scale: "fixed" },
   ],
   variants: [
-    { id: "interior-full", label: "Interior: walls, ceilings, trim & doors", detail: "two coats throughout, the full repaint" },
-    { id: "interior-walls", label: "Interior: walls & ceilings", detail: "two coats, trim and doors left as they are", drop: ["Trim, baseboard, casing and crown", "Doors: both faces and edges"] },
-    { id: "exterior", label: "Exterior: siding & body", detail: "washed, prepped and two coats; trim priced apart", only: PAINT_EXTERIOR },
+    // The full repaint is the source's whole-home interior; the per-sq-ft rate covers walls, not trim and doors.
+    {
+      id: "interior-full",
+      label: "Interior: walls, ceilings, trim & doors",
+      detail: "two coats throughout, the full repaint",
+      cited: { parts: [{ source: "HomeGuide 2026", label: "whole-home interior" }], per: "job" },
+    },
+    {
+      id: "interior-walls",
+      label: "Interior: walls & ceilings",
+      detail: "two coats, trim and doors left as they are",
+      cited: { parts: [{ source: "HomeGuide 2026", label: "painters charge" }], per: "unit" },
+      drop: ["Trim, baseboard, casing and crown", "Doors: both faces and edges"],
+    },
+    // The price book has no exterior source of its own; the general per-sq-ft rate is the one the page cites.
+    {
+      id: "exterior",
+      label: "Exterior: siding & body",
+      detail: "washed, prepped and two coats; trim priced apart",
+      cited: { parts: [{ source: "HomeGuide 2026", label: "painters charge" }], per: "unit" },
+      only: PAINT_EXTERIOR,
+    },
   ],
   defaultVariant: "interior-full",
   extras: [{ id: "lead", label: "Home built before 1978", add: [{ step: "Lead-safe work practices", label: "Lead-safe work practices (EPA RRP)", scale: "fixed" }] }],

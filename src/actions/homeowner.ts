@@ -6,6 +6,7 @@ import { suggestIntakeQuestions, type IntakeQuestion } from "@/lib/ai/homeownerQ
 import { enforceRateLimit, clientIp, rateLimitShared, MINUTE } from "@/lib/rateLimit";
 import { needsAddressFor, writeProfessionalScope } from "@/lib/leadScope";
 import { SEO_SOURCE_RE } from "@/lib/seo/links";
+import { LEAD_CONSENT_TEXT } from "@/lib/leadConsent";
 
 const homeownerSchema = z.object({
   name: z.string().min(1),
@@ -29,6 +30,10 @@ const homeownerSchema = z.object({
   timezone: z.string().max(80).optional(),
   /** Started on a cost guide: "seo:<work>:<city>" (lib/seo/links). Anything else is dropped, never refused. */
   source: z.string().max(120).optional().transform((v) => (v && SEO_SOURCE_RE.test(v) ? v : undefined)),
+  /** The TCPA box under "Send my project" (lib/leadConsent): required. The words kept are the server's own. */
+  consent: z.boolean().optional(),
+  /** The page it was sent from (path and query), for the consent record. */
+  page: z.string().max(300).optional(),
 });
 
 /**
@@ -55,6 +60,11 @@ export async function submitHomeownerRequest(raw: unknown) {
 
 async function submitHomeownerRequestInner(raw: unknown) {
   const data = homeownerSchema.parse(raw);
+  // Nobody is contacted without the box ticked (owner, 2026-10-26) — said
+  // back in words, before the brakes count the attempt.
+  if (data.consent !== true) {
+    return { ok: false as const, error: "Please tick the box to agree to be contacted about your request, then send again." };
+  }
   // Public, unauthenticated, and expensive downstream (AI, geocode, email, SMS
   // to a caller-supplied number): per-IP cap plus a platform-wide ceiling.
   await enforceRateLimit(`homeowner:${await clientIp()}`, 3, 10 * MINUTE, "requests");
@@ -74,9 +84,31 @@ async function submitHomeownerRequestInner(raw: unknown) {
   // A valid ?test=<key> (lib/leadCenter/testLeads) makes this a test lead; a
   // wrong or empty key is simply an ordinary request.
   const isTest = data.testKey ? await isValidTestKey(data.testKey) : false;
-  const { testKey: _testKey, homeKey, planId, timezone, source, ...intake } = data;
+  const { testKey: _testKey, homeKey, planId, timezone, source, consent: _consent, page, ...intake } = data;
   void _testKey;
-  return createHomeownerLead(intake, { isTest, homeKey: homeKey ?? null, planId: planId ?? null, timezone: timezone ?? null, source: source ?? null });
+  void _consent;
+  const ip = await clientIp();
+  return createHomeownerLead(intake, {
+    isTest,
+    homeKey: homeKey ?? null,
+    planId: planId ?? null,
+    timezone: timezone ?? null,
+    source: source ?? null,
+    consent: { text: LEAD_CONSENT_TEXT, at: new Date(), ip: ip === "local" || ip === "unknown" ? null : ip, page: page?.startsWith("/") ? page : await refererPath() },
+  });
+}
+
+/** The page a server action was called from, when the browser did not say (path and query). */
+async function refererPath(): Promise<string | null> {
+  try {
+    const { headers } = await import("next/headers");
+    const ref = (await headers()).get("referer");
+    if (!ref) return null;
+    const u = new URL(ref);
+    return (u.pathname + u.search).slice(0, 300);
+  } catch {
+    return null;
+  }
 }
 
 // ── Adaptive clarify questions ─────────────────────────────────────────────

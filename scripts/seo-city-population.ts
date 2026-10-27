@@ -1,0 +1,116 @@
+// Writes src/lib/seo/city-population.data.ts — each cost-guide city's
+// population, from the Census Bureau's city and town estimates (2026-10-26).
+//
+// The cost guides (/cost) prebuild only the largest cities at deploy time and
+// render the rest on their first visit (owner, 2026-10-26); this file is how
+// "largest" is known. Source: Vintage 2024 population estimates, "City and
+// Town Population Totals: 2020-2024" (SUB-EST2024), downloaded from
+//   https://www2.census.gov/programs-surveys/popest/datasets/2020-2024/cities/totals/sub-est2024.csv
+// Run again with a newer vintage's file:
+//
+//   npx tsx scripts/seo-city-population.ts path/to/sub-est2024.csv
+//
+// A city is matched by name and state against incorporated places, then
+// consolidated cities, then towns and townships (county subdivisions); a few
+// carry the Census name they go by (ALIAS). A row the estimates do not carry
+// (Tri-Cities; a census-designated place such as Bethesda or Hilo) is written
+// as null and simply is not prebuilt.
+
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { CITY_COST_INDEX } from "../src/lib/estimate/location-index-data";
+import { slugify } from "../src/lib/seo/cities";
+import { stateDisplayName } from "../src/lib/pricing/salesTax";
+
+const csvPath = process.argv[2];
+if (!csvPath) throw new Error("Pass the path of the Census SUB-EST csv (see the header of this script).");
+const lines = readFileSync(csvPath, "latin1").trim().split(/\r?\n/);
+const head = lines[0].split(",");
+const col = (name: string) => {
+  const i = head.indexOf(name);
+  if (i < 0) throw new Error(`The csv has no ${name} column — the Census file layout changed.`);
+  return i;
+};
+const popCols = head.filter((h) => /^POPESTIMATE\d{4}$/.test(h)).sort();
+const latest = popCols[popCols.length - 1];
+if (!latest) throw new Error("No POPESTIMATE<year> column in the csv.");
+const [iLev, iName, iState, iPop] = [col("SUMLEV"), col("NAME"), col("STNAME"), col(latest)];
+
+// Rows are plain comma-separated; a quoted name ("Lynchburg, Moore County metropolitan government") is the exception.
+function cells(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let q = false;
+  for (const ch of line) {
+    if (ch === '"') q = !q;
+    else if (ch === "," && !q) {
+      out.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+// The Census name's kind ("Dallas city", "Edison township") is dropped before matching.
+const KIND = / (city|town|township|village|borough|municipality|charter township)$/i;
+const norm = (s: string) => s.toLowerCase().replace(/[.']/g, "").replace(/^st /, "saint ");
+// Rows whose Census name is not the city's own: consolidated governments, a
+// city the Census calls "Boise City", and the boroughs and county that are
+// whole counties.
+const ALIAS: Record<string, string> = {
+  "Louisville|KY": "Louisville/Jefferson County metro government (balance)",
+  "Lexington|KY": "Lexington-Fayette urban county",
+  "Nashville|TN": "Nashville-Davidson metropolitan government (balance)",
+  "Augusta|GA": "Augusta-Richmond County consolidated government (balance)",
+  "Boise|ID": "Boise City city",
+  "Juneau|AK": "Juneau city and borough",
+  "Manhattan|NY": "New York County",
+  "Brooklyn|NY": "Kings County",
+  "Queens|NY": "Queens County",
+  "Bronx|NY": "Bronx County",
+  "Staten Island|NY": "Richmond County",
+  "Arlington|VA": "Arlington County",
+};
+// 162 incorporated place, 170 consolidated city, 061/071 county subdivision
+// (a New England town, a New Jersey township), 050 county (aliases only).
+const RANK: Record<string, number> = { "162": 0, "170": 1, "061": 2, "071": 3, "050": 4 };
+const byName = new Map<string, { pop: number; rank: number }>();
+const exact = new Map<string, number>();
+for (const line of lines.slice(1)) {
+  const c = cells(line);
+  const rank = RANK[c[iLev]];
+  if (rank == null) continue;
+  const state = c[iState].toLowerCase();
+  const pop = Number(c[iPop]);
+  if (!exact.has(`${c[iName]}|${state}`)) exact.set(`${c[iName]}|${state}`, pop);
+  if (rank === 4) continue;
+  // Both readings: "Dallas city" is Dallas, "Carson City" is Carson City.
+  for (const name of new Set([c[iName].replace(KIND, ""), c[iName]])) {
+    const key = `${norm(name)}|${state}`;
+    const hit = byName.get(key);
+    if (!hit || rank < hit.rank || (rank === hit.rank && pop > hit.pop)) byName.set(key, { pop, rank });
+  }
+}
+
+const rows = CITY_COST_INDEX.map((r) => {
+  const state = r.state === "DC" ? "district of columbia" : stateDisplayName(r.state).toLowerCase();
+  const alias = ALIAS[`${r.city}|${r.state}`];
+  const pop = alias ? (exact.get(`${alias}|${state}`) ?? null) : (byName.get(`${norm(r.city)}|${state}`)?.pop ?? null);
+  return { slug: `${slugify(r.city)}-${r.state.toLowerCase()}`, pop };
+});
+const missing = rows.filter((r) => r.pop == null).map((r) => r.slug);
+
+const file = `// GENERATED by scripts/seo-city-population.ts from the Census Bureau's
+// ${latest.replace("POPESTIMATE", "July 1, ")} city and town population estimates (SUB-EST) — do not edit by hand.
+// null: the estimates carry no place under the row's name. Read by
+// lib/seo/cities to pick the cost guides prebuilt at deploy. Plain data.
+
+export const CITY_POPULATION_YEAR = ${latest.replace("POPESTIMATE", "")};
+
+export const CITY_POPULATION: Record<string, number | null> = {
+${rows.map((r) => `  ${JSON.stringify(r.slug)}: ${r.pop ?? "null"},`).join("\n")}
+};
+`;
+writeFileSync(join(__dirname, "..", "src/lib/seo/city-population.data.ts"), file);
+console.log(`wrote ${rows.length} cities from ${latest}; not found: ${missing.length ? missing.join(", ") : "none"}`);

@@ -1,12 +1,14 @@
 // The cities of the cost guides (/cost/<work>/<city>, 2026-10-26): every row
 // of the construction cost index (lib/estimate/location-index-data), with its
-// URL slug, its state and the per-city indices the research table printed
-// (./city-indices.data). Plain module, no I/O.
+// URL slug, its state, the per-city indices the research table printed
+// (./city-indices.data) and its Census population (./city-population.data).
+// Plain module, no I/O.
 
 import { CITY_COST_INDEX } from "@/lib/estimate/location-index-data";
 import { STATE_COST_INDEX } from "@/lib/estimate/trade-knowledge";
 import { stateDisplayName } from "@/lib/pricing/salesTax";
 import { CITY_INDICES, type CityIndices } from "./city-indices.data";
+import { CITY_POPULATION } from "./city-population.data";
 
 export type SeoCity = {
   slug: string;
@@ -22,6 +24,8 @@ export type SeoCity = {
   indices: CityIndices | null;
   /** Position in the index table; rows there are grouped by metro. */
   order: number;
+  /** Census population estimate; null where the estimates carry no place by this name. */
+  population: number | null;
 };
 
 export const slugify = (s: string) =>
@@ -46,6 +50,7 @@ export const SEO_CITIES: SeoCity[] = CITY_COST_INDEX.map((r, order) => ({
   stateFactor: STATE_COST_INDEX[r.state] ?? null,
   indices: indicesByKey.get(`${r.city}|${r.state}`) ?? null,
   order,
+  population: CITY_POPULATION[`${slugify(r.city)}-${r.state.toLowerCase()}`] ?? null,
 }));
 
 const bySlug = new Map<string, SeoCity>();
@@ -56,6 +61,36 @@ for (const c of SEO_CITIES) {
 
 export function seoCity(slug: string): SeoCity | null {
   return bySlug.get(slug) ?? null;
+}
+
+/**
+ * The cities whose guides are built at deploy (owner, 2026-10-26): the 60
+ * largest by population. Every other city's guide is rendered on its first
+ * visit and kept like the rest (ISR).
+ */
+export const SEO_PREBUILT_CITIES: SeoCity[] = [...SEO_CITIES]
+  .filter((c) => c.population != null)
+  .sort((a, b) => (b.population as number) - (a.population as number))
+  .slice(0, 60);
+
+/**
+ * The city a guide names as its canonical page (owner, 2026-10-26). Cities
+ * whose data is the same — state, cost index, and the labor and material
+ * indices the page explains it with — would print the same guide under
+ * another name, so each points at the first of them in the index table,
+ * which lists a metro's head city first (Bellevue and Kent → Seattle).
+ * A city with data of its own is its own canonical. They all stay in the
+ * sitemap.
+ */
+const dataKey = (c: SeoCity) => {
+  const i = c.indices;
+  return JSON.stringify([c.state, c.factor, i?.labor ?? null, i?.laborMetro ?? null, i?.county ?? null, i?.material ?? null]);
+};
+const firstByData = new Map<string, SeoCity>();
+for (const c of SEO_CITIES) if (!firstByData.has(dataKey(c))) firstByData.set(dataKey(c), c);
+
+export function canonicalCity(city: SeoCity): SeoCity {
+  return firstByData.get(dataKey(city)) ?? city;
 }
 
 /** A listed city named in free text ("Dallas, TX") — the homeowner page's prefill check. */

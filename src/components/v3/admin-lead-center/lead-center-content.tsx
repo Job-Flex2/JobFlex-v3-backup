@@ -145,6 +145,10 @@ export interface PlatformLeadDTO {
   }[];
   /** The admin's price for the lead, in cents; null = free (2026-10-02). */
   priceCents: number | null;
+  /** Where the request was started (LeadSource, 2026-10-26): a cost guide, or the page it was sent from. Null before that. */
+  source: { label: string; detail: string | null } | null;
+  /** The TCPA consent it was sent with: the words, when, from which IP and page. Null before 2026-10-26. */
+  consent: { at: string; ip: string | null; page: string | null; text: string } | null;
   /** What the shop paid to open it (lib/leadCenter/purchase), when it did. */
   paid: {
     offerId: string;
@@ -579,6 +583,7 @@ export function AdminLeadCenterContent({
             <div className={cx(ui.tr, ui.th, styles.cols)} role="row">
               <span>Lead</span>
               <span>Homeowner</span>
+              <span>Source</span>
               <span>Went to</span>
               <span>Paid</span>
               <span>Status</span>
@@ -744,6 +749,16 @@ function LedgerRow({
         <div className={ui.tdSub}>
           {lead.detectedTrade ?? lead.projectType ?? "Unclassified"} · {place(lead)}
         </div>
+      </div>
+
+      {/* SOURCE — where the request was started (LeadSource): a cost guide by
+          its work and city, else the page it was sent from. */}
+      <div className={ui.tdWide}>
+        <span className={ui.tdLbl}>Source</span>
+        <div className={ui.tdName} title={lead.source ? [lead.source.label, lead.source.detail].filter(Boolean).join(" · ") : undefined}>
+          {lead.source?.label ?? <span className={styles.paidNone}>—</span>}
+        </div>
+        {lead.source?.detail ? <div className={ui.tdSub}>{lead.source.detail}</div> : null}
       </div>
 
       <div className={ui.tdWide}>
@@ -1322,6 +1337,23 @@ function DetailSheet({
               {lead.aiConfidence != null ? (
                 <span className={styles.dim}> · {Math.round(lead.aiConfidence * 100)}% sure</span>
               ) : null}
+            </Field>
+            <Field label="Source">
+              {lead.source ? [lead.source.label, lead.source.detail].filter(Boolean).join(" · ") : <span className={styles.dim}>not recorded</span>}
+            </Field>
+            {/* The TCPA consent the request was sent with (lib/leadConsent): the words are on hover. */}
+            <Field label="Contact consent">
+              {lead.consent ? (
+                <span title={lead.consent.text}>
+                  Ticked {shortDate(lead.consent.at)} {new Date(lead.consent.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                  <span className={styles.dim}>
+                    {lead.consent.ip ? ` · IP ${lead.consent.ip}` : ""}
+                    {lead.consent.page ? ` · ${lead.consent.page}` : ""}
+                  </span>
+                </span>
+              ) : (
+                <span className={styles.dim}>not recorded</span>
+              )}
             </Field>
           </div>
 

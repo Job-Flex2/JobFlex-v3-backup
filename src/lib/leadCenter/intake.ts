@@ -82,8 +82,10 @@ export interface IntakeOptions {
   planId?: string | null;
   /** The browser's zone, kept on a new home for its reminders. */
   timezone?: string | null;
-  /** Where the request was started ("seo:<work>:<city>"), kept as a LeadSource row. */
+  /** Where the request was started ("seo:<work>:<city>"), kept on the LeadSource row. */
   source?: string | null;
+  /** The TCPA consent the request was sent with (lib/leadConsent), kept on the LeadSource row. */
+  consent?: { text: string; at: Date; ip: string | null; page: string | null } | null;
 }
 
 export async function createHomeownerLead(data: HomeownerIntake, opts: IntakeOptions) {
@@ -148,12 +150,25 @@ export async function createHomeownerLead(data: HomeownerIntake, opts: IntakeOpt
     },
   });
 
-  // Where it was started (2026-10-26, the cost guides): best-effort, like the
-  // rest after the two inserts — without the table the request still goes.
-  if (opts.source) {
-    await db.leadSource.create({ data: { platformLeadId: platformLead.id, source: opts.source } }).catch((err: unknown) => {
-      console.warn("[homeowner] lead source not kept — the request stands:", err);
-    });
+  // Where it was started (the cost guides) and the consent it was sent with
+  // (2026-10-26): best-effort, like the rest after the two inserts — without
+  // the table the request still goes, loudly, since the consent record is lost.
+  if (opts.source || opts.consent) {
+    const c = opts.consent;
+    await db.leadSource
+      .create({
+        data: {
+          platformLeadId: platformLead.id,
+          source: opts.source ?? null,
+          consentText: c?.text ?? null,
+          consentAt: c?.at ?? null,
+          consentIp: c?.ip ?? null,
+          consentPage: c?.page ?? null,
+        },
+      })
+      .catch((err: unknown) => {
+        console.error("[homeowner] lead source and consent not kept — the request stands:", err);
+      });
   }
 
   // THE HOME DASHBOARD (2026-10-03): the request joins the home that carries

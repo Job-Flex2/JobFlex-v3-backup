@@ -65,7 +65,7 @@
    Five columns: which lead, who it is, where it went, what the shop paid
    for it (paid leads, 2026-10-02), what state it is in. */
 :global(.jf-blueprint .content) .cols {
-  grid-template-columns: 150px minmax(0, 1.3fr) minmax(0, 1.3fr) 104px 150px;
+  grid-template-columns: 150px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.3fr) 104px 150px;
 }
 :global(.jf-blueprint .content) .paidCell { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
 :global(.jf-blueprint .content) .paidAmt { font-family: var(--font-mono); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }

@@ -7,7 +7,7 @@
 import { SEO_TRADES, type SeoTrade } from "./trades";
 import { SEO_PHRASES } from "./keywords";
 import { sameStateCities, citiesInState, rankIn, SEO_CITIES, type SeoCity } from "./cities";
-import { quote, costModel, bookSources } from "./pricing";
+import { quote, costModel, bookSources, calibration } from "./pricing";
 import { stateFacts, permitFor, LUMBER_WORDS } from "./local";
 import { usd, unitUsd, roundMoney, type CalcModel } from "./calc";
 import { TRADES } from "@/lib/estimate/trade-knowledge";
@@ -159,7 +159,12 @@ export function costPage(trade: SeoTrade, city: SeoCity): CostPage {
     heading: `What ${/^(hvac|[aeiou])/i.test(trade.lower) ? "an" : "a"} ${trade.lower} in ${city.city} includes`,
     intro: `Line by line, the ${usd(q.avg)} average for ${sizeWords} breaks down like this: ${pct(q.labor, q.avg)}% labor, ${pct(q.material, q.avg)}% materials and equipment${q.fees > 0 ? `, and ${usd(q.fees)} in permit fees passed through at cost` : ""}.`,
     rows: q.lines.map((l, i) => ({ key: String(i), label: l.label, lo: usd(l.lo), hi: usd(l.hi), avg: usd((l.lo + l.hi) / 2), per: "" })),
-    outro: `Each line is the price book's U.S. rate for that step times ${city.city}'s index of ${city.factor.toFixed(2)}; permit fees are not scaled.`,
+    outro: (() => {
+      const k = calibration(trade, variant.id)?.k ?? 1;
+      return k < 1
+        ? `Each line is the price book's U.S. rate for that step, scaled by ${k.toFixed(2)} to the installed price published sources give for the whole job (see how these prices are built), times ${city.city}'s index of ${city.factor.toFixed(2)}; permit fees are not scaled.`
+        : `Each line is the price book's U.S. rate for that step times ${city.city}'s index of ${city.factor.toFixed(2)}; permit fees are not scaled.`;
+    })(),
   };
 
   // ── What moves the price ──
@@ -235,6 +240,7 @@ export function costPage(trade: SeoTrade, city: SeoCity): CostPage {
   const checks = [ix?.rsmeans != null ? `RSMeans residential ${ix.rsmeans.toFixed(2)}` : null, ix?.hud != null ? `HUD ${ix.hud.toFixed(2)}` : null, ix?.craftsman != null ? `Craftsman ${ix.craftsman.toFixed(2)}` : null].filter(Boolean);
   const method = [
     `Every price on this page comes from JobFlex's contractor price book: what a homeowner pays a licensed contractor for each step of the job, as a U.S. national average per unit, with the contractor's overhead and profit included and sales tax left out. The ${trade.lower} is priced step by step, then multiplied by ${city.city}'s construction cost index of ${city.factor.toFixed(2)}.`,
+    ...calibrationNote(trade),
     `The index weighs local construction wages (BLS Occupational Employment and Wage Statistics, May 2025) at 60% and the area's material prices (Craftsman ZIP-area factors) at 40%.${checks.length ? ` Published indices for ${city.city}, each on its own base: ${checks.join(", ")}.` : ""} Treat any city figure as about ±5%; a contractor's quote for your house is the number to plan with.`,
   ];
 
@@ -262,6 +268,25 @@ export function costPage(trade: SeoTrade, city: SeoCity): CostPage {
     low: roundMoney(q.lo),
     high: roundMoney(q.hi),
   };
+}
+
+/** The method's sentence on the options scaled to a cited source (lib/seo/pricing calibration), or nothing. */
+function calibrationNote(trade: SeoTrade): string[] {
+  const items = trade.variants.flatMap((v) => {
+    const c = calibration(trade, v.id);
+    if (!c || c.k >= 1) return [];
+    if (c.from !== v.id) {
+      const ref = trade.variants.find((x) => x.id === c.from);
+      return [`${lc(v.label)} × ${c.k.toFixed(2)}, following ${lc(ref?.label ?? "the default option")}`];
+    }
+    const range = c.per === "unit" ? `${unitUsd(c.cited[0])}–${unitUsd(c.cited[1])} ${trade.size.per}` : `${usd(c.cited[0])}–${usd(c.cited[1])}`;
+    const names = c.sources.map((src) => src.split(":")[0]).join(" plus ");
+    return [`${lc(v.label)} × ${c.k.toFixed(2)} (${names}: ${range})`];
+  });
+  if (!items.length) return [];
+  return [
+    `Where the price book's steps for an option add up to more than 20% over the installed price a published source gives for the whole job, every step but a permit fee is scaled down to the middle of that range: ${items.join("; ")}.`,
+  ];
 }
 
 function typicalAvgAt(trade: SeoTrade, factor: number): number {

@@ -609,16 +609,23 @@ model PlatformLead {
   @@index([homeId])
 }
 
-// Where a homeowner request came from, when the page it was started on says
-// (2026-10-26): the public cost guides (/cost/<work>/<city>) send
-// "seo:<work>:<city>" through /homeowner. One row per PlatformLead; a request
-// with no source has none. No foreign key, like EmailLog — a write that fails
-// never costs the request (lib/leadCenter/intake).
+// Where a homeowner request came from and what the homeowner agreed to
+// (2026-10-26). `source`: the public cost guides (/cost/<work>/<city>) send
+// "seo:<work>:<city>" through /homeowner; null for any other start. The
+// consent columns keep the TCPA consent the request was sent with — the exact
+// words shown beside the ticked box (lib/leadConsent), when, from which IP
+// and on which page. One row per PlatformLead, written by the intake for
+// every request. No foreign key, like EmailLog — a write that fails never
+// costs the request (lib/leadCenter/intake).
 model LeadSource {
-  id             String   @id @default(cuid())
-  platformLeadId String   @unique
-  source         String
-  createdAt      DateTime @default(now())
+  id             String    @id @default(cuid())
+  platformLeadId String    @unique
+  source         String?
+  consentText    String?
+  consentAt      DateTime?
+  consentIp      String?
+  consentPage    String?
+  createdAt      DateTime  @default(now())
 
   @@index([source])
 }

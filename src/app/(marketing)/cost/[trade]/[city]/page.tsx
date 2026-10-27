@@ -1,15 +1,17 @@
 // /cost/<work>/<city> — a public cost guide (2026-10-26): what a work costs in
 // one city, for the homeowner who searched it. Every number comes from
-// lib/seo (the price book times the city's index), computed at build time;
-// nothing here reads the database or calls an outside service. Built for
-// every work × city pair, refreshed daily; any other address is a 404.
+// lib/seo (the price book times the city's index), computed on the server;
+// nothing here reads the database or calls an outside service. The 60
+// largest cities are built at deploy for every work; any other listed city
+// is rendered on its first visit and kept (owner, 2026-10-26). Refreshed
+// daily; a work or city that is not listed is a 404.
 
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SEO_TRADES, seoTrade } from "@/lib/seo/trades";
-import { SEO_CITIES, seoCity } from "@/lib/seo/cities";
-import { costPage, SEO_UPDATED } from "@/lib/seo/content";
+import { SEO_PREBUILT_CITIES, canonicalCity, seoCity } from "@/lib/seo/cities";
+import { costPage, costPath, SEO_UPDATED } from "@/lib/seo/content";
 import { SEO_PHRASES } from "@/lib/seo/keywords";
 import { costPageLd, ldJson } from "@/lib/seo/schema";
 import { homeownerHref, proHref } from "@/lib/seo/links";
@@ -21,12 +23,13 @@ import { CostTrack } from "@/components/seo-cost/cost-track";
 import s from "@/components/seo-cost/cost.module.css";
 
 export const revalidate = 86400;
-export const dynamicParams = false;
+// The rest of the listed cities render on request; load() 404s anything else.
+export const dynamicParams = true;
 
 type Params = { trade: string; city: string };
 
 export function generateStaticParams(): Params[] {
-  return SEO_TRADES.flatMap((t) => SEO_CITIES.map((c) => ({ trade: t.slug, city: c.slug })));
+  return SEO_TRADES.flatMap((t) => SEO_PREBUILT_CITIES.map((c) => ({ trade: t.slug, city: c.slug })));
 }
 
 function load(params: Params) {
@@ -39,10 +42,12 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   const p = load(await params);
   if (!p) return {};
   const url = `${SITE_URL}${p.path}`;
+  // A city whose data is another's (canonicalCity) names that city's guide.
+  const canonical = `${SITE_URL}${costPath(p.trade, canonicalCity(p.city))}`;
   return {
     title: p.title,
     description: p.description,
-    alternates: { canonical: url },
+    alternates: { canonical },
     openGraph: { type: "article", url, siteName: "JobFlex", title: p.h1, description: p.description },
     twitter: { card: "summary", title: p.h1, description: p.description },
   };
