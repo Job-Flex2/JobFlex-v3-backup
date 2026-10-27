@@ -25,6 +25,8 @@
 import type { ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
+// Types only (erased at run time): Playwright itself is found by ../_lib/_prod-server playwright().
+import type { Browser, ConsoleMessage, Response, Route } from "playwright";
 import { ensureBuild, playwright, startServer, stopServer } from "../_lib/_prod-server";
 import { fillStepOne, openStepOneSheet } from "../_lib/_step1";
 
@@ -50,13 +52,13 @@ const UA: Record<Kind, string> = { phone: IPHONE, desk: DESK, "ig-ios": IG_IOS, 
 
 /** A fresh visitor from `ip`: declined optional cookies, third parties answered empty, and a
  *  log of everything that went wrong on the current step. */
-async function visitor(browser: any, kind: Kind, ip: string) {
+async function visitor(browser: Browser, kind: Kind, ip: string) {
   const phone = kind !== "desk";
   const ctx = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 900 }, isMobile: phone, hasTouch: phone, deviceScaleFactor: phone ? 2 : 1, userAgent: UA[kind], locale: "en-US" });
   const host = new URL(BASE).hostname;
   await ctx.addCookies([{ name: "jf_consent", value: encodeURIComponent(JSON.stringify({ v: 1, at: new Date().toISOString(), analytics: false, marketing: false, ack: true })), domain: host, path: "/" }]);
   const handoff: { checkout?: string; google?: string } = {};
-  await ctx.route("**/*", (route: any) => {
+  await ctx.route("**/*", (route: Route) => {
     const u = route.request().url();
     if (u.startsWith(BASE)) return route.continue({ headers: { ...route.request().headers(), "x-forwarded-for": ip } });
     if (/^https:\/\/checkout\.stripe\.com\//.test(u)) { handoff.checkout = u; return route.fulfill({ status: 200, contentType: "text/html", body: "<title>checkout</title>" }); }
@@ -67,9 +69,9 @@ async function visitor(browser: any, kind: Kind, ip: string) {
   const page = await ctx.newPage();
   const log = { step: "landing", errs: [] as string[] };
   const push = (what: string) => log.errs.push(`[${log.step}] ${what.replace(/\s+/g, " ").slice(0, 220)}`);
-  page.on("console", (m: any) => { if (m.type() === "error" && page.url().startsWith(BASE)) push("console: " + m.text()); });
-  page.on("pageerror", (e: any) => push("pageerror: " + String(e?.message || e)));
-  page.on("response", (r: any) => {
+  page.on("console", (m: ConsoleMessage) => { if (m.type() === "error" && page.url().startsWith(BASE)) push("console: " + m.text()); });
+  page.on("pageerror", (e: Error) => push("pageerror: " + String(e?.message || e)));
+  page.on("response", (r: Response) => {
     if (r.status() >= 400 && r.url().startsWith(BASE)) push(`HTTP ${r.status()} ${r.request().method()} ${r.url().slice(BASE.length)}`);
     // Stripe's page arrives by the server's 303: seen as the tab's own document, not through the route above.
     if (r.request().isNavigationRequest() && r.request().frame() === page.mainFrame() && /^https:\/\/checkout\.stripe\.com\//.test(r.url())) handoff.checkout = r.url();
@@ -146,14 +148,14 @@ async function toCheckout(v: Awaited<ReturnType<typeof visitor>>) {
         return { slug: on.dataset.planCard ?? "", hero: on.classList.contains("pw-plan--hero"), off: Math.round(((b.left + b.right) / 2 - (rail.left + rail.right) / 2) * 10) / 10 };
       })
     : null;
-  const answer = page.waitForResponse((r: any) => r.url().startsWith(BASE + "/auth/register/checkout"), { timeout: 90000 }).catch(() => null);
+  const answer = page.waitForResponse((r: Response) => r.url().startsWith(BASE + "/auth/register/checkout"), { timeout: 90000 }).catch(() => null);
   await go.click();
   const r = await answer;
   for (let i = 0; i < 60 && !v.handoff.checkout; i++) await page.waitForTimeout(250);
   return { status: r ? r.status() : 0, url: v.handoff.checkout || "", middle };
 }
 
-async function emailPath(browser: any, kind: Kind, industry: string, ip: string, n: number, toStripe: boolean) {
+async function emailPath(browser: Browser, kind: Kind, industry: string, ip: string, n: number, toStripe: boolean) {
   const name = `${kind} ${industry ? "?industry=" + industry : "/"}`;
   const v = await visitor(browser, kind, ip);
   try {
@@ -180,7 +182,7 @@ async function emailPath(browser: any, kind: Kind, industry: string, ip: string,
 
 /** The 21st step 2 from one IP + User-Agent: the brake answers in words. The pair's count
  *  is set to the allowance first (lib/signupBrake's key) rather than spent by twenty runs. */
-async function brake(browser: any, ip: string) {
+async function brake(browser: Browser, ip: string) {
   const key = `rl:signup-start:${ip}:${createHash("sha256").update(IPHONE).digest("hex").slice(0, 16)}`;
   const full = `20:${Date.now() + 3_600_000}`;
   await db.syncState.upsert({ where: { key }, create: { key, cursor: full }, update: { cursor: full } });
@@ -211,7 +213,7 @@ async function brake(browser: any, ip: string) {
 
 /** The Google buttons hand off to Google. The landing's hero has had no Google button since 2026-10-19 (one CTA,
  *  hero.tsx): at 1440 the hero's CTA opens step 1 and step 1's button is pressed; at 390, step 1's straight away. */
-async function google(browser: any) {
+async function google(browser: Browser) {
   for (const [kind, where] of [["desk", "landing → step 1"], ["phone", "step 1"]] as Array<[Kind, string]>) {
     const v = await visitor(browser, kind, newIp());
     try {
