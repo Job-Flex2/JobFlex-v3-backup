@@ -29,7 +29,7 @@ const LOW_GLASS = { bottomIn: 18, topIn: 36, areaSqFt: 9 } as const;
 /** Glass by a hot tub (IRC R308.4.5): within 60 in. of the water's edge and under 60 in. up. */
 const TUB_GLASS_IN = 60;
 
-const WHAT: Record<HouseOpening["kind"], string> = { window: "window", door: "door", slider: "sliding door" };
+const WHAT: Record<HouseOpening["kind"], string> = { window: "window", door: "door", slider: "sliding door", garage: "garage door" };
 const where = (o: HouseOpening) => `${ftIn(Math.round(Math.max(0, o.xFt) * 12))} along the deck`;
 /** Several openings' places along the deck, in one breath: "3'-6", 6'-6" and 9'-3" along the deck". */
 const places = (os: HouseOpening[]) => {
@@ -75,7 +75,8 @@ export function openingChecks(s: DeckStructure, add: (c: DeckCheck) => void): vo
 
   /* ── The door the deck serves ─────────────────────────────────────── */
   onDeck
-    .filter((o) => o.kind !== "window")
+    // A garage door is never the door the deck serves (2026-10-26): no threshold check against it.
+    .filter((o) => o.kind !== "window" && o.kind !== "garage")
     .forEach((d, i) => {
       const id = `door-threshold${i ? `-${i + 1}` : ""}`;
       const th = Math.round(d.sillFt * 12 * 4) / 4;

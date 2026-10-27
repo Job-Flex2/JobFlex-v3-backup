@@ -49,6 +49,9 @@ interface Field {
   gy: Float32Array;
   /** The picture's luminance 0…1 (for what a box holds — glass is not siding). */
   lum: Float32Array;
+  /** The siding's typical luminance — the wall clear of its openings (snapRead), for growToFrame: rows that look like
+   *  the wall are no part of a window's frame. Absent when unknown. */
+  wallLum?: number;
 }
 
 /** How strongly a vertical line at column x stands out between rows y0…y1 (the mean |∂x|). */
@@ -686,7 +689,7 @@ function fitRows(f: Field, boxes: Box[], span: { x0: number; x1: number }): Box[
  * while the edge there stays over half as strong as inside the box), and each end then sits on the strongest row edge
  * near where the sides stop — the sill, the head. Sides not on a frame grow nothing.
  */
-function growToFrame(f: Field, b: Box): Box {
+function growToFrame(f: Field, b: Box, others: readonly Box[] = []): Box {
   const X0 = Math.round(b.x0 * f.w), X1 = Math.round(b.x1 * f.w);
   const T = Math.round(b.top * f.h), B = Math.round(b.bottom * f.h);
   const bh = B - T;
@@ -697,14 +700,25 @@ function growToFrame(f: Field, b: Box): Box {
   if (inside < 0.06) return b;
   const step = Math.max(2, Math.round(bh * 0.08));
   const down = Math.max(bh * 1.6, f.h * 0.06), up = Math.max(bh, f.h * 0.04);
+  // A FRAME, NOT THE WALL'S OWN TRIM (2026-10-26 evening — a split-level whose trim boards run from the windows down to
+  // the foundation: the sides' edges never weakened and a window grew down through the one under it to the ground).
+  // Rows that look like the siding (within a tenth of its luminance) are no part of the frame; and no window grows
+  // into another box standing in its column.
+  const xa0 = Math.round(X0 + (X1 - X0) * 0.15), xb0 = Math.round(X1 - (X1 - X0) * 0.15);
+  const wallish = (y0: number, y1: number) => {
+    if (f.wallLum === undefined) return false;
+    const m = meanLum(f, xa0, xb0, Math.round(y0), Math.round(y1));
+    return m !== null && Math.abs(m - f.wallLum) < 0.1;
+  };
+  const inOther = (y: number) => others.some((o) => Math.min(o.x1, b.x1) - Math.max(o.x0, b.x0) > 0.5 * Math.min(o.x1 - o.x0, b.x1 - b.x0) && y >= o.top * f.h - 2 && y <= o.bottom * f.h + 2);
   let nb = B;
   for (let y = B; y + step <= Math.min(f.h - 2, B + down); y += step) {
-    if (side(y, y + step) < inside * 0.55) break;
+    if (side(y, y + step) < inside * 0.55 || wallish(y, y + step) || inOther(y + step)) break;
     nb = y + step;
   }
   let nt = T;
   for (let y = T; y - step >= Math.max(1, T - up); y -= step) {
-    if (side(y - step, y) < inside * 0.55) break;
+    if (side(y - step, y) < inside * 0.55 || wallish(y - step, y) || inOther(y - step)) break;
     nt = y - step;
   }
   if (nb === B && nt === T) return b;
@@ -723,6 +737,25 @@ function growToFrame(f: Field, b: Box): Box {
 export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: number; split: number; /** Windows read off the picture itself (findWindows), 0 when the model's boxes were lined up instead. */ found: number } {
   const { gx, gy } = gradients(g);
   const f: Field = { w: g.w, h: g.h, gx, gy, lum: g.data };
+  // The siding's luminance: the wall between the model's eave and base, clear of its windows and doors, the median.
+  {
+    const xL = Math.round(Math.min(read.base.left.x, read.base.right.x) * g.w), xR = Math.round(Math.max(read.base.left.x, read.base.right.x) * g.w);
+    const open = [...read.windows.map((w) => ({ x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill })), ...read.doors];
+    const sample: number[] = [];
+    for (let y = 2; y < g.h - 2; y += 3) {
+      for (let x = xL; x < xR; x += 3) {
+        const fx = x / g.w, fy = y / g.h;
+        const top = read.eave ? lineY(read.eave, fx) + 0.02 : lineY(read.base, fx) - 0.3;
+        if (fy < top || fy > lineY(read.base, fx) - 0.02) continue;
+        if (open.some((o) => fx >= o.x0 - 0.01 && fx <= o.x1 + 0.01 && fy >= o.top - 0.01 && fy <= o.bottom + 0.01)) continue;
+        sample.push(g.data[y * g.w + x]);
+      }
+    }
+    if (sample.length >= 60) {
+      sample.sort((a, b) => a - b);
+      f.wallLum = sample[Math.floor(sample.length / 2)];
+    }
+  }
   let moved = 0;
   let split = 0;
   const near = (a: number, b: number) => Math.abs(a - b) < 0.0015;
@@ -734,14 +767,31 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
     return m && m.gain >= 1.1 ? moveBox(f, b, m) : b;
   };
   const windows: HouseRead["windows"] = [];
-  // The picture's own windows first (findWindows): where it shows three or more, they stand and the model's boxes are
-  // left aside; where it shows fewer (low glass against a dark wall, a photo of a different kind), the model's boxes
-  // are lined up as before.
+  // THE PICTURE'S OWN WINDOWS (findWindows) STAND IN FOR THE MODEL'S ONLY WHEN THEY AGREE WITH IT (2026-10-26 evening —
+  // owner, a split-level with a garage in the frame: "didn't make the door, didn't include all the windows, missed the
+  // garage"). The GPT-6 read had the four windows and the door on their frames; this pass found twelve "windows" — the
+  // garage door's panels, patches of siding, the door's own lite — and they replaced the model's, the door went as
+  // "drawn over a window", the base fell to the driveway. So the pixels take over only when
+  //   (a) the model found next to nothing — fewer than three windows — and the picture shows three or more (the rescue
+  //       this pass was written for, 2026-10-25: a gpt-4o read with windows the size of garage doors), or
+  //   (b) they CONFIRM the model: three or more found, no more than twice the model's count and two, at least half
+  //       the model's windows lying on one of them (the rest are the panes it merged or missed, and its boxes over
+  //       nothing),
+  // and in either case none of them lies inside a door the model drew — a door's lite, a garage door's panels are not
+  // windows. Otherwise the model's boxes are lined up on the picture's edges as before (aligned, snapped, split, rowed).
   const pixel = findWindows(read, g, f);
-  const found = pixel.length >= 3 ? pixel.length : 0;
+  const modelBoxes: Box[] = read.windows.map((w) => ({ x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill }));
+  const ov = (a: Box, b: Box) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+  const areaOf = (b: Box) => Math.max(1e-9, (b.x1 - b.x0) * (b.bottom - b.top));
+  const insideDoor = pixel.some((b) => read.doors.some((d) => ov(b, d) >= 0.7 * areaOf(b)));
+  const rescue = modelBoxes.length < 3 && pixel.length >= 3;
+  const confirmed = pixel.length >= 3 && pixel.length <= 2 * modelBoxes.length + 2 && modelBoxes.filter((m) => pixel.some((b) => ov(m, b) >= 0.3 * Math.min(areaOf(m), areaOf(b)))).length >= 0.5 * modelBoxes.length;
+  const found = (rescue || confirmed) && !insideDoor ? pixel.length : 0;
   const source = found ? pixel.map((b) => ({ x0: b.x0, x1: b.x1, head: b.top, sill: b.bottom })) : read.windows;
   for (const w of source) {
-    const box0 = found ? growToFrame(f, { x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill }) : growToFrame(f, snapBox(f, own(align({ x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill }))));
+    const self: Box = { x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill };
+    const rest = (found ? pixel : modelBoxes).filter((o) => o.x0 !== self.x0 || o.top !== self.top);
+    const box0 = found ? growToFrame(f, self, rest) : growToFrame(f, snapBox(f, own(align(self))), rest);
     const parts = splitRow(f, box0);
     if (parts.length > 1) split += parts.length - 1;
     for (const p of parts) {
@@ -765,7 +815,8 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
   {
     const span = { x0: Math.min(read.base.left.x, read.base.right.x), x1: Math.max(read.base.left.x, read.base.right.x) };
     const boxes = windows.map((w) => ({ x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill }));
-    const fitted = (found ? boxes : fitRows(f, boxes, span)).map((b) => growToFrame(f, b));
+    const rowed0 = found ? boxes : fitRows(f, boxes, span);
+    const fitted = rowed0.map((b) => growToFrame(f, b, rowed0.filter((o) => o !== b)));
     windows.splice(0, windows.length, ...fitted.map((b) => ({ x0: b.x0, x1: b.x1, head: b.top, sill: b.bottom })));
     windows.sort((a, b) => a.x0 - b.x0 || a.head - b.head);
   }
@@ -844,9 +895,9 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
   // where the siding meets the ground; a door the model drew over the picture's windows is no door.
   let scaleLine = read.scaleLine;
   let storeys = read.storeys;
-  let doors2 = doors;
-  let door2 = door;
-  if (found && windows.length >= 3) {
+  // The rows, the storey between them, the base and the eave are read off whichever windows stand — the picture's own
+  // or the model's lined up (2026-10-26 evening: before, only the picture's).
+  if (windows.length >= 3) {
     // The rows: windows whose heads lie within most of a window's height of each other; the two fullest rows are the
     // storeys, one above the other (a patio or the ground found below the wall makes a thin third row, left out).
     const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
@@ -893,7 +944,14 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
           // on are just as strong; the ground line has no twin).
           const second = scores.filter((c) => Math.abs(c[0] - best[0]) >= 6).reduce((m, c) => Math.max(m, c[1]), 0);
           const standsOut = best[1] > 1.5 * second;
-          if (best[1] > 2 * typical && best[1] > 0.03 && standsOut) {
+          // Within reach of the model's own base when that base already stands in the window searched (2026-10-26
+          // evening: a GPT-6 base on the wall's foot was dragged a storey down onto the driveway's edge, the strongest
+          // row in the picture). A base read far off — on a porch roof, above the lower row — is out of the window and
+          // the strongest row stands as before.
+          const modelY = (base2.left.y + (xm - base2.left.x) * slope) * g.h;
+          const wallPx = eave2 ? (lineY(base2, xm) - lineY(eave2, xm)) * g.h : storey * g.h;
+          const withinReach = !(modelY >= y0 && modelY <= y1) || Math.abs(best[0] - modelY) <= Math.max(6, 0.06 * wallPx);
+          if (best[1] > 2 * typical && best[1] > 0.03 && standsOut && withinReach) {
             const yb = best[0] / g.h;
             const dy = yb - (base2.left.y + (xm - base2.left.x) * slope);
             baseFound = true;
@@ -925,11 +983,14 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
         }
       }
     }
-    // A door the model drew where the picture shows windows is no door.
-    const overlapArea = (d: { x0: number; x1: number; top: number; bottom: number }, w: HouseRead["windows"][number]) => Math.max(0, Math.min(d.x1, w.x1) - Math.max(d.x0, w.x0)) * Math.max(0, Math.min(d.bottom, w.sill) - Math.max(d.top, w.head));
-    const area = (d: { x0: number; x1: number; top: number; bottom: number }) => Math.max(1e-6, (d.x1 - d.x0) * (d.bottom - d.top));
-    doors2 = doors.filter((d) => windows.reduce((t, w) => t + overlapArea(d, w), 0) < 0.5 * area(d));
-    door2 = door && doors2.some((d) => Math.abs((d.x0 + d.x1) / 2 - (door.x0 + door.x1) / 2) < 0.03) ? door : null;
   }
+  // A door the model drew where the picture shows a ROW of windows is no door (2026-10-25: a phantom door over the
+  // lower row). A door's own lite or panel reads as a blob too, and so do a garage door's panels: a blob standing on its
+  // own inside the door box is not a window — only blobs in a row of their like (another of the same size beside it,
+  // outside any door) count against a door (2026-10-26 evening).
+  const likeBox = (a: Box, b: Box) => Math.abs((a.x1 - a.x0) - (b.x1 - b.x0)) < 0.2 * (b.x1 - b.x0) && Math.abs((a.bottom - a.top) - (b.bottom - b.top)) < 0.3 * (b.bottom - b.top);
+  const rowed = pixel.filter((b) => pixel.some((q) => q !== b && Math.min(q.bottom, b.bottom) - Math.max(q.top, b.top) > 0.6 * Math.min(q.bottom - q.top, b.bottom - b.top) && likeBox(q, b) && !read.doors.some((d) => ov(q, d) >= 0.7 * areaOf(q))));
+  const doors2 = doors.filter((d) => rowed.reduce((t, b) => t + ov(d, b), 0) < 0.5 * areaOf(d));
+  const door2 = door && doors2.some((d) => Math.abs((d.x0 + d.x1) / 2 - (door.x0 + door.x1) / 2) < 0.03) ? door : null;
   return { read: { ...read, base: base2, eave: eave2, jogs, windows: windows.slice(0, 30), doors: doors2, door: door2, scaleLine, storeys }, moved, split, found };
 }

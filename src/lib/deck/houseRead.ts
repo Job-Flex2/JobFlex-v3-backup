@@ -17,7 +17,7 @@
 import { z } from "zod";
 import { JOG_DEFAULT_FT, parseWallRead, type Pt, type WallRead } from "./photoFit";
 
-export type ReadDoorKind = "slider" | "hinged" | "french";
+export type ReadDoorKind = "slider" | "hinged" | "french" | "garage";
 export type ReadRoofKind = "hip" | "gable-side" | "gable-end" | "shed" | "flat";
 export type ReadMaterial = "lap" | "brick" | "stucco" | "board-batten" | "stone" | "shingle";
 
@@ -64,7 +64,7 @@ const box = (v: unknown, minW: number, minH: number, bottomKey: string, topKey: 
 };
 const hex = (v: unknown): string | null => (typeof v === "string" && HEX.test(v.trim()) ? v.trim().toLowerCase() : null);
 
-const DOOR_KINDS: ReadonlySet<string> = new Set(["slider", "hinged", "french"]);
+const DOOR_KINDS: ReadonlySet<string> = new Set(["slider", "hinged", "french", "garage"]);
 const ROOF_KINDS: ReadonlySet<string> = new Set(["hip", "gable-side", "gable-end", "shed", "flat"]);
 /** What a model says the wall is clad in, in the words it may use. */
 const MATERIAL_WORDS: ReadonlyArray<[RegExp, ReadMaterial]> = [
@@ -529,7 +529,7 @@ export const houseReadSchema = z.object({
   eave: z.object({ left: PX, right: PX }).nullable(),
   storeys: z.number().nullable(),
   sections: z.array(z.object({ x0: z.number(), x1: z.number(), outFt: z.number(), why: z.string() })),
-  doors: z.array(z.object({ x0: z.number(), x1: z.number(), bottom: z.number(), top: z.number(), kind: z.enum(["slider", "hinged", "french"]), ontoYard: z.boolean() })),
+  doors: z.array(z.object({ x0: z.number(), x1: z.number(), bottom: z.number(), top: z.number(), kind: z.enum(["slider", "hinged", "french", "garage"]), ontoYard: z.boolean() })),
   windows: z.array(z.object({ x0: z.number(), x1: z.number(), sill: z.number(), head: z.number() })),
   patio: SPAN.nullable(),
   roof: z.object({ kind: z.enum(["hip", "gable-side", "gable-end", "shed", "flat"]).nullable(), pitch: z.number().nullable() }),
@@ -549,8 +549,8 @@ SUBJECT: "house-exterior" when the picture shows the outside wall(s) of a house 
 OUTLINE: the house's own silhouette, a polygon of 6 to 20 points going round clockwise — along the roof's ridge and its edges, down the walls' corners to the ground and back: the HOUSE, not the trees in front of it, not a fence, not a neighbour's house, not an old deck, a porch roof or a car standing in front of the wall (the outline runs behind them, along the house). Where the house runs off the picture's edge, follow the edge. Null when there is no house.
 THE WALL: "base" is the house wall's bottom edge where the WALL meets the ground (or would meet it behind a patio, steps or a deck), at the house's left corner and at its right corner — the whole face of the house across every step in it. "eave" is the top of that wall above each corner: the underside of the MAIN roof's eave (on a two-storey house, the eave over the upper floor); null when hidden. "storeys": 1 or 2 storeys of wall between the base and that eave (count the rows of windows), null when unsure.
 SECTIONS: FIRST work out the wall's sections, left to right from its left corner to its right corner: a section is a stretch of the house's wall whose face is one flat plane. "outFt" is how far that section's face stands IN FRONT of the main wall (the main wall — the widest stretch — is 0; a bump-out or a bay is +2 to +4; a part set back is negative). "why" is the evidence you see for that section's plane: its own corner boards at both its ends, its own eave or roof edge in front of the main eave, a shadow down the wall at its side, its siding meeting the next section at a corner. A porch roof, a patio roof or an awning in front of the wall does NOT make a section: the wall under it and behind it is the main wall unless its OWN face steps. A lower roof over only the GROUND storey of part of a two-storey wall, with that part's upper-storey windows above it, is a porch roof or a lean-to — that stretch is NOT a bump-out unless its upper storey stands forward too (its own corner boards up both storeys, its own hip or gable in the main roof). One section when the wall is one flat face.
-DOORS: EVERY door in the wall, left to right, with its kind (slider, hinged, french); "ontoYard" true for the one door a deck would meet — the back door, the slider onto the yard — and false for every other (at most one true). A garage door is not a door here.
-WINDOWS: EVERY window in the wall, both storeys: the outside edges of its frame left and right, its sill and its head. Windows side by side are one entry PER window — count them. Not the doors.
+DOORS: EVERY door in the wall, left to right, with its kind (slider, hinged, french, garage); "ontoYard" true for the one door a deck would meet — the back door, the slider onto the yard — and false for every other (at most one true). A garage door IS a door here, kind "garage", never ontoYard: box the whole panel, its bottom where it meets the driveway. Box every door whole, threshold to head, even where a railing, a step or a plant hides part of it.
+WINDOWS: EVERY window in the wall, both storeys: the outside edges of its frame left and right, its sill and its head. Windows side by side are one entry PER window — count them; a unit divided by mullions into two or three sashes is two or three windows, one entry per sash. Not the doors, not a garage door's panels.
 PATIO: a concrete patio or slab at the wall's base, its ends along the wall (only to know where a deck would go); null when none.
 ROOF: the MAIN roof of the house — hip (slopes on every side), gable-side (the ridge runs along this wall, triangles at the sides), gable-end (a triangle of wall faces the camera), shed, flat; pitch in inches of rise per foot when you can judge it (a usual house is 4 to 8), else null.
 MATERIAL: what most of the wall is clad in (lap = horizontal siding, vinyl or fiber cement). COLOURS: your best guess at the real colours as "#rrggbb" in plain daylight (not the sunset, not the shadow), null when you cannot say.

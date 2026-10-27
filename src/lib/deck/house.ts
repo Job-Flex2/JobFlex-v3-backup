@@ -77,8 +77,8 @@ export type HouseMaterial = "lap" | "brick" | "stucco" | "board-batten" | "stone
 export const HOUSE_MATERIALS: readonly HouseMaterial[] = ["lap", "brick", "stucco", "board-batten", "stone"];
 export const HOUSE_MATERIAL_LABEL: Record<HouseMaterial, string> = { lap: "Lap siding", brick: "Brick", stucco: "Stucco", "board-batten": "Board and batten", stone: "Stone" };
 
-export type OpeningKind = "window" | "door" | "slider";
-export const OPENING_LABEL: Record<OpeningKind, string> = { window: "Window", door: "Door", slider: "Sliding door" };
+export type OpeningKind = "window" | "door" | "slider" | "garage";
+export const OPENING_LABEL: Record<OpeningKind, string> = { window: "Window", door: "Door", slider: "Sliding door", garage: "Garage door" };
 /** A window or a door in the back wall: its middle along the house (the deck's feet from its left end), its size, and its bottom above the ground (a door's threshold), ft. */
 export interface HouseOpening {
   id: string;
@@ -190,7 +190,7 @@ export function normalizeOpenings(raw: unknown[], fromFt: number, toFt: number):
   return raw
     .map((o, i) => {
       const v = obj(o);
-      const kind: OpeningKind = v.kind === "door" || v.kind === "slider" ? v.kind : "window";
+      const kind: OpeningKind = v.kind === "door" || v.kind === "slider" || v.kind === "garage" ? v.kind : "window";
       const id = typeof v.id === "string" && v.id && !seen.has(v.id) ? v.id : `o${i + 1}`;
       seen.add(id);
       const L = OPENING_LIMITS;
@@ -534,7 +534,8 @@ function placeOpenings(openings: HouseOpening[], parts: WallPart[], partH: numbe
     if (h < 0.75) continue;
     const row = [r2((x0 + x1) / 2), p.depthFt, r2(x1 - x0), r2(h), r2(sill)];
     if (o.kind === "window") windows.push(row);
-    else doors.push([...row, o.kind === "slider" ? 1 : 0]);
+    // The door's kind for the 3D: 0 a door, 1 a sliding door, 2 a garage door (2026-10-26).
+    else doors.push([...row, o.kind === "slider" ? 1 : o.kind === "garage" ? 2 : 0]);
   }
   return { windows: windows.slice(0, 60), doors: doors.slice(0, 8) };
 }

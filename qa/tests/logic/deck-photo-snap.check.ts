@@ -151,6 +151,31 @@ console.log("— the scale off the picture: one storey between the rows of windo
   check("a door drawn over a window is dropped", doored.read.doors.length === 0 && doored.read.door === null, `${doored.read.doors.length} doors`);
 }
 
+console.log("— a house with a garage (2026-10-26 evening: 'didn't make the door, didn't include all the windows, missed the garage') —");
+{
+  // The split-level's front: four windows in two rows, an entry door (a white slab with a dark lite) and a two-car
+  // garage door (a light panel with six recessed sections) — the GPT-6 read right, on their frames. The pixel pass
+  // sees the garage's sections, the door's lite and the siding between as "windows": they must not take the model's
+  // place, the door must stay, and the base must not fall to the garage door's foot.
+  const WIN: Array<[number, number, number, number]> = [[150, 120, 210, 180], [400, 120, 455, 180], [470, 120, 525, 180], [150, 300, 210, 360]];
+  const gar = wall(WIN);
+  const DOOR: [number, number, number, number] = [290, 230, 330, 320];
+  for (let y = DOOR[1]; y < DOOR[3]; y++) for (let x = DOOR[0]; x < DOOR[2]; x++) gar.data[y * W + x] = 0.92;
+  for (let y = DOOR[1] + 12; y < DOOR[1] + 42; y++) for (let x = DOOR[0] + 10; x < DOOR[2] - 10; x++) gar.data[y * W + x] = 0.2;
+  const GAR: [number, number, number, number] = [430, 280, 720, 400];
+  for (let y = GAR[1]; y < GAR[3]; y++) for (let x = GAR[0]; x < GAR[2]; x++) gar.data[y * W + x] = 0.88;
+  for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) for (let y = GAR[1] + 15 + r * 55; y < GAR[1] + 55 + r * 55; y++) for (let x = GAR[0] + 15 + c * 95; x < GAR[0] + 90 + c * 95; x++) gar.data[y * W + x] = 0.62;
+  const doors = [{ x0: fx(DOOR[0]), x1: fx(DOOR[2]), top: fy(DOOR[1]), bottom: fy(DOOR[3]), kind: "hinged" as const }, { x0: fx(GAR[0]), x1: fx(GAR[2]), top: fy(GAR[1]), bottom: fy(GAR[3]), kind: "garage" as const }];
+  const model = { ...read0(WIN.map(box)), base: { left: { x: fx(60), y: fy(400) }, right: { x: fx(860), y: fy(400) } }, doors, door: { x0: doors[0].x0, x1: doors[0].x1, top: doors[0].top, bottom: doors[0].bottom } } as HouseRead;
+  const { gx: ggx, gy: ggy } = gradients(gar);
+  const blobs = findWindows(model, gar, { w: W, h: H, gx: ggx, gy: ggy, lum: gar.data });
+  check("the pixel pass alone sees more than the four windows (the garage's sections, the lite)", blobs.length > 4, `${blobs.length} blobs`);
+  const kept = snapRead(model, gar);
+  check("the model's four windows stand, each on its frame (within 4 px) — the picture's blobs do not take their place", kept.found === 0 && kept.read.windows.length === 4 && worst(kept.read.windows, WIN.map(box)) <= 4, `found ${kept.found}, ${kept.read.windows.length} windows, worst ${worst(kept.read.windows, WIN.map(box))}`);
+  check("the door stays (its own lite is no window), and so does the garage door", kept.read.doors.length === 2 && kept.read.doors[0].kind === "hinged" && kept.read.doors[1].kind === "garage" && !!kept.read.door, `${kept.read.doors.length} doors`);
+  check("the base stays on the wall's foot — not dragged onto the garage door's edge", Math.abs(kept.read.base.left.y * H - 400) <= 6, String(kept.read.base.left.y * H));
+}
+
 console.log("— the steps from the wall's sections —");
 const base = { base: { left: { x: 0.05, y: 0.8 }, right: { x: 0.95, y: 0.8 } }, eave: { left: { x: 0.05, y: 0.3 }, right: { x: 0.95, y: 0.3 } }, storeys: 2, windows: [], doors: [] };
 const bump = parseHouseRead({ ...base, sections: [{ x0: 0.05, x1: 0.2, outFt: 0 }, { x0: 0.2, x1: 0.5, outFt: 2 }, { x0: 0.5, x1: 0.95, outFt: 0 }], jogs: [{ x: 0.55, dir: "toward", depthFt: 6 }] })!;

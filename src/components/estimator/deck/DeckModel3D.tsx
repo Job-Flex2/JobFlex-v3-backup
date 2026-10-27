@@ -1485,7 +1485,9 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         owned.push(glassTex);
         const trimMat = new THREE.MeshStandardMaterial({ color: TRIM_WHITE, roughness: 0.8 });
         const doorMat = new THREE.MeshStandardMaterial({ color: 0xf1eee6, roughness: 0.7 });
-        owned.push(wallMat, baseMat, roofMat, glassMat, trimMat, doorMat);
+        // A garage door's rails: a shade under its panel, so the sections read without a lite (2026-10-26).
+        const railMat = new THREE.MeshStandardMaterial({ color: 0xd9d5cc, roughness: 0.85 });
+        owned.push(wallMat, baseMat, roofMat, glassMat, trimMat, doorMat, railMat);
         const height = H.heightFt;
         const band = Math.min(1.5, Math.max(0.5, s.heightFt - 0.6));
         siding.repeat.set(1, height / 0.5);
@@ -1590,7 +1592,14 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           // rail; a door is a painted slab with a glass lite in its top half, its knob on the latch side.
           for (const [dx, face, dw, dh, sill, kind] of H.doors) {
             if (kind === 1) opening(dx, dw, dh, sill, true, face);
-            else {
+            else if (kind === 2) {
+              // A garage door (2026-10-26): one flat panel the width of the opening, its rails as shaded lines, no lite.
+              const z0 = face - oz;
+              part(null, trimMat, dw + 0.5, dh + 0.3, 0.12, dx - ox, sill + (dh + 0.3) / 2, z0 + 0.03);
+              part(null, doorMat, dw - 0.1, dh - 0.05, 0.14, dx - ox, sill + dh / 2, z0 + 0.04);
+              const rails = Math.max(2, Math.round(dh / 1.75));
+              for (let i = 1; i < rails; i++) part(null, railMat, dw - 0.3, 0.07, 0.16, dx - ox, sill + (dh * i) / rails, z0 + 0.05);
+            } else {
               const z0 = face - oz;
               part(null, trimMat, dw + 0.5, dh + 0.3, 0.12, dx - ox, sill + (dh + 0.3) / 2, z0 + 0.03);
               part(null, doorMat, dw - 0.1, dh - 0.05, 0.14, dx - ox, sill + dh / 2, z0 + 0.04);

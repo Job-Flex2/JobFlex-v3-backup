@@ -933,8 +933,8 @@ export function HousePhotoReview({ hp, design }: { hp: HousePhotoState; design: 
                 {read.jogs.map((j, i) => handle(`jog-${i}`, j.x, j.y, `Step ${i + 1} in the wall`, { kind: "jog", i }, "is-jog"))}
                 {read.doors.map((d, i) => (
                   <React.Fragment key={`dh${i}`}>
-                    {handle(`door-${i}`, (d.x0 + d.x1) / 2, d.bottom, `Door ${i + 1} — its threshold`, { kind: "door", i }, "is-door")}
-                    {handle(`door-top-${i}`, (d.x0 + d.x1) / 2, d.top, `Door ${i + 1} — its top`, { kind: "door", i }, "is-door is-small")}
+                    {handle(`door-${i}`, (d.x0 + d.x1) / 2, d.bottom, `${d.kind === "garage" ? "Garage door" : "Door"} ${i + 1} — its ${d.kind === "garage" ? "bottom" : "threshold"}`, { kind: "door", i }, "is-door")}
+                    {handle(`door-top-${i}`, (d.x0 + d.x1) / 2, d.top, `${d.kind === "garage" ? "Garage door" : "Door"} ${i + 1} — its top`, { kind: "door", i }, "is-door is-small")}
                   </React.Fragment>
                 ))}
                 {read.windows.map((w, i) => handle(`win-${i}`, (w.x0 + w.x1) / 2, (w.head + w.sill) / 2, `Window ${i + 1}`, { kind: "win", i }, "is-win"))}

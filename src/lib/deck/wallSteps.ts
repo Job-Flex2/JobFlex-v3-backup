@@ -209,7 +209,13 @@ export function wallCorners(read: HouseRead, g: Gray, gx?: Float32Array): number
     if (!near) picks.push({ x, s });
     else if (s > near.s) Object.assign(near, { x, s });
   });
+  // A DOOR'S OR A WINDOW'S OWN FRAME IS NO CORNER (2026-10-26 evening — a split-level: the trim board down the side of
+  // the entry door ran on up the side of the window over it, an edge up both storeys, and read as a corner with the
+  // wall to its right "back 2 ft"). A column on an opening's edge — within 1½ % of the wall's span — is the frame.
+  const edge = Math.max(4, span * 0.015);
+  const frames = [...read.windows.flatMap((o) => [o.x0, o.x1]), ...read.doors.flatMap((o) => [o.x0, o.x1])].map((x) => x * w);
   return picks
+    .filter((p) => !frames.some((fx) => Math.abs(fx - p.x) <= edge))
     .sort((a, b) => b.s - a.s)
     .slice(0, 4)
     .map((p) => r3(p.x / w))

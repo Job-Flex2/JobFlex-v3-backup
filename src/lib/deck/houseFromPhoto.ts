@@ -82,8 +82,8 @@ export function ftIn(ft: number): string {
 export function houseScale(read: HouseRead, photoW: number, photoH: number, wallWidthFt?: number | null): { pxPerFt: number; by: HousePhoto["by"] } {
   const basePx = Math.hypot((read.base.right.x - read.base.left.x) * photoW, (read.base.right.y - read.base.left.y) * photoH);
   if (wallWidthFt && wallWidthFt >= 4 && basePx > 8) return { pxPerFt: basePx / wallWidthFt, by: "width" };
-  // Any door gives the scale (they are all about 80 in. tall), the tallest in the picture first.
-  const tallest = read.doors.slice().sort((a, b) => b.bottom - b.top - (a.bottom - a.top))[0];
+  // Any door gives the scale (they are all about 80 in. tall), the tallest in the picture first — never a garage door.
+  const tallest = read.doors.filter((d) => d.kind !== "garage").sort((a, b) => b.bottom - b.top - (a.bottom - a.top))[0];
   const s: PhotoScale = scaleFromRead(read.door || !tallest ? read : { ...read, door: { x0: tallest.x0, x1: tallest.x1, bottom: tallest.bottom, top: tallest.top } }, photoW, photoH);
   return { pxPerFt: s.pxPerFt, by: s.by === "line" ? "line" : s.by === "door" ? "door" : s.by === "eave" ? "eave" : "none" };
 }
@@ -114,13 +114,15 @@ export function houseFromPhoto(input: PhotoHouseInput): PhotoHouse | null {
     const cx = (d.x0 + d.x1) / 2;
     const widthFt = ((d.x1 - d.x0) * photoW) / k;
     const heightFt = ((d.bottom - d.top) * photoH) / k;
-    const kind: HouseOpening["kind"] = d.kind === "slider" || widthFt >= 5 ? "slider" : "door";
+    const kind: HouseOpening["kind"] = d.kind === "garage" ? "garage" : d.kind === "slider" || widthFt >= 5 ? "slider" : "door";
     return { cx, atFt: along(cx), widthFt, heightFt, sillFt: Math.max(0, above(d.bottom, cx)), kind };
   });
   const within = (a: number, s: { x0: number; x1: number } | null) => !!s && a >= s.x0 - 0.01 && a <= s.x1 + 0.01;
+  // The deck never meets a garage door (2026-10-26).
+  const walkDoors = doors.filter((d) => d.kind !== "garage");
   const mainDoor = read.door
-    ? (doors.find((d) => Math.abs(d.cx - (read.door!.x0 + read.door!.x1) / 2) < 0.02) ?? null)
-    : (doors.find((d) => within(d.cx, read.patio)) ?? doors.filter((d) => d.kind === "slider")[0] ?? doors[0] ?? null);
+    ? (walkDoors.find((d) => Math.abs(d.cx - (read.door!.x0 + read.door!.x1) / 2) < 0.02) ?? null)
+    : (walkDoors.find((d) => within(d.cx, read.patio)) ?? walkDoors.filter((d) => d.kind === "slider")[0] ?? walkDoors[0] ?? null);
 
   // WHERE THE DECK GOES along the wall, ft from the wall's left corner.
   const centreOf = (s: { x0: number; x1: number }) => along((s.x0 + s.x1) / 2);
@@ -193,14 +195,14 @@ export function houseFromPhoto(input: PhotoHouseInput): PhotoHouse | null {
   facts.push({ id: "storeys", label: "House", value: `${storeys === 2 ? "Two storeys" : "One storey"} · ${read.roof.kind ? ROOF_WORDS[read.roof.kind] : `${roof} roof (not seen — kept)`}${read.roof.pitch ? ` · about ${read.roof.pitch}/12` : ""}`, guess: !read.storeys || !read.roof.kind });
   facts.push({ id: "steps", label: "Steps", value: jogs.length ? `${plural(jogs.length, "step")} in the wall — ${jogs.map((j) => `${j.dir === "toward" ? "out" : "back"} ${ftIn(j.depthFt)}`).join(", ")}${tallBump ? " · the bump-out is as tall as the house" : ""}` : "A straight wall", guess: unsizedSteps > 0 });
   const winCount = openings.filter((o) => o.kind === "window").length;
-  const doorWords = doors.length ? doors.map((d) => `${d.kind === "slider" ? "a sliding door" : "a door"} ${ftIn(Math.round(d.widthFt * 2) / 2)} wide`).join(", ") : "no door seen";
+  const doorWords = doors.length ? doors.map((d) => `${d.kind === "garage" ? "a garage door" : d.kind === "slider" ? "a sliding door" : "a door"} ${ftIn(Math.round(d.widthFt * 2) / 2)} wide`).join(", ") : "no door seen";
   facts.push({ id: "openings", label: "Openings", value: `${plural(winCount, "window")} · ${doorWords}`, guess: false });
   facts.push({ id: "look", label: "Siding", value: `${MATERIAL_WORDS[read.material ?? "lap"]}${sidingColour ? "" : " · colour kept"}`, guess: !read.material, ...(sidingColour ? { swatch: sidingColour } : {}) });
   if (roofColour) facts.push({ id: "roof-colour", label: "Roof colour", value: "from the picture", guess: false, swatch: roofColour });
   facts.push({ id: "deck", label: "The deck", value: centredOn === "middle" ? "In the middle of the wall" : `Centred on the ${centredOn}`, guess: false });
 
   if (rough) checks.push("Sized by the storeys, the roughest way — type the wall's width (corner to corner) for a true size.");
-  if (!mainDoor) checks.push("No back door seen — if there is one, mark it, and the deck's height comes from its threshold.");
+  if (!mainDoor) checks.push(doors.length ? "No door onto the deck seen (a garage door doesn't count) — if there is one, mark it, and the deck's height comes from its threshold." : "No back door seen — if there is one, mark it, and the deck's height comes from its threshold.");
   if (unsizedSteps) checks.push(`${unsizedSteps === 1 ? "The step's depth is" : "The steps' depths are"} a guess (${ftIn(JOG_DEFAULT_FT)}) — set ${unsizedSteps === 1 ? "it" : "them"} in the wall drawing.`);
   if (read.confidence < 0.5) checks.push("The picture was hard to read — look over the lines before building.");
   if (read.note) checks.push(read.note);
