@@ -1362,8 +1362,9 @@ export async function submitInstantOrder(
   const requestId = accepted?.request?.id;
   if (!requestId) throw new Error("Property Data returned no request id");
   evDebug("property request accepted", { requestId, packs, status: accepted.request?.status });
-  // An accepted order is a billed one, per pack (lib/trialMeter).
-  await notePaidCall("eagleview", "pack", { units: packs.length });
+  // An accepted order is a billed one: one ROOF when it carries the area pack (the detail packs that follow for the
+  // same address are the same roof — $2.40 whatever packs it takes, lib/paidApiCosts).
+  if (packs.includes(PD_PACK.ROOF_AREA)) await notePaidCall("eagleview", "roof");
   return { requestId, completeAddress, packs };
 }
 

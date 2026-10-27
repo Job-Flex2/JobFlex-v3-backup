@@ -11,6 +11,7 @@
 // update, so two sweeps at once refund an order once.
 import { db } from "@/lib/db";
 import { PENDING_EXPIRE_MS, rowPacks } from "@/lib/eagleviewOrder";
+import { PD_PACK } from "@/lib/eagleview";
 import { refundPaidCall } from "@/lib/trialMeter";
 
 /** The error a closed order carries — also how a later click knows its area order was closed, not refused. */
@@ -31,7 +32,8 @@ export async function expireStaleInstantOrders(scope: { organizationId?: string 
     });
     if (done.count !== 1) continue;
     closed += 1;
-    await refundPaidCall(o.organizationId, "eagleview", "pack", { units: rowPacks(o.packs).length, at: o.createdAt });
+    // The roof was counted when its area pack was accepted (lib/eagleview); an expired area order gives it back.
+    if (rowPacks(o.packs).includes(PD_PACK.ROOF_AREA)) await refundPaidCall(o.organizationId, "eagleview", "roof", { at: o.createdAt });
   }
   if (closed) console.warn(`[instantOrderExpiry] closed ${closed} order(s) pending over ${Math.round(PENDING_EXPIRE_MS / 60_000)} min`);
   return closed;
