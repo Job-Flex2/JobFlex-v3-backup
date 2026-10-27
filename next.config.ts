@@ -156,6 +156,13 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // The website estimators (2026-10-27): a contractor embeds /estimate/<slug>/<trade> in an iframe on their own
+      // site, so that route may be framed anywhere — a CSP frame-ancestors rule, which browsers honour over the
+      // X-Frame-Options above. The shop's own domain allow-list is enforced in the page (lib/webEstimator hostAllowed).
+      {
+        source: "/estimate/:path*",
+        headers: [{ key: "Content-Security-Policy", value: "frame-ancestors *" }],
+      },
     ];
   },
 };

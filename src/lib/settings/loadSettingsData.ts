@@ -284,6 +284,7 @@ export async function loadSettingsData(ctx: SettingsOrgContext, opts: { billingL
       sms: await loadSmsSettings(organizationId, me?.smsPhone ?? null, me?.smsVerifiedAt ?? null, role, sub?.plan ?? null, user.id),
     },
     desk: await loadDeskSettings(organizationId, role),
+    website: { visible: await websiteVisible() },
   };
 }
 
@@ -692,4 +693,17 @@ async function loadDeskSettings(organizationId: string, role: string): Promise<D
     forwardCheck: forwardCheckView(await readForwardCheck(organizationId).catch(() => null), { forwarding: d.forwarding, phone: toE164(orgRow?.phone ?? ""), desk: toE164(registration?.number ?? "") ?? toE164(assignedNumbers[0] ?? "") }),
     facts: facts ?? factsFor({ name: "", phone: null, address: null, website: null, trades: [], hours: [], services: [], bookingUrl: null, timezone: null }),
   };
+}
+
+/** Website estimators (2026-10-27): every account once the owner opens the feature; until then platform admins only. */
+async function websiteVisible(): Promise<boolean> {
+  const { webEstimatorOpen } = await import("@/lib/webEstimatorServer");
+  if (await webEstimatorOpen()) return true;
+  try {
+    const { requirePlatformAdmin } = await import("@/lib/orgContext");
+    await requirePlatformAdmin();
+    return true;
+  } catch {
+    return false;
+  }
 }

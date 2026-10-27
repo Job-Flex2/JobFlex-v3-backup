@@ -156,6 +156,7 @@ import { FreeSwitchNotice, ManageSubscription } from "@/components/billing/FreeS
 import "./mobile-settings.css";
 import { isRefusal } from "@/lib/actionResult";
 import { CompanyPricingForm } from "@/components/v3/company-pricing/company-pricing-form";
+import { WebEstimatorForm } from "@/components/v3/web-estimator/web-estimator-form";
 
 /* ══════════════════════════ small shared bits ══════════════════════════ */
 
@@ -1209,6 +1210,19 @@ function EstimatingPaneMobile() {
   );
 }
 
+/** Settings → Website estimators on the phone (2026-10-27): the same form as the desk pane. */
+function WebsitePaneMobile() {
+  const item = RAIL_ITEMS.find((r) => r.key === "website");
+  return (
+    <section className="mst-card" id="website">
+      <CardHeader card={{ title: "Your estimators on your website", sub: item?.sub ?? "" }} />
+      <div className="mst-cardB">
+        <WebEstimatorForm />
+      </div>
+    </section>
+  );
+}
+
 /* ═════════════════════════════ THE PAGE ═════════════════════════════ */
 
 const RAIL_KEYS = new Set<string>(RAIL_ITEMS.map((r) => r.key));
@@ -1222,6 +1236,7 @@ const RAIL_ICON: Record<RailKey, IconName> = {
   notifications: "i-bell",
   desk: "i-phone",
   estimating: "i-hardhat",
+  website: "i-globe",
 };
 
 export function MobileSettings({
@@ -1415,7 +1430,7 @@ export function MobileSettings({
               // arrangement the option sheet uses.
               hidden={!railOpen}
             >
-              {RAIL_ITEMS.map((item) => (
+              {RAIL_ITEMS.filter((item) => item.key !== "website" || data.website?.visible).map((item) => (
                 <button
                   key={item.key}
                   className={item.key === active ? "mst-swOpt is-on" : "mst-swOpt"}
@@ -1458,6 +1473,11 @@ export function MobileSettings({
             <div className={active === "estimating" ? "mst-pane is-on" : "mst-pane"}>
               <EstimatingPaneMobile />
             </div>
+            {data.website?.visible ? (
+              <div className={active === "website" ? "mst-pane is-on" : "mst-pane"}>
+                <WebsitePaneMobile />
+              </div>
+            ) : null}
           </div>
 
           {/* Log out — the last thing on the page, in every section. Same

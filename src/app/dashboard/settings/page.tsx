@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     "Settings — account, payments, billing, integrations and notifications on one sheet.",
 };
 
-const PANE_KEYS = ["account", "payments", "billing", "integrations", "notifications", "desk", "estimating"] as const;
+const PANE_KEYS = ["account", "payments", "billing", "integrations", "notifications", "desk", "estimating", "website"] as const;
 type PaneKey = (typeof PANE_KEYS)[number];
 
 export default async function SettingsPage({
