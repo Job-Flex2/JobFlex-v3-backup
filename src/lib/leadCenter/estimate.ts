@@ -87,9 +87,12 @@ export function suggestedLeadPriceCents(e: LeadEstimate, exclusive: boolean): nu
   return exclusive ? base * 2 : base;
 }
 
-/** A planned project's notes that hold a range: the tag, a newline, the record. */
-export function planNotesFor(e: LeadEstimate): string {
-  return `${PRICE_PLAN_TAG}\n${JSON.stringify(e)}`;
+export type PlanSite = { address: string; city: string; state: string; zip: string; lat: number; lng: number };
+
+/** A planned project's notes that hold a range: the tag, a newline, the record (with the house, so "Get quotes" from
+ *  the dashboard or the email picks the flow up at the form). */
+export function planNotesFor(e: LeadEstimate, site?: PlanSite | null): string {
+  return `${PRICE_PLAN_TAG}\n${JSON.stringify(site ? { ...e, site } : e)}`;
 }
 
 export function parsePlanEstimate(notes: string | null | undefined): LeadEstimate | null {
@@ -100,6 +103,17 @@ export function parsePlanEstimate(notes: string | null | undefined): LeadEstimat
   } catch {
     return null;
   }
+}
+
+export function parsePlanSite(notes: string | null | undefined): PlanSite | null {
+  if (!parsePlanEstimate(notes)) return null;
+  const site = (JSON.parse(notes!.slice(PRICE_PLAN_TAG.length + 1)) as { site?: PlanSite }).site;
+  return site && typeof site.lat === "number" && typeof site.lng === "number" && typeof site.address === "string" ? site : null;
+}
+
+/** What a saved range reads as on a plan row or in a reminder: "Roof range $14,200–$19,800 · architectural shingle — priced on JobFlex". */
+export function planRangeWords(e: LeadEstimate): string {
+  return `Roof range ${usd(e.range.low)}–${usd(e.range.high)} · ${e.materialLabel.toLowerCase()} — priced on JobFlex, not a quote`;
 }
 
 export async function writeLeadEstimate(leadId: string, e: LeadEstimate): Promise<void> {

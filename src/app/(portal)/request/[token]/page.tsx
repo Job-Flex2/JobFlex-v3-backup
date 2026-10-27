@@ -359,6 +359,12 @@ export default async function RequestPage({ params }: { params: Promise<{ token:
                 )}
               </dl>
             )}
+            {v.estimate && (
+              <div className={s.scope} data-request-range>
+                <p><b>Your range: {v.estimate.range}</b> · {v.estimate.material} · {v.estimate.basis}</p>
+                <p>An estimate range from aerial data and local prices, not a quote. A local pro confirms on site.</p>
+              </div>
+            )}
             {v.scope && (
               // Open (2026-10-14): on a fresh request it is the only thing on the page that is theirs.
               <details className={s.scope} open>

@@ -23,6 +23,7 @@ import { planWhen, remindModeOf, validTimeZone, type RemindMode } from "./dates"
 import { listFolder, type FolderFileView, type FolderRequestView } from "./files";
 import { storageMode, type StorageMode } from "@/lib/media/privateStore";
 import type { WizardPrefill } from "./prefill";
+import { estimateShort, parsePlanEstimate, planRangeWords } from "@/lib/leadCenter/estimate";
 
 export { mayShowHomeKey, planDate, planWhen, reminderFor, validTimeZone } from "./dates";
 
@@ -126,7 +127,7 @@ export async function loadWizardPrefill(key: string | null | undefined, planId?:
     zip: home.zip ?? "",
     homeKey: key,
     planId: plan?.id ?? null,
-    description: `${again}${plan ? `${plan.title}${plan.notes ? ` — ${plan.notes}` : ""}` : ""}`,
+    description: `${again}${plan ? `${plan.title}${plan.notes ? ` — ${parsePlanEstimate(plan.notes) ? planRangeWords(parsePlanEstimate(plan.notes)!) : plan.notes}` : ""}` : ""}`,
   };
 }
 
@@ -144,6 +145,8 @@ export interface HomePlanView {
   id: string;
   title: string;
   notes: string | null;
+  /** A range saved from /price (2026-10-27): the money range and the material, for the dashboard's own card. */
+  estimate: { range: string; material: string } | null;
   /** YYYY-MM-DD (UTC date) — a month plan on its first day. */
   date: string;
   wholeMonth: boolean;
@@ -357,7 +360,9 @@ export async function loadHomeDashboard(key: string, now = new Date()): Promise<
   const plans: HomePlanView[] = planRows.map((p) => ({
     id: p.id,
     title: p.title,
-    notes: p.notes,
+    // A range saved from /price (lib/leadCenter/estimate) reads as its words, never its record.
+    notes: parsePlanEstimate(p.notes) ? planRangeWords(parsePlanEstimate(p.notes)!) : p.notes,
+    estimate: parsePlanEstimate(p.notes) ? { range: estimateShort(parsePlanEstimate(p.notes)!).split(" · ")[0], material: parsePlanEstimate(p.notes)!.materialLabel.toLowerCase() } : null,
     date: p.plannedFor.toISOString().slice(0, 10),
     wholeMonth: p.wholeMonth,
     when: planWhen(p.plannedFor, p.wholeMonth),

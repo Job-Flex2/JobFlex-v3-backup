@@ -11,6 +11,7 @@ import { trackTraffic } from "@/lib/traffic-client";
 import { PlaceField, type Site } from "./place-field";
 import { QuestionCards } from "./question-cards";
 import { RangeView, type Priced } from "./range-view";
+import { QuotesForm, type ResumePlan } from "./quotes-form";
 import s from "./price.module.css";
 
 type Step = "address" | "questions" | "range";
@@ -28,16 +29,18 @@ function Steps({ at }: { at: Step }) {
   );
 }
 
-export function RoofFlow({ prefill }: { prefill: Site | null }) {
-  const [step, setStep] = React.useState<Step>("address");
-  const [site, setSite] = React.useState<Site | null>(prefill);
-  const [answers, setAnswers] = React.useState<RoofAnswers>(DEFAULT_ANSWERS);
+/** A range saved from the dashboard or the email, picked up at the form (the server prices it again from the cache). */
+export type Resume = { site: Site; priced: Priced; plan: ResumePlan };
+
+export function RoofFlow({ prefill, resume }: { prefill: Site | null; resume?: Resume | null }) {
+  const [step, setStep] = React.useState<Step>(resume ? "range" : "address");
+  const [site, setSite] = React.useState<Site | null>(resume?.site ?? prefill);
+  const [answers, setAnswers] = React.useState<RoofAnswers>(resume?.priced.answers ?? DEFAULT_ANSWERS);
   const [read, setRead] = React.useState<RoofRead | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   // "Get quotes" / "Email me this range": the form that follows the range (its own task) and what it carries.
-  const [form, setForm] = React.useState<{ kind: "quotes" | "email"; priced: Priced } | null>(null);
-  void form;
+  const [form, setForm] = React.useState<{ kind: "quotes" | "email"; priced: Priced } | null>(resume ? { kind: "quotes", priced: resume.priced } : null);
   const hpRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
@@ -101,7 +104,11 @@ export function RoofFlow({ prefill }: { prefill: Site | null }) {
         </div>
       ) : null}
 
-      {step === "range" && site && read ? (
+      {form && site ? (
+        <QuotesForm mode={form.kind} site={site} priced={form.priced} resume={resume?.plan ?? null} onBack={() => setForm(null)} />
+      ) : null}
+
+      {step === "range" && site && read && !form ? (
         <RangeView
           site={site}
           read={read}

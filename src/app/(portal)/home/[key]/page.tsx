@@ -128,6 +128,10 @@ export default async function HomePage({ params }: { params: Promise<{ key: stri
 
         {/* ── what they can do ────────────────────────────────────────── */}
         <nav className={s.quick} aria-label="What you can do">
+          <a className={s.quickItem} href="/price">
+            <b>Price a project</b>
+            <span>A roof range for your house in a minute — from the sky, no account</span>
+          </a>
           <a className={s.quickItem} href="#plans">
             <b>Plan one for later</b>
             <span>Put it on the calendar; we remind you when the month comes</span>
@@ -178,6 +182,24 @@ export default async function HomePage({ params }: { params: Promise<{ key: stri
                   <span className={s.mono}>Your record — keep it for as long as you own the place</span>
                 </div>
                 {record.map((p) => <ProjectCard key={p.token} p={p} h={h} />)}
+              </section>
+            )}
+
+            {h.plans.some((p) => p.estimate && p.status === "PLANNED") && (
+              <section className={s.card} id="ranges" aria-labelledby="ranges-title" data-home-range>
+                <div className={s.cardHead}>
+                  <h2 id="ranges-title" className={s.label}>Your roof range</h2>
+                  <span className={s.mono}>Priced on JobFlex · not a quote</span>
+                </div>
+                <div className={s.cardBody}>
+                  {h.plans.filter((p) => p.estimate && p.status === "PLANNED").map((p) => (
+                    <p key={p.id} className={s.text}>
+                      <b>{p.estimate!.range}</b> · {p.estimate!.material} · {p.title}{" "}
+                      <a href={`/price/roof?home=${encodeURIComponent(h.key)}&plan=${encodeURIComponent(p.id)}`}>Get quotes</a>
+                    </p>
+                  ))}
+                  <p className={s.text}>A local pro confirms on site. Ready? Get quotes sends it to one local pro at a time.</p>
+                </div>
               </section>
             )}
 

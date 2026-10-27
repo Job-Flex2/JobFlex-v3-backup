@@ -12,6 +12,7 @@ import { renderEmail } from "@/lib/email/renderEmail";
 import { buildHomePlanReminder } from "@/lib/email/build/platform";
 import { homeUrl } from "./portal";
 import { FOLLOW_UP_MS, planWhen } from "./dates";
+import { parsePlanEstimate, planRangeWords } from "@/lib/leadCenter/estimate";
 
 export async function sendPlanReminders(now = new Date()): Promise<{ reminded: number; failed: number }> {
   const rows = await db.homePlan.findMany({
@@ -43,8 +44,11 @@ export async function sendPlanReminders(now = new Date()): Promise<{ reminded: n
           when: planWhen(plan.plannedFor, plan.wholeMonth),
           daysAway: daysAway > 0 ? daysAway : 0,
           followUp,
-          notes: plan.notes,
-          submitUrl: `${appUrl}/homeowner?home=${encodeURIComponent(plan.home.accessToken)}&plan=${encodeURIComponent(plan.id)}`,
+          // A range saved from /price (2026-10-27): its words, and "Get quotes" picks the flow up at the form.
+          notes: parsePlanEstimate(plan.notes) ? planRangeWords(parsePlanEstimate(plan.notes)!) : plan.notes,
+          submitUrl: parsePlanEstimate(plan.notes)
+            ? `${appUrl}/price/roof?home=${encodeURIComponent(plan.home.accessToken)}&plan=${encodeURIComponent(plan.id)}`
+            : `${appUrl}/homeowner?home=${encodeURIComponent(plan.home.accessToken)}&plan=${encodeURIComponent(plan.id)}`,
           homeUrl: url,
         }),
       );
