@@ -34,6 +34,7 @@ import { fromMinor, resolveSchedule } from "@/lib/paymentSchedule";
 import { orgReplyTo } from "@/lib/email/orgSend";
 import { findClientForLead } from "@/lib/leadClient";
 import { orgRatingsByIds } from "@/lib/reviews/publicSummary";
+import { estimateShort, readLeadEstimates } from "@/lib/leadCenter/estimate";
 
 /** What the homeowner reads on a proposal card. */
 export type ProposalStage = "NEW" | "OPENED" | "ACCEPTED" | "DECLINED" | "PAID" | "COMPLETED";
@@ -118,6 +119,8 @@ export interface RequestPortalView {
   submittedAt: string;
   place: string | null;
   scope: string | null;
+  /** The range the homeowner priced before asking (2026-10-27), when they did. */
+  estimate: { range: string; material: string; basis: string } | null;
   /** Fallback zone for times shown before the viewer's own clock takes over. */
   timeZone: string;
   /** The homeowner's home dashboard key (/home/[key]); null for a request with no home yet. */
@@ -376,6 +379,11 @@ export async function buildRequestPortal(pl: RequestLeadRow): Promise<RequestPor
   events.sort((a, b) => a.at.localeCompare(b.at));
 
   const place = [pl.city, pl.state].filter(Boolean).join(", ") || pl.zip || null;
+  // The range they priced on /price before asking (2026-10-27) — shown above "what you asked for".
+  const est = (await readLeadEstimates([pl.id])).get(pl.id) ?? null;
+  const estimateView = est
+    ? { range: estimateShort(est).split(" · ")[0], material: est.materialLabel.toLowerCase(), basis: est.measurementId ? "measured" : est.basis === "solar" ? "read from aerial data" : "from your home's size" }
+    : null;
   const won = proposals.some((p) => p.current && (p.stage === "ACCEPTED" || p.stage === "PAID"));
   const done = proposals.some((p) => p.current && p.stage === "COMPLETED");
   const status2: RequestPortalView["status2"] = done ? "DONE" : won ? "HIRED" : proposals.some((p) => p.current) ? "PROPOSAL" : currentOrg ? "MATCHED" : "WAITING";
@@ -391,6 +399,7 @@ export async function buildRequestPortal(pl: RequestLeadRow): Promise<RequestPor
     submittedAt: pl.createdAt.toISOString(),
     place,
     scope: (pl.scope ?? pl.description ?? "").trim() || null,
+    estimate: estimateView,
     timeZone: currentOrg?.timeZone ?? [...orgs.values()][0]?.timeZone ?? "America/New_York",
     current: currentOrg ? { org: currentOrg, matchedAt: pl.matchedAt?.toISOString() ?? null } : null,
     previous: left.flatMap((o) => {

@@ -367,6 +367,40 @@ export function buildHomePlanReminder(i: HomePlanReminderInput): EmailDoc {
   };
 }
 
+export interface PriceRangeEmailInput {
+  name: string | null;
+  address: string;
+  /** "$14,200–$19,800" */
+  range: string;
+  materialLabel: string;
+  /** "about 2,100 sq ft of roof · 6/12 pitch · read from aerial data" */
+  basis: string;
+  included: string[];
+  /** The flow, picked up at "Get quotes" — or the request page when they already asked. */
+  quotesUrl: string;
+  quotesLabel: string;
+  homeUrl: string;
+}
+
+/** "Your roof range" (2026-10-27): the number they saw, what's in it, and the one next step. */
+export function buildPriceRangeEmail(i: PriceRangeEmailInput): EmailDoc {
+  const first = i.name ? i.name.split(" ")[0] : null;
+  return {
+    subject: `Your roof range: ${i.range}`,
+    lockup: PLATFORM_LOCKUP,
+    kicker: { text: "Your roof range" },
+    headline: i.range,
+    prose: [
+      `${first ? `Hi ${first} — here` : "Here"} is the range you priced for ${i.address}: ${i.materialLabel.toLowerCase()}, ${i.basis}.`,
+      ...(i.included.length ? [`What's in it: ${i.included.slice(0, 5).join(" ")}`] : []),
+    ],
+    cta: { label: i.quotesLabel, href: i.quotesUrl },
+    after: [`It stays on your home dashboard: ${i.homeUrl}`],
+    fine: "An estimate range from aerial data and local prices, not a quote. A local pro confirms on site.",
+    footer: PLATFORM_FOOTER,
+  };
+}
+
 export interface HomePlanSavedInput {
   name: string;
   title: string;

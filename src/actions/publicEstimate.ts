@@ -17,7 +17,12 @@ import { unitCents } from "@/lib/paidApiCosts";
 import { roofGuideRange } from "@/lib/publicEstimate/guide";
 import { cacheFresh, cacheable, houseOrgId, pubRoofKey, readPubRoof, writePubRoof, type PubRoofCache } from "@/lib/publicEstimate/store";
 import { roofFactsFromSize, roofFactsFromSolar, roofRange, type MaterialId, type RoofAnswers } from "@/lib/publicEstimate/roof";
-import { estimateWords, leadEstimateFrom, planNotesFor, type LeadEstimate } from "@/lib/leadCenter/estimate";
+import { estimateShort, estimateWords, leadEstimateFrom, planNotesFor, type LeadEstimate } from "@/lib/leadCenter/estimate";
+import { buildPriceRangeEmail } from "@/lib/email/build/platform";
+import { renderEmail } from "@/lib/email/renderEmail";
+import { sendEmail } from "@/lib/sdk/resend";
+import { appBaseUrl } from "@/lib/appUrl";
+import { homeUrl } from "@/lib/home/portal";
 import { createHomeownerLead } from "@/lib/leadCenter/intake";
 import { LEAD_CONSENT_TEXT } from "@/lib/leadConsent";
 import { findOrCreateHome, homePath } from "@/lib/home/portal";
@@ -140,6 +145,11 @@ const leadSchema = siteSchema.merge(pricedSchema).extend({
   phone: z.string().trim().min(7).max(40),
   consent: z.boolean(),
   page: z.string().max(300).optional(),
+  /** "Send me the range by email too". */
+  emailRange: z.boolean().optional(),
+  /** A saved range picked up from the dashboard or its email: the plan becomes this request (lib/home/portal). */
+  homeKey: z.string().max(200).optional(),
+  planId: z.string().max(60).optional(),
 });
 const emailSchema = siteSchema.merge(pricedSchema).extend({
   email: z.string().trim().email().max(200),
@@ -175,7 +185,30 @@ async function serverEstimate(input: z.infer<typeof siteSchema> & z.infer<typeof
   return e;
 }
 
-export type PublicRoofLeadResult = { ok: true; statusPath: string; homePath: string | null } | { ok: false; error: string };
+export type PublicRoofLeadResult = { ok: true; statusPath: string; requestToken: string; homePath: string | null } | { ok: false; error: string };
+
+/** The range, by email: the number, what's in it, the one next step. Best-effort — the request or the plan stands. */
+async function sendRangeEmail(to: string, name: string | null, site: { address: string; city: string }, e: LeadEstimate, quotes: { url: string; label: string }, home: string | null | undefined): Promise<void> {
+  try {
+    const basis = `about ${Math.round(e.squares * 100).toLocaleString("en-US")} sq ft of roof${e.basis === "solar" ? ` · ${e.pitchLabel} pitch · read from aerial data` : " · from your home's size"}`;
+    const { subject, html } = renderEmail(
+      buildPriceRangeEmail({
+        name,
+        address: `${site.address}, ${site.city}`,
+        range: estimateShort(e).split(" · ")[0],
+        materialLabel: e.materialLabel,
+        basis,
+        included: e.hidden.scopeText.split(/(?<=\.)\s+/).filter((l) => !/\$/.test(l)).slice(0, 5),
+        quotesUrl: quotes.url,
+        quotesLabel: quotes.label,
+        homeUrl: home ?? `${await appBaseUrl()}/home`,
+      }),
+    );
+    await sendEmail({ to, subject, html });
+  } catch (err) {
+    console.error("[price] the range email did not go:", err);
+  }
+}
 
 /** "Get quotes from local pros": the range becomes a Lead Center lead that carries the whole estimate. */
 export async function publicRoofLead(raw: unknown): Promise<PublicRoofLeadResult> {
@@ -210,9 +243,15 @@ export async function publicRoofLead(raw: unknown): Promise<PublicRoofLeadResult
         source: "price:roof",
         consent: { text: LEAD_CONSENT_TEXT, at: new Date(), ip: ip === "local" || ip === "unknown" ? null : ip, page: input.page?.startsWith("/") ? input.page : "/price/roof" },
         estimate,
+        homeKey: input.homeKey ?? null,
+        planId: input.planId ?? null,
       },
     );
-    return { ok: true, statusPath: res.statusPath, homePath: res.homePath ?? null };
+    if (input.emailRange !== false) {
+      const base = await appBaseUrl();
+      await sendRangeEmail(input.email, input.name, input, estimate, { url: `${base}${res.statusPath}`, label: "Follow your request" }, res.homePath ? `${base}${res.homePath}` : null);
+    }
+    return { ok: true, statusPath: res.statusPath, requestToken: res.requestToken ?? "", homePath: res.homePath ?? null };
   } catch (err) {
     const e = err as { name?: string; retryAfterMs?: number };
     if (e?.name === "RateLimitError") {
@@ -253,13 +292,15 @@ export async function publicRoofEmail(raw: unknown): Promise<PublicRoofEmailResu
       data: {
         homeId: home.id,
         title: `Roof · ${input.address}`,
-        notes: planNotesFor(estimate),
+        notes: planNotesFor(estimate, { address: input.address, city: input.city, state: input.state, zip: input.zip, lat: input.lat, lng: input.lng }),
         plannedFor: nextMonth,
         wholeMonth: true,
         remindAt: new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000),
       },
       select: { id: true },
     });
+    const base = await appBaseUrl();
+    await sendRangeEmail(input.email, input.name?.trim() || null, input, estimate, { url: `${base}/price/roof?home=${encodeURIComponent(home.accessToken)}&plan=${encodeURIComponent(plan.id)}`, label: "Get quotes from local pros" }, await homeUrl(home.accessToken));
     return { ok: true, homePath: homePath(home.accessToken), planId: plan.id };
   } catch (err) {
     const e = err as { name?: string; retryAfterMs?: number };
