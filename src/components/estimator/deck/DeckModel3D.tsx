@@ -419,14 +419,31 @@ function bumpGableGeometry(w: number, d: number, rise: number): { slopes: THREE.
   return { slopes: trisGeometry([BL, FL, R1, BL, R1, R2, FR, BR, R2, FR, R2, R1]), ends: trisGeometry([FL, FR, R1]) };
 }
 
+/** Lap siding, one course per tile (6 in. tall, the tile 4 ft wide): the board's bevel — lighter at its top, deeper
+ *  toward the butt — the butt's shadow on the course below, a lip of light under it, faint grain along the board and
+ *  a butt joint now and then. The same canvas is the wall's bump map (2026-10-27: "a bit more realistic … but
+ *  optimized" — one small texture, drawn once). */
 function sidingTexture() {
-  return canvasTexture(8, 64, (g) => {
-    g.fillStyle = "#ffffff";
-    g.fillRect(0, 0, 8, 64);
-    g.fillStyle = "rgba(0,0,0,0.16)";
-    g.fillRect(0, 60, 8, 4);
-    g.fillStyle = "rgba(0,0,0,0.05)";
-    g.fillRect(0, 52, 8, 8);
+  return canvasTexture(256, 32, (g) => {
+    const bevel = g.createLinearGradient(0, 0, 0, 32);
+    bevel.addColorStop(0, "#ffffff");
+    bevel.addColorStop(0.75, "#f1f1f1");
+    bevel.addColorStop(1, "#e2e2e2");
+    g.fillStyle = bevel;
+    g.fillRect(0, 0, 256, 32);
+    for (let i = 0; i < 40; i++) {
+      g.fillStyle = `rgba(60,45,30,${0.02 + Math.random() * 0.04})`;
+      g.fillRect(Math.random() * 256, 2 + Math.random() * 27, 20 + Math.random() * 90, 1);
+    }
+    g.fillStyle = "rgba(0,0,0,0.22)";
+    g.fillRect(0, 29, 256, 3);
+    g.fillStyle = "rgba(0,0,0,0.08)";
+    g.fillRect(0, 26, 256, 3);
+    g.fillStyle = "rgba(255,255,255,0.35)";
+    g.fillRect(0, 0, 256, 1);
+    const joint = 40 + Math.random() * 176;
+    g.fillStyle = "rgba(0,0,0,0.14)";
+    g.fillRect(joint, 0, 1, 29);
   });
 }
 /** Wood grain: fine streaks along x, a pale base the instance colour tints. */
@@ -501,52 +518,87 @@ function grassTexture() {
 /** What a wall built from its photo is clad in (2026-10-23): a pale pattern the wall's own colour tints, one tile a
  *  known size (brick: two courses, 16 × 5⅓ in.; board and batten: one 16-in. bay; stone: 2 × 2 ft). */
 function brickTexture() {
-  return canvasTexture(64, 32, (g) => {
-    g.fillStyle = "#ffffff";
-    g.fillRect(0, 0, 64, 32);
-    for (let row = 0; row < 2; row++) {
+  return canvasTexture(128, 64, (g) => {
+    g.fillStyle = "#f4f1ea";
+    g.fillRect(0, 0, 128, 64);
+    for (let row = 0; row < 4; row++) {
       const y = row * 16;
-      const off = row ? 16 : 0;
-      for (let x = -off; x < 64; x += 32) {
-        g.fillStyle = `rgba(0,0,0,${0.1 + Math.random() * 0.1})`;
-        g.fillRect(x + 1.5, y + 1.5, 29, 13);
+      const off = row % 2 ? 32 : 0;
+      for (let x = -off; x < 128; x += 64) {
+        const tone = 0.1 + Math.random() * 0.16;
+        g.fillStyle = `rgba(0,0,0,${tone})`;
+        g.fillRect(x + 2, y + 2, 60, 12);
+        g.fillStyle = `rgba(255,255,255,${Math.random() * 0.08})`;
+        g.fillRect(x + 2, y + 2, 60, 2);
+        g.fillStyle = "rgba(0,0,0,0.18)";
+        g.fillRect(x + 2, y + 12, 60, 2);
+        for (let k = 0; k < 14; k++) {
+          g.fillStyle = `rgba(0,0,0,${Math.random() * 0.1})`;
+          g.fillRect(x + 2 + Math.random() * 60, y + 2 + Math.random() * 12, 2, 1);
+        }
       }
     }
   });
 }
 function stuccoTexture() {
-  return canvasTexture(64, 64, (g) => {
+  return canvasTexture(128, 128, (g) => {
     g.fillStyle = "#ffffff";
-    g.fillRect(0, 0, 64, 64);
-    for (let i = 0; i < 1400; i++) {
-      g.fillStyle = `rgba(0,0,0,${Math.random() * 0.07})`;
-      g.fillRect(Math.random() * 64, Math.random() * 64, 1 + Math.random(), 1 + Math.random());
+    g.fillRect(0, 0, 128, 128);
+    for (let i = 0; i < 36; i++) {
+      g.fillStyle = `rgba(0,0,0,${Math.random() * 0.035})`;
+      g.beginPath();
+      g.ellipse(Math.random() * 128, Math.random() * 128, 10 + Math.random() * 24, 8 + Math.random() * 18, Math.random() * 3, 0, Math.PI * 2);
+      g.fill();
+    }
+    for (let i = 0; i < 5200; i++) {
+      const dark = Math.random() < 0.6;
+      g.fillStyle = dark ? `rgba(0,0,0,${Math.random() * 0.1})` : `rgba(255,255,255,${Math.random() * 0.25})`;
+      g.fillRect(Math.random() * 128, Math.random() * 128, 1 + Math.random(), 1 + Math.random());
     }
   });
 }
 function battenTexture() {
-  return canvasTexture(32, 8, (g) => {
+  return canvasTexture(64, 256, (g) => {
     g.fillStyle = "#ffffff";
-    g.fillRect(0, 0, 32, 8);
-    g.fillStyle = "rgba(0,0,0,0.05)";
-    g.fillRect(26, 0, 6, 8);
+    g.fillRect(0, 0, 64, 256);
+    for (let i = 0; i < 70; i++) {
+      g.fillStyle = `rgba(60,45,30,${0.02 + Math.random() * 0.04})`;
+      g.fillRect(2 + Math.random() * 48, Math.random() * 256, 1, 20 + Math.random() * 120);
+    }
     g.fillStyle = "rgba(0,0,0,0.2)";
-    g.fillRect(31, 0, 1, 8);
+    g.fillRect(50, 0, 3, 256);
+    g.fillStyle = "rgba(0,0,0,0.05)";
+    g.fillRect(53, 0, 9, 256);
+    g.fillStyle = "rgba(255,255,255,0.3)";
+    g.fillRect(53, 0, 1, 256);
+    g.fillStyle = "rgba(0,0,0,0.12)";
+    g.fillRect(62, 0, 2, 256);
   });
 }
 function stoneTexture() {
-  return canvasTexture(128, 128, (g) => {
-    g.fillStyle = "#ffffff";
-    g.fillRect(0, 0, 128, 128);
-    for (let row = 0; row < 6; row++) {
-      let x = -Math.random() * 20;
-      const y = row * 21.3;
-      while (x < 128) {
-        const w = 18 + Math.random() * 26;
-        g.fillStyle = `rgba(0,0,0,${0.08 + Math.random() * 0.2})`;
+  return canvasTexture(256, 256, (g) => {
+    g.fillStyle = "#dedbd3";
+    g.fillRect(0, 0, 256, 256);
+    const rows = [0, 44, 80, 128, 166, 212, 256];
+    for (let r = 0; r + 1 < rows.length; r++) {
+      const y = rows[r];
+      const h = rows[r + 1] - y;
+      let x = -Math.random() * 30;
+      while (x < 256) {
+        const w = 30 + Math.random() * 50;
+        const tone = 0.04 + Math.random() * 0.18;
+        g.fillStyle = `rgba(0,0,0,${tone})`;
         g.beginPath();
-        g.roundRect(x + 1.5, y + 1.5, w - 3, 18, 5);
+        g.roundRect(x + 2, y + 2, w - 4, h - 4, 4);
         g.fill();
+        g.fillStyle = `rgba(255,255,255,${0.1 + Math.random() * 0.15})`;
+        g.fillRect(x + 3, y + 3, w - 6, 2);
+        g.fillStyle = "rgba(0,0,0,0.16)";
+        g.fillRect(x + 3, y + h - 5, w - 6, 2);
+        for (let k = 0; k < 24; k++) {
+          g.fillStyle = `rgba(0,0,0,${Math.random() * 0.08})`;
+          g.fillRect(x + 3 + Math.random() * (w - 6), y + 3 + Math.random() * (h - 6), 2, 1);
+        }
         x += w;
       }
     }
@@ -1454,21 +1506,26 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         const H = s.house;
         // The cladding's tile repeats by the wall's size (brick 16 × 5⅓ in., a batten bay 16 in., stone 2 ft): one copy of
         // the pattern per block, so a narrow bump-out's bricks are the size of the main wall's.
-        const clad = H.material && cladding[H.material] ? cladding[H.material] : null;
-        const TILE: Record<string, [number, number]> = { brick: [1.333, 0.444], stucco: [3, 3], "board-batten": [1.333, 100], stone: [2, 2] };
-        const wallMat = new THREE.MeshStandardMaterial({ color: H.siding ? new THREE.Color(H.siding) : SIDING, roughness: 0.95, map: clad ?? siding });
+        const clad = H.material && cladding[H.material] ? cladding[H.material] : siding;
+        const material = H.material && cladding[H.material] ? H.material : "lap";
+        // Lap: a 4-ft board 6 in. tall. Brick: four courses, 2 ft 8 in. × 1 ft 9 in. Stucco: 3 ft. Board and batten:
+        // one 16-in. bay, the boards 8 ft tall. Stone: 4 × 4 ft.
+        const TILE: Record<string, [number, number]> = { lap: [4, 0.5], brick: [2.667, 1.333], stucco: [3, 3], "board-batten": [1.333, 8], stone: [4, 4] };
+        // The relief of each cladding, as the colour map read for height (a bump map costs one texture read, no geometry).
+        const BUMP: Record<string, number> = { lap: 0.035, brick: 0.05, stucco: 0.012, "board-batten": 0.045, stone: 0.06 };
+        const wallMat = new THREE.MeshStandardMaterial({ color: H.siding ? new THREE.Color(H.siding) : SIDING, roughness: 0.95, map: clad, bumpMap: clad, bumpScale: BUMP[material] });
         const wallMatFor = (w: number, h: number) => {
-          if (!clad || !H.material) return wallMat;
           const t = clad.clone();
-          const [tw, th] = TILE[H.material];
-          t.repeat.set(Math.max(1, w / tw), H.material === "board-batten" ? 1 : Math.max(1, h / th));
+          const [tw, th] = TILE[material];
+          t.repeat.set(Math.max(1, w / tw), Math.max(1, h / th));
           t.needsUpdate = true;
           const m = wallMat.clone();
           m.map = t;
+          m.bumpMap = t;
           owned.push(t, m);
           return m;
         };
-        const baseMat = new THREE.MeshStandardMaterial({ color: FOUNDATION, roughness: 1, map: concrete });
+        const baseMat = new THREE.MeshStandardMaterial({ color: FOUNDATION, roughness: 1, map: concrete, bumpMap: concrete, bumpScale: 0.02 });
         const roofMat = new THREE.MeshStandardMaterial({ color: H.roofColour ? new THREE.Color(H.roofColour) : ROOF, roughness: 0.95, map: shingles, side: THREE.DoubleSide });
         // The windows' glass as it looks from the yard by day (owner, 2026-10-24: "the windows are like mirrors, blooming"): a
         // dull dielectric, not a dark metal — the sky's light toward the top of the pane, the room's dark toward the sill, a
@@ -1481,16 +1538,18 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           g.fillStyle = grad;
           g.fillRect(0, 0, 8, 64);
         });
-        const glassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: glassTex, roughness: 0.42, metalness: 0, envMapIntensity: 0.6 });
+        const glassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: glassTex, roughness: 0.28, metalness: 0, envMapIntensity: 1.1 });
+        // The jamb — the rim between the casing and the pane, a shade of shadow, so the glass reads set back into the
+        // wall (the wall is one solid block: its depth is drawn, not cut).
+        const jambMat = new THREE.MeshStandardMaterial({ color: 0x3d4148, roughness: 0.9 });
         owned.push(glassTex);
         const trimMat = new THREE.MeshStandardMaterial({ color: TRIM_WHITE, roughness: 0.8 });
         const doorMat = new THREE.MeshStandardMaterial({ color: 0xf1eee6, roughness: 0.7 });
         // A garage door's rails: a shade under its panel, so the sections read without a lite (2026-10-26).
         const railMat = new THREE.MeshStandardMaterial({ color: 0xd9d5cc, roughness: 0.85 });
-        owned.push(wallMat, baseMat, roofMat, glassMat, trimMat, doorMat, railMat);
+        owned.push(wallMat, baseMat, roofMat, glassMat, jambMat, trimMat, doorMat, railMat);
         const height = H.heightFt;
         const band = Math.min(1.5, Math.max(0.5, s.heightFt - 0.6));
-        siding.repeat.set(1, height / 0.5);
         const blocks = H.blocks.map((b) => ({ x0: b[0], y0: b[1], x1: b[2], y1: b[3], h: b[4] ?? height }));
         mount.dataset.deck3dHouse = `${H.storeys ?? 1}:${H.roof ?? "hip"}:${blocks.length}:${H.windows?.length ?? 0}:${H.siding ?? ""}:${H.roofColour ?? ""}:${H.material ?? "lap"}:${H.doors?.length ?? "-"}:${H.roofs?.map((r) => r[0]).join("") ?? "-"}`;
         const part = (geo: THREE.BufferGeometry | null, mat: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number, shadow = false) => {
@@ -1581,6 +1640,7 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
         const opening = (x: number, w: number, h: number, y: number, door: boolean, face: number) => {
           const z0 = face - oz;
           part(null, trimMat, w + 0.5, h + 0.5, 0.12, x - ox, y + h / 2, z0 + 0.03);
+          part(null, jambMat, w + 0.14, h + 0.14, 0.13, x - ox, y + h / 2, z0 + 0.035);
           part(null, glassMat, w, h, 0.14, x - ox, y + h / 2, z0 + 0.04);
           // A window's mullions: one up the middle to about 5 ft wide, then one every sash of about 3 ft (a long
           // window read off a photo is one frame with its sashes, 2026-10-27), and the meeting rail across.
@@ -1592,7 +1652,12 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           }
           for (const [bx, by, bw, bh] of bars) part(null, trimMat, bw, bh, 0.16, bx, by, z0 + 0.05);
           if (door) part(null, glassMat, 0.08, 0.5, 0.2, x - ox + 0.35, y + 3, z0 + 0.12);
-          else part(null, trimMat, w + 0.7, 0.18, 0.3, x - ox, y - 0.09, z0 + 0.12);
+          else {
+            // A head cap over the casing, the sill with its nose, the apron under it.
+            part(null, trimMat, w + 0.62, 0.22, 0.22, x - ox, y + h + 0.3, z0 + 0.08);
+            part(null, trimMat, w + 0.7, 0.18, 0.34, x - ox, y - 0.09, z0 + 0.14);
+            part(null, trimMat, w + 0.46, 0.3, 0.1, x - ox, y - 0.33, z0 + 0.02);
+          }
         };
         if (H.doors) {
           // The doors where the photo showed them, on their own thresholds: a sliding door is glass with its meeting
