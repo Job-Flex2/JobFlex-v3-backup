@@ -166,3 +166,25 @@ export function moneyRange(r: Pick<RoofRange, "low" | "high">): string {
   const usd = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
   return `${usd(r.low)}–${usd(r.high)}`;
 }
+
+/** The range's material, in the words a sentence uses ("architectural shingle"). */
+export function materialWords(id: string): string {
+  return (MATERIALS.find((m) => m.id === id)?.label ?? id).toLowerCase();
+}
+
+/**
+ * "Is it in my budget?" — one sentence. Covers it: say so, and what the next option up would need. Under: by how much,
+ * and the dearest option that fits, when one does. `alternatives` are the other materials priced on the same roof.
+ */
+export function budgetWords(budgetCents: number, current: RoofRange, alternatives: Array<{ material: MaterialId; range: RoofRange }>): string {
+  const budget = budgetCents / 100;
+  const usd = (n: number) => "$" + round100(n).toLocaleString("en-US");
+  const mine = materialWords(current.hidden.spec.systemId);
+  if (budget >= current.high) {
+    const up = alternatives.filter((a) => a.range.high > budget).sort((a, b) => a.range.high - b.range.high)[0];
+    const label = up ? materialWords(up.material) : null;
+    return `That covers the ${mine}.${up && label ? ` ${label.charAt(0).toUpperCase()}${label.slice(1)} would need about ${usd(up.range.high - budget)} more.` : ""}`;
+  }
+  const fits = alternatives.filter((a) => a.range.high <= budget).sort((a, b) => b.range.high - a.range.high)[0];
+  return `That’s under the range for the ${mine} by about ${usd(current.high - budget)}${fits ? `; the ${materialWords(fits.material)} fits` : ""}.`;
+}
