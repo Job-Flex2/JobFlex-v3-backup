@@ -534,6 +534,65 @@ export function findWindows(read: HouseRead, g: Gray, f: Field, opts: { diff?: n
 const boxScore = (f: Field, b: Box) => outlineScore(f, Math.round(b.x0 * f.w), Math.round(b.x1 * f.w), Math.round(b.top * f.h), Math.round(b.bottom * f.h));
 
 /**
+ * ONE FRAME, ONE WINDOW (owner, 2026-10-27, a back wall with a triple unit: "instead of a long window it got two
+ * windows together … it looks like the two windows have outlines but it's actually connected"). A unit of several
+ * sashes — a picture window with sliders beside it, a triple, a bay's front — comes from the model one box per sash,
+ * and splitRow cuts a unit at its mullions too. Two boxes side by side, their heads and sills in line, with nothing
+ * but a mullion between them — touching, or a gap no wider than a mullion (a sixth of their height) that is NOT the
+ * colour of the siding — are one window. Two windows with siding between them stay two: the drawn row of four, its
+ * frames 8 px of siding apart, keeps its four.
+ */
+export function mergeMulled(f: Field, ws: HouseRead["windows"]): HouseRead["windows"] {
+  const sorted = [...ws].sort((a, b) => a.x0 - b.x0 || a.head - b.head);
+  const out: HouseRead["windows"] = [];
+  for (const w of sorted) {
+    const mate = out.find((o) => mulled(f, o, w));
+    if (mate) {
+      mate.x1 = r3(Math.max(mate.x1, w.x1));
+      mate.head = r3(Math.min(mate.head, w.head));
+      mate.sill = r3(Math.max(mate.sill, w.sill));
+    } else out.push({ ...w });
+  }
+  return out;
+}
+/** `b` is the next sash of `a`'s frame: in line with it, and only a mullion between. */
+function mulled(f: Field, a: HouseRead["windows"][number], b: HouseRead["windows"][number]): boolean {
+  if (b.x0 < a.x0) return false;
+  const h = Math.min(a.sill - a.head, b.sill - b.head);
+  if (h <= 0) return false;
+  if (Math.abs(a.head - b.head) > 0.12 * h || Math.abs(a.sill - b.sill) > 0.12 * h) return false;
+  const gapPx = (b.x0 - a.x1) * f.w;
+  const hPx = h * f.h;
+  if (gapPx > Math.max(4, hPx / 6)) return false;
+  if (gapPx <= 1) return true;
+  // Between them: trim or glass (a mullion), never the wall. Without the siding's luminance, only a hairline gap counts.
+  const siding = sidingBetween(f, a.x1, b.x0, Math.max(a.head, b.head) + 0.15 * h, Math.min(a.sill, b.sill) - 0.15 * h);
+  return siding === null ? gapPx <= 3 : !siding;
+}
+/**
+ * Whether the strip between two boxes (fractions: columns xa…xb, rows y0…y1) is the WALL — siding — rather than part of
+ * a window (glass, a mullion, trim): column by column, the share of columns whose mean luminance sits within 0.08 of
+ * the siding's. Siding when most columns do (its courses are faint); a light with its mullions when most do not. A
+ * mean over the whole strip would not do — dark glass and white mullions average out to the siding's own tone. Null
+ * when the siding's luminance is unknown or the strip is too thin to say.
+ */
+function sidingBetween(f: Field, xa: number, xb: number, y0: number, y1: number): boolean | null {
+  if (f.wallLum === undefined) return null;
+  const X0 = Math.round(xa * f.w), X1 = Math.round(xb * f.w);
+  const Y0 = Math.max(0, Math.round(y0 * f.h)), Y1 = Math.min(f.h, Math.round(y1 * f.h));
+  if (X1 - X0 < 2 || Y1 - Y0 < 3) return null;
+  let wallish = 0;
+  let n = 0;
+  for (let x = Math.max(0, X0); x < Math.min(f.w, X1); x++) {
+    const m = meanLum(f, x, x + 1, Y0, Y1);
+    if (m === null) continue;
+    n++;
+    if (Math.abs(m - f.wallLum) <= 0.08) wallish++;
+  }
+  return n ? wallish / n >= 0.5 : null;
+}
+
+/**
  * ROWS OF WINDOWS, TOGETHER (2026-10-24 — owner, the live read: "make windows read right"). The model read a row of
  * four panes one pane to the right: three boxes on panes, the fourth past the house's corner, the first pane bare —
  * and each box alone, snapping a short way, found a frame under it and stayed. A row of windows — boxes of one height
@@ -706,9 +765,16 @@ function growToFrame(f: Field, b: Box, others: readonly Box[] = []): Box {
   // into another box standing in its column.
   const xa0 = Math.round(X0 + (X1 - X0) * 0.15), xb0 = Math.round(X1 - (X1 - X0) * 0.15);
   const wallish = (y0: number, y1: number) => {
-    if (f.wallLum === undefined) return false;
     const m = meanLum(f, xa0, xb0, Math.round(y0), Math.round(y1));
-    return m !== null && Math.abs(m - f.wallLum) < 0.1;
+    if (m === null) return false;
+    if (f.wallLum !== undefined && Math.abs(m - f.wallLum) < 0.1) return true;
+    // The wall right beside the box at those rows (past the trim: a few pixels out), where a corner stands in shade
+    // or sun and the wall's median says nothing (2026-10-27: a window by the house's corner grew up into the siding).
+    const m2 = Math.max(4, Math.round((X1 - X0) * 0.15));
+    const left = meanLum(f, X0 - 4 - m2, X0 - 4, Math.round(y0), Math.round(y1));
+    const right = meanLum(f, X1 + 4, X1 + 4 + m2, Math.round(y0), Math.round(y1));
+    const beside = left !== null && right !== null ? (left + right) / 2 : left ?? right;
+    return beside !== null && Math.abs(m - beside) < 0.06;
   };
   const inOther = (y: number) => others.some((o) => Math.min(o.x1, b.x1) - Math.max(o.x0, b.x0) > 0.5 * Math.min(o.x1 - o.x0, b.x1 - b.x0) && y >= o.top * f.h - 2 && y <= o.bottom * f.h + 2);
   let nb = B;
@@ -787,12 +853,43 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
   const rescue = modelBoxes.length < 3 && pixel.length >= 3;
   const confirmed = pixel.length >= 3 && pixel.length <= 2 * modelBoxes.length + 2 && modelBoxes.filter((m) => pixel.some((b) => ov(m, b) >= 0.3 * Math.min(areaOf(m), areaOf(b)))).length >= 0.5 * modelBoxes.length;
   const found = (rescue || confirmed) && !insideDoor ? pixel.length : 0;
-  const source = found ? pixel.map((b) => ({ x0: b.x0, x1: b.x1, head: b.top, sill: b.bottom })) : read.windows;
+  // THE PICTURE'S PIECES OF ONE MODEL WINDOW (2026-10-27 — owner, a back wall with a triple unit: "instead of a long
+  // window it got two windows together"): a long window the model boxed whole comes back from the pixels as two or
+  // three of its lights (a reflection loses the middle one), and the two stood as two windows with a hole between.
+  // Two or more pixel boxes inside one model box, in a row, with no siding between any two of them, are that window's
+  // sashes: the model's frame stands for them. Separate windows the model ran into one box — siding between — stay
+  // the picture's own.
+  const whole = new Set<Box>();
+  const framesOverSashes = (): Box[] => {
+    const taken = new Set<Box>();
+    const frames: Box[] = [];
+    for (const m of modelBoxes) {
+      const inside = pixel.filter((b) => ov(b, m) >= 0.7 * areaOf(b)).sort((a, b) => a.x0 - b.x0);
+      if (inside.length < 2) continue;
+      const h = Math.min(...inside.map((b) => b.bottom - b.top));
+      if (!inside.every((b) => Math.abs(b.top - inside[0].top) <= 0.3 * h)) continue;
+      let siding = false;
+      for (let i = 0; i + 1 < inside.length && !siding; i++) {
+        const a = inside[i], b = inside[i + 1];
+        const gapPx = (b.x0 - a.x1) * f.w;
+        if (gapPx <= 1) continue;
+        const s = sidingBetween(f, a.x1, b.x0, Math.max(a.top, b.top) + 0.15 * h, Math.min(a.bottom, b.bottom) - 0.15 * h);
+        siding = s === null ? gapPx > 3 : s;
+      }
+      if (siding) continue;
+      inside.forEach((b) => taken.add(b));
+      frames.push(m);
+      whole.add(m);
+    }
+    return [...frames, ...pixel.filter((b) => !taken.has(b))];
+  };
+  const source = found ? framesOverSashes().map((b) => ({ x0: b.x0, x1: b.x1, head: b.top, sill: b.bottom, whole: whole.has(b) })) : read.windows.map((w) => ({ ...w, whole: false }));
   for (const w of source) {
     const self: Box = { x0: w.x0, x1: w.x1, top: w.head, bottom: w.sill };
     const rest = (found ? pixel : modelBoxes).filter((o) => o.x0 !== self.x0 || o.top !== self.top);
-    const box0 = found ? growToFrame(f, self, rest) : growToFrame(f, snapBox(f, own(align(self))), rest);
-    const parts = splitRow(f, box0);
+    // A frame that stood for its lights is whole: onto its own edges, never cut at its mullions nor grown past them.
+    const box0 = w.whole ? snapBox(f, self) : found ? growToFrame(f, self, rest) : growToFrame(f, snapBox(f, own(align(self))), rest);
+    const parts = w.whole ? [box0] : splitRow(f, box0);
     if (parts.length > 1) split += parts.length - 1;
     for (const p of parts) {
       const box = parts.length > 1 ? snapBox(f, p) : p;
@@ -830,6 +927,8 @@ export function snapRead(read: HouseRead, g: Gray): { read: HouseRead; moved: nu
       [a.x1, b.x0] = [b.x0, a.x1];
     }
   }
+  // ONE FRAME, ONE WINDOW: the sashes of a unit, side by side with only a mullion between them, are one window.
+  windows.splice(0, windows.length, ...mergeMulled(f, windows));
   const doors = read.doors.map((d) => {
     const box = snapBox(f, own(align(d)));
     if (!near(box.x0, d.x0) || !near(box.bottom, d.bottom)) moved++;

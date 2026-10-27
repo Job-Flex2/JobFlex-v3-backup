@@ -1582,7 +1582,14 @@ export function DeckModel3D({ scene, built = Number.POSITIVE_INFINITY, xray = fa
           const z0 = face - oz;
           part(null, trimMat, w + 0.5, h + 0.5, 0.12, x - ox, y + h / 2, z0 + 0.03);
           part(null, glassMat, w, h, 0.14, x - ox, y + h / 2, z0 + 0.04);
-          const bars = door ? [[x - ox, y + h / 2, 0.1, h]] : [[x - ox, y + h / 2, 0.08, h], [x - ox, y + h / 2, w, 0.08]];
+          // A window's mullions: one up the middle to about 5 ft wide, then one every sash of about 3 ft (a long
+          // window read off a photo is one frame with its sashes, 2026-10-27), and the meeting rail across.
+          const sashes = door ? 1 : Math.max(1, Math.round(w / 3.2));
+          const bars: number[][] = door ? [[x - ox, y + h / 2, 0.1, h]] : [[x - ox, y + h / 2, w, 0.08]];
+          if (!door) {
+            if (sashes === 1) bars.push([x - ox, y + h / 2, 0.08, h]);
+            else for (let i = 1; i < sashes; i++) bars.push([x - ox - w / 2 + (w * i) / sashes, y + h / 2, 0.08, h]);
+          }
           for (const [bx, by, bw, bh] of bars) part(null, trimMat, bw, bh, 0.16, bx, by, z0 + 0.05);
           if (door) part(null, glassMat, 0.08, 0.5, 0.2, x - ox + 0.35, y + 3, z0 + 0.12);
           else part(null, trimMat, w + 0.7, 0.18, 0.3, x - ox, y - 0.09, z0 + 0.12);

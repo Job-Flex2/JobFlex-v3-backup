@@ -176,6 +176,30 @@ console.log("— a house with a garage (2026-10-26 evening: 'didn't make the doo
   check("the base stays on the wall's foot — not dragged onto the garage door's edge", Math.abs(kept.read.base.left.y * H - 400) <= 6, String(kept.read.base.left.y * H));
 }
 
+console.log("— one frame, one window (2026-10-27: 'instead of a long window it got two windows together') —");
+{
+  // A triple unit: one white frame 190 px wide, two 6 px mullions, dark glass in each of its three lights — and a
+  // single window off to the right with siding between.
+  const UNIT: [number, number, number, number] = [300, 200, 490, 270];
+  const LONE: [number, number, number, number] = [560, 200, 615, 270];
+  const tri = wall([UNIT, LONE]);
+  for (const mx of [360, 426]) for (let y = UNIT[1] + 4; y < UNIT[3] - 4; y++) for (let x = mx; x < mx + 6; x++) tri.data[y * W + x] = 0.95;
+  const sashes = ([[300, 200, 366, 270], [360, 200, 432, 270], [426, 200, 490, 270]] as Array<[number, number, number, number]>).map(box);
+  const one = snapRead(read0([...sashes, box(LONE)]), tri);
+  check("three sash boxes over one frame come back as one long window, the lone window beside it still its own (within 4 px)", one.read.windows.length === 2 && worst(one.read.windows, [box(UNIT), box(LONE)]) <= 4, `${one.read.windows.length} windows, worst ${worst(one.read.windows, [box(UNIT), box(LONE)])}`);
+  const whole = snapRead(read0([box(UNIT), box(LONE)]), tri);
+  check("one box over the unit stays one — not left split at its mullions", whole.read.windows.length === 2 && worst(whole.read.windows, [box(UNIT), box(LONE)]) <= 4, `${whole.read.windows.length} windows, worst ${worst(whole.read.windows, [box(UNIT), box(LONE)])}`);
+  const four = snapRead(read0(truth), g);
+  check("four windows with siding between them stay four", rowOf(four.read.windows).length === 4, `${rowOf(four.read.windows).length} in the row`);
+  // The owner's back wall: the model boxed the triple whole; the picture's pass saw its outer lights only (the middle
+  // one lost to a reflection) and two singles elsewhere, enough to take over — the frame must still stand as one.
+  const dull = wall([UNIT, LONE, [700, 420, 755, 490], [800, 420, 855, 490]]);
+  for (const mx of [360, 426]) for (let y = UNIT[1] + 4; y < UNIT[3] - 4; y++) for (let x = mx; x < mx + 6; x++) dull.data[y * W + x] = 0.95;
+  for (let y = UNIT[1] + 4; y < UNIT[3] - 4; y++) for (let x = 366; x < 426; x++) dull.data[y * W + x] = 0.52;
+  const frame = snapRead(read0([box(UNIT), box(LONE), box([700, 420, 755, 490]), box([800, 420, 855, 490])]), dull);
+  check("the model's whole frame stands over the picture's two outer lights — one long window, not two with a hole", frame.read.windows.filter((w) => w.head < 0.4).length === 2 && worst(frame.read.windows.filter((w) => w.head < 0.4), [box(UNIT), box(LONE)]) <= 4, `${frame.read.windows.filter((w) => w.head < 0.4).length} in the row, worst ${worst(frame.read.windows.filter((w) => w.head < 0.4), [box(UNIT), box(LONE)])}`);
+}
+
 console.log("— the steps from the wall's sections —");
 const base = { base: { left: { x: 0.05, y: 0.8 }, right: { x: 0.95, y: 0.8 } }, eave: { left: { x: 0.05, y: 0.3 }, right: { x: 0.95, y: 0.3 } }, storeys: 2, windows: [], doors: [] };
 const bump = parseHouseRead({ ...base, sections: [{ x0: 0.05, x1: 0.2, outFt: 0 }, { x0: 0.2, x1: 0.5, outFt: 2 }, { x0: 0.5, x1: 0.95, outFt: 0 }], jogs: [{ x: 0.55, dir: "toward", depthFt: 6 }] })!;
