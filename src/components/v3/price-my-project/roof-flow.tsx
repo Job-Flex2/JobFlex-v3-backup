@@ -10,7 +10,7 @@ import { TRAFFIC_EVENTS } from "@/lib/traffic-contract";
 import { trackTraffic } from "@/lib/traffic-client";
 import { PlaceField, type Site } from "./place-field";
 import { QuestionCards } from "./question-cards";
-import { RangeView } from "./range-view";
+import { RangeView, type Priced } from "./range-view";
 import s from "./price.module.css";
 
 type Step = "address" | "questions" | "range";
@@ -35,6 +35,9 @@ export function RoofFlow({ prefill }: { prefill: Site | null }) {
   const [read, setRead] = React.useState<RoofRead | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // "Get quotes" / "Email me this range": the form that follows the range (its own task) and what it carries.
+  const [form, setForm] = React.useState<{ kind: "quotes" | "email"; priced: Priced } | null>(null);
+  void form;
   const hpRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
@@ -105,6 +108,8 @@ export function RoofFlow({ prefill }: { prefill: Site | null }) {
           answers={answers}
           onAnswers={setAnswers}
           onBack={() => setStep("questions")}
+          onQuotes={(priced) => setForm({ kind: "quotes", priced })}
+          onEmail={(priced) => setForm({ kind: "email", priced })}
         />
       ) : null}
     </div>
