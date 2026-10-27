@@ -25,7 +25,7 @@ export type TrialCapKey =
 /**
  * THE NUMBERS — one place. What one use costs us (list price, lib/paidApiCosts)
  * is beside each; the worst case per trial at these numbers is about $13 plus
- * three EagleView Instant packs.
+ * three EagleView roofs at $2.40 each.
  */
 export const TRIAL_CAPS: Readonly<Record<TrialCapKey, number>> = {
   /** "Measure this roof" on a new address (an EagleView Instant order — pack

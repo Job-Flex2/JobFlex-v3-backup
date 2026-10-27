@@ -68,8 +68,9 @@ export const UNIT_CENTS: Record<PaidService, Record<string, number>> = {
   "google-elevation": { elevation: 0.5 },
   reportall: { parcel: 12.5, tile: 0.5 },
   regrid: { parcel: 10 },
-  // PLACEHOLDER — the contract price per Instant pack is not public.
-  eagleview: { pack: 500, report: 4500 },
+  // Instant: $2.40 a whole roof measured, whatever packs it takes (the owner's contract, 2026-10-26); the full
+  // report is a separate product priced by EagleView's own quote — this figure is a placeholder for it.
+  eagleview: { roof: 240, report: 4500 },
   serpapi: { search: 1.5 },
   coolcalc: { report: 1000 },
   twilio: { sms: 1.25, number: 115 },
