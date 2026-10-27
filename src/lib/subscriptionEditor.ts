@@ -21,7 +21,7 @@
 // hand and let go of the Stripe subscription without cancelling it, which is
 // how a "trial → active" edit left the trial billing beside a comp.
 
-import { isDeckAddonLine, planLine } from "@/lib/deckAddon";
+import { isAddonLine, planLine } from "@/lib/deckAddon";
 import type Stripe from "stripe";
 import { releaseAttachedSchedule } from "@/lib/scheduleRelease";
 import { z } from "zod";
@@ -149,10 +149,11 @@ function intervalOf(sub: Stripe.Subscription | null): "MONTH" | "YEAR" | null {
 }
 
 /** The lines a change of plan takes off with it: the plan's other lines (a custom plan's page quantity), and the
- *  Deck Studio add-on (lib/deckAddon) only when the term changes — its price is the old term's. */
+ *  add-ons — Deck Studio's (lib/deckAddon) and the website estimators' (lib/webAddon) — only when the term changes:
+ *  their prices are the old term's. */
 function droppedLines(sub: Stripe.Subscription, planItem: Stripe.SubscriptionItem, interval: string): Stripe.SubscriptionItem[] {
   const sameTerm = intervalOf(sub) === interval;
-  return sub.items.data.filter((i) => i.id !== planItem.id && !(sameTerm && isDeckAddonLine(i)));
+  return sub.items.data.filter((i) => i.id !== planItem.id && !(sameTerm && isAddonLine(i)));
 }
 
 function priceCentsOf(sub: Stripe.Subscription | null): number | null {

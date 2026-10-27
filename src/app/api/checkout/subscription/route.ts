@@ -17,6 +17,7 @@ import { getCustomPlanTrialDays } from "@/lib/customPlanConfig";
 import { customLineItems, customMetadata } from "@/lib/customBilling";
 import { CUSTOM_PLAN_OFF_SALE, customPlanOffered } from "@/lib/customPlanFlag";
 import { deckAddonCheckoutItems, heldDeckAddonPrice } from "@/lib/deckAddonBilling";
+import { heldWebAddonPrices } from "@/lib/webAddonBilling";
 
 // Real SaaS subscription checkout. A captured influencer promo (the org's
 // permanent signup stamp, falling back to the 30-day capture cookie) is
@@ -269,9 +270,12 @@ export async function POST(req: Request) {
      that holds it on this term passes ITS line's price on — a shop that bought it at $49 keeps $49. */
   const keepDeckPrice = replacesSubId ? await heldDeckAddonPrice(stripe, replacesSubId, interval) : null;
   const deck = await deckAddonCheckoutItems({ stripe, mode, interval, chosen: deckAddon === true, keepPriceId: keepDeckPrice });
+  // The website estimators' lines (lib/webAddonBilling, 2026-10-27) ride a replacement the same way: a shop keeps its
+  // estimators, at the prices it bought them at, through a plan bought again on this term.
+  const keepWebPrices = replacesSubId ? await heldWebAddonPrices(stripe, replacesSubId, interval) : [];
   const baseParams = {
     mode: "subscription" as const,
-    line_items: [...lineItems, ...deck.lineItems],
+    line_items: [...lineItems, ...deck.lineItems, ...keepWebPrices.map((price) => ({ price, quantity: 1 }))],
     ...(deck.optionalItems.length ? { optional_items: deck.optionalItems } : {}),
     ...(sub?.externalCustomerId && mode === "live"
       ? { customer: sub.externalCustomerId }
@@ -291,6 +295,7 @@ export async function POST(req: Request) {
       interval,
       replacesSubId: replacesSubId ?? "",
       ...(deck.lineItems.length ? { deckAddon: keepDeckPrice ? "kept" : "1" } : {}),
+      ...(keepWebPrices.length ? { webAddons: "kept" } : {}),
       ...(isCustom ? { customPages: pages.join(",") } : {}),
     },
     success_url: `${origin}/dashboard/upgrade?session_id={CHECKOUT_SESSION_ID}`,

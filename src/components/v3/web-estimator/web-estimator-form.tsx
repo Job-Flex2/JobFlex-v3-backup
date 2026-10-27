@@ -1,22 +1,30 @@
 "use client";
 
-// SETTINGS → WEBSITE ESTIMATORS (2026-10-27): one card per trade — on/off, the price words, what the homeowner sees
+// SETTINGS → WEBSITE ESTIMATORS (2026-10-27): one card per trade — on/off, the money words, what the homeowner sees
 // (a range or the exact figure, how wide), which materials they may pick, a note under the price, ask for the email —
 // then the shop's sites, the monthly cap, this month's counts, and the three ways onto a website (the link, the
 // button, the frame), each with Copy and a Preview. A platform admin also sees the owner's switch that opens the
 // feature to every account. Loads and saves itself (actions/webEstimator).
+//
+// THE MONEY (lib/webAddon): with the feature open, a trade on is a line on the shop's plan. Ticking a trade on a
+// card plan asks Stripe what today costs (the rest of this period) before anything is saved; Save puts the line on
+// and says what was charged. Off takes the line off (a credit). In a trial, free until it ends.
 import { useEffect, useState, useTransition } from "react";
-import { loadWebEstimator, saveWebEstimator, setWebEstimatorOpenAction, type WebEstimatorView } from "@/actions/webEstimator";
+import { loadWebEstimator, quoteWebAddon, saveWebEstimator, setWebEstimatorOpenAction, type WebEstimatorView } from "@/actions/webEstimator";
 import { SPREAD_MAX, SPREAD_MIN, WEB_TRADE, WEB_TRADES, embedSnippets, type WebEstimatorSettings, type WebTrade } from "@/lib/webEstimator";
+import { dollars, webAddonPriceWords, webBillingWords, webModeBills } from "@/lib/webAddon";
 import styles from "./web-estimator-form.module.css";
 
-const priceWords = (cents: number) => `$${Math.round(cents / 100)} a month`;
+type Quote = { dueNowCents: number | null; termCents: number; interval: "MONTH" | "YEAR"; trialing: boolean } | "loading" | "error";
 
 export function WebEstimatorForm() {
   const [view, setView] = useState<WebEstimatorView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<WebEstimatorSettings | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const [notes, setNotes] = useState<string[]>([]);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [quotes, setQuotes] = useState<Partial<Record<WebTrade, Quote>>>({});
   const [pending, start] = useTransition();
   const [copied, setCopied] = useState<string | null>(null);
   const [domainsText, setDomainsText] = useState("");
@@ -34,25 +42,40 @@ export function WebEstimatorForm() {
   if (error) return <p className={styles.err} role="alert">{error}</p>;
   if (!view || !settings) return <p className={styles.muted}>Loading…</p>;
 
+  const billing = view.billing;
+  const bills = view.open && webModeBills(billing.mode);
   const set = (next: WebEstimatorSettings) => { setSettings(next); setSaved(null); };
   const setTrade = (t: WebTrade, patch: Partial<WebEstimatorSettings["trades"][WebTrade]>) => set({ ...settings, trades: { ...settings.trades, [t]: { ...settings.trades[t], ...patch } } });
+  const flip = (t: WebTrade, on: boolean) => {
+    setTrade(t, { on });
+    // ticked on a card plan without its line: ask what today costs
+    if (on && bills && !billing.held[t] && !quotes[t]) {
+      setQuotes((q) => ({ ...q, [t]: "loading" }));
+      void quoteWebAddon(t).then((r) => setQuotes((q) => ({ ...q, [t]: r.ok ? { dueNowCents: r.dueNowCents, termCents: r.termCents, interval: r.interval, trialing: r.trialing } : "error" })));
+    }
+  };
   const save = () => start(async () => {
     const next = { ...settings, domains: domainsText.split(/[,\s]+/).map((d) => d.trim()).filter(Boolean) };
     const r = await saveWebEstimator(next);
     if (!r.ok) { setError(r.error); return; }
     setSettings(r.settings); setDomainsText(r.settings.domains.join(", ")); setSaved("Saved."); setError(null);
+    setNotes(r.notes); setErrors(r.errors); setQuotes({});
+    setView({ ...view, settings: r.settings, billing: r.billing });
   });
   const copy = async (what: string, text: string) => { try { await navigator.clipboard.writeText(text); setCopied(what); setTimeout(() => setCopied((c) => (c === what ? null : c)), 1800); } catch { /* the field is selectable */ } };
-  const flipOpen = (on: boolean) => start(async () => { const r = await setWebEstimatorOpenAction(on); if (r.ok) setView({ ...view, open: r.open }); else setError(r.error); });
+  const flipOpen = (on: boolean) => start(async () => { const r = await setWebEstimatorOpenAction(on); if (r.ok) { const v = await loadWebEstimator(); if (v.ok) { setView(v.view); setSettings(v.view.settings); } else setView({ ...view, open: r.open }); } else setError(r.error); });
 
   const onTrades = WEB_TRADES.filter((t) => settings.trades[t].on);
+  const adding = bills ? WEB_TRADES.filter((t) => settings.trades[t].on && !billing.held[t]) : [];
+  const removing = bills ? WEB_TRADES.filter((t) => !settings.trades[t].on && billing.held[t]) : [];
+  const cannot = view.open && (billing.mode === "free" || billing.mode === "offline");
 
   return (
-    <div className={styles.form} data-web-estimator-form>
+    <div className={styles.form} data-web-estimator-form data-web-billing={billing.mode}>
       {view.admin ? (
         <div className={styles.adminBox} data-web-admin>
           <div>
-            <b>JobFlex admin</b> · {view.open ? "Open to every account." : "In preview: only JobFlex admins see this page and can turn a trade on. Nothing is billed yet."}
+            <b>JobFlex admin</b> · {view.open ? "Open to every account. A trade on is a line on the shop's plan." : "In preview: only JobFlex admins see this page and can turn a trade on. Nothing is billed yet."}
           </div>
           <button type="button" className={styles.btnGhost} disabled={pending} onClick={() => flipOpen(!view.open)} data-web-open-switch>
             {view.open ? "Back to preview" : "Open to every account"}
@@ -62,16 +85,30 @@ export function WebEstimatorForm() {
 
       <div className={styles.cards}>
         {WEB_TRADES.map((t) => {
-          const info = WEB_TRADE[t], ts = settings.trades[t];
+          const info = WEB_TRADE[t], ts = settings.trades[t], held = billing.held[t] ?? null, q = quotes[t];
+          const words = webBillingWords({ mode: view.open ? billing.mode : "preview", trade: t, interval: billing.interval, held, on: ts.on, trialEndsAt: billing.trialEndsAt });
+          const willAdd = bills && ts.on && !held, willRemove = bills && !ts.on && !!held;
           return (
-            <section key={t} className={styles.card + (ts.on ? " " + styles.cardOn : "")} data-web-trade={t} data-on={ts.on}>
+            <section key={t} className={styles.card + (ts.on ? " " + styles.cardOn : "")} data-web-trade={t} data-on={ts.on} data-held={!!held}>
               <header className={styles.cardHead}>
                 <div>
                   <div className={styles.cardTitle}>{info.name}</div>
-                  <div className={styles.cardPrice}>{priceWords(info.cents)}{!view.open ? " · preview, not billed" : ""}</div>
+                  <div className={styles.cardPrice} data-web-money={t}>{words}</div>
+                  {willAdd ? (
+                    <div className={styles.money} data-web-quote={t}>
+                      {q === "loading" ? "Asking what today costs…"
+                        : q && q !== "error" ? (q.trialing || q.dueNowCents === 0 ? `Nothing charged today. ${webAddonPriceWords(q.termCents, q.interval, true)} from the end of your trial. Added when you save.`
+                          : q.dueNowCents === null ? `Charged today for the rest of this period, then ${webAddonPriceWords(q.termCents, q.interval, true)}. Added when you save.`
+                          : `Charged today: ${dollars(q.dueNowCents)} for the rest of this period, then ${webAddonPriceWords(q.termCents, q.interval, true)}. Added when you save.`)
+                        : q === "error" ? "Couldn't read what today costs — Save still adds it, prorated for this period."
+                        : "Added to your plan when you save."}
+                      {!billing.owner ? " Only the account owner can add it." : ""}
+                    </div>
+                  ) : null}
+                  {willRemove ? <div className={styles.money} data-web-quote={t}>Taken off your plan when you save{billing.mode === "card" ? "; the unused days come back as a credit on your next bill" : ""}.{!billing.owner ? " Only the account owner can take it off." : ""}</div> : null}
                 </div>
                 <label className={styles.switch}>
-                  <input type="checkbox" checked={ts.on} onChange={(e) => setTrade(t, { on: e.target.checked })} data-web-on={t} />
+                  <input type="checkbox" checked={ts.on} disabled={cannot && !ts.on} onChange={(e) => flip(t, e.target.checked)} data-web-on={t} />
                   <span>{ts.on ? "On" : "Off"}</span>
                 </label>
               </header>
@@ -123,7 +160,7 @@ export function WebEstimatorForm() {
 
       <section className={styles.shared}>
         <label className={styles.field}>
-          <span>Your websites <small>the button runs only on these; the link works anywhere. Blank = any site.</small></span>
+          <span>Your websites <small>the button runs only on these; the link works anywhere. Blank = any site. A site name like ridgelineroofing.com.</small></span>
           <input value={domainsText} placeholder="ridgelineroofing.com, shop.ridgelineroofing.com" onChange={(e) => { setDomainsText(e.target.value); setSaved(null); }} data-web-domains />
         </label>
         <label className={styles.field + " " + styles.narrow}>
@@ -139,10 +176,14 @@ export function WebEstimatorForm() {
       </section>
 
       <div className={styles.foot}>
-        <button type="button" className={styles.btn} disabled={pending} onClick={save} data-web-save>{pending ? "Saving…" : "Save"}</button>
+        <button type="button" className={styles.btn} disabled={pending} onClick={save} data-web-save>
+          {pending ? "Saving…" : adding.length ? `Save and add to my plan (${adding.map((t) => WEB_TRADE[t].name.split(" ")[0]).join(", ")})` : removing.length ? "Save and take off my plan" : "Save"}
+        </button>
         {saved ? <span className={styles.ok} data-web-saved>{saved}{onTrades.length ? ` ${onTrades.map((t) => WEB_TRADE[t].name.split(" ")[0]).join(", ")} on.` : ""}</span> : null}
         {!view.slug ? <span className={styles.err}>This company has no public handle yet — the link can&apos;t be made.</span> : null}
       </div>
+      {notes.length ? <ul className={styles.notes} data-web-notes>{notes.map((n) => <li key={n}>{n}</li>)}</ul> : null}
+      {errors.length ? <ul className={styles.errors} role="alert" data-web-errors>{errors.map((n) => <li key={n}>{n}</li>)}</ul> : null}
     </div>
   );
 }

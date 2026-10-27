@@ -13,6 +13,7 @@
 // months' price for twelve, the custom plan's rule (lib/customPlan CUSTOM_YEAR_MULTIPLIER).
 
 import { CUSTOM_YEAR_MULTIPLIER } from "@/lib/customPlan";
+import { isWebAddonLine } from "@/lib/webAddon";
 
 /** $79 a month (from 2026-10-26; $49 before — those lines keep $49). */
 export const DECK_ADDON_CENTS = 7900;
@@ -64,9 +65,14 @@ export function isDeckAddonLine(item: { price?: { metadata?: Record<string, stri
   return item?.price?.metadata?.jfKind === DECK_ADDON_KIND;
 }
 
-/** The plan's own lines — every line but the add-on. A subscription's plan is read off these, never the add-on. */
+/** Any add-on line: the Deck Studio one, or a website estimator's (lib/webAddon, 2026-10-27). */
+export function isAddonLine(item: { price?: { metadata?: Record<string, string> | null } | null } | null | undefined): boolean {
+  return isDeckAddonLine(item) || isWebAddonLine(item);
+}
+
+/** The plan's own lines — every line but the add-ons. A subscription's plan is read off these, never an add-on. */
 export function planLines<T extends { price?: { metadata?: Record<string, string> | null } | null }>(items: readonly T[]): T[] {
-  return items.filter((i) => !isDeckAddonLine(i));
+  return items.filter((i) => !isAddonLine(i));
 }
 
 /** The plan's line: the first that is not the add-on (the first line as it was, when the add-on is all there is). */
