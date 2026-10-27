@@ -8,6 +8,8 @@ import { LeadDetailContent } from "@/components/v3/lead-detail-blueprint/lead-de
 import { contractorFolder, listFolder } from "@/lib/home/files";
 import { findClientForLead } from "@/lib/leadClient";
 import { customPageGate } from "@/components/v3/upgrade-gate/custom-page-gate";
+import { HANDOFF_WORDS, WEB_LEAD_SOURCE, WEB_TRADE, bandWords } from "@/lib/webEstimator";
+import { readWebLead } from "@/lib/webEstimatorServer";
 
 // ONE LEAD (2026-09-22) — under the blueprint shell, the same design as the
 // Leads list it opens from. Session-scoped, never static.
@@ -73,8 +75,14 @@ export default async function LeadDetailPage({
       folder = { leadId: lead.id, homeownerFirstName: door.home.name.trim().split(/\s+/)[0] || "the homeowner", files, requests, proposals };
     }
   }
+  // A lead from the shop's website estimator (lib/webEstimator): what the homeowner saw, for the card and the hand-off.
+  const web = lead.source === WEB_LEAD_SOURCE ? await readWebLead(lead.id).catch(() => null) : null;
+  const website = web
+    ? { trade: web.trade, estimator: WEB_TRADE[web.trade].name.replace(" on your website", ""), summary: web.estimate.summary, choice: web.estimate.choice, price: bandWords(web.estimate.band), show: web.estimate.show, note: web.contact.note, handoff: HANDOFF_WORDS[web.trade] }
+    : null;
   return (
     <LeadDetailContent
+      website={website}
       folder={folder}
       lead={{
         id: lead.id,

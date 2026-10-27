@@ -134,7 +134,8 @@ export type RailKey =
   | 'integrations'
   | 'notifications'
   | 'desk'
-  | 'estimating';
+  | 'estimating'
+  | 'website';
 
 export interface RailItem {
   readonly key: RailKey;
@@ -158,6 +159,10 @@ export const RAIL_ITEMS: readonly RailItem[] = [
   // Estimating (2026-10-16): the company's own estimating method — labor by the crew-hour or person-hour, its markup,
   // overhead, profit and sales-tax rule — for Smart Proposal and the video estimator. Off until the company turns it on.
   { key: 'estimating', label: 'Estimating', icon: 'i-hardhat', isNew: true, sub: 'Your own labor rate, markup and sales-tax rule for Smart Proposal and video estimates.' },
+  // Website estimators (2026-10-27): the shop's estimators on its own website — a link, a button or a frame; the
+  // homeowner's price in the shop's prices, their request on My leads. In preview (platform admins) until the owner
+  // opens it: settings-content hides the rail item when data.website.visible is false.
+  { key: 'website', label: 'Website estimators', icon: 'i-globe', isNew: true, sub: 'Put your roof, HVAC, fence or deck estimator on your own website — the price in your prices, the request on My leads.' },
 ];
 
 export const RAIL_NEW_BADGE = 'NEW' as const;
@@ -1512,6 +1517,8 @@ export interface SettingsData {
   integrations: IntegrationsData;
   notifications: NotificationsData;
   desk: DeskSettingsData;
+  /** Website estimators: shown while the feature is open to every account, or to a platform admin in the preview. */
+  website: { visible: boolean };
 }
 
 /** Every pane takes exactly this. `navigate` jumps rails (and subtabs). */

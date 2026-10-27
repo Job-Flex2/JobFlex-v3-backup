@@ -43,6 +43,7 @@ import { IntegrationsPane } from "./panes/integrations-pane";
 import { NotificationsPane } from "./panes/notifications-pane";
 import { DeskPane } from "./panes/desk-pane";
 import { EstimatingPane } from "./panes/estimating-pane";
+import { WebsitePane } from "./panes/website-pane";
 
 const PANE_BODIES: Record<RailKey, ComponentType<PaneProps>> = {
   account: AccountPane,
@@ -53,6 +54,7 @@ const PANE_BODIES: Record<RailKey, ComponentType<PaneProps>> = {
   // Texting is its own page since 2026-10-16 (/dashboard/texting).
   desk: DeskPane,
   estimating: EstimatingPane,
+  website: WebsitePane,
 };
 
 const RAIL_KEYS = new Set<string>(RAIL_ITEMS.map((r) => r.key));
@@ -96,6 +98,7 @@ export function SettingsContent({
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const railItems = RAIL_ITEMS.filter((item) => item.key !== "website" || data.website?.visible);
   const activeLabel = RAIL_ITEMS.find((item) => item.key === active)?.label ?? PAGE_TITLE;
 
   return (
@@ -112,7 +115,7 @@ export function SettingsContent({
       <div className="set">
         <aside className="rail">
           <nav className="rail-nav">
-            {RAIL_ITEMS.map((item) => (
+            {railItems.map((item) => (
               <button
                 key={item.key}
                 className={`rail-a${item.key === active ? " on" : ""}`}
@@ -133,7 +136,7 @@ export function SettingsContent({
         </aside>
 
         <div className="panes">
-          {RAIL_ITEMS.map((item) => {
+          {railItems.map((item) => {
             const PaneBody = PANE_BODIES[item.key];
             return (
               <div

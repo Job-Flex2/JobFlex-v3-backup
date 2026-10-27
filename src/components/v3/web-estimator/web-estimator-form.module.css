@@ -1,0 +1,40 @@
+/* Settings → Website estimators (2026-10-27): the JobFlex settings look — ink on paper, hairlines, blue for the on state. */
+.form { display: grid; gap: 18px; }
+.muted { color: #6b7280; font-size: 14px; }
+.err { color: #8a1c1c; font-size: 14px; }
+.ok { color: #1854a0; font-size: 14px; font-weight: 600; }
+.adminBox { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 14px; border-radius: 10px; background: #e7eefb; color: #0b0d12; font-size: 14px; line-height: 1.4; }
+.cards { display: grid; gap: 14px; }
+.card { border: 1px solid rgba(11, 13, 18, 0.14); border-radius: 12px; background: #fff; }
+.cardOn { border-color: #1854a0; box-shadow: 0 0 0 1px #1854a0 inset; }
+.cardHead { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 16px; }
+.cardTitle { font-weight: 800; font-size: 16px; letter-spacing: -0.01em; }
+.cardPrice { margin-top: 3px; font-size: 13px; color: #6b7280; }
+.switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.switch input { width: 18px; height: 18px; }
+.cardBody { display: grid; gap: 14px; padding: 0 16px 16px; border-top: 1px solid rgba(11, 13, 18, 0.08); padding-top: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 14px 20px; align-items: end; }
+.field { display: grid; gap: 6px; min-width: 200px; }
+.field > span { font-size: 12.5px; font-weight: 700; letter-spacing: 0.02em; color: #3b4150; }
+.field > span small { display: block; font-weight: 500; color: #6b7280; }
+.field input:not([type="range"]):not([type="checkbox"]), .field select { font: inherit; font-size: 14px; padding: 9px 11px; border: 1px solid rgba(11, 13, 18, 0.2); border-radius: 8px; background: #fff; color: #0b0d12; width: 100%; }
+.narrow { max-width: 320px; }
+.check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: inherit; font-size: 13px; padding: 6px 10px; border: 1px solid rgba(11, 13, 18, 0.2); border-radius: 999px; background: #fff; color: #0b0d12; cursor: pointer; }
+.chipOn { background: #1854a0; border-color: #1854a0; color: #fff; }
+.snips { display: grid; gap: 10px; padding-top: 6px; border-top: 1px dashed rgba(11, 13, 18, 0.14); }
+.snip { display: grid; gap: 6px; }
+.snipHead { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 13px; }
+.snipHead b { font-weight: 800; }
+.snipHead span { color: #6b7280; }
+.snipRow { display: flex; gap: 8px; align-items: center; }
+.snipRow input { flex: 1; min-width: 0; font: 12.5px/1.4 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; padding: 8px 10px; border: 1px solid rgba(11, 13, 18, 0.18); border-radius: 8px; background: #f7f6f2; color: #0b0d12; }
+.shared { display: grid; gap: 14px; padding: 14px 16px; border: 1px solid rgba(11, 13, 18, 0.14); border-radius: 12px; background: #fff; }
+.counts { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 14px; color: #3b4150; }
+.counts b { color: #0b0d12; }
+.foot { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.btn { font: inherit; font-size: 14px; font-weight: 700; padding: 10px 18px; border: 0; border-radius: 8px; background: #1854a0; color: #fff; cursor: pointer; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btnGhost { font: inherit; font-size: 13px; font-weight: 700; padding: 8px 12px; border: 1px solid rgba(11, 13, 18, 0.2); border-radius: 8px; background: #fff; color: #0b0d12; cursor: pointer; text-decoration: none; white-space: nowrap; }
+.btnGhost:disabled { opacity: 0.5; }

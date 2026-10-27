@@ -8,6 +8,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { AirVent, Fence, FilePen, type LucideIcon } from "lucide-react";
 import { startEstimateFromLead, writeLeadScope } from "@/actions/leadEstimate";
+import { openWebLeadInEstimator } from "@/actions/webEstimator";
 import { ESTIMATOR_LABEL, estimatorFor, looksLikeStreetAddress, type EstimatorId } from "@/lib/leadRules";
 import { EstimateCardButton } from "./estimate-card-button";
 import { JobFolder, type JobFolderProps } from "./job-folder";
@@ -98,9 +99,11 @@ export type LeadDetailProps = {
   paid?: { amount: string; when: string } | null;
   /** The homeowner's job folder (lib/home/files); null for a lead with none. */
   folder?: JobFolderProps | null;
+  /** A lead from the shop's website estimator (2026-10-27, lib/webEstimator): what the homeowner saw. */
+  website?: { trade: "roof" | "hvac" | "fence" | "deck"; estimator: string; summary: string; choice: string; price: string; show: "range" | "exact"; note: string | null; handoff: string } | null;
 };
 
-export function LeadDetailContent({ lead, canEstimate, scopeFailed, contactsLocked = false, paid = null, folder = null }: LeadDetailProps) {
+export function LeadDetailContent({ lead, canEstimate, scopeFailed, contactsLocked = false, paid = null, folder = null, website = null }: LeadDetailProps) {
   const primary = estimatorFor(lead.aiCategory, lead.description);
   const fullAddress = [lead.address, lead.city, [lead.state, lead.zip].filter(Boolean).join(" ")]
     .filter((s) => s && s.trim())
@@ -241,6 +244,27 @@ export function LeadDetailContent({ lead, canEstimate, scopeFailed, contactsLock
               framed card per estimator — icon, name, what it does, Start
               estimate — the lead's own trade first and tagged. Every card is
               a form posting startEstimateFromLead; none waits on an address. */}
+          {/* THE WEBSITE ESTIMATOR'S LEAD (2026-10-27): the homeowner already saw a price on the shop's own site, in
+              the shop's prices; one click opens the estimator with their address, measurement and package. */}
+          {website && (
+            <div className={cx("est")} data-lead-website>
+              <div className={cx("sec-h")}>From your website estimator</div>
+              <p className={cx("est-sub")}>
+                {website.summary} They chose <b>{website.choice}</b> and saw <b>{website.price}</b> before tax{website.show === "range" ? " (a range)" : ""}.
+                {website.note ? ` Their note: "${website.note}"` : ""}
+              </p>
+              {canEstimate && (
+                <form action={openWebLeadInEstimator.bind(null, lead.id)}>
+                  <button type="submit" className={cx("est-card", `est-card--${website.trade === "deck" ? "roof" : website.trade}`)} data-lead-website-open>
+                    <span className={cx("est-txt")}>
+                      <span className={cx("est-n")}>Open in the {website.estimator}</span>
+                      <span className={cx("est-s")}>{website.handoff}</span>
+                    </span>
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
           {canEstimate && (
             <div className={cx("est")} data-lead-estimators>
               <div className={cx("sec-h")}>Estimate this job</div>

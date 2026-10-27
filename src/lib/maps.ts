@@ -1,5 +1,9 @@
 import { ExternalCallError, externalFetch } from "@/lib/externalCall";
 
+// Outside production a stand may point Google's geocoder at a fake (MAPS_API_BASE), as the static map and Solar
+// do — the website estimator's walk (2026-10-27) prices a roof without a real key.
+const MAPS_API_BASE = process.env.NODE_ENV !== "production" && process.env.MAPS_API_BASE ? process.env.MAPS_API_BASE.replace(/\/+$/, "") : "https://maps.googleapis.com";
+
 export function isMapsEnabled() {
   return Boolean(process.env.GOOGLE_MAPS_API_KEY);
 }
@@ -30,7 +34,7 @@ export async function geocodeAddress(parts: {
     .filter(Boolean)
     .join(", ");
   if (!query || !isMapsEnabled()) return null;
-  const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+  const url = new URL(`${MAPS_API_BASE}/maps/api/geocode/json`);
   url.searchParams.set("address", query);
   url.searchParams.set("region", "us");
   url.searchParams.set("key", process.env.GOOGLE_MAPS_API_KEY!);
@@ -92,7 +96,7 @@ export async function geocodeAddress(parts: {
 // why in `error_message` — so that text is what the user now sees.
 export async function geocode(address: string): Promise<{ lat: number; lng: number } | null> {
   if (!isMapsEnabled()) return null;
-  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.GOOGLE_MAPS_API_KEY}`;
+  const url = `${MAPS_API_BASE}/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.GOOGLE_MAPS_API_KEY}`;
   const res = await externalFetch("maps", "geocode", url, {}, { timeoutMs: MAPS_TIMEOUT_MS });
   const data = (await res.json()) as {
     status?: string;
@@ -132,7 +136,7 @@ export async function geocodePlace(address: string): Promise<{
 } | null> {
   const q = address.trim();
   if (!q || !isMapsEnabled()) return null;
-  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&key=${process.env.GOOGLE_MAPS_API_KEY}`;
+  const url = `${MAPS_API_BASE}/maps/api/geocode/json?address=${encodeURIComponent(q)}&key=${process.env.GOOGLE_MAPS_API_KEY}`;
   try {
     const res = await externalFetch("maps", "geocode", url, {}, { timeoutMs: MAPS_TIMEOUT_MS });
     const data = (await res.json()) as {
