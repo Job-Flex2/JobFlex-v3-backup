@@ -1,0 +1,44 @@
+{
+  "name": "buildings/synthetic-buffalo-house",
+  "center": { "latitude": 42.948, "longitude": -78.853 },
+  "imageryDate": { "year": 2025, "month": 6, "day": 1 },
+  "imageryQuality": "HIGH",
+  "boundingBox": {
+    "sw": { "latitude": 42.94792, "longitude": -78.85312 },
+    "ne": { "latitude": 42.94808, "longitude": -78.85288 }
+  },
+  "solarPotential": {
+    "wholeRoofStats": { "areaMeters2": 195.1, "groundAreaMeters2": 167.2 },
+    "buildingStats": { "areaMeters2": 195.1, "groundAreaMeters2": 167.2 },
+    "roofSegmentStats": [
+      {
+        "pitchDegrees": 26.57,
+        "azimuthDegrees": 180,
+        "stats": { "areaMeters2": 78.05, "groundAreaMeters2": 69.7 },
+        "center": { "latitude": 42.94797, "longitude": -78.853 },
+        "planeHeightAtCenterMeters": 7.2
+      },
+      {
+        "pitchDegrees": 26.57,
+        "azimuthDegrees": 0,
+        "stats": { "areaMeters2": 78.05, "groundAreaMeters2": 69.7 },
+        "center": { "latitude": 42.94803, "longitude": -78.853 },
+        "planeHeightAtCenterMeters": 7.2
+      },
+      {
+        "pitchDegrees": 36.87,
+        "azimuthDegrees": 90,
+        "stats": { "areaMeters2": 19.5, "groundAreaMeters2": 13.9 },
+        "center": { "latitude": 42.948, "longitude": -78.85292 },
+        "planeHeightAtCenterMeters": 6.4
+      },
+      {
+        "pitchDegrees": 36.87,
+        "azimuthDegrees": 270,
+        "stats": { "areaMeters2": 19.5, "groundAreaMeters2": 13.9 },
+        "center": { "latitude": 42.948, "longitude": -78.85308 },
+        "planeHeightAtCenterMeters": 6.4
+      }
+    ]
+  }
+}
