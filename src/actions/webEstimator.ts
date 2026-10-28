@@ -723,7 +723,7 @@ export async function webPageModel(slug: string, trade: string, host: string | n
   let appHost: string | null = null;
   try { appHost = new URL(base).host; } catch { appHost = null; }
   return {
-    shop: { name: shop.name, slug: shop.slug, logoUrl: shop.logoUrl, primaryColor: shop.primaryColor, phone: shop.phone, website: shop.website },
+    shop: { name: shop.name, slug: shop.slug, logoUrl: shop.logoUrl, primaryColor: shop.primaryColor, phone: shop.phone, website: shop.website, house: isHouse(shop) },
     trade,
     title: WEB_TRADE[trade].title,
     basis: shop.settings.trades[trade].note || WEB_TRADE[trade].basis,

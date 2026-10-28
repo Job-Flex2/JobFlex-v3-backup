@@ -2,7 +2,8 @@
 // reserved `jobflex` slug, every trade on but the roof, a range, its own ceilings. Pure parts only; the slug lookup
 // and the gates are walked on the stand.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/web-house.check.ts
-import { HANDOFF_WORDS, HOUSE_HOURLY, HOUSE_MONTHLY_CAP, HOUSE_NAME, HOUSE_SLUG, SHOP_HOURLY, WEB_TRADES, houseSettings, houseShop, isHouse, shopHourly } from "../../../src/lib/webEstimator";
+import { HANDOFF_WORDS, HOUSE_HOURLY, HOUSE_MONTHLY_CAP, HOUSE_NAME, HOUSE_SLUG, SHOP_HOURLY, WEB_TRADES, houseSettings, houseShop, isHouse, pageWords, shopHourly } from "../../../src/lib/webEstimator";
+import { LEAD_CONSENT_TEXT } from "../../../src/lib/leadConsent";
 
 let bad = 0;
 const check = (name: string, ok: boolean, extra = "") => {
@@ -31,6 +32,27 @@ check(
 
 // ── the buyer's hand-off (Task 4): the lead page's words say the estimator opens priced ──
 check("the hand-off words say the estimator opens priced", /priced in your book/.test(HANDOFF_WORDS.fence) && /tier they picked/.test(HANDOFF_WORDS.hvac) && /lines they were priced on/.test(HANDOFF_WORDS.smart), JSON.stringify([HANDOFF_WORDS.fence, HANDOFF_WORDS.hvac, HANDOFF_WORDS.smart]));
+
+// ── the page's words (Task 5): a shop's page names the shop; the house's names a local pro and the Lead Center's consent ──
+const pw = pageWords({ name: "Ridgeline Roofing" }, "fence"), hw = pageWords({ name: "JobFlex", house: true }, "fence");
+check(
+  "a shop's page words name the shop",
+  pw.sees === "No account, no payment. Ridgeline Roofing sees your request only when you send it." &&
+    pw.quote === "The full, line-by-line quote comes from Ridgeline Roofing after they look at it. You pick a time; they confirm the price." &&
+    pw.consent === "Ridgeline Roofing may call, text or email me about this fence." &&
+    pw.foot === "Estimates by JobFlex for Ridgeline Roofing. No prices are shown to anyone else; the final price follows a visit." &&
+    pw.call === "Call Ridgeline Roofing and they will price it in person." && pw.who === "Ridgeline Roofing",
+  JSON.stringify(pw),
+);
+check(
+  "the house's page words: a local pro, the Lead Center's consent, no shop",
+  hw.sees === "No account, no payment. JobFlex sends your request to a local pro only when you send it." &&
+    hw.quote === "The full, line-by-line quote comes from a local pro after they look at it. You pick a time; they confirm the price." &&
+    hw.consent === LEAD_CONSENT_TEXT &&
+    hw.foot === "Estimates by JobFlex. No prices are shown to anyone else; a local pro confirms on site." &&
+    hw.call === "Describe it instead and a local pro prices it." && hw.who === "a local pro",
+  JSON.stringify(hw),
+);
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);

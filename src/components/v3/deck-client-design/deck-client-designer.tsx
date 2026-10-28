@@ -22,6 +22,7 @@ import * as React from "react";
 import dynamic from "next/dynamic";
 import { deckingProduct, railType, treatedDecking, type RailTypeId } from "@/lib/deck/catalog";
 import { applyDeckPatch } from "@/lib/deck/checks";
+import { LEAD_CONSENT_TEXT } from "@/lib/leadConsent";
 import {
   DECK_LIMITS,
   LOWER_LIMITS,
@@ -277,6 +278,8 @@ export interface DeckClientDesignerProps {
   website?: {
     askEmail: boolean;
     leadId: string | null;
+    /** The house (2026-10-28): JobFlex's own page — the Lead Center's consent, the email required, the request page after. */
+    house?: boolean;
     price: (design: DeckDesign) => Promise<{ ok: true; words: string; summary: string; show: "range" | "exact"; basis: string } | { ok: false; error: string }>;
     send: (input: { design: DeckDesign; note: string; name: string; phone: string; email: string; consent: boolean; company: string }) => Promise<{ ok: true; at: string; leadId: string; next?: string } | { ok: false; error: string }>;
   } | null;
@@ -524,11 +527,13 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
     if (props.website) {
       if (!name.trim()) { setSendError("Your name, please."); document.getElementById("client-name")?.focus(); return; }
       if (phone.replace(/\D/g, "").length < 10) { setSendError(`A phone number ${shopName} can reach you at, please.`); return; }
-      if (!consent) { setSendError(`Tick the box so ${shopName} may contact you.`); return; }
+      if (props.website.house && !email.trim()) { setSendError("Your email, please — your request page and your dashboard are sent there."); return; }
+      if (!consent) { setSendError(props.website.house ? "Tick the box so a local pro may contact you." : `Tick the box so ${shopName} may contact you.`); return; }
       setSending(true);
       setSendError(null);
       const res = await props.website.send({ design, note, name, phone, email, consent, company });
       setSending(false);
+      if (res.ok && res.next) { window.location.assign(res.next); return; }   // the house: the homeowner's own request page
       if (res.ok) { setSent({ at: res.at, design }); setSentLeadId(res.leadId); setSaveState("saved"); } else setSendError(res.error);
       return;
     }
@@ -921,8 +926,8 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
                     </div>
                     {props.website.askEmail ? (
                       <label className={s.field}>
-                        <span className={s.lbl}>Email — for your copy of the price</span>
-                        <input className={s.in} type="email" value={email} autoComplete="email" onChange={(e) => setEmail(e.target.value)} data-web-email />
+                        <span className={s.lbl}>{props.website.house ? "Email" : "Email — for your copy of the price"}</span>
+                        <input className={s.in} type="email" required={!!props.website.house} value={email} autoComplete="email" onChange={(e) => setEmail(e.target.value)} data-web-email />
                       </label>
                     ) : null}
                     <label className={s.field}>
@@ -931,7 +936,7 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
                     </label>
                     <label className={s.consent}>
                       <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} data-web-consent />
-                      <span>{shopName} may call, text or email me about this deck.</span>
+                      <span>{props.website?.house ? LEAD_CONSENT_TEXT : `${shopName} may call, text or email me about this deck.`}</span>
                     </label>
                     <input className={s.hp} tabIndex={-1} autoComplete="off" value={company} onChange={(e) => setCompany(e.target.value)} aria-hidden="true" name="company" />
                     {sendError ? <p className={s.error} role="alert">{sendError}</p> : null}

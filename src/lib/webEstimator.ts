@@ -12,6 +12,8 @@
 // PREVIEW (owner): until the WEB_OPEN switch is on, only platform admins see the pane and can turn a trade on, and
 // nothing is billed; the Stripe line per trade comes when the owner has tested the flow. Not on the pricing page.
 
+import { LEAD_CONSENT_TEXT } from "./leadConsent";
+
 export const WEB_TRADES = ["roof", "hvac", "fence", "deck", "smart"] as const;
 export type WebTrade = (typeof WEB_TRADES)[number];
 export const isWebTrade = (v: unknown): v is WebTrade => typeof v === "string" && (WEB_TRADES as readonly string[]).includes(v);
@@ -150,6 +152,29 @@ export const isHouse = (shop: { slug: string }): boolean => shop.slug === HOUSE_
 /** The per-shop hourly brakes: the house's own, else today's. */
 export function shopHourly(shop: { slug: string }): { estimates: number; leads: number } {
   return isHouse(shop) ? HOUSE_HOURLY : SHOP_HOURLY;
+}
+
+/** The page's words where a shop's name stood: a shop's page names the shop (the strings the pages always printed);
+ *  the house's names a local pro, since up to three contractors may call, and carries the Lead Center's own consent. */
+export function pageWords(shop: { name: string; house?: boolean }, noun: string): { who: string; sees: string; quote: string; consent: string; foot: string; call: string } {
+  if (shop.house) {
+    return {
+      who: "a local pro",
+      sees: "No account, no payment. JobFlex sends your request to a local pro only when you send it.",
+      quote: "The full, line-by-line quote comes from a local pro after they look at it. You pick a time; they confirm the price.",
+      consent: LEAD_CONSENT_TEXT,
+      foot: "Estimates by JobFlex. No prices are shown to anyone else; a local pro confirms on site.",
+      call: "Describe it instead and a local pro prices it.",
+    };
+  }
+  return {
+    who: shop.name,
+    sees: `No account, no payment. ${shop.name} sees your request only when you send it.`,
+    quote: `The full, line-by-line quote comes from ${shop.name} after they look at it. You pick a time; they confirm the price.`,
+    consent: `${shop.name} may call, text or email me about this ${noun}.`,
+    foot: `Estimates by JobFlex for ${shop.name}. No prices are shown to anyone else; the final price follows a visit.`,
+    call: `Call ${shop.name} and they will price it in person.`,
+  };
 }
 
 /** Whatever was stored, as settings: unknown fields dropped, numbers clamped, hosts cleaned. */

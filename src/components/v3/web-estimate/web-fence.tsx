@@ -9,7 +9,7 @@ import * as React from "react";
 import dynamic from "next/dynamic";
 import { PlacesAutocomplete, type PickedAddress } from "@/components/estimator/roof/PlacesAutocomplete";
 import { webFenceLot, webFencePrice, webGeocode, webLead, webView, type WebEstimateView, type WebLot } from "@/actions/webEstimator";
-import { bandWords, money } from "@/lib/webEstimator";
+import { bandWords, money, pageWords } from "@/lib/webEstimator";
 import type { WebChoice } from "@/lib/webEstimatorTrades";
 import type { BuildingFootprint, GateSpec, PathPoint } from "@/components/estimator/fence/fenceTypes";
 import { presetWidthFt } from "@/components/estimator/fence/fenceTypes";
@@ -22,7 +22,7 @@ const DrawMap = dynamic(() => import("@/components/estimator/fence/FenceDrawMap"
 const Model3D = dynamic(() => import("@/components/estimator/fence/FenceModel3D").then((m) => m.FenceModel3D), { ssr: false, loading: () => <div className="we-fence-wait">Loading the 3D…</div> });
 
 export interface WebFenceProps {
-  shop: { name: string; slug: string; logoUrl: string | null; primaryColor: string | null; phone: string | null; website: string | null };
+  shop: { name: string; slug: string; logoUrl: string | null; primaryColor: string | null; phone: string | null; website: string | null; house?: boolean };
   title: string;
   basis: string;
   askEmail: boolean;
@@ -59,6 +59,7 @@ export function WebFence(p: WebFenceProps) {
   const [byHand, setByHand] = React.useState(false);
   const [est, setEst] = React.useState<WebEstimateView | null>(null);
   const [contact, setContact] = React.useState({ name: "", phone: "", email: "", note: "", consent: false, company: "" });
+  const pw = pageWords(p.shop, "fence");
   const [leadId, setLeadId] = React.useState<string | null>(null);
   const viewed = React.useRef(false);
 
@@ -119,6 +120,7 @@ export function WebFence(p: WebFenceProps) {
     const r = await webLead(p.shop.slug, "fence", est.token, contact).catch(() => ({ ok: false as const, error: "Something went wrong — try again." }));
     setBusy(false);
     if (!r.ok) { setError(r.error); return; }
+    if (r.next) { window.location.assign(r.next); return; }   // the house: the homeowner's own request page
     setLeadId(r.leadId); setStep("done"); tell("lead");
   }
 
@@ -142,7 +144,7 @@ export function WebFence(p: WebFenceProps) {
           <button type="button" className="we-btn we-wide" disabled={!addressOk || busy} onClick={() => void find()} data-web-next>
             {step === "finding" ? "Finding the lot…" : "Show my lot"}
           </button>
-          <p className="we-fine">No account, no payment. {p.shop.name} sees your request only when you send it.</p>
+          <p className="we-fine">{pw.sees}</p>
         </section>
       )}
 
@@ -207,7 +209,7 @@ export function WebFence(p: WebFenceProps) {
           <p className="we-sum">{est.summary}</p>
           <p className="we-choice-line"><i>Priced as</i>{est.choice}, {heightFt} ft</p>
           <button type="button" className="we-btn we-wide" onClick={() => setStep("quote")} data-web-quote>Get my full quote</button>
-          <p className="we-fine">The full, line-by-line quote comes from {p.shop.name} after they look at it. You pick a time; they confirm the price.</p>
+          <p className="we-fine">{pw.quote}</p>
           <button type="button" className="we-link" onClick={() => setStep("draw")} data-web-again>Change the fence</button>
         </section>
       )}
@@ -215,13 +217,13 @@ export function WebFence(p: WebFenceProps) {
       {step === "quote" && (
         <section className="we-card" data-web-step="quote">
           <h2>Your full quote</h2>
-          {est ? <p className="we-note">{est.summary} <b>{price}</b> as {est.choice}. {p.shop.name} confirms it line by line.</p> : null}
+          {est ? <p className="we-note">{est.summary} <b>{price}</b> as {est.choice}. {p.shop.house ? "A local pro" : p.shop.name} confirms it line by line.</p> : null}
           <form className="we-form" onSubmit={(e) => { e.preventDefault(); void sendNow(); }}>
             <label><span>Your name</span><input value={contact.name} autoComplete="name" onChange={(e) => setContact({ ...contact, name: e.target.value })} data-web-name /></label>
             <label><span>Phone</span><input value={contact.phone} inputMode="tel" autoComplete="tel" onChange={(e) => setContact({ ...contact, phone: e.target.value })} data-web-phone /></label>
-            {p.askEmail ? <label><span>Email <small>for your copy of the price</small></span><input type="email" value={contact.email} autoComplete="email" onChange={(e) => setContact({ ...contact, email: e.target.value })} data-web-email /></label> : null}
+            {p.askEmail ? <label><span>Email {p.shop.house ? null : <small>for your copy of the price</small>}</span><input type="email" required={!!p.shop.house} value={contact.email} autoComplete="email" onChange={(e) => setContact({ ...contact, email: e.target.value })} data-web-email /></label> : null}
             <label><span>Anything we should know? <small>optional</small></span><textarea rows={3} maxLength={1000} value={contact.note} onChange={(e) => setContact({ ...contact, note: e.target.value })} data-web-note /></label>
-            <label className="we-consent"><input type="checkbox" checked={contact.consent} onChange={(e) => setContact({ ...contact, consent: e.target.checked })} data-web-consent /><span>{p.shop.name} may call, text or email me about this fence.</span></label>
+            <label className="we-consent"><input type="checkbox" checked={contact.consent} onChange={(e) => setContact({ ...contact, consent: e.target.checked })} data-web-consent /><span>{pw.consent}</span></label>
             <input className="we-hp" tabIndex={-1} autoComplete="off" value={contact.company} onChange={(e) => setContact({ ...contact, company: e.target.value })} aria-hidden="true" name="company" />
             {error ? <p className="we-err" role="alert">{error}</p> : null}
             <div className="we-row">
@@ -241,7 +243,7 @@ export function WebFence(p: WebFenceProps) {
         </section>
       )}
 
-      <p className="we-foot">Estimates by <b>JobFlex</b> for {p.shop.name}. No prices are shown to anyone else; the final price follows a visit.</p>
+      <p className="we-foot">{p.shop.house ? pw.foot : <>Estimates by <b>JobFlex</b> for {p.shop.name}. No prices are shown to anyone else; the final price follows a visit.</>}</p>
     </div>
   );
 }
