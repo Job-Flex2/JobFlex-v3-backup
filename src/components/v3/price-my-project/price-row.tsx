@@ -7,10 +7,13 @@ import { ProductMark } from "@/components/brand/ProductMark";
 import { homeownerDoorFor } from "@/lib/home/homeownerDoor";
 import s from "./price.module.css";
 
-export type PriceCardKey = "roof" | "fence" | "hvac" | "any";
+export type PriceCardKey = "roof" | "deck" | "fence" | "hvac" | "any";
 
 const CARDS: ReadonlyArray<{ key: PriceCardKey; title: string; blurb: string; go: string; href: string; live: boolean }> = [
   { key: "roof", title: "Roof", blurb: "Measured from the sky · a range in a minute", go: "Price my roof", href: "/price/roof", live: true },
+  // Deck Studio (owner, 2026-10-28: "I don't see the deck studio estimator"): visible in the row; the design itself is the
+  // contractor's — the homeowner describes the deck and a local pro designs and prices it in Deck Studio.
+  { key: "deck", title: "Deck", blurb: "Designed in 3D, priced before it's built. Describe it — a local pro designs and prices it.", go: "Describe my deck", href: homeownerDoorFor("decking")?.href ?? "/homeowner", live: false },
   { key: "fence", title: "Fence", blurb: "Pick the sides, pick a style. Describe it — a local pro prices it.", go: "Describe my fence", href: homeownerDoorFor("fencing")?.href ?? "/homeowner", live: false },
   { key: "hvac", title: "Heating & cooling", blurb: "Replace or add a system. Describe it — a local pro prices it.", go: "Describe the job", href: homeownerDoorFor("hvac")?.href ?? "/homeowner", live: false },
   { key: "any", title: "Any project", blurb: "Send a photo, get a range. Describe it — a local pro prices it.", go: "Describe my project", href: "/homeowner", live: false },
@@ -25,6 +28,16 @@ function Pic({ k }: { k: PriceCardKey }) {
           <path d="M4 17 16 6l12 11" />
           <path d="M8 15v11h16V15" />
           <path d="M13 26v-7h6v7" />
+        </svg>
+      );
+    case "deck":
+      return (
+        <svg viewBox="0 0 32 32" {...common}>
+          <path d="M4 14h24" />
+          <path d="M4 20h24" />
+          <path d="M8 14v12M16 14v12M24 14v12" />
+          <path d="M6 14V8h20v6" />
+          <path d="M11 8V5M21 8V5" />
         </svg>
       );
     case "fence":
