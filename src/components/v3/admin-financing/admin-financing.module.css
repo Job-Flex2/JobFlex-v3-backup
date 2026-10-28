@@ -1,0 +1,23 @@
+/* ============================================================
+   ADMIN · FINANCING — BLUEPRINT
+   /admin/financing
+   Page vocabulary only; the furniture is admin-influencers/admin-ui.module.css.
+   Two classes on every selector (the shell's resets).
+   ============================================================ */
+
+:global(.jf-blueprint .content) .root { display: flex; flex-direction: column; gap: 22px; }
+:global(.jf-blueprint .content) .warn { border-left: 5px solid var(--warning, #b88420); }
+:global(.jf-blueprint .content) .p { margin: 8px 0 0; font-size: 14px; line-height: 1.5; color: var(--ink-soft); }
+:global(.jf-blueprint .content) .modes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+:global(.jf-blueprint .content) .field { display: grid; gap: 6px; margin-top: 12px; }
+:global(.jf-blueprint .content) .lbl { font-size: 12px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); }
+:global(.jf-blueprint .content) .in {
+  width: 100%; padding: 9px 11px; box-sizing: border-box;
+  border: 1.5px solid var(--hair-strong, rgba(10, 10, 10, 0.28)); border-radius: var(--radius); background: #fff;
+  font: 13px/1.4 var(--font-mono, ui-monospace, monospace); color: var(--ink); resize: vertical;
+}
+:global(.jf-blueprint .content) .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+:global(.jf-blueprint .content) .cols { grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.4fr); }
+@media (max-width: 760px) {
+  :global(.jf-blueprint .content) .cols { grid-template-columns: 1fr; }
+}

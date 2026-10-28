@@ -13,7 +13,7 @@
 // Every preset answer is written so it is true for any company in the trade: where the honest answer depends on the
 // company (financing, insurance claims, a trip fee), the preset says the team will go over it and is marked for review
 // with the yes/no answers one click away.
-import { BASIC_INTAKE, MAX_FAQS, MAX_INTAKE, type CompanyFacts, type DeskFaq, type DeskProfile } from "./profile";
+import { BASIC_INTAKE, FINANCING_PRESET_ANSWERS, MAX_FAQS, MAX_INTAKE, type CompanyFacts, type DeskFaq, type DeskProfile } from "./profile";
 import { faqKey, matchTrades, TRADES, yesNo, type DeskFix, type DeskReviewItem, type PackFaq, type TradePack } from "./tradeCore";
 import { EXTERIOR_PACKS } from "./tradePacks/exterior";
 import { INTERIOR_PACKS } from "./tradePacks/interior";
@@ -81,6 +81,9 @@ export type Preset = { profile: DeskProfile; review: DeskReviewItem[]; trades: s
 const FAQS_FIRST: PackFaq[] = [{ q: "How soon can someone come out?", a: "I can check the calendar right now and offer you the next open times." }];
 
 /** …and after them. Payment terms, deposits and financing are the company's to say — marked, with the answers one click away. */
+/** The preset financing answers live in ./profile (withFinancingAnswer reads them); re-exported for the presets' readers. */
+export { FINANCING_PRESET_ANSWERS };
+
 function faqsLast(bigTicket: boolean): PackFaq[] {
   return [
     { q: "Can you give me a price over the phone?", a: "Prices depend on the job, so the team gives you a price once they've seen it. I can book that visit now." },
@@ -105,9 +108,9 @@ function faqsLast(bigTicket: boolean): PackFaq[] {
           },
           {
             q: "Do you offer financing?",
-            a: "The team can go over payment options with you at the estimate.",
+            a: FINANCING_PRESET_ANSWERS[0],
             check: "Whether you offer financing.",
-            fixes: yesNo("Yes — financing is available; the team goes over the options with the estimate.", "We don't offer financing; the team goes over payment terms with the estimate."),
+            fixes: yesNo(FINANCING_PRESET_ANSWERS[1], FINANCING_PRESET_ANSWERS[2]),
           },
         ]
       : []),

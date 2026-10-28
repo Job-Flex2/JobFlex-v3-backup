@@ -10,6 +10,7 @@ import type { PortalView } from "./portal-view";
 import type { PortalPayModel } from "@/lib/payments/portalModel";
 import { ProposalDecision } from "./proposal-decision";
 import { PaymentCenter } from "./payment-center";
+import { PayOverTime } from "@/components/v3/financing/pay-over-time";
 import { usePayReturn } from "./use-pay-return";
 import { StarsInline } from "@/components/reviews/StarsInline";
 import { FenceSceneFigure } from "@/components/v3/fence-scene/fence-scene-figure";
@@ -501,6 +502,8 @@ export function MobileProposalClient({ view }: { view: PortalView }) {
                   ? s.paidOn
                     ? `Paid · ${s.paidOn}`
                     : "Paid"
+                  : s.financed
+                    ? "Monthly payments"
                   : s.status === "PENDING"
                     ? "Processing"
                     : s.status === "WAIVED"
@@ -549,6 +552,7 @@ export function MobileProposalClient({ view }: { view: PortalView }) {
               );
             })}
           </div>
+          {pay.financing ? <PayOverTime f={pay.financing} publicId={pay.publicId} accepted={settled === "accepted"} /> : null}
           {pay.paidMinor > 0 && pay.remainingMinor > 0 ? (
             <div className="mpc-pay-sum">
               <span>{`Paid to date ${pay.paid}`}</span>

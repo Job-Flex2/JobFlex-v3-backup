@@ -2023,6 +2023,10 @@
 .bp :global(.content .ppl-st--closed) { text-decoration: line-through; }
 .bp :global(.content .ppl-note) { margin-left: auto; font-size: 12.5px; color: var(--muted); }
 .bp :global(.content .ppl-note--ok) { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--success-dark); }
+/* Wisetack financing (2026-10-28): the loan line and Send financing link, under the side actions. */
+.bp :global(.content .ppl-fin) { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 8px; }
+.bp :global(.content .ppl-fin .ppl-note) { margin-left: 0; display: inline-flex; align-items: center; gap: 6px; }
+.bp :global(.content .ppl-fin .ppl-note .ic) { width: 14px; height: 14px; }
 .bp :global(.content .ppl-note--ok .ic) { width: 14px; height: 14px; }
 .bp :global(.content .ppl-acts) { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
 .bp :global(.content .ppl-note b) { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--warning-dark); }

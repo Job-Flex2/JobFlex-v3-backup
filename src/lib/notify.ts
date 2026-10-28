@@ -1288,6 +1288,7 @@ function providerLabel(provider: string, method: string | null): string {
   if (provider === "STRIPE") return method === "us_bank_account" ? "Stripe (bank debit)" : "Stripe";
   if (provider === "SQUARE") return "Square";
   if (provider === "STAX") return method === "us_bank_account" ? "Stax (bank)" : "Stax";
+  if (provider === "WISETACK") return "Wisetack financing";
   switch (method) {
     case "BANK_TRANSFER":
       return "Bank transfer";

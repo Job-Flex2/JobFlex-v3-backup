@@ -1,6 +1,6 @@
 // Provider response bodies can echo credentials, Authorization headers or
 // webhook URLs. Never send their free-form messages to a browser or a log.
-export function credentialErrorMessage(provider: "Stripe" | "Square" | "Stax", error: unknown): string {
+export function credentialErrorMessage(provider: "Stripe" | "Square" | "Stax" | "Wisetack", error: unknown): string {
   const e = error && typeof error === "object" ? error as { statusCode?: unknown; status?: unknown; message?: unknown } : null;
   const status = e?.statusCode ?? e?.status;
   if (status === 401) return `${provider} rejected the credential. Check that it is valid and has not expired or been revoked.`;

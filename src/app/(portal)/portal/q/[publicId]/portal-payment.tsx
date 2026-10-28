@@ -18,10 +18,12 @@ import { PaymentCenter } from "@/components/v3/mobile-proposal-client/payment-ce
 import type { PortalPayModel, PortalStage } from "@/lib/payments/portalModel";
 import { usePayReturn } from "@/components/v3/mobile-proposal-client/use-pay-return";
 import { useAcceptedLocally } from "./portal-accepted";
+import { PayOverTime } from "@/components/v3/financing/pay-over-time";
 
 
 function statusWord(s: PortalStage, accepted: boolean): string {
   if (s.status === "PAID") return s.paidOn ? `Paid · ${s.paidOn}` : "Paid";
+  if (s.financed) return "Monthly payments";
   if (s.status === "PENDING") return "Processing";
   if (s.status === "WAIVED") return "Closed";
   return s.payable && accepted ? "Due now" : "Due";
@@ -119,6 +121,8 @@ export function PortalPayment({
           );
         })}
       </div>
+
+      {model.financing ? <PayOverTime f={model.financing} publicId={model.publicId} accepted={accepted} /> : null}
 
       {accepted && model.showRemaining && showHosted ? (
         <div className="pv-pay-all">

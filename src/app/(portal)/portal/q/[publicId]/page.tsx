@@ -45,6 +45,7 @@ import { proposalPictures } from "@/lib/proposalPictures";
 import { FenceSceneFigure } from "@/components/v3/fence-scene/fence-scene-figure";
 import { DeckSceneFigure } from "@/components/v3/deck-scene/deck-scene-figure";
 import { buildPortalPayModel } from "@/lib/payments/portalModel";
+import { syncLoanForPublicId } from "@/lib/financing/service";
 import { formatAvg, orgPublicRating, publicReviewsPath } from "@/lib/reviews/publicSummary";
 import { StarsInline } from "@/components/reviews/StarsInline";
 import { PortalActions } from "./portal-actions";
@@ -84,6 +85,8 @@ export default async function PublicProposalPortal({
   const sp = (await searchParams) ?? {};
   const focusStage = typeof sp.pay === "string" ? sp.pay : null;
   const methodParam = typeof sp.method === "string" && ["card", "bank", "any"].includes(sp.method) ? (sp.method as "card" | "bank" | "any") : null;
+  // Back from Wisetack (lib/financing): read the client's loan once, so the page shows where it stands.
+  if (sp.financing === "back") await syncLoanForPublicId(publicId).catch(() => {});
   const proposal = await db.proposal.findUnique({
     where: { publicId },
     include: {

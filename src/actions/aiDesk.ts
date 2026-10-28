@@ -28,7 +28,8 @@ import { toE164 } from "@/lib/phone";
 import { clock, DESK_FORWARDING, DESK_MODES, DESK_PACK, dollars, minutesLeftWords, minutesOf, validTimezone, VOICES, type DeskBalance, type DeskForwarding, type DeskMode, type DeskPackRecord, type DeskVoice } from "@/lib/aiDesk/shared";
 import { deskBalanceFor, readDeskPacks, setAutoTopUp, settleDeskUse } from "@/lib/aiDesk/minutes";
 import { chargePackOnFile, finishPackCheckout, startPackPurchase, type PackStep } from "@/lib/aiDesk/packs";
-import { ASK_FORMAT, cleanCompose, cleanProfile, COMPOSE_SYSTEM, composePrompt, deskInstructions, EMPTY_PROFILE, gapQuestions, profileFromFacts, type DeskFaq, type DeskProfile } from "@/lib/aiDesk/profile";
+import { ASK_FORMAT, cleanCompose, cleanProfile, COMPOSE_SYSTEM, composePrompt, deskInstructions, EMPTY_PROFILE, gapQuestions, profileFromFacts, withFinancingAnswer, type DeskFaq, type DeskProfile } from "@/lib/aiDesk/profile";
+import { deskFinancingAnswer } from "@/lib/financing/desk";
 import { companyFacts } from "@/lib/aiDesk/facts";
 import { currentForwardCheck, deskNumberFor, noteForwardCheck, startForwardTest } from "@/lib/aiDesk/forwardTest";
 import type { ForwardCheck } from "@/lib/aiDesk/forwardCheck";
@@ -195,7 +196,8 @@ export async function askDesk(questionRaw: string): Promise<DeskActionResult<{ a
   }
   const [facts, settings] = await Promise.all([companyFacts(organizationId), readDeskSettings(organizationId)]);
   if (!facts) return { ok: false, error: "Not found." };
-  const profile = settings.profile ?? profileFromFacts(facts);
+  // An approved Wisetack company says yes to financing (lib/financing/desk).
+  const profile = withFinancingAnswer(settings.profile ?? profileFromFacts(facts), await deskFinancingAnswer(organizationId));
   try {
     const o = await askJson(`${deskInstructions(profile, facts, settings.mode, settings.forwarding)}\n\n${ASK_FORMAT}`, `A caller says: «${question}»`, 0.4);
     const answer = o && typeof o === "object" && typeof (o as { answer?: unknown }).answer === "string" ? (o as { answer: string }).answer.trim().slice(0, 500) : "";
@@ -264,7 +266,8 @@ export async function startDeskTest(): Promise<DeskActionResult<DeskTestStart>> 
   if (!facts) return { ok: false, error: "Not found." };
   // A test costs minutes like a call: none left, no test.
   if (balance.out) return { ok: false, error: `The desk is out of minutes — add ${DESK_PACK.minutes} minutes below, then test it.` };
-  const profile = settings.profile ?? profileFromFacts(facts);
+  // An approved Wisetack company says yes to financing (lib/financing/desk).
+  const profile = withFinancingAnswer(settings.profile ?? profileFromFacts(facts), await deskFinancingAnswer(organizationId));
   const nowWords = new Date().toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: facts.timezone });
   const instructions = [deskInstructions(profile, facts, settings.mode, settings.forwarding), "", `THIS CALL: it is ${nowWords} (${facts.timezone}). ${TEST_NOTE}`, "Offer only times that open_times returns, and book only with book_visit."].join("\n");
   const api = realtimeApi();

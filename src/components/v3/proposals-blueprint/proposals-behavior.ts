@@ -49,6 +49,7 @@ import {
   uploadProposalPhoto,
 } from "@/actions/proposals";
 import { notifyPaymentReminder, setProposalReminders, sendInstallmentInvoice, getInvoiceOptions } from "@/actions/notify";
+import { sendFinancingLink } from "@/actions/financing";
 import { markInstallmentPaid, unmarkInstallmentPaid, recordRemainingPayment } from "@/actions/installments";
 // The handheld surface's route-local read of the SAME book this page renders
 // from (same query, same requireProposalStaff guard) — used to pick up a row
@@ -698,9 +699,20 @@ export function initProposalsContent(
       "</div>" +
       '<div class="ppl-body">' +
       (stages ? '<ol class="ppl-stages">' + stages + "</ol>" : "") +
-      '<div class="ppl-side">' + side + "</div>" +
+      '<div class="ppl-side">' + side + finHtml(p) + "</div>" +
       "</div>" +
       "</div></td></tr>"
+    );
+  }
+  /** Wisetack financing (2026-10-28): where the client's loan stands, and Send financing link for the office. */
+  function finHtml(p: ProposalRow): string {
+    const f = p.fin;
+    if (!f || (!f.line && !f.canSend)) return "";
+    return (
+      '<div class="ppl-fin" data-fin-row>' +
+      (f.line ? '<span class="ppl-note"><svg class="ic"><use href="#i-bank"/></svg>' + esc(f.line) + "</span>" : "") +
+      (f.canSend ? '<button class="ppl-act" type="button" data-act="fin-send" title="Text or email the client the proposal, opened at Pay over time"><svg class="ic"><use href="#i-send"/></svg>Send financing link</button>' : "") +
+      "</div>"
     );
   }
   /** The next stage's three actions, or the whole balance's when the job has no schedule. */
@@ -1889,6 +1901,10 @@ export function initProposalsContent(
         void runReminder(p, act.dataset.inst ?? "", act);
         return;
       }
+      if (kind === "fin-send" && p) {
+        void runFinancingLink(p, act);
+        return;
+      }
       if (kind === "markpaid" && p) {
         // ONE TAP (owner, 2026-09-03). The in-place bank / cash / check picker
         // read as the button breaking into three new buttons, and a stage was
@@ -2450,6 +2466,22 @@ export function initProposalsContent(
       renderAccepted();
     } catch (err) {
       showAlert("Couldn't change reminders", actionError(err));
+    } finally {
+      pstate.writing = false;
+      (btn as HTMLButtonElement).disabled = false;
+    }
+  }
+
+  async function runFinancingLink(p: ProposalRow, btn: HTMLElement) {
+    if (pstate.writing) return;
+    pstate.writing = true;
+    (btn as HTMLButtonElement).disabled = true;
+    try {
+      const res = await sendFinancingLink(p.id, "auto");
+      if (res.ok) flashBtn(btn, res.via === "text" ? "Texted" : "Emailed");
+      else showAlert("Nothing sent", res.error);
+    } catch (err) {
+      showAlert("Couldn't send", actionError(err));
     } finally {
       pstate.writing = false;
       (btn as HTMLButtonElement).disabled = false;

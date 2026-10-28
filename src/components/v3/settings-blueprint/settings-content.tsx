@@ -58,7 +58,7 @@ const PANE_BODIES: Record<RailKey, ComponentType<PaneProps>> = {
 };
 
 const RAIL_KEYS = new Set<string>(RAIL_ITEMS.map((r) => r.key));
-const SUB_KEYS = new Set<string>(["gmail", "meta", "stripe", "square", "stax"]);
+const SUB_KEYS = new Set<string>(["gmail", "meta", "stripe", "square", "stax", "financing"]);
 
 export function SettingsContent({
   data,
@@ -77,6 +77,7 @@ export function SettingsContent({
     gmail: params.get("gmail") ?? undefined,
     stripe: params.get("stripe") ?? undefined,
     square: params.get("square") ?? undefined,
+    financing: params.get("financing") ?? undefined,
   };
   // A processor sub-tab (?sub=stripe|square|stax) always means Payments now —
   // older links still say ?tab=integrations (owner, 2026-09-26).

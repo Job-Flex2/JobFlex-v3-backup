@@ -15,6 +15,8 @@ import {
   type StageInput,
 } from "@/lib/paymentSchedule";
 import { resolvePayOptions, type PayBlockReason } from "./payOptions";
+import { portalFinancing } from "@/lib/financing/service";
+import type { PortalFinancing } from "@/lib/financing/view";
 
 export type PortalStage = {
   id: string;
@@ -35,6 +37,8 @@ export type PortalStage = {
   belowMin: { stripe: boolean; square: boolean; stax: boolean };
   /** No DB row (implicit full-payment / balance line). */
   synthetic: boolean;
+  /** Paid by the client's accepted Wisetack loan — no card/bank buttons (lib/financing). */
+  financed?: boolean;
 };
 
 export type PortalPayModel = {
@@ -61,9 +65,14 @@ export type PortalPayModel = {
   anyHosted: boolean;
   /** Anything a client can act on: a hosted button or bank details. */
   anyWay: boolean;
+  /** Pay over time through Wisetack (lib/financing): the button, what they qualify for, or where the loan stands. */
+  financing: PortalFinancing | null;
 };
 
 type ProposalLike = {
+  /** Present on every caller's row; financing reads the proposal by it. */
+  id?: string;
+  organizationId?: string;
   status: string;
   total: number;
   currency: string;
@@ -142,7 +151,20 @@ export async function buildPortalPayModel(
     });
   }
 
-  const openCount = stages.filter((s) => s.status === "UNPAID" || s.status === "PENDING").length;
+  // Wisetack financing: an accepted loan pays the last stages; those lose their buttons.
+  const financing =
+    proposal.id && proposal.organizationId
+      ? await portalFinancing({ orgId: proposal.organizationId, proposalId: proposal.id, status: proposal.status, stages, owedMinor: schedule.remainingMinor })
+      : null;
+  const financed = new Set(financing?.coveredIds ?? []);
+  for (const s of stages) {
+    if (!financed.has(s.id)) continue;
+    s.financed = true;
+    s.payable = false;
+  }
+  const nextPayableId = schedule.nextPayableId && financed.has(schedule.nextPayableId) ? null : schedule.nextPayableId;
+
+  const openCount = stages.filter((s) => (s.status === "UNPAID" || s.status === "PENDING") && !s.financed).length;
   const anyHosted = options.anyHosted;
   return {
     publicId,
@@ -154,11 +176,12 @@ export async function buildPortalPayModel(
     remainingMinor: schedule.remainingMinor,
     balance: fmt.money(fromMinor(schedule.balanceMinor)),
     balanceMinor: schedule.balanceMinor,
-    nextPayableId: schedule.nextPayableId,
-    showRemaining: schedule.remainingMinor > 0 && openCount > 1,
+    nextPayableId,
+    showRemaining: schedule.remainingMinor > 0 && openCount > 1 && financed.size === 0,
     providers: { stripe: options.stripe, square: options.square, stax: options.stax },
     bankTransfer: options.bankTransfer,
     anyHosted,
     anyWay: anyHosted || options.bankTransfer.ok,
+    financing,
   };
 }

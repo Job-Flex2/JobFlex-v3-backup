@@ -16,6 +16,7 @@ export type PrefKey =
   | "proposal-accepted"
   | "proposal-declined"
   | "payment-received"
+  | "financing"
   | "billing-problems"
   | "change-order"
   | "appointment-booked"
@@ -70,6 +71,9 @@ export const PREF_EVENTS: readonly PrefEventMeta[] = [
   { key: "proposal-accepted", name: "Proposal accepted", sub: "Signed and ready to schedule", emailAvailable: true, smsAvailable: true, seed: [true, true, true], audience: { office: true, sales: true }, example: "Sarah Mitchell accepted \"Standing-seam metal · 18412 92nd Ave NE\" — $27,926. Schedule it: jobflex.app/…" },
   { key: "proposal-declined", name: "Proposal declined", sub: "With the reason the client gave", emailAvailable: true, smsAvailable: true, seed: [true, true, false], audience: { office: false, sales: true }, example: "Sarah Mitchell declined \"Architectural shingles · 18412 92nd Ave NE\": \"Going with a lower bid.\"" },
   { key: "payment-received", name: "Payment received", sub: "A stage was paid — card, Square or recorded by hand", emailAvailable: true, smsAvailable: true, seed: [true, true, true], audience: { office: true, sales: false }, example: "Sarah Mitchell paid $8,378 on \"Standing-seam metal · 18412 92nd Ave NE\" — $19,548 still due." },
+  // Wisetack financing (2026-10-28, lib/financing): the contractor's application decided, a client approved or
+  // accepting a loan, Wisetack's payout. Text + bell; nothing mails it.
+  { key: "financing", name: "Financing", sub: "Wisetack decided your application, a client was approved or accepted a loan, Wisetack paid you", emailAvailable: false, smsAvailable: true, seed: [true, false, true], audience: { office: true }, example: "Sarah Mitchell was approved for $14,000 through Wisetack on \"Standing-seam metal · 18412 92nd Ave NE\" — the loan terms are next." },
   // JobFlex's own bill (owner, 2026-10-21): the company's plan payment did not go through. The Text cell gates the
   // owner's one or two texts per invoice (lib/billingProblemText). The Email cell governs only extra notices: the
   // dunning emails (lib/cardUpdate) always go, whatever it says. The in-app notice is the payment banner on every
@@ -155,7 +159,7 @@ export type SmsGroupKey = "crew" | "sales" | "money";
 export const SMS_GROUPS: readonly { key: SmsGroupKey; label: string; sub: string; keys: readonly PrefKey[] }[] = [
   { key: "crew", label: "Crew on site", sub: "Started, back for another day, completed, photos and videos", keys: ["job-started", "job-completed", "job-photos", "worker-responded"] },
   { key: "sales", label: "Sales & leads", sub: "A new lead, a proposal accepted or declined", keys: ["lead-assigned", "proposal-accepted", "proposal-declined"] },
-  { key: "money", label: "Money", sub: "A payment, a change order answered", keys: ["payment-received", "change-order"] },
+  { key: "money", label: "Money", sub: "A payment, a change order answered, financing", keys: ["payment-received", "change-order", "financing"] },
 ];
 /** Which groups a member's stored matrix has on: a group is on when any of
  *  its texting events is (the seeds leave "proposal declined" off, and a
