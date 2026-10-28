@@ -8,6 +8,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { webPageModel, webPageOffReason } from "@/actions/webEstimator";
 import { WebEstimate } from "@/components/v3/web-estimate/web-estimate";
+import { WebDeck } from "@/components/v3/web-estimate/web-deck";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,14 @@ export default async function WebEstimatePage({ params, searchParams }: { params
     return (
       <main className="we" style={{ padding: 24, fontFamily: "Inter, -apple-system, sans-serif" }}>
         <p style={{ margin: 0, fontSize: 16 }}>This estimator isn&apos;t enabled for this website. The shop can add the site under Settings → Website estimators.</p>
+      </main>
+    );
+  }
+  if (m.trade === "deck") {
+    // Deck Studio itself (2026-10-28): the homeowner designs in 3D; the price at the end; the lead with the design.
+    return (
+      <main style={{ minHeight: "100vh", background: embed ? "#fff" : "#f5f3ee" }}>
+        <WebDeck shop={m.shop} title={m.title} embed={embed} />
       </main>
     );
   }

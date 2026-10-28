@@ -28,7 +28,7 @@ import { resolveMarket } from "@/lib/fence/market";
 import { fenceCatalogSchema } from "@/lib/fence/catalogSchema";
 import { sanitizeRateBook } from "@/lib/fence/rates";
 import { priceDeck } from "@/lib/deck/pricing";
-import { defaultDeckDesign, type DeckDesign } from "@/lib/deck/design";
+import { defaultDeckDesign, structureWords, type DeckDesign } from "@/lib/deck/design";
 import { applyDeckPatch } from "@/lib/deck/checks";
 import { settleDesign } from "@/lib/deck/settle";
 import { DECK_SAMPLES, sampleById, sampleDesign } from "@/lib/deck/samples";
@@ -299,6 +299,41 @@ async function fenceEstimate(shop: WebShop, input: WebTradeInput): Promise<WebTr
   const gateWords = [gates ? `${gates} walk gate${gates > 1 ? "s" : ""}` : "", doubles ? `${doubles} double gate${doubles > 1 ? "s" : ""}` : ""].filter(Boolean).join(" and ");
   const summary = `${feet.toLocaleString("en-US")} ft of fence, ${heightFt} ft high${gateWords ? `, ${gateWords}` : ""} — about ${dollars(pkg.pricePerLf)} a foot installed.`;
   return { ok: true, summary, choice: def?.label ?? type, cents: Math.round(pkg.subtotal * 100), ...p, facts: { feet, type, heightFt, gates, doubles, pricePerLf: pkg.pricePerLf, netFenceLf: pkg.netFenceLf } };
+}
+
+// DECK STUDIO ON THE WEBSITE (2026-10-28): the homeowner designs in the client designer (components/v3/deck-client-design);
+// this prices WHAT THEY DESIGNED in the shop's rate book — the same engine, the same book, the shop's regional site.
+
+/** The blank deck a website visitor starts from: the classic sample on this address's site, as a blank start. */
+export function webDeckBase(shop: WebShop, address: string): DeckDesign {
+  const state = stateOfTyped(address) ?? shop.state;
+  const sample = sampleById("deck-classic") ?? DECK_SAMPLES[0];
+  const base = sampleDesign(sample, defaultDeckDesign({ state }));
+  const site = siteFromAddress(address, state);
+  return applyDeckPatch(base, { loadPsf: site.deckLoad, frostIn: site.frostIn, site: { ...base.site, groundSnowPsf: site.groundSnowPsf, termite: site.termite } } as Parameters<typeof applyDeckPatch>[1]);
+}
+
+/** "…, Kirkland, WA 98033" → "WA" (a typed address; null when no state is in it). */
+function stateOfTyped(address: string): string | null {
+  const m = address.match(/,\s*([A-Za-z]{2})(?:\s+\d{5}(?:-\d{4})?)?\s*$/);
+  return m ? m[1].toUpperCase() : null;
+}
+
+export interface WebDeckPriced { design: DeckDesign; cents: number; summary: string; choice: string; areaSqFt: number; pricePerSqFt: number }
+
+/** The designed deck, settled to the code tables and priced in the shop's book. */
+export async function priceWebDeckDesign(shop: WebShop, raw: DeckDesign, address: string): Promise<WebDeckPriced> {
+  const state = stateOfTyped(address) ?? shop.state ?? raw.site.state;
+  const site = siteFromAddress(address, state);
+  let design = applyDeckPatch(raw, { loadPsf: site.deckLoad, frostIn: site.frostIn, site: { ...raw.site, groundSnowPsf: site.groundSnowPsf, termite: site.termite } } as Parameters<typeof applyDeckPatch>[1]);
+  const market = resolveMarket({ address });
+  const rates = await readDeckRateBook(shop.id);
+  design = settleDesign(design, { rates, market }).design;
+  const pkg = priceDeck(design, { rates, market });
+  const boards = DECKING.find((d) => d.id === design.decking.product)?.label ?? design.decking.product;
+  const words = structureWords(design);
+  const summary = `${words.charAt(0).toUpperCase()}${words.slice(1)} (${Math.round(pkg.areaSqFt)} sq ft), ${boards.toLowerCase()} boards — about ${dollars(pkg.pricePerSqFt)} a square foot.`;
+  return { design, cents: Math.round(pkg.subtotal * 100), summary, choice: boards, areaSqFt: pkg.areaSqFt, pricePerSqFt: pkg.pricePerSqFt };
 }
 
 // DECK — a starting layout, sized and dressed → the engine's package in the shop's rate book

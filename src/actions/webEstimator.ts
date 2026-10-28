@@ -30,6 +30,8 @@ import {
   type WebMonthCounts,
   type WebTrade,
   splitTypedAddress,
+  money,
+  bandWords,
 } from "@/lib/webEstimator";
 import {
   bumpWebCount,
@@ -46,7 +48,11 @@ import {
   writeWebSettings,
   type WebShop,
 } from "@/lib/webEstimatorServer";
-import { runWebTrade, webTradeAllChoices, webTradeChoices, webTradeQuestions, type WebAddress, type WebChoice, type WebQuestion } from "@/lib/webEstimatorTrades";
+import { priceWebDeckDesign, runWebTrade, webDeckBase, webTradeAllChoices, webTradeChoices, webTradeQuestions, type WebAddress, type WebChoice, type WebQuestion } from "@/lib/webEstimatorTrades";
+import { randomBytes } from "node:crypto";
+import { CLIENT_TOKEN_RE, mergeClientDesign, type ClientDesignLink } from "@/lib/deck/clientDesign";
+import { normalizeDeckDesign, type DeckDesign } from "@/lib/deck/design";
+import { fileWebClientLink, readWebClientLink, sendDeckClientDesign, writeWebClientLink } from "@/actions/deckClientDesign";
 
 type Fail = { ok: false; error: string };
 const DENIED = "You don't have access to this.";
@@ -181,6 +187,10 @@ export async function openWebLeadInEstimator(leadId: string): Promise<void> {
   const rec = lead ? await readWebLead(lead.id) : null;
   if (!lead || !rec) throw new Error("No such website lead.");
   const est = rec.estimate;
+  if (rec.trade === "deck" && typeof est.facts.draftId === "string" && /^[a-f0-9-]{8,40}$/i.test(est.facts.draftId)) {
+    // Designed on the website in the client designer: the send already made the studio's draft — open that one.
+    redirect(`/dashboard/deck-estimator?draft=${est.facts.draftId}`);
+  }
   if (rec.trade === "deck") {
     const design = est.facts.design;
     const id = randomUUID();
@@ -301,6 +311,149 @@ export async function webLead(slug: unknown, trade: unknown, token: unknown, raw
   if (typeof c.company === "string" && c.company.trim()) return { ok: true, leadId: "ok" };   // the honeypot: a bot filled the hidden field
   const { leadId } = await createWebLead(shop, est, { name, phone, email, note });
   return { ok: true, leadId };
+}
+
+// ── DECK STUDIO ON THE WEBSITE (2026-10-28): the homeowner designs in 3D in the client designer, through a link the
+// website makes for them (lib/deck/clientDesign `web`); the price at the end is the shop's book on what they designed;
+// "Get my full quote" sends the design (the studio's draft, the bell) AND makes the lead.
+
+const WEB_DECK_DAYS = 30;
+
+export interface WebDeckProps {
+  token: string;
+  shop: { name: string; logoUrl: string | null; phone: string | null };
+  address: string;
+  base: DeckDesign;
+  work: DeckDesign | null;
+  note: string;
+  sentAt: string | null;
+  leadId: string | null;
+  basis: string;
+  askEmail: boolean;
+}
+
+function deckLinkProps(link: ClientDesignLink, shop: WebShop): WebDeckProps {
+  const ts = shop.settings.trades.deck;
+  return {
+    token: link.token,
+    shop: { name: shop.name, logoUrl: shop.logoUrl, phone: shop.phone },
+    address: link.address ?? "",
+    base: link.base,
+    work: link.work,
+    note: link.note,
+    sentAt: link.sentAt,
+    leadId: link.web?.leadId ?? null,
+    basis: ts.note || WEB_TRADE.deck.basis,
+    askEmail: ts.askEmail,
+  };
+}
+
+/** The visitor typed where the deck goes: a link of their own, a blank deck on that site. */
+export async function webDeckStart(slug: unknown, rawAddress: unknown): Promise<{ ok: true; props: WebDeckProps } | (Fail & { code?: string })> {
+  if (typeof slug !== "string" || typeof rawAddress !== "string") return { ok: false, error: "Something went wrong — try again." };
+  const shop = await webShopBySlug(slug);
+  if (!shop || !(await webTradeLive(shop.id, "deck", shop.settings.trades.deck.on))) return { ok: false, error: "This estimator isn't turned on." };
+  try {
+    await enforceRateLimit(`web-deck-start:${await clientIp()}`, 8, HOUR, "new designs");
+  } catch (err) {
+    if (err instanceof RateLimitError) return { ok: false, error: "That is a lot of new designs from here. Try again in a while." };
+    throw err;
+  }
+  if (await webCapReached(shop)) return { ok: false, code: "capped", error: "This estimator is resting for the month. Leave your details and the shop will price it by hand." };
+  const typed = splitTypedAddress({ address: rawAddress.trim().slice(0, 200), city: "", state: "", zip: "" });
+  const address = [typed.address, typed.city, [typed.state, typed.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  if (address.length < 5) return { ok: false, error: "Type the street address." };
+  const now = new Date();
+  const link: ClientDesignLink = {
+    v: 1, token: randomBytes(18).toString("base64url"), orgId: shop.id, createdBy: null, createdAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + WEB_DECK_DAYS * 24 * 3600 * 1000).toISOString(),
+    clientName: "", clientPhone: null, clientEmail: null, clientId: null, address, title: "From the website", titleAuto: true,
+    start: "blank", base: webDeckBase(shop, address), work: null, workAt: null, openedAt: now.toISOString(), note: "", unsure: [],
+    status: "open", sentAt: null, sends: 0, draftId: null, proposalId: null, byName: "Website", seenAt: null, pricedAt: null,
+    web: { slug: shop.slug, leadId: null, priced: false },
+  };
+  await writeWebClientLink(link);
+  noteRequestOrg(shop.id);
+  return { ok: true, props: deckLinkProps(link, shop) };
+}
+
+/** Back on the page later (the token is kept in their browser): the same design, where they left it. */
+export async function webDeckResume(slug: unknown, token: unknown): Promise<{ ok: true; props: WebDeckProps } | Fail> {
+  if (typeof slug !== "string" || typeof token !== "string" || !CLIENT_TOKEN_RE.test(token)) return { ok: false, error: "No such design." };
+  const link = await readWebClientLink(token);
+  if (!link || link.web?.slug !== slug) return { ok: false, error: "No such design." };
+  const shop = await webShopBySlug(slug);
+  if (!shop || shop.id !== link.orgId || !(await webTradeLive(shop.id, "deck", shop.settings.trades.deck.on))) return { ok: false, error: "This estimator isn't turned on." };
+  return { ok: true, props: deckLinkProps(link, shop) };
+}
+
+/** THE PRICE AT THE END: what they designed, settled to code and priced in the shop's book, shown the shop's way. */
+export async function webDeckPrice(token: unknown, raw: unknown): Promise<{ ok: true; words: string; summary: string; show: "range" | "exact"; basis: string } | Fail> {
+  if (typeof token !== "string" || !CLIENT_TOKEN_RE.test(token)) return { ok: false, error: "No such design." };
+  const link = await readWebClientLink(token);
+  if (!link || !link.web) return { ok: false, error: "This design link has closed." };
+  try {
+    await enforceRateLimit(`web-deck-price:${token}`, 60, HOUR, "prices");
+  } catch (err) {
+    if (err instanceof RateLimitError) return { ok: false, error: "That is a lot of prices in an hour. Try again in a while." };
+    throw err;
+  }
+  const shop = await webShopBySlug(link.web.slug);
+  if (!shop || shop.id !== link.orgId) return { ok: false, error: "This estimator isn't turned on." };
+  const ts = shop.settings.trades.deck;
+  const merged = mergeClientDesign(link.base, raw);
+  const priced = await priceWebDeckDesign(shop, merged, link.address ?? "");
+  const band = priceBand(priced.cents, ts.show, ts.spread);
+  if (!link.web.priced) {
+    await writeWebClientLink({ ...link, web: { ...link.web, priced: true } });
+    await bumpWebCount(shop.id, "estimates");
+  }
+  return { ok: true, words: ts.show === "exact" ? money(band.low) : bandWords(band), summary: priced.summary, show: ts.show, basis: ts.note || WEB_TRADE.deck.basis };
+}
+
+/** "GET MY FULL QUOTE": the design goes to the shop as a studio draft (the bell rings), the lead is made with the
+ *  price they saw, the homeowner gets the confirmation, and the link joins the shop's client designs. */
+export async function webDeckSend(token: unknown, raw: unknown): Promise<{ ok: true; at: string; leadId: string } | Fail> {
+  if (typeof token !== "string" || !CLIENT_TOKEN_RE.test(token)) return { ok: false, error: "No such design." };
+  const link = await readWebClientLink(token);
+  if (!link || !link.web) return { ok: false, error: "This design link has closed." };
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  if (str(r.company, 80)) return { ok: true, at: new Date().toISOString(), leadId: "" }; // the honeypot: a bot filled it
+  const name = str(r.name, 80), phone = str(r.phone, 40), email = str(r.email, 200).toLowerCase(), note = str(r.note, 1500);
+  if (name.length < 2) return { ok: false, error: "Your name, please." };
+  if (phone.replace(/\D/g, "").length < 10) return { ok: false, error: "A phone number we can reach you at, please." };
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: "That email address doesn't look right." };
+  if (r.consent !== true) return { ok: false, error: "Tick the box so the shop may contact you." };
+  try {
+    await enforceRateLimit(`web-lead:${await clientIp()}`, 6, 10 * MINUTE, "requests");
+  } catch (err) {
+    if (err instanceof RateLimitError) return { ok: false, error: "That is a lot of requests from here. Try again in a few minutes." };
+    throw err;
+  }
+  const shop = await webShopBySlug(link.web.slug);
+  if (!shop || shop.id !== link.orgId) return { ok: false, error: "This estimator isn't turned on." };
+  if (link.web.leadId) {
+    // Sent before: the design goes again to the same draft; the lead already exists.
+    const again = await sendDeckClientDesign(token, { design: r.design, note, name, phone });
+    return again.ok ? { ok: true, at: again.at, leadId: link.web.leadId } : again;
+  }
+  const sent = await sendDeckClientDesign(token, { design: r.design, note, name, phone });
+  if (!sent.ok) return sent;
+  const after = (await readWebClientLink(token)) ?? link;
+  const ts = shop.settings.trades.deck;
+  const design = normalizeDeckDesign(after.work ?? r.design);
+  const priced = await priceWebDeckDesign(shop, design, link.address ?? "");
+  const band = priceBand(priced.cents, ts.show, ts.spread);
+  const typed = splitTypedAddress({ address: link.address ?? "", city: "", state: "", zip: "" });
+  const est = await storeWebEstimate({
+    organizationId: shop.id, trade: "deck", address: typed.address, city: typed.city || null, state: typed.state || null, zip: typed.zip || null,
+    summary: priced.summary, choice: priced.choice, cents: priced.cents, band, show: ts.show,
+    facts: { design: priced.design, draftId: after.draftId, token, areaSqFt: priced.areaSqFt, pricePerSqFt: priced.pricePerSqFt, designedOnline: true },
+  });
+  const { leadId } = await createWebLead(shop, est, { name, phone, email: email || null, note: note || null });
+  await fileWebClientLink(token, { leadId, clientEmail: email || null }).catch((err) => console.warn("[web-deck] link not filed:", err));
+  return { ok: true, at: sent.at, leadId };
 }
 
 /** Why this page is off, for the shop's OWN people when signed in (null for everyone else — they get the 404). */

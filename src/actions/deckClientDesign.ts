@@ -372,10 +372,36 @@ export async function sendDeckClientDesign(
     summary: `${name} ${again ? "sent their deck design again" : "sent back their deck design"} — ${structureWords(settled)}${changes.filter((c) => !c.startsWith("size ")).length ? ` (${changes.filter((c) => !c.startsWith("size ")).join(", ")})` : ""}`,
     meta: { href, token, draftId },
   });
-  await emailTheMaker(link, { name, phone, note, unsure, settledWords: structureWords(settled), changes, href, again }).catch((err) => {
-    console.warn("[deck-client] email not sent:", err instanceof Error ? err.message : err);
-  });
+  // A website visitor's send (link.web) is told by the lead alert instead (actions/webEstimator webDeckSend).
+  if (!link.web) {
+    await emailTheMaker(link, { name, phone, note, unsure, settledWords: structureWords(settled), changes, href, again }).catch((err) => {
+      console.warn("[deck-client] email not sent:", err instanceof Error ? err.message : err);
+    });
+  }
   return { ok: true, at };
+}
+
+/** THE WEBSITE'S LINK JOINS THE SHOP'S LIST once it is sent with a lead (actions/webEstimator): the folder of client
+ *  designs shows it like any other, named by the visitor. */
+export async function fileWebClientLink(token: string, patch: { leadId: string; clientEmail: string | null; clientId?: string | null }): Promise<void> {
+  const link = await readLink(token);
+  if (!link || !link.web) return;
+  await writeLink({ ...link, clientEmail: patch.clientEmail ?? link.clientEmail, clientId: patch.clientId ?? link.clientId, web: { ...link.web, leadId: patch.leadId } });
+  const index = [token, ...(await readIndex(link.orgId)).filter((t) => t !== token)];
+  const dropped = index.slice(CLIENT_LINK_MAX);
+  await writeIndex(link.orgId, index.slice(0, CLIENT_LINK_MAX));
+  if (dropped.length) await db.syncState.deleteMany({ where: { key: { in: dropped.map(clientLinkKey) } } }).catch(() => {});
+}
+
+/** The website's new link (actions/webEstimator webDeckStart): written, not yet in the shop's list. */
+export async function writeWebClientLink(link: ClientDesignLink): Promise<void> {
+  await writeLink(link);
+}
+
+/** The website's read of its own link: the token is the key, the link must be the website's. */
+export async function readWebClientLink(token: string): Promise<ClientDesignLink | null> {
+  const link = await readLink(token);
+  return link && link.web && live(link) ? link : null;
 }
 
 /* ── the photo of the house (2026-10-23) ───────────────────────────── */
