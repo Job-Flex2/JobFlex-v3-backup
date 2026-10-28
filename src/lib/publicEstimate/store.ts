@@ -7,13 +7,21 @@ import { db } from "@/lib/db";
 import { instantAddressKey } from "@/lib/eagleview";
 import type { SolarFailureKind } from "@/lib/solar";
 import type { SolarRoofEstimate } from "@/lib/roofSolarEstimate";
+import type { HomeSize } from "./roof";
 
 export const PUBROOF_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const HOUSE_ORG_KEY = "leadCenter:houseOrgId";
 
 /** v 2 (2026-10-28): reads that may fall back to MEDIUM imagery. A v 1 row (HIGH-only) is read again, so a home that
  *  had only MEDIUM imagery is not left on "couldn't read" for the rest of its 30 days. */
-export type PubRoofCache = { v: 2; at: string; solar: SolarRoofEstimate | null; error: string | null };
+export type PubRoofCache = {
+  v: 2;
+  at: string;
+  solar: SolarRoofEstimate | null;
+  error: string | null;
+  /** No aerial roof: the home's size from the house lookup (the HVAC estimator's), so it is never asked. */
+  size?: HomeSize | null;
+};
 
 /** The address AND the pin, to about 11 m: a pin dragged onto the house next door is another read, and a scripted
  *  read at a warehouse's pin never answers the real visitor's pick (the review of 2026-10-27). */

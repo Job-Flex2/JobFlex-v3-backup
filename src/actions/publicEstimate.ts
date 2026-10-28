@@ -16,7 +16,9 @@ import { recordApiSpend } from "@/lib/apiSpend";
 import { unitCents } from "@/lib/paidApiCosts";
 import { roofGuideRange } from "@/lib/publicEstimate/guide";
 import { cacheFresh, cacheable, houseOrgId, inUs, pubRoofKey, readPubRoof, writePubRoof, type PubRoofCache } from "@/lib/publicEstimate/store";
-import { disclaimerFor, roofFactsFromSize, roofFactsFromSolar, roofRange, type MaterialId, type RoofAnswers } from "@/lib/publicEstimate/roof";
+import { disclaimerFor, roofFactsFromSize, roofFactsFromSolar, roofRange, type HomeSize, type MaterialId, type RoofAnswers } from "@/lib/publicEstimate/roof";
+import { lookupSiteFacts } from "@/lib/hvac/siteLookup";
+import { lookupPropertyBoundary } from "@/lib/fence/boundaryLookup";
 import { estimateShort, estimateWords, leadEstimateFrom, planNotesFor, type RoofLeadEstimate } from "@/lib/leadCenter/estimate";
 import { buildPriceRangeEmail } from "@/lib/email/build/platform";
 import { renderEmail } from "@/lib/email/renderEmail";
@@ -55,6 +57,8 @@ export type PublicRoofReadResult =
       cityWords: string | null;
       guide: { low: number; high: number; cityWords: string } | null;
       cached: boolean;
+      /** No aerial roof: the home's size from the house lookup — the range is priced from it, nothing asked. */
+      size: HomeSize | null;
     }
   | { ok: false; error: string };
 
@@ -98,9 +102,12 @@ async function readInner(raw: unknown, caller: PublicCaller): Promise<PublicRoof
   const now = new Date();
   const cached = await readPubRoof(key);
   if (cacheFresh(cached, now)) {
-    return { ok: true, solar: cached!.solar, noRoofReason: cached!.solar ? null : NO_ROOF, cityFactor, cityWords, guide, cached: true };
+    return { ok: true, solar: cached!.solar, noRoofReason: cached!.solar || cached!.size ? null : NO_ROOF, cityFactor, cityWords, guide, cached: true, size: cached!.size ?? null };
   }
-  if (!isSolarEnabled()) return { ok: true, solar: null, noRoofReason: NO_ROOF, cityFactor, cityWords, guide, cached: false };
+  if (!isSolarEnabled()) {
+    const size = await homeSizeAt(input);
+    return { ok: true, solar: null, noRoofReason: size ? null : NO_ROOF, cityFactor, cityWords, guide, cached: false, size };
+  }
 
   // HIGH imagery first; where Google has none (or none the roof math takes), MEDIUM — many US homes have nothing
   // better, and a homeowner's rough range does not need the contractor's precision (2026-10-28).
@@ -128,10 +135,31 @@ async function readInner(raw: unknown, caller: PublicCaller): Promise<PublicRoof
   if (house) await recordApiSpend(house, [{ service: "google-solar", op: "buildingInsights", calls, cents: calls * unitCents("google-solar", "buildingInsights") }], now);
   // Why a read came back empty, in the server log: the key, coverage, or the roof math.
   if (!row?.solar) console.warn("[price] roof read empty:", outcome, row?.error ?? "", key);
-  if (row && cacheable(outcome)) await writePubRoof(key, row);
+  // No aerial roof: the home's size worked out from the house lookup — the homeowner is never asked for square feet
+  // they do not know (owner, 2026-10-28). Kept with the read.
+  const size = row?.solar ? null : await homeSizeAt(input);
+  if (row && cacheable(outcome)) await writePubRoof(key, { ...row, size });
   if (caller.kind === "site") console.info("[price] site read", caller.orgSlug, key);
   const solar = row?.solar ?? null;
-  return { ok: true, solar, noRoofReason: solar ? null : NO_ROOF, cityFactor, cityWords, guide, cached: false };
+  return { ok: true, solar, noRoofReason: solar || size ? null : NO_ROOF, cityFactor, cityWords, guide, cached: false, size };
+}
+
+/** The home's size when the sky can't read the roof — the HVAC estimator's house lookup (lib/hvac/siteLookup: the
+ *  county record's living area and storeys, the building's outline at the pin via the fence estimator's lot lookup),
+ *  filed under the house org. Nothing found, or no house org: null, and the homeowner is asked as a last resort. */
+async function homeSizeAt(input: PublicRoofReadInput): Promise<HomeSize | null> {
+  const house = await houseOrgId();
+  if (!house) return null;
+  const address = [input.address, input.city, [input.state, input.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  const looked = await lookupSiteFacts({ address, state: input.state, lat: input.lat, lng: input.lng }, house, { boundary: lookupPropertyBoundary }).catch((err: unknown) => {
+    console.warn("[price] house lookup failed:", err instanceof Error ? err.message : err);
+    return null;
+  });
+  if (!looked || !looked.ok) return null;
+  const f = looked.facts;
+  if (!f.footprintSqft && !f.livingSqft) return null;
+  const source = f.footprintSqft ? (f.sources.footprint ?? "the building's outline") : (f.sources.living ?? "the county record");
+  return { footprintSqft: f.footprintSqft ?? null, livingSqft: f.livingSqft ?? null, storeys: f.storeys ?? null, source };
 }
 
 // ── The submits ──────────────────────────────────────────────────────────────
