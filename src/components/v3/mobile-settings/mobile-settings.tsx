@@ -1234,7 +1234,7 @@ function WebsitePaneMobile() {
 /* ═════════════════════════════ THE PAGE ═════════════════════════════ */
 
 const RAIL_KEYS = new Set<string>(RAIL_ITEMS.map((r) => r.key));
-const SUB_KEYS = new Set<string>(["gmail", "meta", "stripe", "square", "stax"]);
+const SUB_KEYS = new Set<string>(["gmail", "meta", "stripe", "square", "stax", "financing"]);
 
 const RAIL_ICON: Record<RailKey, IconName> = {
   account: "i-users",

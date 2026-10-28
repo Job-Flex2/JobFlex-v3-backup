@@ -1,29 +1,35 @@
-/* Pay over time — one card in both portal trees. Light, quiet, the contractor's page around it. */
-.card {
-  margin: 16px 0 4px;
-  padding: 16px;
-  border: 1px solid #e3e5e8;
+/* Pay over time — one card in both portal trees. Light, quiet, the contractor's page around it.
+   Every selector carries two classes: both portal trees reset margins and paddings with one-class rules. */
+.card.card {
+  display: block;
+  margin: 16px 0 8px;
+  padding: 16px 18px;
+  border: 1px solid #dfe2e6;
   border-radius: 12px;
   background: #fafbfc;
   color: #1c1f23;
+  font-family: inherit;
 }
-.title {
+.card .title {
   margin: 0;
   font-size: 15px;
-  font-weight: 600;
+  line-height: 1.35;
+  font-weight: 650;
 }
-.sub {
+.card .sub {
   margin: 4px 0 0;
   font-size: 13px;
+  line-height: 1.45;
   color: #5b6168;
 }
-.line {
-  margin: 8px 0 0;
+.card .line {
+  margin: 10px 0 0;
   font-size: 13px;
+  line-height: 1.45;
   font-weight: 600;
 }
-.primary,
-.ghost {
+.card .primary,
+.card .ghost {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -32,38 +38,41 @@
   padding: 0 18px;
   border-radius: 10px;
   font: inherit;
+  font-size: 15px;
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
 }
-.primary {
+.card .primary {
   border: 0;
   background: #1c1f23;
   color: #fff;
 }
-.primary:disabled {
+.card .primary:disabled {
   opacity: 0.6;
   cursor: default;
 }
-.ghost {
+.card .ghost {
   border: 1px solid #c9cdd2;
   background: #fff;
   color: #1c1f23;
 }
-.error {
+.card .error {
   margin: 8px 0 0;
   font-size: 13px;
   color: #a1281f;
 }
-.fine {
+.card .fine {
   margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid #e8eaed;
   font-size: 11px;
-  line-height: 1.4;
+  line-height: 1.45;
   color: #7a8087;
 }
 @media (max-width: 600px) {
-  .primary,
-  .ghost {
+  .card .primary,
+  .card .ghost {
     width: 100%;
   }
 }
