@@ -10,6 +10,7 @@ import * as React from "react";
 import dynamic from "next/dynamic";
 import { PlacesAutocomplete, type PickedAddress } from "@/components/estimator/roof/PlacesAutocomplete";
 import { webDeckPrice, webDeckResume, webDeckSend, webDeckStart, webView, type WebDeckProps } from "@/actions/webEstimator";
+import { pageWords } from "@/lib/webEstimator";
 import { WebHead } from "./web-head";
 import "./web-estimate.css";
 
@@ -19,7 +20,7 @@ const Designer = dynamic(() => import("@/components/v3/deck-client-design/deck-c
 });
 
 export interface WebDeckPageProps {
-  shop: { name: string; slug: string; logoUrl: string | null; primaryColor: string | null; phone: string | null; website: string | null };
+  shop: { name: string; slug: string; logoUrl: string | null; primaryColor: string | null; phone: string | null; website: string | null; house?: boolean };
   title: string;
   embed: boolean;
 }
@@ -76,7 +77,7 @@ export function WebDeck(p: WebDeckPageProps) {
           unsure={[]}
           sentAt={props.sentAt}
           expired={false}
-          website={{ askEmail: props.askEmail, leadId: props.leadId, price: (d) => webDeckPrice(token, d), send: (i) => webDeckSend(token, i) }}
+          website={{ askEmail: props.askEmail, leadId: props.leadId, house: !!p.shop.house, price: (d) => webDeckPrice(token, d), send: (i) => webDeckSend(token, i) }}
         />
       </div>
     );
@@ -95,9 +96,9 @@ export function WebDeck(p: WebDeckPageProps) {
         <button type="button" className="we-btn" disabled={!addressOk || state !== "address"} onClick={() => void start()} data-web-next>
           {state === "starting" ? "Opening the studio…" : "Design my deck"}
         </button>
-        <p className="we-fine">No account, no payment. Design it in 3D, see the price at the end, and {p.shop.name} sends the full quote when you ask for it.</p>
+        <p className="we-fine">No account, no payment. Design it in 3D, see the price at the end, and {p.shop.house ? "a local pro" : p.shop.name} sends the full quote when you ask for it.</p>
       </section>
-      <p className="we-foot">Estimates by <b>JobFlex</b> for {p.shop.name}. No prices are shown to anyone else; the final price follows a visit.</p>
+      <p className="we-foot">{p.shop.house ? pageWords(p.shop, "deck").foot : <>Estimates by <b>JobFlex</b> for {p.shop.name}. No prices are shown to anyone else; the final price follows a visit.</>}</p>
     </div>
   );
 }

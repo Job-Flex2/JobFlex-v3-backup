@@ -30,7 +30,6 @@ import {
   webSettingsKey,
   type WebEstimatorSettings,
   type WebMonthCounts,
-  type WebTrade,
   type WebShop,
   type WebEstimateRecord,
   type WebLeadContact,

@@ -2,10 +2,12 @@
 // it, so it wouldn't confuse the client that he is working on the contractor's website but a different name appears
 // up there"). The contractor's logo big and their name first; JobFlex a quiet "by JobFlex" mark, never the headline.
 // Inside a frame on their own site (embed) the shop's own header is already above: one short brand line.
+// THE HOUSE (2026-10-28, lib/webEstimator houseShop): JobFlex is the shop — no "by JobFlex" twice; a way back to the
+// row of estimators on /price instead.
 import * as React from "react";
 
 export interface WebHeadProps {
-  shop: { name: string; logoUrl: string | null };
+  shop: { name: string; logoUrl: string | null; house?: boolean };
   /** "Your roof, priced" — the page's own title, under the brand. */
   title: string;
   /** "Deck Studio", "Roof estimator"… — what the small mark says this is. */
@@ -22,7 +24,7 @@ export function WebHead({ shop, title, tool, embed }: WebHeadProps) {
           <img className="we-embedLogo" src={shop.logoUrl} alt="" />
         ) : null}
         <b>{title}</b>
-        <span className="we-by">{tool} by JobFlex</span>
+        {shop.house ? null : <span className="we-by">{tool} by JobFlex</span>}
       </div>
     );
   }
@@ -40,10 +42,14 @@ export function WebHead({ shop, title, tool, embed }: WebHeadProps) {
           <div className="we-title">{title}</div>
         </div>
       </div>
-      <div className="we-by" aria-label={`${tool} by JobFlex`}>
-        <span className="we-byTool">{tool}</span>
-        <span className="we-byJf">by JobFlex</span>
-      </div>
+      {shop.house ? (
+        <a className="we-back" href="/price" data-web-back>← Price another project</a>
+      ) : (
+        <div className="we-by" aria-label={`${tool} by JobFlex`}>
+          <span className="we-byTool">{tool}</span>
+          <span className="we-byJf">by JobFlex</span>
+        </div>
+      )}
     </header>
   );
 }

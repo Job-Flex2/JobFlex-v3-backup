@@ -8,12 +8,12 @@
 import * as React from "react";
 import { webLead, webView, type WebEstimateView } from "@/actions/webEstimator";
 import { webSmartAnalyze, webSmartGenerate } from "@/actions/advancedEstimator";
-import { bandWords, money } from "@/lib/webEstimator";
+import { bandWords, money, pageWords } from "@/lib/webEstimator";
 import { WebHead } from "./web-head";
 import "./web-estimate.css";
 
 export interface WebSmartProps {
-  shop: { name: string; slug: string; logoUrl: string | null; primaryColor: string | null; phone: string | null; website: string | null };
+  shop: { name: string; slug: string; logoUrl: string | null; primaryColor: string | null; phone: string | null; website: string | null; house?: boolean };
   title: string;
   basis: string;
   askEmail: boolean;
@@ -52,6 +52,7 @@ export function WebSmart(p: WebSmartProps) {
   const [est, setEst] = React.useState<WebEstimateView | null>(null);
   const [included, setIncluded] = React.useState<string[]>([]);
   const [contact, setContact] = React.useState({ name: "", phone: "", email: "", note: "", consent: false, company: "" });
+  const pw = pageWords(p.shop, "project");
   const [leadId, setLeadId] = React.useState<string | null>(null);
   const viewed = React.useRef(false);
 
@@ -95,10 +96,11 @@ export function WebSmart(p: WebSmartProps) {
   }
   async function sendNow() {
     setBusy(true); setError(null);
-    if (!est) { setError(`Call ${p.shop.name}${p.shop.phone ? ` at ${p.shop.phone}` : ""} — they will price it in person.`); setBusy(false); return; }
+    if (!est) { setError(p.shop.house ? pw.call : `Call ${p.shop.name}${p.shop.phone ? ` at ${p.shop.phone}` : ""} — they will price it in person.`); setBusy(false); return; }
     const r = await webLead(p.shop.slug, "smart", est.token, contact).catch(() => ({ ok: false as const, error: "Something went wrong — try again." }));
     setBusy(false);
     if (!r.ok) { setError(r.error); return; }
+    if (r.next) { window.location.assign(r.next); return; }   // the house: the homeowner's own request page
     setLeadId(r.leadId); setStep("done"); tell("lead");
   }
 
@@ -147,7 +149,7 @@ export function WebSmart(p: WebSmartProps) {
           <button type="button" className="we-btn we-wide" disabled={!ready || busy} onClick={() => void analyze()} data-web-next>
             {step === "asking" ? "Reading your project…" : "Price my project"}
           </button>
-          <p className="we-fine">No account, no payment. {p.shop.name} sees your request only when you send it.</p>
+          <p className="we-fine">{pw.sees}</p>
         </section>
       )}
 
@@ -187,7 +189,7 @@ export function WebSmart(p: WebSmartProps) {
             </ul>
           ) : null}
           <button type="button" className="we-btn we-wide" onClick={() => setStep("quote")} data-web-quote>Get my full quote</button>
-          <p className="we-fine">The full, line-by-line quote comes from {p.shop.name} after they look at it. You pick a time; they confirm the price.</p>
+          <p className="we-fine">{pw.quote}</p>
           <button type="button" className="we-link" onClick={() => setStep("describe")} data-web-again>Change the project</button>
         </section>
       )}
@@ -195,20 +197,20 @@ export function WebSmart(p: WebSmartProps) {
       {step === "quote" && (
         <section className="we-card" data-web-step="quote">
           <h2>{est ? "Your full quote" : "Leave your details"}</h2>
-          {est ? <p className="we-note">{est.choice}: <b>{price}</b>. {p.shop.name} confirms it line by line.</p> : null}
+          {est ? <p className="we-note">{est.choice}: <b>{price}</b>. {p.shop.house ? "A local pro" : p.shop.name} confirms it line by line.</p> : null}
           <form className="we-form" onSubmit={(e) => { e.preventDefault(); void sendNow(); }}>
             <label><span>Your name</span><input value={contact.name} autoComplete="name" onChange={(e) => setContact({ ...contact, name: e.target.value })} data-web-name /></label>
             <label><span>Phone</span><input value={contact.phone} inputMode="tel" autoComplete="tel" onChange={(e) => setContact({ ...contact, phone: e.target.value })} data-web-phone /></label>
-            {p.askEmail ? <label><span>Email <small>for your copy of the price</small></span><input type="email" value={contact.email} autoComplete="email" onChange={(e) => setContact({ ...contact, email: e.target.value })} data-web-email /></label> : null}
+            {p.askEmail ? <label><span>Email {p.shop.house ? null : <small>for your copy of the price</small>}</span><input type="email" required={!!p.shop.house} value={contact.email} autoComplete="email" onChange={(e) => setContact({ ...contact, email: e.target.value })} data-web-email /></label> : null}
             <label><span>Anything we should know? <small>optional</small></span><textarea rows={3} maxLength={1000} value={contact.note} onChange={(e) => setContact({ ...contact, note: e.target.value })} data-web-note /></label>
-            <label className="we-consent"><input type="checkbox" checked={contact.consent} onChange={(e) => setContact({ ...contact, consent: e.target.checked })} data-web-consent /><span>{p.shop.name} may call, text or email me about this project.</span></label>
+            <label className="we-consent"><input type="checkbox" checked={contact.consent} onChange={(e) => setContact({ ...contact, consent: e.target.checked })} data-web-consent /><span>{pw.consent}</span></label>
             <input className="we-hp" tabIndex={-1} autoComplete="off" value={contact.company} onChange={(e) => setContact({ ...contact, company: e.target.value })} aria-hidden="true" name="company" />
             {error ? <p className="we-err" role="alert">{error}</p> : null}
             <div className="we-row">
               <button type="button" className="we-btn we-ghost" onClick={() => setStep(est ? "price" : "describe")} disabled={busy}>Back</button>
               <button type="submit" className="we-btn" disabled={busy || !est} data-web-send>{busy ? "Sending…" : "Send my request"}</button>
             </div>
-            {!est ? <p className="we-fine">Call {p.shop.name}{p.shop.phone ? ` at ${p.shop.phone}` : ""} and they will price it in person.</p> : null}
+            {!est ? <p className="we-fine">{p.shop.house ? <a className="we-link" href="/homeowner">{pw.call}</a> : <>Call {p.shop.name}{p.shop.phone ? ` at ${p.shop.phone}` : ""} and they will price it in person.</>}</p> : null}
           </form>
         </section>
       )}
@@ -222,7 +224,7 @@ export function WebSmart(p: WebSmartProps) {
         </section>
       )}
 
-      <p className="we-foot">Estimates by <b>JobFlex</b> for {p.shop.name}. No prices are shown to anyone else; the final price follows a visit.</p>
+      <p className="we-foot">{p.shop.house ? pw.foot : <>Estimates by <b>JobFlex</b> for {p.shop.name}. No prices are shown to anyone else; the final price follows a visit.</>}</p>
     </div>
   );
 }
