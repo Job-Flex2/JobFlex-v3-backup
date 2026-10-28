@@ -10,6 +10,7 @@ import { getPlanNamesBySlug } from "@/lib/planCatalogServer";
 import { planDisplayName } from "@/lib/planCatalog";
 import { parseReasons } from "@/lib/cancelFeedback";
 import { AdminCancellationsContent, type CancellationDTO } from "@/components/v3/admin-cancellations/cancellations-content";
+import { readCameBack } from "@/lib/cameBackRead";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,9 @@ function bookedWithin(rows: { createdAt: Date }[], days: number): number {
 
 export default async function AdminCancellationsPage() {
   await requirePlatformAdmin();
+  // Who came back (2026-10-28): card-less trials that ran out and later paid, cancellations whose company pays
+  // again — read beside the rows; a failed read leaves the card out, never the table.
+  const cameBackP = readCameBack().catch(() => null);
   const [rows, names] = await Promise.all([
     db.cancellationFeedback
       .findMany({
@@ -49,5 +53,6 @@ export default async function AdminCancellationsPage() {
         createdAt: r.createdAt.toISOString(),
       }))
     : null;
-  return <AdminCancellationsContent rows={dto} last30={rows ? bookedWithin(rows, 30) : 0} />;
+  const cameBack = await cameBackP;
+  return <AdminCancellationsContent rows={dto} last30={rows ? bookedWithin(rows, 30) : 0} cameBack={cameBack} />;
 }
