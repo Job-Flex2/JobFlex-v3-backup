@@ -582,7 +582,7 @@ export function initProposalsContent(
     return (
       '<tr class="prow-grp" data-grp="' +
       esc(c.id) +
-      '"><td colspan="7"><div class="pgrp">' +
+      '"><td colspan="6"><div class="pgrp">' +
       '<svg class="ic pgrp-ic"><use href="#i-folder"/></svg>' +
       '<a class="pgrp-name" href="/dashboard/projects/' +
       encodeURIComponent(c.id) +
@@ -634,52 +634,72 @@ export function initProposalsContent(
     if (!state) return "";
     const insts = p.inst ?? [];
     const next = state === "collect" ? nextStage(p) : null;
+    // PAYMENTS, REDRAWN (owner, 2026-10-28: "redesign the payments section to something that looks better"): every
+    // stage a column of its own — what it is, its share, the amount large, where it stands — under one heading line
+    // that says the money at a glance; the actions in equal columns at the right.
     const stages = insts
       .map((it) => {
         const amount = fmtMoney(instDollars(p, it));
-        const share = it.pct && state === "plan" ? '<em>' + Math.round(it.amount) + "%</em>" : "";
+        const share = it.pct ? Math.round(it.amount) + "%" : "";
         let tone = "later";
         let tail = "";
         if (it.status === "PAID") {
           tone = "paid";
-          tail = it.paidOn ? "paid " + it.paidOn : "paid";
+          tail = it.paidOn ? "Paid " + it.paidOn : "Paid";
         } else if (it.status === "WAIVED") {
           tone = "closed";
-          tail = "closed";
+          tail = "Closed";
         } else if (state === "plan") {
           tone = "plan";
+          tail = it.due ? "Due " + it.due : "After signing";
         } else if (next && it.id === next.id) {
           // The stage being chased carries its own facts: due or late, invoiced, reminded.
           tone = it.overdue ? "next is-late" : "next";
-          tail = stageFacts(it).join(" · ");
+          tail = stageFacts(it).join(" · ") || "Next to collect";
+        } else {
+          tail = it.due ? "Due " + it.due : "Later";
         }
         return (
           '<li class="ppl-st ppl-st--' + tone + '" data-stage="' + esc(it.id) + '">' +
-          (it.status === "PAID" ? '<svg class="ic"><use href="#i-check"/></svg>' : "") +
-          "<b>" + esc(it.label) + "</b>" + share + "<span>" + amount + "</span>" +
-          (tail ? "<i>" + esc(tail) + "</i>" : "") +
+          '<span class="ppl-st-k">' + esc(it.label) + (share ? "<em>" + share + "</em>" : "") + "</span>" +
+          '<span class="ppl-st-v">' + amount + "</span>" +
+          '<i class="ppl-st-s">' + (it.status === "PAID" ? '<svg class="ic"><use href="#i-check"/></svg>' : "") + esc(tail) + "</i>" +
           "</li>"
         );
       })
       .join("") ||
       // Signed with no schedule: the balance is the one thing to collect.
-      (state === "collect" ? '<li class="ppl-st ppl-st--next"><b>Balance</b><span>' + fmtMoney(p.owed) + "</span></li>" : "");
+      (state === "collect" ? '<li class="ppl-st ppl-st--next"><span class="ppl-st-k">Balance</span><span class="ppl-st-v">' + fmtMoney(p.owed) + '</span><i class="ppl-st-s">Next to collect</i></li>' : "");
+    const contract = p.contract ?? p.total;
+    const paid = p.paidAmt ?? 0;
+    const sum =
+      state === "plan"
+        ? fmtMoney(contract) + " · " + (insts.length || 1) + (insts.length === 1 ? " payment" : " payments")
+        : state === "paid"
+          ? "Paid in full · " + fmtMoney(p.paidAmt ?? contract)
+          : "Paid " + fmtMoney(paid) + " of " + fmtMoney(contract) + " · <b>" + fmtMoney(p.owed) + "</b> due";
     let side = "";
     if (state === "plan") {
       side = '<span class="ppl-note">' + esc((p.clientId ? "Billed after " + p.client.split(/\s+/)[0] + " accepts" : "Billed after the client accepts")) + "</span>";
     } else if (state === "paid") {
-      side = '<span class="ppl-note ppl-note--ok"><svg class="ic"><use href="#i-check"/></svg>Paid in full · ' + fmtMoney(p.paidAmt ?? p.contract ?? p.total) + "</span>";
+      side = '<span class="ppl-note ppl-note--ok"><svg class="ic"><use href="#i-check"/></svg>Paid in full</span>';
     } else {
       // Billing is the office's: a sales rep or an estimator reads what is left instead of the buttons.
       side = p.canBill === false ? '<span class="ppl-note"><b>' + fmtMoney(p.owed) + "</b> left to collect</span>" : payActsHtml(p, next);
     }
+    const pctPaid = contract > 0 ? Math.max(0, Math.min(100, Math.round((paid / contract) * 100))) : 0;
     return (
       '<tr class="prow-pay ppl--' + state + chain.replace(/prow--/g, "prow-pay--") + '" data-id="' + esc(p.id) + '"' +
       (chain && p.projectId ? ' data-grp="' + esc(p.projectId) + '"' : "") +
-      '><td colspan="7"><div class="ppl">' +
-      '<span class="ppl-lbl"><svg class="ic"><use href="#i-card"/></svg>Payments</span>' +
+      '><td colspan="6"><div class="ppl">' +
+      '<div class="ppl-head"><span class="ppl-lbl"><svg class="ic"><use href="#i-card"/></svg>Payments</span>' +
+      '<span class="ppl-sum">' + sum + "</span>" +
+      (state === "collect" || state === "paid" ? '<span class="ppl-meter" role="progressbar" aria-label="Paid so far" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pctPaid + '"><span style="width:' + pctPaid + '%"></span></span>' : "") +
+      "</div>" +
+      '<div class="ppl-body">' +
       (stages ? '<ol class="ppl-stages">' + stages + "</ol>" : "") +
-      side +
+      '<div class="ppl-side">' + side + "</div>" +
+      "</div>" +
       "</div></td></tr>"
     );
   }
@@ -699,6 +719,39 @@ export function initProposalsContent(
     );
   }
 
+  /**
+   * THE PROPOSAL'S ACTION BAR (owner, 2026-10-28: "a lower section divided by a bold line with all the action
+   * buttons from the 3 dots — all buttons in that lower action bar"). The row keeps what the proposal IS; this bar,
+   * the card's last line, keeps everything that can be done to it: send, open, the client's view, the client's link,
+   * a change order, the listing, and — apart, at the far end — delete. Billing lives in the payments above it.
+   */
+  function barRowHtml(p: ProposalRow, chain: string): string {
+    const s = sendState(p);
+    const send =
+      s === "none"
+        ? '<button class="pbar-btn" type="button" data-act="send" title="' + esc(p.clientEmail ? "Send to " + p.clientEmail : "Send to the client") + '"><svg class="ic"><use href="#i-send"/></svg>Send to client</button>'
+        : sendCellHtml(p).replace(/class="pact /, 'class="pbar-btn pact ');
+    const zillow = p.zillow
+      ? '<a class="pbar-btn" href="' + esc(p.zillow) + '" target="_blank" rel="noopener noreferrer" title="Open the listing"><svg class="ic"><use href="#i-building"/></svg>Zillow</a>'
+      : "";
+    return (
+      '<tr class="prow-bar' + chain.replace(/prow--/g, "prow-bar--") + '" data-id="' + esc(p.id) + '"' +
+      (chain && p.projectId ? ' data-grp="' + esc(p.projectId) + '"' : "") +
+      '><td colspan="6"><div class="pbar">' +
+      '<div class="pbar-l">' +
+      '<a class="pbar-btn pbar-btn--open" href="' + proposalHref(p.id) + '" title="Open the proposal"><svg class="ic"><use href="#i-pen"/></svg>Open</a>' +
+      send +
+      '<a class="pbar-btn pbar-btn--view" href="/portal/q/' + encodeURIComponent(p.publicId) + '" target="_blank" rel="noopener noreferrer" title="Client view — the page the client gets, in a new tab"><svg class="ic"><use href="#i-eye"/></svg>Client view</a>' +
+      '<button class="pbar-btn" type="button" data-act="change-order" title="Price extras, send for signature"><svg class="ic"><use href="#i-plus"/></svg>' + (p.co && p.co.count ? "Change orders · " + p.co.count : "Change order") + "</button>" +
+      zillow +
+      '<button class="pbar-btn" type="button" data-act="copylink" title="Copy the client\'s link to paste into a text"><svg class="ic"><use href="#i-link"/></svg>Copy client link</button>' +
+      "</div>" +
+      '<button class="pbar-btn pbar-btn--del" type="button" data-act="del" title="Delete this proposal — permanent"><svg class="ic"><use href="#i-trash"/></svg>Delete</button>' +
+      "</div></td></tr>" +
+      '<tr class="prow-gap" data-id="' + esc(p.id) + '" aria-hidden="true"><td colspan="6"></td></tr>'
+    );
+  }
+
   /** The rows the ALL table is currently showing, with the page clamped. */
   function allSlice() {
     const rows = chained(filteredAll());
@@ -712,7 +765,7 @@ export function initProposalsContent(
     return (
       '<tr class="prow' +
       chain +
-      (pay ? " has-pay" : "") +
+      (pay ? " has-pay" : " no-pay") +
       '" data-id="' +
       esc(p.id) +
       '"' +
@@ -763,21 +816,9 @@ export function initProposalsContent(
       '<td class="td-owner">' +
       (p.mine ? "" : p.ownerWho ? whoHtml(p.ownerWho) : '<span class="pt-mono">' + esc(p.owner) + "</span>") +
       "</td>" +
-      // THE ROW'S OWN ACTIONS (owner, 2026-10-13: "I don't like the three dots at the end with a whole bunch of
-      // options; add Client view on the line"): Open and Client view sit on the row as plain links; the dots keep
-      // only what is rarer — share, bill, the rest.
-      '<td class="num td-acts"><div class="pacts">' +
-      sendCellHtml(p) +
-      '<a class="pact pact--open" href="' + proposalHref(p.id) + '" title="Open the proposal"><svg class="ic"><use href="#i-pen"/></svg><span>Open</span></a>' +
-      '<a class="pact pact--view" href="/portal/q/' + encodeURIComponent(p.publicId) + '" target="_blank" rel="noopener noreferrer" title="Client view — the page the client gets, in a new tab"><svg class="ic"><use href="#i-eye"/></svg><span>Client view</span></a>' +
-      '<button class="pt-open" type="button" data-menu="' +
-      esc(p.id) +
-      '" aria-label="More for ' +
-      esc(p.title) +
-      '" title="Share, bill, more"><svg class="ic"><use href="#i-dots"/></svg></button>' +
-      "</div></td>" +
       "</tr>" +
-      pay
+      pay +
+      barRowHtml(p, chain)
     );
   }
   /** A stamp blooms ONCE in this browser (2026-10-13): the render that shows it records it a moment later, so
@@ -863,7 +904,7 @@ export function initProposalsContent(
     body.innerHTML = html;
     syncAllChrome();
     if (stagger && panelVisible("all")) {
-      staggerIn(Array.from(body.querySelectorAll<HTMLElement>(".prow, .prow-pay")));
+      staggerIn(Array.from(body.querySelectorAll<HTMLElement>(".prow, .prow-pay, .prow-bar")));
     }
   }
   function accSlice() {
@@ -1182,13 +1223,23 @@ export function initProposalsContent(
     const next = tr.nextElementSibling as HTMLElement | null;
     return next && next.classList.contains("prow-pay") ? next : null;
   }
+  /** Every row after a proposal's own that belongs to it: its payments, its action bar, the gap under the card. */
+  function tailRowsOf(tr: HTMLElement): HTMLElement[] {
+    const out: HTMLElement[] = [];
+    let n = tr.nextElementSibling as HTMLElement | null;
+    while (n && n.dataset.id === tr.dataset.id && /\bprow-(pay|bar|gap)\b/.test(n.className)) {
+      out.push(n);
+      n = n.nextElementSibling as HTMLElement | null;
+    }
+    return out;
+  }
   /** Patch a single ALL row in place: the row and its payment line are rebuilt from the record, since a write
    *  can change the plate, the money, the Send cell and every stage (2026-10-23). Unchained rows only — a
    *  chained one redraws the table with its project's header. */
   function patchAllRow(tr: HTMLElement, p: ProposalRow) {
     const t = document.createElement("tbody");
     t.innerHTML = allRowHtml(p);
-    payRowOf(tr)?.remove();
+    tailRowsOf(tr).forEach((r) => r.remove());
     tr.replaceWith(...Array.from(t.children));
   }
 
@@ -1242,7 +1293,7 @@ export function initProposalsContent(
       return;
     }
     if (tr && !onPage) {
-      payRowOf(tr)?.remove();
+      tailRowsOf(tr).forEach((r) => r.remove());
       leaveRow(
         tr,
         () => {
@@ -1793,6 +1844,10 @@ export function initProposalsContent(
       }
       if (kind === "change-order" && p) {
         openChangeOrder(p);
+        return;
+      }
+      if (kind === "del" && p) {
+        if (!pstate.writing) promptDelete(p);
         return;
       }
       if (kind === "reminders" && p) {

@@ -145,7 +145,6 @@ export function ProposalsContent({ rows }: { rows: ProposalRow[] }) {
                 <th className="c">Views</th>
                 <th>Updated</th>
                 <th className="th-owner">Owner</th>
-                <th className="th-open"></th>
               </tr>
             </thead>
             <tbody id="propTableBody"></tbody>

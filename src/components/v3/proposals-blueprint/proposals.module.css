@@ -2043,3 +2043,112 @@
 .bp :global(.content .ppl-act:disabled) { opacity: 0.45; cursor: not-allowed; }
 .bp :global(.content .ppl-act:focus-visible) { outline: 2px solid var(--blueprint); outline-offset: 2px; }
 .bp :global(.content .ppl-act.is-flashed) { color: #fff; background: var(--success); border-color: var(--success); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   EVERY PROPOSAL ITS OWN CARD (owner, 2026-10-28: "have individual proposals not together but separated, and add a
+   lower section divided by a bold line, a section with all the action buttons from the 3 dots"). The ALL table keeps
+   its rows (the writes patch them in place) but draws each proposal as a framed card: its row, a bold ink line, the
+   payments, its action bar, a 2 px ink line to close it, and a gap before the next. The row's ⋮ menu is gone;
+   everything it held is on the bar. */
+.bp :global(.content #allCard.card) { border: 0; box-shadow: none; background: transparent; overflow: visible; }
+.bp :global(.content #allCard .ptable) { border-collapse: separate; border-spacing: 0; }
+.bp :global(.content #allCard .ptable th) { border-bottom: 0; padding-bottom: 10px; }
+.bp :global(.content #allCard .ptable tbody tr:hover) { background: transparent; }
+/* The card: the proposal's own row, framed in ink on three sides. */
+.bp :global(.content #allCard .ptable tr.prow td) { background: #fff; border-top: 2px solid var(--ink); border-bottom: 0; padding-top: 16px; padding-bottom: 16px; }
+.bp :global(.content #allCard .ptable tr.prow td:first-child) { border-left: 2px solid var(--ink); }
+.bp :global(.content #allCard .ptable tr.prow td:last-child),
+.bp :global(.content #allCard .ptable.is-solo tr.prow td:nth-last-child(2)) { border-right: 2px solid var(--ink); }
+.bp :global(.content #allCard .ptable tr.prow:hover td) { background: var(--paper-deep); }
+.bp :global(.content #allCard .ptable tr.prow-pay td),
+.bp :global(.content #allCard .ptable tr.prow-bar td) { padding: 0; border-left: 2px solid var(--ink); border-right: 2px solid var(--ink); border-bottom: 0; }
+/* The lower section begins under a bold line: the payments when there are any, else the action bar. */
+.bp :global(.content #allCard .ptable tr.prow-pay td) { background: #fff; border-top: 2px solid var(--ink); }
+.bp :global(.content #allCard .ptable tr.prow-pay + tr.prow-bar td) { border-top: 1.5px solid var(--ink-line); }
+.bp :global(.content #allCard .ptable tr.prow.no-pay + tr.prow-bar td) { border-top: 2px solid var(--ink); }
+/* The card's last line: bold ink. */
+.bp :global(.content #allCard .ptable tr.prow-bar td) { background: var(--paper-deep); border-bottom: 2px solid var(--ink); }
+.bp :global(.content #allCard .ptable tr.prow-gap td) { height: 16px; padding: 0; border: 0; background: transparent; }
+.bp :global(.content #allCard .ptable tr.prow-grp td) { padding: 18px 4px 10px; }
+/* A project's chain keeps its rail down the cards. */
+.bp :global(.content #allCard .ptable tr.prow--chain td:first-child::before) { top: -2px; bottom: -2px; }
+
+/* ── The payments, redrawn: one heading line with the money at a glance, every stage its own column, the actions
+   in equal columns at the right ── */
+.bp :global(.content #allCard .ppl) { display: block; padding: 16px 20px 18px; border: 0; border-radius: 0; background: transparent; }
+.bp :global(.content #allCard .ppl-head) { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.bp :global(.content #allCard .ppl-lbl) { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em; color: var(--ink); }
+.bp :global(.content #allCard .ppl-sum) { font-size: 14px; font-weight: 600; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.bp :global(.content #allCard .ppl-sum b) { font-weight: 800; color: var(--warning-dark); }
+.bp :global(.content #allCard .ppl-meter) { flex: 0 0 200px; height: 8px; margin-left: auto; border: 1.5px solid var(--ink); background: #fff; }
+.bp :global(.content #allCard .ppl-meter > span) { display: block; height: 100%; background: var(--success); }
+.bp :global(.content #allCard .ppl-body) { display: flex; align-items: stretch; gap: 16px; }
+.bp :global(.content #allCard .ppl-stages) { flex: 1 1 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; margin: 0; padding: 0; border: 1.5px solid var(--ink-line); }
+.bp :global(.content #allCard .ppl-st) {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0;
+  padding: 12px 14px; border: 0; border-left: 1.5px solid var(--ink-line); border-radius: 0;
+  background: #fff; white-space: normal; box-shadow: inset 0 3px 0 var(--ink-line);
+}
+.bp :global(.content #allCard .ppl-st:first-child) { border-left: 0; }
+.bp :global(.content #allCard .ppl .ppl-st-k) { font: 700 11px/1.2 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); }
+.bp :global(.content #allCard .ppl .ppl-st-k em) { margin-left: 6px; font-style: normal; color: var(--muted); }
+.bp :global(.content #allCard .ppl .ppl-st-v) { font-size: 20px; font-weight: 900; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--ink); }
+.bp :global(.content #allCard .ppl .ppl-st-s) { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-style: normal; font-weight: 600; color: var(--muted); }
+.bp :global(.content #allCard .ppl .ppl-st-s .ic) { width: 13px; height: 13px; }
+.bp :global(.content #allCard .ppl-st--paid) { box-shadow: inset 0 3px 0 var(--success); background: var(--success-soft); }
+.bp :global(.content #allCard .ppl-st--paid .ppl-st-v), .bp :global(.content #allCard .ppl-st--paid .ppl-st-s) { color: var(--success-dark); }
+.bp :global(.content #allCard .ppl-st--next) { box-shadow: inset 0 3px 0 var(--blueprint); }
+.bp :global(.content #allCard .ppl-st--next .ppl-st-v) { color: var(--blueprint); }
+.bp :global(.content #allCard .ppl-st--next .ppl-st-s) { color: var(--ink-soft); }
+.bp :global(.content #allCard .ppl-st--next.is-late) { box-shadow: inset 0 3px 0 var(--danger); }
+.bp :global(.content #allCard .ppl-st--next.is-late .ppl-st-v), .bp :global(.content #allCard .ppl-st--next.is-late .ppl-st-s) { color: var(--danger); }
+.bp :global(.content #allCard .ppl-st--closed .ppl-st-v) { text-decoration: line-through; color: var(--muted); }
+.bp :global(.content #allCard .ppl-side) { flex: 0 0 auto; display: flex; align-items: center; justify-content: flex-end; min-width: 240px; }
+.bp :global(.content #allCard .ppl-note) { margin-left: 0; font-size: 14px; font-weight: 600; color: var(--ink-soft); text-align: right; }
+/* Mark paid · Send invoice · Remind — equal columns (owner, 2026-10-28: "make the buttons in columns"). */
+.bp :global(.content #allCard .ppl-acts) { display: grid; grid-template-columns: repeat(3, minmax(118px, 1fr)); gap: 8px; margin: 0; }
+.bp :global(.content #allCard .ppl-act) { height: 44px; justify-content: center; padding: 0 12px; font-size: 13px; }
+.bp :global(.content #allCard .ppl-act .ic) { width: 14px; height: 14px; }
+@media (max-width: 1280px) {
+  .bp :global(.content #allCard .ppl-body) { flex-direction: column; }
+  .bp :global(.content #allCard .ppl-side) { justify-content: flex-start; }
+  .bp :global(.content #allCard .ppl-note) { text-align: left; }
+}
+
+/* ── The action bar ── */
+.bp :global(.content .pbar) { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 20px; }
+.bp :global(.content .pbar-l) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bp :global(.content .pbar .pbar-btn) {
+  display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 14px;
+  border: 1.5px solid var(--ink); border-radius: var(--radius); background: #fff; color: var(--ink);
+  font: 700 13px/1 var(--font); letter-spacing: 0; text-transform: none; text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition: background 0.12s, transform 0.12s, box-shadow 0.12s;
+}
+.bp :global(.content .pbar .pbar-btn .ic) { width: 14px; height: 14px; }
+.bp :global(.content .pbar .pbar-btn span) { display: inline; }
+.bp :global(.content .pbar .pbar-btn:hover) { background: var(--paper-deep); transform: translate(-1px, -1px); box-shadow: 2px 2px 0 var(--ink); }
+.bp :global(.content .pbar .pbar-btn:focus-visible) { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+.bp :global(.content .pbar .pbar-btn--open) { background: var(--blueprint); color: #fff; }
+.bp :global(.content .pbar .pbar-btn--open:hover) { background: var(--blueprint-dark); }
+.bp :global(.content .pbar .pbar-btn--view) { color: var(--blueprint); }
+.bp :global(.content .pbar .pbar-btn.pact--send) { background: var(--success); color: #fff; }
+.bp :global(.content .pbar .pbar-btn.pact--send:hover) { background: var(--success-dark); }
+.bp :global(.content .pbar .pbar-btn.pact--sent) { background: var(--success-soft); color: var(--success-dark); }
+.bp :global(.content .pbar .pbar-btn.pact--sent.is-static) { border-color: transparent; background: transparent; cursor: default; padding-inline: 4px; }
+.bp :global(.content .pbar .pbar-btn.pact--sent.is-static:hover) { transform: none; box-shadow: none; }
+.bp :global(.content .pbar .pbar-btn.pact--sent small) { font: 600 11px/1 var(--font-mono); }
+.bp :global(.content .pbar .pbar-btn--del) { flex: none; border-color: var(--danger); color: var(--danger); }
+.bp :global(.content .pbar .pbar-btn--del:hover) { background: var(--danger-soft); box-shadow: 2px 2px 0 var(--danger); }
+
+/* ── The accepted card (owner, 2026-10-28): each stage's Mark paid · Send invoice · Remind in three equal columns
+   under the stage, each in its colour; the footer's two dividers — the line that closes Copy client link and the
+   line that opens Un-accept — bold ink, the card's frame too. ── */
+.bp :global(.content .pjob) { border: 2px solid var(--ink); }
+.bp :global(.content .pjob .pcol > .pinst-acts) {
+  grid-column: 1 / -1; grid-row: 3; align-self: stretch;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0 0;
+}
+.bp :global(.content .pjob .pcol > .pinst-acts .pinst-paid) { grid-column: 1 / span 2; }
+.bp :global(.content .pjob .pinst-acts .btn.btn--sm) { justify-content: center; min-height: 40px; height: 40px; font-size: 11px; }
+.bp :global(.content .pjob .pjob-foot .pjob-foot-l .btn.btn--sm:last-child) { border-right: 2px solid var(--ink); }
+.bp :global(.content .pjob .pjob-foot .pjob-foot-r) { border-left: 2px solid var(--ink); }
