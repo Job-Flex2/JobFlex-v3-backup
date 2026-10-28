@@ -111,6 +111,10 @@ export default async function CostCityPage({ params }: { params: Promise<Params>
           <a className={s.jump} href="#calculator">
             Price your own job ↓
           </a>
+          {/* The live price for YOUR address (2026-10-27, /price): the roof reads itself from the sky; the others start at the row. */}
+          <a className={s.jump} href={trade.slug === "roof-replacement" ? `/price/roof?city=${encodeURIComponent(city.city)}&state=${encodeURIComponent(city.state)}` : "/price"} data-seo-cta="price">
+            See the price for your address →
+          </a>
         </section>
         <div className={s.lede}>
           {p.lede.map((t) => (
