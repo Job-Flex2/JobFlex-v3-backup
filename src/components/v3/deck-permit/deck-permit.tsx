@@ -20,7 +20,7 @@ import { DeckPlan } from "@/components/v3/deck-estimator-blueprint/deck-plan";
 import { permitNotes, roofDetails, type DetailDrawing } from "@/lib/deck/permit";
 import { crewSheetList } from "@/lib/deck/plans/sheets";
 import { DECK_SIDE_LABEL, DECK_SIDES, defaultSitePlan, normalizeSitePlan, siteLayout, siteScale, turnLot, type SitePlan } from "@/lib/deck/sitePlan";
-import { countyCodeFor, designCriteria, RESEARCHED_ON } from "@/lib/deck/countyCodes";
+import { countyCodeFor, designCriteria, RESEARCHED_ON, siteScaleWarning } from "@/lib/deck/countyCodes";
 import { readDeckCounty, readDeckLot, saveDeckSitePlan } from "@/actions/deckSitePlan";
 import { DrawingSvg } from "./deck-sections";
 import { SitePlanSvg } from "./deck-site-plan";
@@ -100,7 +100,7 @@ function PermitSet({ design, address, title, shop, initialPlan, editable, built 
     readDeckCounty(address)
       .then((r) => {
         if (!r.ok || !r.county) return;
-        const county = { name: r.county.name, state: r.county.state, source: "census" as const };
+        const county = { name: r.county.name, state: r.county.state, source: "census" as const, city: r.county.city };
         dirty.current = true;
         setPlan((p) => (p.county ? p : { ...p, county, street: p.street || r.street || p.street }));
       })
@@ -123,8 +123,8 @@ function PermitSet({ design, address, title, shop, initialPlan, editable, built 
     setBusy(false);
   };
 
-  const county = countyCodeFor(plan.county?.state ?? design.site.state, plan.county?.name);
-  const countyName = plan.county ? `${plan.county.name}${plan.county.state ? `, ${plan.county.state}` : ""}` : null;
+  const county = countyCodeFor(plan.county?.state ?? design.site.state, plan.county?.name, plan.county?.city);
+  const countyName = plan.county ? `${plan.county.city ? `${plan.county.city} · ` : ""}${plan.county.name}${plan.county.state ? `, ${plan.county.state}` : ""}` : null;
   const criteria = designCriteria(structure, county, countyName);
   const layout = siteLayout(plan, structure);
   const siteW = layout.bounds.x1 - layout.bounds.x0;
@@ -135,7 +135,8 @@ function PermitSet({ design, address, title, shop, initialPlan, editable, built 
   const rDetails = roofDetails(structure, county?.windMph ?? null);
   const notes = permitNotes(structure, criteria.countyNotes, county?.edition ?? null);
   const fails = checks.filter((c) => c.level === "fail");
-  const warns = [...criteria.warnings, ...layout.checks.filter((c) => c.level === "warn").map((c) => c.text)];
+  const scaleWarn = siteScaleWarning(county, scale);
+  const warns = [...criteria.warnings, ...(scaleWarn ? [scaleWarn] : []), ...layout.checks.filter((c) => c.level === "warn").map((c) => c.text)];
   const what = structureWords(design);
   const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   // The title block's project line: the draft's or proposal's own title when it already names the deck, else the deck and the title.
@@ -173,7 +174,7 @@ function PermitSet({ design, address, title, shop, initialPlan, editable, built 
           <SitePlanPanel plan={plan} fallback={fallback} update={update} readLot={readLot} busy={busy} said={said} editable={editable} hasAddress={!!address} detached={design.placement === "detached"} />
           <div className={s.panelFoot}>
             <span>{status}</span>
-            <span>{county ? `${county.county}: the county's own figures on file (${RESEARCHED_ON}) — ${county.jurisdiction}.` : countyName ? `${countyName}: not among the counties on file — the state's figures are used; confirm them with the building department.` : "The county is read from the address."}</span>
+            <span>{county ? `${county.city ? `${county.city} (${county.county})` : county.county}: ${county.city ? "the city's" : "the county's"} own figures on file (${RESEARCHED_ON}) — ${county.jurisdiction}.` : countyName ? `${countyName}: not among the counties on file — the state's figures are used; confirm them with the building department.` : "The county is read from the address."}</span>
           </div>
         </div>
 

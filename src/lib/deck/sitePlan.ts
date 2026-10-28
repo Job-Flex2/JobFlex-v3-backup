@@ -71,8 +71,9 @@ export interface SitePlan {
   /** The zoning setbacks the deck must keep, typed from the zoning office (null = not checked). */
   setbackRearFt: number | null;
   setbackSideFt: number | null;
-  /** The county (or county-equivalent) the lot lies in, and who said so. */
-  county: { name: string; state: string; source: "census" | "parcel" | "typed" } | null;
+  /** The county (or county-equivalent) the lot lies in, who said so — and the city, when the geocoder named one
+   *  (a city with its own permit office reads its own figures: lib/deck/countyCodes). */
+  county: { name: string; state: string; source: "census" | "parcel" | "typed"; city?: string | null } | null;
   /** The title block's typed lines: the owner of the property, the contractor's licence. */
   owner: string;
   licence: string;
@@ -166,7 +167,7 @@ export function normalizeSitePlan(raw: unknown, fallback: SitePlan = BASE_SITE_P
   const fp = ringOf(h.footprint, 5000);
   const countyR = obj(r.county);
   const county = str(countyR.name, 60) && /^[A-Z]{2}$/.test(str(countyR.state, 2).toUpperCase())
-    ? { name: str(countyR.name, 60), state: str(countyR.state, 2).toUpperCase(), source: (countyR.source === "parcel" || countyR.source === "census" ? countyR.source : "typed") as "census" | "parcel" | "typed" }
+    ? { name: str(countyR.name, 60), state: str(countyR.state, 2).toUpperCase(), source: (countyR.source === "parcel" || countyR.source === "census" ? countyR.source : "typed") as "census" | "parcel" | "typed", city: str(countyR.city, 60) || null }
     : null;
   const setback = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? r1(clamp(v, SITE_LIMITS.setbackFt.min, SITE_LIMITS.setbackFt.max)) : null);
   return {

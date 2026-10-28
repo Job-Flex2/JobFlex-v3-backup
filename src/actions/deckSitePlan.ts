@@ -50,14 +50,15 @@ export async function saveDeckSitePlan(input: { address: string; plan: unknown; 
 }
 
 /** The county the address lies in (the Census Bureau's geocoder), for the county's design values. */
-export async function readDeckCounty(address: string): Promise<{ ok: true; county: { name: string; state: string } | null; street: string | null } | { ok: false; error: string }> {
+export async function readDeckCounty(address: string): Promise<{ ok: true; county: { name: string; state: string; city: string | null } | null; street: string | null } | { ok: false; error: string }> {
   const g = await gate();
   if (!g.ok) return g;
   const text = (address ?? "").trim().slice(0, 300);
   if (text.length < 8) return { ok: false, error: "Set the job's street address first." };
   const hit = await censusGeocode(text);
   if (!hit) return { ok: true, county: null, street: null };
-  return { ok: true, county: hit.county && hit.state ? { name: hit.county, state: hit.state.toUpperCase() } : null, street: hit.matched ? streetFrom(hit.matched) : null };
+  // The city too (the Census geocoder's address components): a city with its own permit office reads its own figures.
+  return { ok: true, county: hit.county && hit.state ? { name: hit.county, state: hit.state.toUpperCase(), city: hit.city?.trim() || null } : null, street: hit.matched ? streetFrom(hit.matched) : null };
 }
 
 /**

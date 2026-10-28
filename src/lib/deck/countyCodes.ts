@@ -19,6 +19,29 @@ import { COUNTY_CODES, COUNTY_RESEARCHED_ON } from "./countyCodes.data";
 import type { DeckStructure } from "./structure";
 import { TERMITE_LABEL } from "./site";
 
+/**
+ * A city inside the county that issues its own permits with its own figures (2026-10-28, owner: "does it adapt
+ * per state, per city — Sacramento?"). The City of Sacramento reads 110 mph and SDC D0 where the County reads 95;
+ * its plan check is electronic only with its own sheet rules. Whatever the city leaves out comes from the county.
+ */
+export interface DeckCityCode {
+  city: string;
+  jurisdiction: string;
+  edition?: string | null;
+  frostIn?: number | null;
+  groundSnowPsf?: number | null;
+  windMph?: number | null;
+  windBasis?: string | null;
+  sdc?: string | null;
+  weathering?: string | null;
+  termite?: string | null;
+  /** The smallest site-plan scale the department accepts, feet per inch (8 = 1/8 in. = 1 ft). */
+  minSiteScaleFtPerIn?: number | null;
+  deckNotes?: string[];
+  note?: string | null;
+  sources?: Array<{ title: string; url: string }>;
+}
+
 export interface DeckCountyCode {
   state: string;
   /** "Harris County", "Orleans Parish", "Anchorage Municipality", "New York City (5 boroughs)". */
@@ -26,6 +49,12 @@ export interface DeckCountyCode {
   fips: string | null;
   /** Who publishes these figures: the county's building department, or the main city's. */
   jurisdiction: string;
+  /** The city the figures were read for, when a city's own entry answered (countyCodeFor with a city). */
+  city?: string | null;
+  /** Cities in the county with figures and rules of their own. */
+  cities?: DeckCityCode[];
+  /** The smallest site-plan scale the department accepts, feet per inch; null when it names none. */
+  minSiteScaleFtPerIn?: number | null;
   /** The code edition enforced there for one- and two-family dwellings. */
   edition: string | null;
   frostIn: number | null;
@@ -67,11 +96,62 @@ for (const c of COUNTY_CODES) {
 const NYC = COUNTY_CODES.find((c) => c.state === "NY" && /new york city/i.test(c.county));
 if (NYC) for (const b of ["new york", "kings", "queens", "bronx", "richmond"]) BY_KEY.set(`NY:${countyKey(b)}`, NYC);
 
-/** The county's own figures, when it is one of the counties on file. */
-export function countyCodeFor(state: string | null | undefined, county: string | null | undefined): DeckCountyCode | null {
+/** "City of Sacramento" / "SACRAMENTO" / "Sacramento city" → a key part. */
+export const cityKey = (name: string | null | undefined): string =>
+  (name ?? "")
+    .toLowerCase()
+    .replace(/\b(city of|town of|village of)\b/g, "")
+    .replace(/\b(city|town|village)\b/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+
+/**
+ * The county's own figures, when it is one of the counties on file — and the city's over them when the address
+ * lies in a city that has its own entry: its jurisdiction, edition, figures, deck rules and sources take the
+ * county's place, line by line, where the city names them.
+ */
+export function countyCodeFor(state: string | null | undefined, county: string | null | undefined, city?: string | null): DeckCountyCode | null {
   const st = (state ?? "").trim().toUpperCase();
   if (!st || !county) return null;
-  return BY_KEY.get(`${st}:${countyKey(county)}`) ?? null;
+  const base = BY_KEY.get(`${st}:${countyKey(county)}`) ?? null;
+  if (!base) return null;
+  const ck = cityKey(city);
+  const c = ck ? base.cities?.find((x) => cityKey(x.city) === ck) : undefined;
+  if (!c) return base;
+  const { cities: _cities, ...rest } = base;
+  void _cities;
+  return {
+    ...rest,
+    city: c.city,
+    jurisdiction: c.jurisdiction,
+    edition: c.edition ?? base.edition,
+    frostIn: c.frostIn ?? base.frostIn,
+    groundSnowPsf: c.groundSnowPsf ?? base.groundSnowPsf,
+    windMph: c.windMph ?? base.windMph,
+    windBasis: c.windMph != null ? c.windBasis ?? null : base.windBasis,
+    sdc: c.sdc ?? base.sdc,
+    weathering: c.weathering ?? base.weathering,
+    termite: c.termite ?? base.termite,
+    minSiteScaleFtPerIn: c.minSiteScaleFtPerIn ?? base.minSiteScaleFtPerIn ?? null,
+    deckNotes: c.deckNotes ?? base.deckNotes,
+    note: c.note ?? base.note,
+    sources: [...(c.sources ?? []), ...base.sources],
+  };
+}
+
+/** The architect's fraction where there is one ("1/8 in. = 1 ft" is 8 ft to the inch), the engineer's "1 in. = 20 ft" otherwise. */
+export function siteScaleWords(ftPerIn: number): string {
+  return ftPerIn === 4 || ftPerIn === 8 || ftPerIn === 16 ? `1/${ftPerIn} in. = 1 ft` : `1 in. = ${ftPerIn} ft`;
+}
+
+/**
+ * The department asks site plans at a scale this lot cannot keep on the 11 × 17 sheet: said before the submittal,
+ * not by the reviewer (the City of Sacramento asks 1/8 in. = 1 ft or larger; a 100-ft lot needs 1 in. = 20 ft).
+ */
+export function siteScaleWarning(county: DeckCountyCode | null, scaleFtPerIn: number): string | null {
+  const min = county?.minSiteScaleFtPerIn;
+  if (!county || !min || scaleFtPerIn <= min) return null;
+  const who = county.jurisdiction.split(/ \(| — /)[0];
+  return `${who} asks the site plan at ${siteScaleWords(min)} or larger; this lot fits the 11 × 17 sheet only at ${siteScaleWords(scaleFtPerIn)}. Note the scale on A-101 and ask plan check to accept it, or print A-101 alone on 24 × 36.`;
 }
 
 export interface CriteriaRow {
