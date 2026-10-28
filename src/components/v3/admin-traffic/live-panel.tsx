@@ -59,7 +59,7 @@ const FUNNEL: Array<[LiveStage, string]> = [
   ["signed-up", "signed up"],
   ["member", "members"],
 ];
-const STAGE: Record<LiveStage, string> = { browsing: "Looking around", "signing-in": "Signing in", registering: "On the sign-up form", checkout: "At checkout", "signed-up": "Signed up", member: "In the app · member" };
+const STAGE: Record<LiveStage, string> = { browsing: "Looking around", "signing-in": "Signing in", registering: "On the sign-up form", checkout: "At checkout · not signed up yet", "signed-up": "Signed up", member: "In the app · member" };
 
 /** "Spent on ads today": Meta's figure (as of its last read), or what was booked, or the daily budget said as one. */
 function AdSpendTile({ spend, adSignups, timezone }: { spend: AdSpendToday | null; adSignups: number; timezone: string }) {

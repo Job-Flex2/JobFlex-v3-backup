@@ -53,7 +53,7 @@ export function FormWatchLine({ f, active, timezone }: { f: LiveFormWatch; activ
           {f.cameBack && !f.away && <em className={s.fwBack} data-form-back>Came back after {durationWords(f.cameBack.secs * 1000)}</em>}
           {f.left && (
             <em className={s.fwLeft} data-form-left={f.left.kind}>
-              {f.left.kind === "closed" ? `Closed the page on the ${f.left.screen} screen` : f.left.kind === "google" ? "Went to Google" : f.left.kind === "checkout" ? "Went to the checkout" : "Finished"}
+              {f.left.kind === "closed" ? `Closed the page on the ${f.left.screen} screen` : f.left.kind === "google" ? "Went to Google" : f.left.kind === "checkout" ? "Went to Stripe's card page · not signed up yet" : f.left.kind === "done" ? "Account made" : "Left"}
               {f.left.kind === "closed" ? ` · ${durationWords(f.left.screenSecs * 1000)} on it${f.left.field ? ` · in ${f.left.field}` : ""}${f.left.awaySecs ? ` · after ${durationWords(f.left.awaySecs * 1000)} away` : ""}` : ""}
             </em>
           )}

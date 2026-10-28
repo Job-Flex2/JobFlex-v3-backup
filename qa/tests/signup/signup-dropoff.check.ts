@@ -65,6 +65,14 @@ check("devices in the admin's words", deviceLabel(v2) === "iPhone · Facebook / 
 const r = buildDropoffReport(visits, 7, NOW);
 check("counts: opened, finished, finished later, still on the form, stopped", r.visits === 10 && r.finished === 2 && r.finishedLater === 1 && r.stillOnForm === 1 && r.stopped === 6, JSON.stringify({ v: r.visits, f: r.finished, l: r.finishedLater, s: r.stillOnForm, st: r.stopped }));
 check("Google leave counted apart", r.wentToGoogle === 1 && r.wentToCheckout === 0);
+// A "done" leave is the account made only when the server's completed event is in (2026-10-28): after the checkout
+// opened it is the hand-off to Stripe's card page; from any other screen it is a close on that screen.
+const toCard = dropoffVisitFromRow(row({ id: "c1", start: 70, end: 69, flow: "otp", steps: { "1": 70, code: 69.8, "3": 69.5 }, opened: 1, leave: "done|done||", lastScreen: "done" }))!;
+check("a 'done' leave with the checkout opened and no account made is the hand-off to Stripe's card page", toCard.leave?.kind === "checkout" && toCard.leave.screen === "checkout" && buildDropoffReport([toCard], 7, NOW).wentToCheckout === 1, JSON.stringify(toCard.leave));
+const flashed = dropoffVisitFromRow(row({ id: "c2", start: 70, end: 69, steps: { "1": 70, "3": 69.5 }, leave: "done|plan||", lastScreen: "plan" }))!;
+check("a 'done' leave from the plan screen is a close on the plan screen", flashed.leave?.kind === "closed" && flashed.leave.screen === "plan", JSON.stringify(flashed.leave));
+const made = dropoffVisitFromRow(row({ id: "c3", start: 70, end: 69, steps: { "1": 70, "3": 69.5 }, done: 69.2, leave: "done|done||", lastScreen: "done" }))!;
+check("…with the account made it stays done", made.leave?.kind === "done");
 check("the code screen shows when the email-code flow ran", r.screens.map((s) => s.key).join(",") === "account,code,company,plan");
 const sc = Object.fromEntries(r.screens.map((s) => [s.key, s]));
 check("reach per screen", sc.account.reached === 10 && sc.code.reached === 3 && sc.company.reached === 4 && sc.plan.reached === 2, r.screens.map((s) => `${s.key}:${s.reached}`).join(" "));

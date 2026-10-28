@@ -54,7 +54,14 @@ export function setSignupPosition(next: Partial<Position>) {
   const moved = (next.screen && next.screen !== state.pos.screen) || (next.step && next.step !== state.pos.step);
   state.pos = { ...state.pos, ...Object.fromEntries(Object.entries(next).filter(([, v]) => v)) } as Position;
   if (moved) state.stepSince = Date.now();
-  if (state.pos.screen === "done") state.leaving = "done";
+}
+
+/** How the leave reads now: a hand-off said on purpose (Google, the checkout), else "done" only ON the done screen —
+ *  the account made — else a close. Read at the leave, never latched from a screen: the done screen that flashes by
+ *  before the plan step, or before Stripe's card page, used to mark the later leave "done" (2026-10-28). */
+export function signupLeaveKind(): Leaving {
+  if (state.leaving !== "closed") return state.leaving;
+  return state.pos.screen === "done" ? "done" : "closed";
 }
 
 /** The page is about to go somewhere on purpose (Google, the checkout): the leave is not an abandon. */
@@ -155,7 +162,7 @@ export function startSignupWatch(): () => void {
     const field = state.current?.field ?? "";
     leaveBox();
     send(TRAFFIC_EVENTS.signupLeave, {
-      kind: state.leaving,
+      kind: signupLeaveKind(),
       field,
       ms: Date.now() - state.stepSince,
       page_ms: Date.now() - state.pageSince,
