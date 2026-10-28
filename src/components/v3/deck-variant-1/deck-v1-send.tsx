@@ -46,10 +46,12 @@ function Stages({ l }: { l: Row }) {
   );
 }
 
-export function DeckV1Send({ design, address, title, clientId, proposalId = null, onOpened, onClose }: { design: DeckDesign; address: string; title: string; clientId?: string; proposalId?: string | null; onOpened?: (token: string) => void; onClose: () => void }) {
-  const [name, setName] = React.useState("");
-  const [phone, setPhone] = React.useState("");
-  const [email, setEmail] = React.useState("");
+export interface SendPrefill { name: string; phone: string | null; email: string | null }
+
+export function DeckV1Send({ design, address, title, clientId, proposalId = null, prefill = null, onOpened, onClose }: { design: DeckDesign; address: string; title: string; clientId?: string; proposalId?: string | null; /** The client this design is for, already known (the lead, the link it came through): the fields start filled (owner, 2026-10-28). */ prefill?: SendPrefill | null; onOpened?: (token: string) => void; onClose: () => void }) {
+  const [name, setName] = React.useState(prefill?.name ?? "");
+  const [phone, setPhone] = React.useState(prefill?.phone ?? "");
+  const [email, setEmail] = React.useState(prefill?.email ?? "");
   const [start, setStart] = React.useState<ClientStart>("mine");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);

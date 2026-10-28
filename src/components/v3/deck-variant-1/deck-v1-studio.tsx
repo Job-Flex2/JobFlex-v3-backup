@@ -107,7 +107,7 @@ import { HouseWallPlan } from "@/components/v3/deck-estimator-blueprint/house-wa
 import { DeckKindPicker } from "@/components/v3/deck-estimator-blueprint/deck-kind-picker";
 import { DeckPlan, type PlanEdgeHit, nearestStairEdge } from "@/components/v3/deck-estimator-blueprint/deck-plan";
 import { Answers, CUSTOM, CUSTOM_LABEL, CustomBox, Field, FieldScope, More, NameInput, NumberInput, Scope, Seg, Stepper, Toggle, ago, cx, feetText, intText, money, parseFeet, parseInches, priceShow, priceText, type FieldScopeValue } from "./deck-v1-parts";
-import { DeckV1Send } from "./deck-v1-send";
+import { DeckV1Send, type SendPrefill } from "./deck-v1-send";
 import { DeckAddonDialog, DeckPreviewBanner } from "@/components/v3/deck-addon/deck-addon";
 import type { AddonInterval } from "@/lib/deckAddon";
 import { PHOTO_ENABLED, PhotoFileInput, PhotoSection, PhotoTools, PhotoViewBox, PhotoWhere, useDeckPhoto, type V1View } from "./deck-v1-photo";
@@ -245,7 +245,7 @@ export interface OpenedDesign {
 
 const DeckKindPickerView = React.memo(DeckKindPicker);
 
-export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId, opened = null, preview = false, trialEndsAt = null, addonInterval = "MONTH" }: { initialBook: DeckRateBook; homeState: string | null; initialAddress?: string; clientId?: string; adminPreview?: boolean; opened?: OpenedDesign | null; preview?: boolean; trialEndsAt?: string | null; addonInterval?: AddonInterval }) {
+export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId, clientContact = null, opened = null, preview = false, trialEndsAt = null, addonInterval = "MONTH" }: { initialBook: DeckRateBook; homeState: string | null; initialAddress?: string; clientId?: string; /** The client the page was opened for (the filing cookie's, a client record's): Send to client starts filled. */ clientContact?: SendPrefill | null; adminPreview?: boolean; opened?: OpenedDesign | null; preview?: boolean; trialEndsAt?: string | null; addonInterval?: AddonInterval }) {
   const router = useRouter();
   // THE PREVIEW (owner, 2026-10-19): an account whose plan runs without Deck Studio designs here freely; every save,
   // send and print opens the add-on's dialog instead (components/v3/deck-addon; the server refuses them too —
@@ -2703,7 +2703,7 @@ export function DeckV1Studio({ initialBook, homeState, initialAddress, clientId,
             <Link href={`/dashboard/manual-blueprint?proposal=${encodeURIComponent(linked.id)}` as Route}>Open the proposal</Link>
           </p>
         ) : null}
-        {sendOpen ? <DeckV1Send design={design} address={address} title={draftTitle.trim()} clientId={clientId} proposalId={linkedId} onOpened={(token) => setInbox((list) => list.filter((l) => l.token !== token))} onClose={() => setSendOpen(false)} /> : null}
+        {sendOpen ? <DeckV1Send design={design} address={address} title={draftTitle.trim()} clientId={clientId} proposalId={linkedId} prefill={opened?.client ? { name: opened.client.name, phone: opened.client.phone, email: opened.client.email ?? clientContact?.email ?? null } : clientContact} onOpened={(token) => setInbox((list) => list.filter((l) => l.token !== token))} onClose={() => setSendOpen(false)} /> : null}
       </div>
 
       <section className="v1-pack" aria-label="On the proposal">

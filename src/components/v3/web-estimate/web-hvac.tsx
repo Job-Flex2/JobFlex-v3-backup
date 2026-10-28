@@ -9,6 +9,7 @@ import * as React from "react";
 import { PlacesAutocomplete, type PickedAddress } from "@/components/estimator/roof/PlacesAutocomplete";
 import { webHvacLookup, webHvacPrice, webHvacSize, webLead, webView, type WebEstimateView, type WebHouse, type WebHvacSizedView } from "@/actions/webEstimator";
 import { bandWords, money } from "@/lib/webEstimator";
+import { WebHead } from "./web-head";
 import "./web-estimate.css";
 
 export interface WebHvacProps {
@@ -100,18 +101,7 @@ export function WebHvac(p: WebHvacProps) {
 
   return (
     <div className={"we" + (p.embed ? " we-embed" : "")} style={accent ? ({ "--we-accent": accent } as React.CSSProperties) : undefined} data-web-estimate="hvac" data-web-step={step}>
-      {!p.embed ? (
-        <header className="we-head">
-          {/* eslint-disable-next-line @next/next/no-img-element -- the shop's own logo URL, any host */}
-          {p.shop.logoUrl ? <img className="we-logo" src={p.shop.logoUrl} alt="" /> : <span className="we-mark">{p.shop.name.slice(0, 1)}</span>}
-          <div>
-            <div className="we-shop">{p.shop.name}</div>
-            <div className="we-title">{p.title}</div>
-          </div>
-        </header>
-      ) : (
-        <div className="we-embedHead"><b>{p.title}</b><span>{p.shop.name}</span></div>
-      )}
+      <WebHead shop={p.shop} title={p.title} tool={"HVAC estimator"} embed={p.embed} />
       <ol className="we-steps" aria-hidden="true">
         {STEPS.map((s, i) => <li key={s} className={idx(step) === i ? "on" : idx(step) > i ? "done" : ""}><i>{i + 1}</i></li>)}
       </ol>

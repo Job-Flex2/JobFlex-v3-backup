@@ -10,6 +10,7 @@ import * as React from "react";
 import dynamic from "next/dynamic";
 import { PlacesAutocomplete, type PickedAddress } from "@/components/estimator/roof/PlacesAutocomplete";
 import { webDeckPrice, webDeckResume, webDeckSend, webDeckStart, webView, type WebDeckProps } from "@/actions/webEstimator";
+import { WebHead } from "./web-head";
 import "./web-estimate.css";
 
 const Designer = dynamic(() => import("@/components/v3/deck-client-design/deck-client-designer").then((m) => m.DeckClientDesigner), {
@@ -84,18 +85,7 @@ export function WebDeck(p: WebDeckPageProps) {
   const accent = p.shop.primaryColor || undefined;
   return (
     <div className={"we" + (p.embed ? " we-embed" : "")} style={accent ? ({ "--we-accent": accent } as React.CSSProperties) : undefined} data-web-estimate="deck" data-web-step="address">
-      {!p.embed ? (
-        <header className="we-head">
-          {/* eslint-disable-next-line @next/next/no-img-element -- the shop's own logo URL, any host */}
-          {p.shop.logoUrl ? <img className="we-logo" src={p.shop.logoUrl} alt="" /> : <span className="we-mark">{p.shop.name.slice(0, 1)}</span>}
-          <div>
-            <div className="we-shop">{p.shop.name}</div>
-            <div className="we-title">{p.title}</div>
-          </div>
-        </header>
-      ) : (
-        <div className="we-embedHead"><b>{p.title}</b><span>{p.shop.name}</span></div>
-      )}
+      <WebHead shop={p.shop} title={p.title} tool={"Deck Studio"} embed={p.embed} />
       <section className="we-card">
         <h2>Where is the deck going?</h2>
         <p className="we-sub">Type the street address. The building code for your area — snow, frost, railing heights — comes from it, and the design is drawn to it.</p>
