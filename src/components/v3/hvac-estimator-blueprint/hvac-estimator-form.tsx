@@ -44,6 +44,7 @@ import { offForState, stateName } from "@/lib/hvac/catalogView";
 import { fixFieldSpec } from "@/lib/hvac/fieldSpecs";
 import { addMissingUsRows } from "@/actions/hvacCatalog";
 import { DEFAULT_JOB, JOBS, jobDef, type JobInput, type JobKind , type OutdoorKind } from "@/lib/hvac/jobs";
+import type { WebHvacSeed } from "@/lib/webHandoff";
 import { applyNameplate, applyStated, applyStatedNested, applyTypedModelNumber, applyWalkthrough, fillEnvelopeDefaults, modelFromSite, type NameplateRead, type SiteFacts } from "@/lib/hvac/intake";
 import { designConditionsFor } from "@/lib/hvac/designConditions";
 import {
@@ -433,7 +434,7 @@ function NumCell({ value, onCommit, ariaLabel, className }: { value: number; onC
 
 // ── the form ────────────────────────────────────────────────────────────────
 
-export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { aiEnabled: boolean; initialAddress?: string; leads?: WaitingLead[] }) {
+export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [], webHvac = null }: { aiEnabled: boolean; initialAddress?: string; leads?: WaitingLead[]; webHvac?: WebHvacSeed | null }) {
   const router = useRouter();
 
   // The stepper: which step is open. A client's record hands the page an
@@ -1216,6 +1217,50 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [] }: { a
       if (!reportPlanLimit(err)) toast.error("Couldn't convert", errMsg(err));
     } finally { setConverting(false); }
   };
+  // A WEBSITE OR HOUSE LEAD (lib/webHandoff, 2026-10-28): the house the homeowner confirmed, the job, what is there,
+  // the gas and the outdoor kind land as `reopen` lands a saved estimate — on the design step — and the unit they were
+  // priced on is picked once the shop's catalog is in (their id when the shop lists it, else that tier's). Applied on
+  // the first tick after mount; the effects themselves set nothing.
+  // The prop as it was at mount: the seed strip spends the seed a moment later and the page re-renders without it.
+  const [web] = React.useState(() => webHvac);
+  // Applied once — the mark is set when the timer fires, not when it is armed, so StrictMode's second mount (which
+  // cancels the first timer) still applies it.
+  const webApplied = React.useRef(false);
+  React.useEffect(() => {
+    if (!web || webApplied.current) return;
+    const t = setTimeout(() => {
+      if (webApplied.current) return;
+      webApplied.current = true;
+      const facts = web.site;
+      setSite(facts);
+      setStateCode(facts.state);
+      {
+        const raw = facts.county ?? "";
+        const hit = raw ? designConditionsFor(facts.state, raw) : null;
+        setCounty(hit && (hit.match === "county" || hit.match === "fuzzy") ? hit.conditions.county : raw);
+      }
+      setJob("replace-system");
+      setTyped({ "existing.kind": web.existing, "gas.available": web.gas !== "no" });
+      setOutdoorKind(web.outdoorKind);
+      if (addrRef.current) addrRef.current.value = facts.address;
+      go("design");
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [web]);
+  const webPicked = React.useRef(false);
+  React.useEffect(() => {
+    if (!web || webPicked.current || !catalog || !tiers.length) return;
+    const own = web.itemId && catalogItems.some((c) => c.id === web.itemId) ? web.itemId : null;
+    const pick = own ?? tiers.find((x) => x.tier === web.tier)?.candidate.item.id ?? null;
+    const t = setTimeout(() => {
+      if (webPicked.current) return;
+      webPicked.current = true;
+      setPickId(pick);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [web, catalog, tiers, catalogItems]);
+
   const reopen = async (id: string) => {
     const res = await getHvacEstimate(id);
     if (!res.ok) { toast.error("Couldn't open", res.error); return; }

@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
+import { HOUSE_SLUG } from "@/lib/webEstimator";
 
 // Turn a business / person name into a URL-safe org slug base.
 export function slugify(s: string): string {
@@ -19,7 +20,8 @@ export function slugify(s: string): string {
 export async function uniqueOrgSlug(base: string): Promise<string> {
   let slug = base;
   for (let i = 0; i < 5; i++) {
-    const exists = await db.organization.findUnique({ where: { slug }, select: { id: true } });
+    // `jobflex` is the house's own address (/estimate/jobflex/<trade>, lib/webEstimator): never a shop's.
+    const exists = slug === HOUSE_SLUG || (await db.organization.findUnique({ where: { slug }, select: { id: true } }));
     if (!exists) return slug;
     slug = `${base}-${randomBytes(2).toString("hex")}`;
   }

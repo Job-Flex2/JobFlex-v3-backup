@@ -23,7 +23,7 @@ import { planWhen, remindModeOf, validTimeZone, type RemindMode } from "./dates"
 import { listFolder, type FolderFileView, type FolderRequestView } from "./files";
 import { storageMode, type StorageMode } from "@/lib/media/privateStore";
 import type { WizardPrefill } from "./prefill";
-import { estimateShort, parsePlanEstimate, planRangeWords } from "@/lib/leadCenter/estimate";
+import { estimateMaterialWords, estimateShort, parsePlanEstimate, planRangeWords } from "@/lib/leadCenter/estimate";
 
 export { mayShowHomeKey, planDate, planWhen, reminderFor, validTimeZone } from "./dates";
 
@@ -362,7 +362,7 @@ export async function loadHomeDashboard(key: string, now = new Date()): Promise<
     title: p.title,
     // A range saved from /price (lib/leadCenter/estimate) reads as its words, never its record.
     notes: parsePlanEstimate(p.notes) ? planRangeWords(parsePlanEstimate(p.notes)!) : p.notes,
-    estimate: parsePlanEstimate(p.notes) ? { range: estimateShort(parsePlanEstimate(p.notes)!).split(" · ")[0], material: parsePlanEstimate(p.notes)!.materialLabel.toLowerCase() } : null,
+    estimate: parsePlanEstimate(p.notes) ? { range: estimateShort(parsePlanEstimate(p.notes)!).split(" · ")[0], material: estimateMaterialWords(parsePlanEstimate(p.notes)!) } : null,
     date: p.plannedFor.toISOString().slice(0, 10),
     wholeMonth: p.wholeMonth,
     when: planWhen(p.plannedFor, p.wholeMonth),

@@ -65,3 +65,12 @@ export async function houseOrgId(): Promise<string | null> {
     return null;
   }
 }
+
+/** The admin names the house org on the Lead Center (2026-10-28); null closes the house pages. */
+export async function setHouseOrgId(id: string | null): Promise<void> {
+  if (!id) {
+    await db.syncState.deleteMany({ where: { key: HOUSE_ORG_KEY } });
+    return;
+  }
+  await db.syncState.upsert({ where: { key: HOUSE_ORG_KEY }, update: { cursor: id }, create: { key: HOUSE_ORG_KEY, cursor: id } });
+}

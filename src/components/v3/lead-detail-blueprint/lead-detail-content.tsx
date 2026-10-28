@@ -101,7 +101,7 @@ export type LeadDetailProps = {
   /** The homeowner's job folder (lib/home/files); null for a lead with none. */
   folder?: JobFolderProps | null;
   /** A lead from the shop's website estimator (2026-10-27, lib/webEstimator): what the homeowner saw. */
-  website?: { trade: WebTrade; estimator: string; summary: string; choice: string; price: string; show: "range" | "exact"; note: string | null; handoff: string } | null;
+  website?: { trade: WebTrade; estimator: string; summary: string; choice: string; price: string; show: "range" | "exact"; note: string | null; handoff: string; house: boolean } | null;
 };
 
 export function LeadDetailContent({ lead, canEstimate, scopeFailed, contactsLocked = false, paid = null, folder = null, website = null }: LeadDetailProps) {
@@ -249,9 +249,9 @@ export function LeadDetailContent({ lead, canEstimate, scopeFailed, contactsLock
               the shop's prices; one click opens the estimator with their address, measurement and package. */}
           {website && (
             <div className={cx("est")} data-lead-website>
-              <div className={cx("sec-h")}>From your website estimator</div>
+              <div className={cx("sec-h")}>{website.house ? "Priced by the homeowner on JobFlex" : "From your website estimator"}</div>
               <p className={cx("est-sub")}>
-                {website.summary} They chose <b>{website.choice}</b> and saw <b>{website.price}</b> before tax{website.show === "range" ? " (a range)" : ""}.
+                {website.summary} They {website.house ? "priced it on JobFlex, chose" : "chose"} <b>{website.choice}</b> and saw <b>{website.price}</b> before tax{website.show === "range" ? " (a range)" : ""}.
                 {website.note ? ` Their note: "${website.note}"` : ""}
               </p>
               {canEstimate && (

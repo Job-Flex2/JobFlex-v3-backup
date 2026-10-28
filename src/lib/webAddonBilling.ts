@@ -39,7 +39,7 @@ import {
   type WebAddonRecord,
   type WebBillingMode,
 } from "@/lib/webAddon";
-import { WEB_TRADE, WEB_TRADES, type WebTrade } from "@/lib/webEstimator";
+import { WEB_TRADE, WEB_TRADES, isHouse, type WebShop, type WebTrade } from "@/lib/webEstimator";
 import { readWebSettings, webEstimatorOpen } from "@/lib/webEstimatorServer";
 
 const keyOf = (organizationId: string) => `webAddon:${organizationId}`;
@@ -97,6 +97,12 @@ export async function webTradeLive(organizationId: string, trade: WebTrade, on?:
   if (!open) return true;
   const b = await webBilling(organizationId, open);
   return webTradeServes({ open, on: true, mode: b.mode, held: !!b.held[trade] });
+}
+
+/** Does this shop serve this trade to the public — the house by its own settings (no add-on, nothing billed), a shop
+ *  by its add-on (webTradeLive). The one gate every public action and page asks (2026-10-28). */
+export async function webShopServes(shop: WebShop, trade: WebTrade): Promise<boolean> {
+  return isHouse(shop) ? shop.settings.trades[trade].on : webTradeLive(shop.id, trade, shop.settings.trades[trade].on);
 }
 
 export async function webAddonPrice(stripe: Stripe, mode: StripeMode, trade: WebTrade, interval: AddonInterval): Promise<string> {

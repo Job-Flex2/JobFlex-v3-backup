@@ -9,7 +9,7 @@ const estimateTotal = (d: { materials: Array<{ quantity: number; unitPrice: numb
   Math.round([...d.materials, ...d.labor].reduce((a, l) => a + l.quantity * l.unitPrice, 0));
 const money = (n: number) => `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 import { db } from "@/lib/db";
-import { reopenFromEstimate } from "@/lib/leadCenter/estimate";
+import { estimatorNameFor, reopenFromEstimate } from "@/lib/leadCenter/estimate";
 import { readLeadEstimates } from "@/lib/leadCenter/estimateStore";
 import { recordInventoryLink } from "@/lib/inventoryPick";
 import { clearFilingContext, filedClientId, leadProposalText, readFilingContext } from "@/lib/filingContext";
@@ -462,6 +462,8 @@ export async function openRoofLeadEstimate(platformLeadId: string): Promise<Roof
   if (!pl) return { ok: false, error: "That lead is not this company's." };
   const e = (await readLeadEstimates([id])).get(id);
   if (!e) return { ok: false, error: "This lead carries no priced estimate.", none: true };
+  // A house estimate of another trade (2026-10-28) is the other estimator's to open — never read as a roof.
+  if (e.trade !== "roof") return { ok: false, error: `This lead's estimate opens in the ${estimatorNameFor(e.trade)} — use that card.` };
   const address = [pl.address, pl.city, [pl.state, pl.zip].filter(Boolean).join(" ")].filter((s) => s && s.trim()).join(", ") || null;
   const r = reopenFromEstimate(e, address);
   return { ok: true, ...r, pin: pl.lat != null && pl.lng != null ? { lat: pl.lat, lng: pl.lng } : null, basis: e.basis };

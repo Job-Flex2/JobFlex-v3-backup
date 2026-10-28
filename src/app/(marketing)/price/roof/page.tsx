@@ -26,7 +26,7 @@ async function resumeFrom(key: string, planId: string): Promise<Resume | null> {
     const plan = await db.homePlan.findFirst({ where: { id: planId, homeId: home.id, status: "PLANNED" }, select: { notes: true } });
     const e = parsePlanEstimate(plan?.notes);
     const site = parsePlanSite(plan?.notes);
-    if (!e || !site) return null;
+    if (!e || e.trade !== "roof" || !site) return null;
     const homeSqft = e.basis === "size" && e.hidden.facts.footprintSqft ? Math.round(e.hidden.facts.footprintSqft * e.storeys) : null;
     return {
       site,

@@ -39,6 +39,12 @@ const nextConfig: NextConfig = {
   ...(process.env.JOBFLEX_DIST_DIR ? { distDir: process.env.JOBFLEX_DIST_DIR } : {}),
   reactStrictMode: true,
   typedRoutes: true,
+  // THE TYPE CHECK RUNS BEFORE THE BUILD ON VERCEL (2026-10-28). Inside `next build` it ran after the compile, in a
+  // worker beside everything the compile still held, and the 8 GB build container was OOM-killed ("Running TypeScript
+  // … SIGKILL"). vercel.json's buildCommand now runs `next typegen && tsc --noEmit` on its own first (about 5 GB at
+  // peak) and sets JOBFLEX_TYPECHECKED=1 for `next build` only once that passed — a type error still fails the deploy.
+  // Everywhere else (a local `npm run build`) the build checks types itself, as before.
+  typescript: { ignoreBuildErrors: process.env.JOBFLEX_TYPECHECKED === "1" },
   // Readable stacks on Vercel PREVIEW builds only: a minified "reading '0' at
   // b (3jtyjojq….js:1:5704)" is undebuggable, and previews are where the
   // owner reproduces production-data bugs. Production stays without maps —

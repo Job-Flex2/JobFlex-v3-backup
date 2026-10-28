@@ -5,9 +5,10 @@
 // always did. "Exclusive" (a box on the lead) doubles the suggestion and is said on the offer card.
 // Pure parts first; the SyncState readers and writers after.
 import { db } from "@/lib/db";
-import { suggestedLeadPriceCents, type LeadEstimate } from "./estimate";
+import { PRICED_TRADES, isPricedTrade, suggestedLeadPriceCents, type LeadEstimate, type PricedTrade } from "./estimate";
 
-export type PricedTrade = "roof";
+// The trades live in ./estimate (pure — the Lead Center's screen lists them); kept exported from here.
+export { PRICED_TRADES, isPricedTrade, type PricedTrade };
 export const AUTO_PRICE_KEY = (trade: PricedTrade) => `leadCenter:autoPrice:${trade}`;
 export const EXCLUSIVE_KEY = (leadId: string) => `leadexclusive:${leadId}`;
 

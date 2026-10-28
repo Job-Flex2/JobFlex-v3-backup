@@ -25,6 +25,7 @@
 // The skip path (testing only) calls `completePendingSignup(token, null)`,
 // which creates the same account with no subscription attached.
 import { alertSignup } from "@/lib/adminAlerts";
+import { HOUSE_SLUG } from "@/lib/webEstimator";
 import { randomUUID, randomBytes, createHash } from "crypto";
 import { SPOTLIGHT_KEY } from "@/lib/planSpotlightServer";
 import { parseSpotlightTool } from "@/lib/planSpotlight";
@@ -1036,7 +1037,8 @@ function slugify(v: string): string {
 async function uniqueSlug(base: string): Promise<string> {
   let candidate = base;
   for (let i = 0; i < 40; i++) {
-    const hit = await db.organization.findUnique({ where: { slug: candidate }, select: { id: true } });
+    // `jobflex` is the house's own address (/estimate/jobflex/<trade>, lib/webEstimator): never a shop's.
+    const hit = candidate === HOUSE_SLUG || (await db.organization.findUnique({ where: { slug: candidate }, select: { id: true } }));
     if (!hit) return candidate;
     candidate = `${base}-${createHash("sha1").update(base + i).digest("hex").slice(0, 4)}`;
   }

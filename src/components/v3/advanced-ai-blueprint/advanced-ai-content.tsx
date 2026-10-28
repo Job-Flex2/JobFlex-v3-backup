@@ -63,7 +63,8 @@ import {
   saveEstimate,
   convertEstimateToProposal,
 } from "@/actions/advancedEstimator";
-import { SAME_BRIEF_NOTE, type ClarifyQuestion, type PricingSnapshotWire } from "@/lib/estimatorSchema";
+import { SAME_BRIEF_NOTE, type ClarifyQuestion, type GeneratedEstimate, type PricingSnapshotWire } from "@/lib/estimatorSchema";
+import type { WebSmartSeed } from "@/lib/webHandoff";
 import {
   briefWithAnswers,
   computeTotals,
@@ -75,6 +76,7 @@ import {
   blankLine,
   unitSelectOptions,
   NO_DISCOUNT,
+  discountFromSchema,
   type ClarifyAnswer,
   type ConsoleLine,
   type DiscountState,
@@ -163,8 +165,10 @@ function clampNum(raw: string, max: number): number {
   return Math.min(Math.max(n, 0), max);
 }
 
-export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: string; state: string } } = {}) {
+export function AdvancedAiContent({ seed, web: webProp = null }: { seed?: { brief: string; address: string; state: string }; web?: WebSmartSeed | null } = {}) {
   const router = useRouter();
+  // The hand-off as it was at mount: the seed strip spends the seed a moment later and the page re-renders without it.
+  const [web] = useState(() => webProp);
 
   // ── Panel 1: the intake console ──────────────────────────────────
   const [panel, setPanel] = useState<Panel>("intake");
@@ -436,33 +440,7 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
         return;
       }
 
-      const est = res.data;
-      setLines(linesFromEstimate(est));
-      // The company's own method: its tax rule and rate go on the sheet, and on to the proposal.
-      const pr = est.pricing ?? null;
-      setPricing(pr);
-      if (pr) {
-        setTax((t) => {
-          if (pr.taxMode === "none") return { pct: 0, pinned: true };
-          if (pr.taxRatePct != null) return { pct: pr.taxRatePct, pinned: true };
-          // The job state's rate: the state picked, else the one in the address the estimate was priced at.
-          if (t.pinned || t.pct > 0) return t;
-          const st = stateFromAddress(useLocation);
-          return st ? { pct: stateTaxPct(st), pinned: false } : t;
-        });
-      }
-      setCheckNotes(est.notes ?? []);
-      setRemembered(est.remembered?.at ?? null);
-      setTitle(est.title);
-      setScope(est.scope || description);
-      setAssumptions(est.assumptions);
-      setTimelineDays(est.estimatedTimelineDays ?? null);
-      setDiscount(NO_DISCOUNT);
-      setDemoMode(Boolean(res.disabled));
-      setBriefUsed(description);
-      setTypeUsed(projectType);
-      setLocationUsed(useLocation);
-      setAddrUsed(useAddress);
+      landEstimate(res.data, { brief: description, type: projectType, location: useLocation, address: useAddress, demo: Boolean(res.disabled), discount: NO_DISCOUNT });
       setStageIdx(GEN_STAGES.length);
       setGenDone(true);
       // Land on "generated" for a beat so the checklist reads as finished
@@ -481,6 +459,37 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
     }
   }
 
+
+  /** A generated estimate lands in the ledger: the lines, the company's method (its tax rule and rate go on the sheet,
+   *  and on to the proposal), the words. Generate's own path — and (2026-10-28, lib/webHandoff) a website or house
+   *  lead's estimate opened exactly as the homeowner was priced, no second model call. */
+  function landEstimate(est: GeneratedEstimate, used: { brief: string; type: string; location: string; address: string; demo: boolean; discount: DiscountState }) {
+    setLines(linesFromEstimate(est));
+    const pr = est.pricing ?? null;
+    setPricing(pr);
+    if (pr) {
+      setTax((t) => {
+        if (pr.taxMode === "none") return { pct: 0, pinned: true };
+        if (pr.taxRatePct != null) return { pct: pr.taxRatePct, pinned: true };
+        // The job state's rate: the state picked, else the one in the address the estimate was priced at.
+        if (t.pinned || t.pct > 0) return t;
+        const st = stateFromAddress(used.location);
+        return st ? { pct: stateTaxPct(st), pinned: false } : t;
+      });
+    }
+    setCheckNotes(est.notes ?? []);
+    setRemembered(est.remembered?.at ?? null);
+    setTitle(est.title);
+    setScope(est.scope || used.brief);
+    setAssumptions(est.assumptions);
+    setTimelineDays(est.estimatedTimelineDays ?? null);
+    setDiscount(used.discount);
+    setDemoMode(used.demo);
+    setBriefUsed(used.brief);
+    setTypeUsed(used.type);
+    setLocationUsed(used.location);
+    setAddrUsed(used.address);
+  }
 
   /** The plan set's trades, merged, land in the same ledger a brief's estimate does. */
   function landPlanEstimate(r: PlanEstimateDone) {
@@ -508,6 +517,12 @@ export function AdvancedAiContent({ seed }: { seed?: { brief: string; address: s
     const t = setTimeout(() => {
       const handed = takePlanEstimate();
       if (handed) landPlanEstimate(handed);
+      else if (web) {
+        // A website or house lead (lib/webHandoff): the lines it was priced on, its discount, its brief; the lead's
+        // address as the market until the contractor types one.
+        landEstimate(web.estimate, { brief: web.brief, type: "", location: seed?.address ?? "", address: seed?.address ?? "", demo: false, discount: discountFromSchema(web.estimate.discount) });
+        setPanel("estimate");
+      }
     }, 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -6,7 +6,8 @@ import { startCascade } from "@/lib/leadCenter/cascade";
 import { offerPlatformLeadToOrg } from "@/lib/leadCenter/route";
 import { buildRanking } from "@/lib/leadCenter/matching";
 import { getRoutingMode, setRoutingMode, type RoutingMode } from "@/lib/leadCenter/routingMode";
-import { setAutoPrice, setExclusive, type PricedTrade } from "@/lib/leadCenter/autoPrice";
+import { isPricedTrade, setAutoPrice, setExclusive, type PricedTrade } from "@/lib/leadCenter/autoPrice";
+import { setHouseOrgId } from "@/lib/publicEstimate/store";
 import { adminRefund, dollars, MAX_LEAD_PRICE_CENTS, MIN_LEAD_PRICE_CENTS } from "@/lib/leadCenter/purchase";
 import { rotateTestKey } from "@/lib/leadCenter/testLeads";
 import { createHomeownerLead } from "@/lib/leadCenter/intake";
@@ -75,9 +76,27 @@ export async function readLeadRoutingMode(): Promise<RoutingMode> {
 /** "Charge the suggested price on automatic routing", per trade (lib/leadCenter/autoPrice). */
 export async function setLeadAutoPrice(trade: PricedTrade, on: boolean): Promise<{ ok: true }> {
   await requirePlatformAdmin();
-  if (trade !== "roof") throw new Error("Unknown trade");
+  if (!isPricedTrade(trade)) throw new Error("Unknown trade");
   await setAutoPrice(trade, on === true);
   revalidatePath("/admin/lead-center");
+  return { ok: true };
+}
+
+/** THE HOUSE ORG (2026-10-28): the internal organization the house estimators run as (/estimate/jobflex/<trade>,
+ *  lib/webEstimator houseShop) — its price books, its spend, its counters. One of JobFlex's own only; null closes
+ *  the house pages and the /price cards go back to describing. */
+export async function setHouseOrg(organizationId: string | null): Promise<{ ok: true }> {
+  await requirePlatformAdmin();
+  if (organizationId === null || organizationId === "") {
+    await setHouseOrgId(null);
+  } else {
+    if (typeof organizationId !== "string" || organizationId.length > 64) throw new Error("Bad organization");
+    const org = await db.organization.findUnique({ where: { id: organizationId }, select: { id: true, deletedAt: true, isInternal: true } });
+    if (!org || org.deletedAt || !org.isInternal) throw new Error("Pick one of JobFlex's own organizations");
+    await setHouseOrgId(org.id);
+  }
+  revalidatePath("/admin/lead-center");
+  revalidatePath("/price");
   return { ok: true };
 }
 

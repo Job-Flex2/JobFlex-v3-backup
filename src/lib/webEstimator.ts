@@ -12,6 +12,8 @@
 // PREVIEW (owner): until the WEB_OPEN switch is on, only platform admins see the pane and can turn a trade on, and
 // nothing is billed; the Stripe line per trade comes when the owner has tested the flow. Not on the pricing page.
 
+import { LEAD_CONSENT_TEXT } from "./leadConsent";
+
 export const WEB_TRADES = ["roof", "hvac", "fence", "deck", "smart"] as const;
 export type WebTrade = (typeof WEB_TRADES)[number];
 export const isWebTrade = (v: unknown): v is WebTrade => typeof v === "string" && (WEB_TRADES as readonly string[]).includes(v);
@@ -73,6 +75,106 @@ export const defaultTradeSettings = (): WebTradeSettings => ({ on: false, show: 
 
 export function defaultWebEstimatorSettings(): WebEstimatorSettings {
   return { domains: [], monthlyCap: DEFAULT_MONTHLY_CAP, trades: Object.fromEntries(WEB_TRADES.map((t) => [t, defaultTradeSettings()])) as Record<WebTrade, WebTradeSettings> };
+}
+
+// ── the shop, the estimate and the lead — the shapes (the server half keeps and reads them)
+
+export interface WebShop {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  primaryColor: string | null;
+  phone: string | null;
+  website: string | null;
+  /** The shop's state (from its address), the trade engines' default when the homeowner's address has none. */
+  state: string | null;
+  settings: WebEstimatorSettings;
+}
+
+/** What every trade's engine gives the public page — the words, the number, and what the lead will carry. */
+export interface WebEstimateRecord {
+  token: string;
+  organizationId: string;
+  trade: WebTrade;
+  at: string;
+  /** The homeowner's address as typed, and its parts when known. */
+  address: string;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  /** One line about what was measured or asked: "26 squares at a 6:12 pitch, 3 facets." */
+  summary: string;
+  /** What they picked: "GAF Timberline HDZ, Charcoal". */
+  choice: string;
+  /** The price before the band, in cents, and the band shown. */
+  cents: number;
+  band: { low: number; high: number };
+  show: "range" | "exact";
+  /** The trade's own facts for the estimator hand-off (a RoofMeasurement id, the HVAC inputs, the deck design…). */
+  facts: Record<string, unknown>;
+}
+
+export interface WebLeadContact { name: string; phone: string; email: string | null; note: string | null }
+
+/** What the lead carries beyond the Lead row — read by My leads and the estimator hand-off. */
+export interface WebLeadRecord { leadId: string; trade: WebTrade; estimate: WebEstimateRecord; contact: WebLeadContact; at: string }
+
+// ── THE HOUSE (owner, 2026-10-28: "let people get preliminary estimates for HVAC, fence, roof, Deck Studio and the smart
+// estimator using our models; when they like it they submit, we give it to the contractor"). The same estimators run for
+// the homeowner on JobFlex's own home portal (/price → /estimate/jobflex/<trade>) with JobFlex as the shop: the internal
+// organization the admin picks on the Lead Center (lib/publicEstimate/store houseOrgId) is the shop's id — its price
+// books, its spend, its counters — and the send becomes a Lead Center lead, never a lead of that org. Every trade but
+// the roof (one roof flow: /price/roof), always a range, its own ceilings. Design:
+// docs/superpowers/specs/2026-10-28-home-portal-house-estimators-design.md.
+
+export const HOUSE_SLUG = "jobflex";
+export const HOUSE_NAME = "JobFlex";
+/** The house's own ceilings — a shop's are DEFAULT_MONTHLY_CAP and SHOP_HOURLY. */
+export const HOUSE_MONTHLY_CAP = 2000;
+export const HOUSE_HOURLY = { estimates: 600, leads: 120 } as const;
+export const SHOP_HOURLY = { estimates: 120, leads: 60 } as const;
+
+export function houseSettings(): WebEstimatorSettings {
+  const s = defaultWebEstimatorSettings();
+  for (const t of WEB_TRADES) s.trades[t].on = t !== "roof";
+  s.monthlyCap = HOUSE_MONTHLY_CAP;
+  return s;
+}
+
+/** The house as a shop: JobFlex on the house org — no logo (the product mark), no phone, no website, no state. */
+export function houseShop(orgId: string): WebShop {
+  return { id: orgId, name: HOUSE_NAME, slug: HOUSE_SLUG, logoUrl: null, primaryColor: null, phone: null, website: null, state: null, settings: houseSettings() };
+}
+
+export const isHouse = (shop: { slug: string }): boolean => shop.slug === HOUSE_SLUG;
+
+/** The per-shop hourly brakes: the house's own, else today's. */
+export function shopHourly(shop: { slug: string }): { estimates: number; leads: number } {
+  return isHouse(shop) ? HOUSE_HOURLY : SHOP_HOURLY;
+}
+
+/** The page's words where a shop's name stood: a shop's page names the shop (the strings the pages always printed);
+ *  the house's names a local pro, since up to three contractors may call, and carries the Lead Center's own consent. */
+export function pageWords(shop: { name: string; house?: boolean }, noun: string): { who: string; sees: string; quote: string; consent: string; foot: string; call: string } {
+  if (shop.house) {
+    return {
+      who: "a local pro",
+      sees: "No account, no payment. JobFlex sends your request to a local pro only when you send it.",
+      quote: "The full, line-by-line quote comes from a local pro after they look at it. You pick a time; they confirm the price.",
+      consent: LEAD_CONSENT_TEXT,
+      foot: "Estimates by JobFlex. No prices are shown to anyone else; a local pro confirms on site.",
+      call: "Describe it instead and a local pro prices it.",
+    };
+  }
+  return {
+    who: shop.name,
+    sees: `No account, no payment. ${shop.name} sees your request only when you send it.`,
+    quote: `The full, line-by-line quote comes from ${shop.name} after they look at it. You pick a time; they confirm the price.`,
+    consent: `${shop.name} may call, text or email me about this ${noun}.`,
+    foot: `Estimates by JobFlex for ${shop.name}. No prices are shown to anyone else; the final price follows a visit.`,
+    call: `Call ${shop.name} and they will price it in person.`,
+  };
 }
 
 /** Whatever was stored, as settings: unknown fields dropped, numbers clamped, hosts cleaned. */
@@ -162,10 +264,10 @@ export function splitTypedAddress(a: { address: string; city: string; state: str
 /** What one click on the lead page does for each trade — said plainly, no more than the estimator will do. */
 export const HANDOFF_WORDS: Record<WebTrade, string> = {
   roof: "Their aerial measurement is on file — it is the top row under Recent measurements; pick it, choose the package, send the proposal.",
-  hvac: "Opens with their address and what they told you; look up the house, size it, and price the install.",
-  fence: "Opens on their lot with your price book; draw the lines they described and the proposal prices itself.",
+  hvac: "Opens with their house looked up and sized, the tier they picked selected and priced in your book — adjust, then send the proposal.",
+  fence: "Opens on their lot with the fence as they drew it — the style, the height, the gates — priced in your book.",
   deck: "Opens as a draft with their deck designed and priced the way they saw it — adjust, then send the proposal.",
-  smart: "Opens Smart Proposal with their words as the brief — run it in your own method and send the proposal.",
+  smart: "Opens Smart Proposal at the result with the lines they were priced on — re-price in your own method and send the proposal.",
 };
 
 /** May the button run on `host`? Empty list = anywhere; a listed domain covers its subdomains; the app itself always. */
@@ -196,9 +298,25 @@ export function leadDescription(trade: WebTrade, parts: { summary: string; choic
 }
 
 /** What the homeowner's confirmation says. */
-export function homeownerEmail(input: { shop: string; trade: WebTrade; band: { low: number; high: number }; show: "range" | "exact"; summary: string; choice: string; phone?: string | null; note?: string | null }): { subject: string; text: string } {
+export function homeownerEmail(input: { shop: string; trade: WebTrade; band: { low: number; high: number }; show: "range" | "exact"; summary: string; choice: string; phone?: string | null; note?: string | null; house?: { url: string } | null }): { subject: string; text: string } {
   const price = input.show === "exact" ? money(input.band.low) : bandWords(input.band);
   const t = WEB_TRADE[input.trade];
+  if (input.house) {
+    // The house (2026-10-28): JobFlex priced it and sends it on — a local pro calls, not JobFlex; the request page's link.
+    const noun = { roof: "roof", hvac: "new system", fence: "fence", deck: "deck", smart: "project" }[input.trade];
+    return {
+      subject: `${t.title} — ${price} — ${HOUSE_NAME}`,
+      text: [
+        `Thanks for pricing your ${noun} on ${HOUSE_NAME}.`,
+        ``,
+        `${input.summary}${input.choice ? ` ${input.choice}.` : ""}`,
+        `Estimated price: ${price}, before tax. ${input.note ?? t.basis}`,
+        ``,
+        `${HOUSE_NAME} is sending it to a local pro, who will be in touch to confirm the details${input.phone ? ` at ${input.phone}` : ""}.`,
+        `Follow your request: ${input.house.url}`,
+      ].join("\n"),
+    };
+  }
   return {
     subject: `${t.title} — ${price} — ${input.shop}`,
     text: [

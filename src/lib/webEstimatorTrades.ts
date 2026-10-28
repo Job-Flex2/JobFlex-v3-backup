@@ -301,7 +301,9 @@ export async function sizeWebHvac(shop: WebShop, site: HvacSiteFacts, p: { city:
     tiers: tiers.map((t) => ({
       tier: t.tier, label: TIER_LABEL[t.tier], unit: `${t.candidate.item.brand} ${t.candidate.item.model}`, cents: Math.round(t.subtotal * 100), summary,
       choice: `${kindWords}, the ${TIER_LABEL[t.tier].toLowerCase()} tier (${t.candidate.item.brand} ${t.candidate.item.model})`,
-      facts: { sqft, storeys: site.storeys, yearBuilt: site.yearBuilt, existing, gas: String(ans.gas || "yes"), outdoorKind, county: site.county ?? null, load, tiers: all, tier: t.tier, pin, lookedUp: Object.keys(site.sources ?? {}).length > 0, footprintSqft: site.footprintSqft ?? null, elevationFt: site.elevationFt ?? null },
+      // `site` and `itemId` (2026-10-28, lib/webHandoff): the house as confirmed and the unit itself, so the lead opens
+      // in the shop's HVAC estimator on the design step with this tier picked.
+      facts: { site, itemId: t.candidate.item.id, sqft, storeys: site.storeys, yearBuilt: site.yearBuilt, existing, gas: String(ans.gas || "yes"), outdoorKind, county: site.county ?? null, load, tiers: all, tier: t.tier, pin, lookedUp: Object.keys(site.sources ?? {}).length > 0, footprintSqft: site.footprintSqft ?? null, elevationFt: site.elevationFt ?? null },
     })),
   };
 }

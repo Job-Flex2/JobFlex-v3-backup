@@ -19,6 +19,7 @@ import type { BoardGrade, PostSystem } from "@/lib/fence/takeoff";
 import { isMapsBrowserEnabled, loadMapsLibrary } from "@/lib/googleMaps";
 import { leaveRow, staggerIn } from "@/components/v3/blueprint-shell/list-motion";
 import { attachPlacesSuggest, type PickedPlace } from "@/components/v3/blueprint-shell/places-suggest";
+import type { WebFenceSeed } from "@/lib/webHandoff";
 import { mountIsland, type Island } from "@/components/v3/blueprint-shell/react-island";
 import {
   FenceDrawMap,
@@ -137,6 +138,9 @@ export type FenceEstimatorOptions = {
   navigate: (href: string) => void;
   /** A lead's address (lib/estimateSeed): typed into the search bar on init, and Find pressed when a map key is configured. */
   initialAddress?: string;
+  /** A website or house lead's fence as the homeowner drew it (lib/webHandoff, 2026-10-28): the site from its pin, the
+   *  style, the height, the gates and the path, applied once the shop's book has loaded. */
+  initialFence?: WebFenceSeed | null;
 };
 
 /** The two fields of a Geocoder result this page reads. */
@@ -3448,6 +3452,34 @@ export function initFenceEstimatorContent(
     onTraceChange(pts); // updates the ledger, then pushes the bumped revision
   }
 
+  /** A website or house lead's fence (lib/webHandoff, 2026-10-28), applied once: the style when the shop's list has
+   *  it (loadOrgBook resets one it does not), the height (snapped to the type's), the path as the homeowner drew it —
+   *  or the typed runs — then the gates on the first run. Priced in the shop's own book from here on. */
+  let initialFenceApplied = false;
+  let disposed = false;
+  function applyInitialFence() {
+    const f = opts.initialFence;
+    if (!f || initialFenceApplied || disposed) return;
+    initialFenceApplied = true;
+    if (f.type && typeRows().some(function (r) { return r.id === f.type; })) { fs.material = f.type; fs.tierBase = f.type; fs.tier = 'better'; }
+    fs.height = f.heightFt;
+    renderHeights();
+    if (f.points.length >= 2) {
+      applyTracedPath(f.points);
+    } else {
+      fs.runs = f.runsFt.map(function (ft, i) { return { id: 'web-' + (i + 1), ft: ft }; });
+      relistRuns();
+    }
+    for (let i = 0; i < f.gates + f.doubles; i++) {
+      opSeq += 1;
+      const o: FenceOpening = { id: 'o' + opSeq, type: i < f.gates ? 'single' : 'double', run: fs.runs.length ? 1 : null };
+      fs.openings.push(o);
+      appendRow($('#openList'), openRowHtml(o));
+    }
+    syncOpenEmpty();
+    renderStudio();
+  }
+
   /** A click placed the armed opening: on a run when it landed close enough to
    *  magnet, otherwise free at the clicked spot. */
   function onDropOpening(segmentIndex: number, t: number, x?: number, y?: number) {
@@ -3993,7 +4025,13 @@ export function initFenceEstimatorContent(
         },
       }),
     );
-    if (opts.initialAddress && !addrInput.value) {
+    if (opts.initialFence?.pin && !addrInput.value) {
+      // A website or house lead (lib/webHandoff): the site is the pin the homeowner's page priced at, so the local-feet
+      // points line up — no Find, no second geocode. The fence itself lands once the shop's book is in (applyInitialFence).
+      const address = opts.initialAddress ?? '';
+      addrInput.value = address;
+      setSite({ address, city: '', state: '', zip: '', lat: opts.initialFence.pin.lat, lng: opts.initialFence.pin.lng, formatted: address, typed: true });
+    } else if (opts.initialAddress && !addrInput.value) {
       // A lead handed over from its page: the address is already typed, and
       // Find geocodes it at once when the browser key allows.
       addrInput.value = opts.initialAddress;
@@ -4695,8 +4733,8 @@ export function initFenceEstimatorContent(
   restoreTier();
   renderStudio();
   // The organization's saved book lands after the first paint; a tab with
-  // its own edits keeps them (they are newer than the saved copy).
-  void loadOrgBook();
+  // its own edits keeps them (they are newer than the saved copy). A website or house lead's fence lands after it.
+  void loadOrgBook().then(applyInitialFence);
   // The map is NOT mounted here: it mounts when an address resolves (showSite).
   // Without a browser key there is no surface to wait for, so the slot is told
   // that now rather than leaving a prompt that can never be satisfied.
@@ -4839,6 +4877,7 @@ export function initFenceEstimatorContent(
   // and re-points at whichever item React marks `active`.
 
   return () => {
+    disposed = true;
     timers.forEach((id) => clearTimeout(id));
     timers.clear();
     disposers.forEach((d) => d());
