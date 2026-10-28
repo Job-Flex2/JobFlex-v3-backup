@@ -9,6 +9,7 @@ import { PlacesAutocomplete, type PickedAddress } from "@/components/estimator/r
 import { webEstimate, webLead, webView, type WebEstimateView } from "@/actions/webEstimator";
 import type { WebChoice, WebQuestion } from "@/lib/webEstimatorTrades";
 import type { WebTrade } from "@/lib/webEstimator";
+import { WebHead } from "./web-head";
 import "./web-estimate.css";
 
 export interface WebEstimateProps {
@@ -24,12 +25,12 @@ export interface WebEstimateProps {
 
 type Step = "address" | "details" | "price" | "quote" | "done";
 const money = (d: number) => "$" + Math.round(d).toLocaleString("en-US");
-const TRADE_WORDS: Record<WebTrade, { ask: string; pick: string; cta: string }> = {
-  roof: { ask: "Where is the roof?", pick: "What should it be?", cta: "Measure my roof" },
-  hvac: { ask: "Where is the house?", pick: "What kind of system?", cta: "Size my system" },
-  fence: { ask: "Where is the fence going?", pick: "What style?", cta: "Price my fence" },
-  deck: { ask: "Where is the deck going?", pick: "Start from a deck like…", cta: "Price my deck" },
-  smart: { ask: "Where is the project?", pick: "What kind of work?", cta: "Price my project" },
+const TRADE_WORDS: Record<WebTrade, { ask: string; pick: string; cta: string; tool: string }> = {
+  roof: { ask: "Where is the roof?", pick: "What should it be?", cta: "Measure my roof", tool: "Roof estimator" },
+  hvac: { ask: "Where is the house?", pick: "What kind of system?", cta: "Size my system", tool: "HVAC estimator" },
+  fence: { ask: "Where is the fence going?", pick: "What style?", cta: "Price my fence", tool: "Fence Studio" },
+  deck: { ask: "Where is the deck going?", pick: "Start from a deck like…", cta: "Price my deck", tool: "Deck Studio" },
+  smart: { ask: "Where is the project?", pick: "What kind of work?", cta: "Price my project", tool: "Smart Proposal" },
 };
 
 export function WebEstimate(p: WebEstimateProps) {
@@ -88,18 +89,7 @@ export function WebEstimate(p: WebEstimateProps) {
 
   return (
     <div className={"we" + (p.embed ? " we-embed" : "")} style={{ ["--we-accent" as string]: accent }} data-web-estimate={p.trade} data-step={step}>
-      {!p.embed ? (
-        <header className="we-head">
-          {/* eslint-disable-next-line @next/next/no-img-element -- the shop's own logo URL, any host */}
-          {p.shop.logoUrl ? <img className="we-logo" src={p.shop.logoUrl} alt="" /> : <span className="we-mark">{p.shop.name.slice(0, 1)}</span>}
-          <div>
-            <div className="we-shop">{p.shop.name}</div>
-            <div className="we-title">{p.title}</div>
-          </div>
-        </header>
-      ) : (
-        <div className="we-embedHead"><span>{p.shop.name}</span><b>{p.title}</b></div>
-      )}
+      <WebHead shop={p.shop} title={p.title} tool={TRADE_WORDS[p.trade].tool} embed={p.embed} />
 
       <ol className="we-steps" aria-hidden="true">
         {(["address", "details", "price", "quote"] as Step[]).filter((s) => s !== "details" || needDetails).map((s, i) => (

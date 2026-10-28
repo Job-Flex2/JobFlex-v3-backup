@@ -19,6 +19,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { readFilingContext } from "@/lib/filingContext";
 import { deckStudioAccess } from "@/lib/deck/access";
 import { editionFacts } from "@/lib/editionAccess";
 import { hasEdition, type EditionLevel } from "@/lib/editions";
@@ -75,12 +76,18 @@ export default async function DeckEstimatorPage({ searchParams }: { searchParams
   // Opened from a client's record (`?client=`): the client's address is in the field. Read from this org only.
   let initialAddress: string | undefined;
   let clientId: string | undefined;
+  let clientContact: { name: string; phone: string | null; email: string | null } | null = null;
   const asked = one(params.client);
-  if (asked) {
-    const client = await db.client.findFirst({ where: { id: asked, organizationId, deletedAt: null }, select: { id: true, address: true, city: true, state: true, zip: true } });
+  // The client the page is for: `?client=`, else the one a lead's hand-off filed (lib/filingContext) — Send to
+  // client starts with their name, phone and email (owner, 2026-10-28).
+  const filed = asked ? null : await readFilingContext(organizationId).catch(() => null);
+  const wantId = asked ?? filed?.clientId ?? null;
+  if (wantId) {
+    const client = await db.client.findFirst({ where: { id: wantId, organizationId, deletedAt: null }, select: { id: true, name: true, email: true, phone: true, address: true, city: true, state: true, zip: true } });
     if (client) {
       clientId = client.id;
-      if (client.address) initialAddress = [client.address, client.city, [client.state, client.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+      clientContact = { name: client.name, phone: client.phone ?? null, email: client.email ?? null };
+      if (asked && client.address) initialAddress = [client.address, client.city, [client.state, client.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
     }
   }
   const [book, org] = await Promise.all([readDeckRateBook(organizationId), db.organization.findUnique({ where: { id: organizationId }, select: { address: true } })]);
@@ -100,5 +107,5 @@ export default async function DeckEstimatorPage({ searchParams }: { searchParams
   }
   // Keyed by what was opened: a client-side push to another draft or proposal (the studio's own Open links) mounts a
   // fresh studio on it, as the old studio's full page loads did.
-  return <DeckV1Studio key={opened ? `${opened.from}:${opened.draftId ?? proposalId}` : `new:${clientId ?? ""}`} initialBook={book} homeState={homeState} initialAddress={opened?.address ?? initialAddress} clientId={clientId} adminPreview={level === "full" && !viaEdition} opened={opened} preview={level === "preview"} trialEndsAt={trialEndsAt} addonInterval={addonInterval} />;
+  return <DeckV1Studio key={opened ? `${opened.from}:${opened.draftId ?? proposalId}` : `new:${clientId ?? ""}`} initialBook={book} homeState={homeState} initialAddress={opened?.address ?? initialAddress} clientId={clientId} clientContact={clientContact} adminPreview={level === "full" && !viaEdition} opened={opened} preview={level === "preview"} trialEndsAt={trialEndsAt} addonInterval={addonInterval} />;
 }

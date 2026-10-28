@@ -285,3 +285,12 @@
 .consent { display: flex; align-items: flex-start; gap: 10px; margin: 8px 0; font-size: 14px; line-height: 1.45; color: #3b4150; }
 .consent input { width: 18px; height: 18px; margin-top: 2px; }
 .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+/* on the shop's own website (2026-10-28): the shop's logo big and first, JobFlex the small mark */
+.topWeb { min-height: 72px; }
+.brandWeb { gap: 14px; font-size: 24px; letter-spacing: -0.02em; }
+.logoWeb { flex: none; height: 64px; width: auto; max-width: 240px; object-fit: contain; }
+.topRight { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.byJf { font-size: 12px; letter-spacing: 0.04em; color: #6b7280; }
+.byJf b { font-weight: 800; color: var(--ink, #0b0d12); }
+@media (max-width: 520px) { .brandWeb { font-size: 19px; } .logoWeb { height: 48px; max-width: 170px; } }

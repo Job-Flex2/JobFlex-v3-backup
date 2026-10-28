@@ -463,6 +463,8 @@ export interface ReturnedClientDesign {
   token: string;
   name: string;
   phone: string | null;
+  /** From the link, when the client gave one (a website visitor's quote always does). */
+  email: string | null;
   note: string;
   unsure: string[];
   sentAt: string | null;
@@ -502,7 +504,7 @@ export async function loadDeckDraft(id: string): Promise<{ ok: true; draft: Deck
   }
   if (token) {
     const link = await markClientLinkSeen(token, g.organizationId);
-    if (link) client = { token: link.token, name: link.clientName, phone: link.clientPhone, note: link.note, unsure: link.unsure, sentAt: link.sentAt, sends: link.sends, url: `${(await appBaseUrl()).replace(/\/$/, "")}/deck-design/${link.token}`, address: link.address, title: linkTitle(link) };
+    if (link) client = { token: link.token, name: link.clientName, phone: link.clientPhone, email: link.clientEmail ?? null, note: link.note, unsure: link.unsure, sentAt: link.sentAt, sends: link.sends, url: `${(await appBaseUrl()).replace(/\/$/, "")}/deck-design/${link.token}`, address: link.address, title: linkTitle(link) };
   }
   // A draft opened from a proposal goes on updating it, while the proposal is there.
   const proposalId = draft.proposalId ?? (client ? (await db.syncState.findUnique({ where: { key: `deckclient:${client.token}` }, select: { cursor: true } }).then((r) => (r ? (JSON.parse(r.cursor) as { proposalId?: unknown }).proposalId : null)).catch(() => null)) : null);

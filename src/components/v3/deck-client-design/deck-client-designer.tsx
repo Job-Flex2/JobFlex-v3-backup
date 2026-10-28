@@ -611,19 +611,23 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
   return (
     <main className={cx(s.page, "jf-blueprint")} data-deck-client>
       <div className={cx("content", s.content)}>
-        <header className={s.top}>
-          <div className={s.brand}>
+        <header className={`${s.top} ${props.website ? s.topWeb : ""}`}>
+          <div className={`${s.brand} ${props.website ? s.brandWeb : ""}`}>
             {shop.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element -- the shop's own logo, any host.
-              <img src={shop.logoUrl} alt="" className={s.logo} />
+              <img src={shop.logoUrl} alt={shopName} className={props.website ? s.logoWeb : s.logo} />
             ) : (
               <span className={s.mark} aria-hidden="true">{shopName.slice(0, 1).toUpperCase()}</span>
             )}
             <span>{shopName}</span>
           </div>
-          <span className={s.saveState} data-client-save={saveState} aria-live="polite">
-            {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved ✓" : saveState === "failed" ? "Not saved — will retry" : "Saves as you go"}
-          </span>
+          <div className={s.topRight}>
+            {/* The shop's brand leads on its own website; JobFlex is the small mark under it (owner, 2026-10-28). */}
+            {props.website ? <span className={s.byJf} aria-label="Deck Studio by JobFlex"><b>Deck Studio</b> by JobFlex</span> : null}
+            <span className={s.saveState} data-client-save={saveState} aria-live="polite">
+              {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved ✓" : saveState === "failed" ? "Not saved — will retry" : "Saves as you go"}
+            </span>
+          </div>
         </header>
 
         <div className={s.intro}>

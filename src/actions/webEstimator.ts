@@ -10,7 +10,10 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { appBaseUrl } from "@/lib/appUrl";
-import { NoOrgError, UnauthorizedError, isOwnerRole, requireEstimatorOrManager, requireManager, requireOrg, requirePlatformAdmin } from "@/lib/orgContext";
+import { NoOrgError, UnauthorizedError, isEstimatorRole, isOwnerRole, requireEstimatorOrManager, requireManager, requireOrg, requirePlatformAdmin } from "@/lib/orgContext";
+import { cookies } from "next/headers";
+import { ensureClientForLead } from "@/lib/leadClient";
+import { FILING_COOKIE, FILING_MAX_AGE_S, type Filing } from "@/lib/filingCookie";
 import { dollars, webAddonPriceWords, webModeBills, webTradeServes, type AddonInterval, type WebAddonLine, type WebBillingMode } from "@/lib/webAddon";
 import { addWebAddon, quoteWebAddon as quoteWebLine, removeWebAddon, webAddonLines, webBilling, webTradeLive } from "@/lib/webAddonBilling";
 import { HOUR, MINUTE, RateLimitError, clientIp, enforceRateLimit } from "@/lib/rateLimit";
@@ -191,12 +194,17 @@ export async function setWebEstimatorOpenAction(on: boolean): Promise<{ ok: true
 export async function openWebLeadInEstimator(leadId: string): Promise<void> {
   const ctx = await requireEstimatorOrManager();
   if (typeof leadId !== "string" || !/^[\w-]{1,64}$/.test(leadId)) throw new Error("No such lead.");
-  const lead = await db.lead.findFirst({ where: { id: leadId, organizationId: ctx.organizationId }, select: { id: true, name: true, address: true, city: true, state: true, zip: true } });
+  const lead = await db.lead.findFirst({ where: { id: leadId, organizationId: ctx.organizationId }, select: { id: true, name: true, email: true, phone: true, address: true, city: true, state: true, zip: true } });
   const rec = lead ? await readWebLead(lead.id) : null;
   if (!lead || !rec) throw new Error("No such website lead.");
   const est = rec.estimate;
   if (rec.trade === "deck" && typeof est.facts.draftId === "string" && /^[a-f0-9-]{8,40}$/i.test(est.facts.draftId)) {
-    // Designed on the website in the client designer: the send already made the studio's draft — open that one.
+    // Designed on the website in the client designer: the send already made the studio's draft — open that one,
+    // filed under the lead's client (found by email or phone, else made), so the proposal lands on them and Send to
+    // client starts with their name (the same cookie startEstimateFromLead writes, lib/filingCookie).
+    const client = await ensureClientForLead(ctx.organizationId, lead, { create: !isEstimatorRole(ctx.role) }).catch(() => null);
+    const filing: Filing = { ...(client ? { clientId: client.id, clientName: client.name } : {}), leadId: lead.id, leadName: lead.name };
+    (await cookies()).set(FILING_COOKIE, JSON.stringify(filing), { path: "/", maxAge: FILING_MAX_AGE_S, sameSite: "lax" });
     redirect(`/dashboard/deck-estimator?draft=${est.facts.draftId}`);
   }
   if (rec.trade === "deck") {
