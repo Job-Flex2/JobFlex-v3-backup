@@ -17,7 +17,7 @@
 // `position: absolute` <svg>, so it takes no space in the `.content` flex
 // column and contributes no `gap`.
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { useBlueprintContent } from "@/components/v3/blueprint-shell/use-blueprint-content";
@@ -25,7 +25,10 @@ import { initFenceEstimatorContent } from "./fence-estimator-behavior";
 import type { WebFenceSeed } from "@/lib/webHandoff";
 import { Sprite } from "./sprite";
 
-export function FenceEstimatorContent({ initialAddress, webFence = null }: { initialAddress?: string; webFence?: WebFenceSeed | null } = {}) {
+export function FenceEstimatorContent({ initialAddress, webFence: webFenceProp = null }: { initialAddress?: string; webFence?: WebFenceSeed | null } = {}) {
+  // The fence as it was at mount: the seed strip spends the seed a moment later and the page re-renders without it —
+  // a changed prop would tear the studio down and rebuild it empty.
+  const [webFence] = useState(() => webFenceProp);
   // "Convert to proposal" creates a real proposal and has to land on it. A
   // behavior module is plain DOM with no React tree, so the only client-side
   // router on this page is the one THIS component can hold — it is handed down

@@ -43,6 +43,9 @@ const good = { title: "Hall bath remodel", scope: "Remove the tub surround, tile
 const s = smartSeedFromWebLead(withFacts({ estimate: good, brief: "Redo the hall bath, keep the tub", qualityTier: "standard", sqft: null, photos: 1 }, "smart"));
 check("a smart record: the generated estimate re-validated, its discount, the brief", !!s && s.estimate.title === "Hall bath remodel" && s.estimate.materials.length === 1 && s.estimate.labor[0].unitPrice === 85 && s.estimate.discount?.amount === 10 && s.brief === "Redo the hall bath, keep the tub", JSON.stringify(s));
 check("a record whose estimate does not parse, or no brief: nothing", smartSeedFromWebLead(withFacts({ estimate: { title: 1 }, brief: "x" }, "smart")) === null && smartSeedFromWebLead(withFacts({ estimate: good }, "smart")) === null && smartSeedFromWebLead(withFacts({ estimate: good, brief: "x" }, "deck")) === null);
+// The house org's pricing method (its labor rate, markup, tax rule) never rides to the buyer: their own applies.
+const priced = smartSeedFromWebLead(withFacts({ estimate: { ...good, pricing: { mode: "company", laborBasis: "crew", crewSize: 2, laborRate: 95, materialMarkupPct: 20, overheadPct: 10, profitPct: 10, taxMode: "none", taxRatePct: null, words: "the house's method" } }, brief: "Redo the hall bath" }, "smart"));
+check("the generated estimate's pricing snapshot is stripped on the hand-off", !!priced && priced.estimate.pricing === undefined && priced.estimate.materials.length === 1, JSON.stringify(priced?.estimate.pricing));
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);

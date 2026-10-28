@@ -118,5 +118,10 @@ export function smartSeedFromWebLead(rec: WebLeadRecord): WebSmartSeed | null {
   const brief = typeof f.brief === "string" ? f.brief.trim() : "";
   if (!brief) return null;
   const parsed = estimateSchema.safeParse(f.estimate);
-  return parsed.success ? { estimate: parsed.data, brief } : null;
+  if (!parsed.success) return null;
+  // The house org's pricing method (its labor rate, markup, tax rule — the `pricing` snapshot) never rides to the
+  // buyer: their own applies once they re-price, and their tax rule goes on the sheet.
+  const { pricing: _pricing, ...estimate } = parsed.data;
+  void _pricing;
+  return { estimate, brief };
 }

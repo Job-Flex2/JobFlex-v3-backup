@@ -463,7 +463,7 @@ export async function openRoofLeadEstimate(platformLeadId: string): Promise<Roof
   const e = (await readLeadEstimates([id])).get(id);
   if (!e) return { ok: false, error: "This lead carries no priced estimate.", none: true };
   // A house estimate of another trade (2026-10-28) is the other estimator's to open — never read as a roof.
-  if (e.trade !== "roof") return { ok: false, error: `This lead's estimate opens in the ${estimatorNameFor(e.trade)} — use that card.`, none: true };
+  if (e.trade !== "roof") return { ok: false, error: `This lead's estimate opens in the ${estimatorNameFor(e.trade)} — use that card.` };
   const address = [pl.address, pl.city, [pl.state, pl.zip].filter(Boolean).join(" ")].filter((s) => s && s.trim()).join(", ") || null;
   const r = reopenFromEstimate(e, address);
   return { ok: true, ...r, pin: pl.lat != null && pl.lng != null ? { lat: pl.lat, lng: pl.lng } : null, basis: e.basis };

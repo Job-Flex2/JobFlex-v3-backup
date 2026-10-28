@@ -3456,9 +3456,10 @@ export function initFenceEstimatorContent(
    *  it (loadOrgBook resets one it does not), the height (snapped to the type's), the path as the homeowner drew it —
    *  or the typed runs — then the gates on the first run. Priced in the shop's own book from here on. */
   let initialFenceApplied = false;
+  let disposed = false;
   function applyInitialFence() {
     const f = opts.initialFence;
-    if (!f || initialFenceApplied) return;
+    if (!f || initialFenceApplied || disposed) return;
     initialFenceApplied = true;
     if (f.type && typeRows().some(function (r) { return r.id === f.type; })) { fs.material = f.type; fs.tierBase = f.type; fs.tier = 'better'; }
     fs.height = f.heightFt;
@@ -4876,6 +4877,7 @@ export function initFenceEstimatorContent(
   // and re-points at whichever item React marks `active`.
 
   return () => {
+    disposed = true;
     timers.forEach((id) => clearTimeout(id));
     timers.clear();
     disposers.forEach((d) => d());
