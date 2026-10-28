@@ -65,7 +65,10 @@ export function parseLeadEstimate(raw: string | null | undefined): LeadEstimate 
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as LeadEstimate;
-    return parsed && parsed.v === 1 && parsed.range && typeof parsed.range.mid === "number" ? parsed : null;
+    if (!parsed || parsed.v !== 1 || !parsed.range || typeof parsed.range.mid !== "number") return null;
+    // Whole or nothing: a web row carries its record, a roof row its hidden package — an Accept must never trip on one.
+    if (parsed.trade === "roof") return parsed.hidden && Array.isArray(parsed.hidden.materials) ? parsed : null;
+    return parsed.web && typeof parsed.web === "object" && parsed.web.facts && typeof parsed.web.facts === "object" ? parsed : null;
   } catch {
     return null;
   }

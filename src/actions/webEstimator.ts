@@ -653,7 +653,6 @@ export async function webDeckSend(token: unknown, raw: unknown): Promise<{ ok: t
   if (name.length < 2) return { ok: false, error: "Your name, please." };
   if (phone.replace(/\D/g, "").length < 10) return { ok: false, error: "A phone number we can reach you at, please." };
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: "That email address doesn't look right." };
-  if (r.consent !== true) return { ok: false, error: "Tick the box so the shop may contact you." };
   try {
     await enforceRateLimit(`web-lead:${await clientIp()}`, 6, 10 * MINUTE, "requests");
   } catch (err) {
@@ -662,6 +661,10 @@ export async function webDeckSend(token: unknown, raw: unknown): Promise<{ ok: t
   }
   const shop = await webShopBySlug(link.web.slug);
   if (!shop || shop.id !== link.orgId) return { ok: false, error: "This estimator isn't turned on." };
+  if (r.consent !== true) return { ok: false, error: isHouse(shop) ? "Tick the box so a local pro may contact you." : "Tick the box so the shop may contact you." };
+  // The shop's (or the house's) hourly ceiling on leads, as webLead has it.
+  const shopBraked = await brake(`web-lead-shop:${shop.id}`, shopHourly(shop).leads, HOUR, "requests");
+  if (shopBraked) return { ok: false, error: shopBraked };
   // The house (2026-10-28) needs the email before anything is made: the request page and the dashboard hang off it.
   if (isHouse(shop) && !email) return { ok: false, error: "Your email, please — your request page and your dashboard are sent there." };
   if (link.web.leadId) {

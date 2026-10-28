@@ -1221,12 +1221,17 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [], webHv
   // the gas and the outdoor kind land as `reopen` lands a saved estimate — on the design step — and the unit they were
   // priced on is picked once the shop's catalog is in (their id when the shop lists it, else that tier's). Applied on
   // the first tick after mount; the effects themselves set nothing.
+  // The prop as it was at mount: the seed strip spends the seed a moment later and the page re-renders without it.
+  const [web] = React.useState(() => webHvac);
+  // Applied once — the mark is set when the timer fires, not when it is armed, so StrictMode's second mount (which
+  // cancels the first timer) still applies it.
   const webApplied = React.useRef(false);
   React.useEffect(() => {
-    if (!webHvac || webApplied.current) return;
-    webApplied.current = true;
+    if (!web || webApplied.current) return;
     const t = setTimeout(() => {
-      const facts = webHvac.site;
+      if (webApplied.current) return;
+      webApplied.current = true;
+      const facts = web.site;
       setSite(facts);
       setStateCode(facts.state);
       {
@@ -1235,23 +1240,26 @@ export function HvacEstimatorForm({ aiEnabled, initialAddress, leads = [], webHv
         setCounty(hit && (hit.match === "county" || hit.match === "fuzzy") ? hit.conditions.county : raw);
       }
       setJob("replace-system");
-      setTyped({ "existing.kind": webHvac.existing, "gas.available": webHvac.gas !== "no" });
-      setOutdoorKind(webHvac.outdoorKind);
+      setTyped({ "existing.kind": web.existing, "gas.available": web.gas !== "no" });
+      setOutdoorKind(web.outdoorKind);
       if (addrRef.current) addrRef.current.value = facts.address;
       go("design");
     }, 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [webHvac]);
+  }, [web]);
   const webPicked = React.useRef(false);
   React.useEffect(() => {
-    if (!webHvac || webPicked.current || !catalog || !tiers.length) return;
-    webPicked.current = true;
-    const own = webHvac.itemId && catalogItems.some((c) => c.id === webHvac.itemId) ? webHvac.itemId : null;
-    const pick = own ?? tiers.find((x) => x.tier === webHvac.tier)?.candidate.item.id ?? null;
-    const t = setTimeout(() => setPickId(pick), 0);
+    if (!web || webPicked.current || !catalog || !tiers.length) return;
+    const own = web.itemId && catalogItems.some((c) => c.id === web.itemId) ? web.itemId : null;
+    const pick = own ?? tiers.find((x) => x.tier === web.tier)?.candidate.item.id ?? null;
+    const t = setTimeout(() => {
+      if (webPicked.current) return;
+      webPicked.current = true;
+      setPickId(pick);
+    }, 0);
     return () => clearTimeout(t);
-  }, [webHvac, catalog, tiers, catalogItems]);
+  }, [web, catalog, tiers, catalogItems]);
 
   const reopen = async (id: string) => {
     const res = await getHvacEstimate(id);

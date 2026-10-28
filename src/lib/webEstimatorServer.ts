@@ -132,9 +132,13 @@ export async function storeWebEstimate(rec: Omit<WebEstimateRecord, "token" | "a
   await writeKey(webEstimateKey(full.token), JSON.stringify(full));
   return full;
 }
-/** The estimate is spent once a lead is made from it (the house path, lib/publicEstimate/houseLead). */
+/** The estimate is spent once a lead is made from it (the house path, lib/publicEstimate/houseLead) — claimed first,
+ *  so a second send of the same token in the seconds the intake takes finds nothing; put back if the intake fails. */
 export async function dropWebEstimate(token: string): Promise<void> {
   await writeKey(webEstimateKey(token), null);
+}
+export async function restoreWebEstimate(est: WebEstimateRecord): Promise<void> {
+  await writeKey(webEstimateKey(est.token), JSON.stringify(est));
 }
 export async function readWebEstimate(token: string, organizationId: string): Promise<WebEstimateRecord | null> {
   if (!WEB_ESTIMATE_TOKEN_RE.test(token)) return null;

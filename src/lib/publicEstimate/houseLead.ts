@@ -12,7 +12,7 @@ import { HOUSE_TRADE, estimateWords, houseSource, leadEstimateFromWeb } from "@/
 import { sendEmail } from "@/lib/sdk/resend";
 import { afterResponse } from "@/lib/server-events";
 import { HOUSE_NAME, PROJECT_TYPE, homeownerEmail, type WebEstimateRecord, type WebLeadContact, type WebShop } from "@/lib/webEstimator";
-import { bumpWebCount, dropWebEstimate } from "@/lib/webEstimatorServer";
+import { bumpWebCount, dropWebEstimate, restoreWebEstimate } from "@/lib/webEstimatorServer";
 
 const escapeHtml = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
 
@@ -33,7 +33,12 @@ export async function createHouseLead(
   const pin = pinOf(est);
   // "Any project" names no trade — the detector reads the brief as for any described request.
   const known = e.trade === "smart" ? null : { trade: { trade: HOUSE_TRADE[e.trade], confidence: 1, reason: `the homeowner priced it on ${HOUSE_NAME}` }, lat: pin?.lat ?? null, lng: pin?.lng ?? null };
-  const res = await createHomeownerLead(
+  // The token is claimed before the lead is made: the intake takes seconds (the cascade, the alerts), and a second
+  // send of the same estimate in that window must find nothing. Put back if the intake throws.
+  await dropWebEstimate(est.token);
+  let res: Awaited<ReturnType<typeof createHomeownerLead>>;
+  try {
+    res = await createHomeownerLead(
     {
       name: contact.name,
       email: contact.email,
@@ -55,8 +60,11 @@ export async function createHouseLead(
       estimate: e,
       known,
     },
-  );
-  await dropWebEstimate(est.token).catch(() => {});
+    );
+  } catch (err) {
+    await restoreWebEstimate(est).catch(() => {});
+    throw err;
+  }
   await bumpWebCount(shop.id, "leads").catch(() => {});
   const url = `${await appBaseUrl()}${res.statusPath}`;
   afterResponse(async () => {

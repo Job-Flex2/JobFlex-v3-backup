@@ -165,8 +165,10 @@ function clampNum(raw: string, max: number): number {
   return Math.min(Math.max(n, 0), max);
 }
 
-export function AdvancedAiContent({ seed, web = null }: { seed?: { brief: string; address: string; state: string }; web?: WebSmartSeed | null } = {}) {
+export function AdvancedAiContent({ seed, web: webProp = null }: { seed?: { brief: string; address: string; state: string }; web?: WebSmartSeed | null } = {}) {
   const router = useRouter();
+  // The hand-off as it was at mount: the seed strip spends the seed a moment later and the page re-renders without it.
+  const [web] = useState(() => webProp);
 
   // ── Panel 1: the intake console ──────────────────────────────────
   const [panel, setPanel] = useState<Panel>("intake");

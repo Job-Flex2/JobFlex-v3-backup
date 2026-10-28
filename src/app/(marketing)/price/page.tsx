@@ -26,7 +26,7 @@ export default async function PricePage() {
         <p className={s.lede}>Type your address, pick what you want, answer three questions. A range in about a minute — no account, nothing to download.</p>
       </div>
       <PriceRow house={house} />
-      <p className={s.small}>An estimate range from aerial data and local prices, not a quote. A local pro confirms on site.</p>
+      <p className={s.small}>{house ? "Estimate ranges from JobFlex’s own estimators, aerial data and local prices — not quotes. A local pro confirms on site." : "An estimate range from aerial data and local prices, not a quote. A local pro confirms on site."}</p>
     </PriceChrome>
   );
 }
