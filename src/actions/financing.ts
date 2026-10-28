@@ -1,0 +1,51 @@
+"use server";
+// Wisetack financing — the contractor's own actions (Settings → Payments → Financing). Managers only: applying binds
+// the company to Wisetack's merchant terms. lib/financing/service does the work.
+import { revalidatePath } from "next/cache";
+import { requireManager } from "@/lib/orgContext";
+import { linkExisting, orgFinancingView, refreshMerchant, setDefault, setYearStarted, startApplication } from "@/lib/financing/service";
+import type { OrgFinancing } from "@/lib/financing/state";
+
+type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
+const NOT_OPEN = "Financing isn't open for your account yet.";
+
+export async function applyForFinancing(): Promise<Result<{ url: string }>> {
+  const { organizationId, user } = await requireManager();
+  const r = await startApplication(organizationId, user.id);
+  revalidatePath("/dashboard/settings");
+  return r;
+}
+
+export async function linkWisetackAccount(email: string): Promise<Result<{ url: string | null; rec: OrgFinancing }>> {
+  const { organizationId, user } = await requireManager();
+  const r = await linkExisting(organizationId, String(email ?? ""), user.id);
+  revalidatePath("/dashboard/settings");
+  return r;
+}
+
+export async function checkFinancingStatus(): Promise<Result<{ rec: OrgFinancing }>> {
+  const { organizationId } = await requireManager();
+  const view = await orgFinancingView(organizationId);
+  if (!view.letIn || !view.available) return { ok: false, error: NOT_OPEN };
+  try {
+    return { ok: true, rec: await refreshMerchant(organizationId) };
+  } catch {
+    return { ok: false, error: "Wisetack didn't answer — try again in a minute." };
+  }
+}
+
+export async function setFinancingDefault(on: boolean): Promise<Result<{ rec: OrgFinancing }>> {
+  const { organizationId } = await requireManager();
+  const view = await orgFinancingView(organizationId);
+  if (!view.letIn) return { ok: false, error: NOT_OPEN };
+  const rec = await setDefault(organizationId, on === true);
+  revalidatePath("/dashboard/settings");
+  return { ok: true, rec };
+}
+
+export async function setFinancingYearStarted(year: number | null): Promise<Result<{ rec: OrgFinancing }>> {
+  const { organizationId } = await requireManager();
+  const view = await orgFinancingView(organizationId);
+  if (!view.letIn) return { ok: false, error: NOT_OPEN };
+  return { ok: true, rec: await setYearStarted(organizationId, typeof year === "number" ? year : null) };
+}

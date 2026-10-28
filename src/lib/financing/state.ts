@@ -40,6 +40,8 @@ export type OrgFinancing = {
   feeBps: number | null;
   /** The contractor's general "check your rate" link. */
   prequalUrl: string | null;
+  /** Wisetack's application page, to finish an application that is started or needs more. */
+  applyUrl: string | null;
   /** "Offer monthly payments on every new proposal". */
   offerByDefault: boolean;
   yearStarted: number | null;
@@ -57,6 +59,7 @@ export const EMPTY_ORG_FINANCING: OrgFinancing = {
   maxMinor: null,
   feeBps: null,
   prequalUrl: null,
+  applyUrl: null,
   offerByDefault: true,
   yearStarted: null,
   checkedAt: null,
@@ -88,6 +91,7 @@ export function parseOrgFinancing(raw: string | null | undefined): OrgFinancing 
     maxMinor: num(o.maxMinor),
     feeBps: num(o.feeBps),
     prequalUrl: str(o.prequalUrl),
+    applyUrl: str(o.applyUrl),
     offerByDefault: o.offerByDefault !== false,
     yearStarted: num(o.yearStarted),
     checkedAt: str(o.checkedAt),

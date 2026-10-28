@@ -761,6 +761,7 @@ export const NOTIFICATION_ICONS: Record<PrefKey, IconName> = {
   'proposal-accepted': 'i-check',
   'proposal-declined': 'i-x',
   'payment-received': 'i-bank',
+  financing: 'i-bank',
   'billing-problems': 'i-card',
   'change-order': 'i-pen',
   'job-scheduled': 'i-cal',
