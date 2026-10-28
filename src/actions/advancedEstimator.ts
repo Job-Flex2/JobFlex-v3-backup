@@ -49,8 +49,8 @@ import { trackActivation, trackProposalCreated } from "@/lib/activation-events";
 import { applyMemberDiscount } from "@/lib/servicePlanBook";
 import { noteRequestOrg, takeTrialCap } from "@/lib/trialMeter";
 import { bumpWebCount, storeWebEstimate, webCapReached, webShopBySlug, type WebShop } from "@/lib/webEstimatorServer";
-import { webTradeLive } from "@/lib/webAddonBilling";
-import { WEB_TRADE, priceBand, splitTypedAddress } from "@/lib/webEstimator";
+import { webShopServes } from "@/lib/webAddonBilling";
+import { WEB_TRADE, priceBand, shopHourly, splitTypedAddress } from "@/lib/webEstimator";
 import type { WebEstimateView } from "@/actions/webEstimator";
 import { briefFingerprint, keepEstimate, photoPrint, SAME_NOTE, sameEstimate } from "@/lib/estimate/sameBrief";
 import { requirePage } from "@/lib/customPageAccess";
@@ -1311,10 +1311,10 @@ export async function convertEstimateToProposal(raw: unknown) {
 async function webSmartGate(slug: unknown): Promise<{ ok: true; shop: WebShop } | { ok: false; error: string; code?: string }> {
   if (typeof slug !== "string") return { ok: false, error: "This estimator isn't here." };
   const shop = await webShopBySlug(slug);
-  if (!shop || !(await webTradeLive(shop.id, "smart", shop.settings.trades.smart.on))) return { ok: false, error: "This estimator isn't turned on." };
+  if (!shop || !(await webShopServes(shop, "smart"))) return { ok: false, error: "This estimator isn't turned on." };
   try {
     await enforceRateLimit(`web-smart-ip:${await clientIp()}`, 4, 10 * MINUTE, "estimates");
-    await enforceRateLimit(`web-est-shop:${shop.id}`, 120, HOUR, "estimates");
+    await enforceRateLimit(`web-est-shop:${shop.id}`, shopHourly(shop).estimates, HOUR, "estimates");
   } catch (err) {
     if (err instanceof RateLimitError) return { ok: false, error: "That's a lot of estimates at once — give it a few minutes and try again.", code: "braked" };
     throw err;

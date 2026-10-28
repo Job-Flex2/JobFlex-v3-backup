@@ -15,7 +15,7 @@ import { cookies } from "next/headers";
 import { ensureClientForLead } from "@/lib/leadClient";
 import { FILING_COOKIE, FILING_MAX_AGE_S, type Filing } from "@/lib/filingCookie";
 import { dollars, webAddonPriceWords, webModeBills, webTradeServes, type AddonInterval, type WebAddonLine, type WebBillingMode } from "@/lib/webAddon";
-import { addWebAddon, quoteWebAddon as quoteWebLine, removeWebAddon, webAddonLines, webBilling, webTradeLive } from "@/lib/webAddonBilling";
+import { addWebAddon, quoteWebAddon as quoteWebLine, removeWebAddon, webAddonLines, webBilling, webShopServes } from "@/lib/webAddonBilling";
 import { HOUR, MINUTE, RateLimitError, clientIp, enforceRateLimit } from "@/lib/rateLimit";
 import { noteRequestOrg, takeTrialCap, trialPointKey } from "@/lib/trialMeter";
 import { geocodePlace } from "@/lib/maps";
@@ -37,6 +37,7 @@ import {
   splitTypedAddress,
   money,
   bandWords,
+  shopHourly,
 } from "@/lib/webEstimator";
 import {
   bumpWebCount,
@@ -246,7 +247,7 @@ export async function openWebLeadInEstimator(leadId: string): Promise<void> {
 async function liveShop(slug: unknown, trade: unknown): Promise<{ shop: WebShop; trade: WebTrade } | Fail> {
   if (typeof slug !== "string" || !isWebTrade(trade)) return { ok: false, error: "This estimator isn't here." };
   const shop = await webShopBySlug(slug);
-  if (!shop || !(await webTradeLive(shop.id, trade, shop.settings.trades[trade].on))) return { ok: false, error: "This estimator isn't turned on." };
+  if (!shop || !(await webShopServes(shop, trade))) return { ok: false, error: "This estimator isn't turned on." };
   return { shop, trade };
 }
 const brake = async (key: string, max: number, windowMs: number, what: string): Promise<string | null> => {
@@ -278,7 +279,7 @@ export async function webEstimate(slug: unknown, trade: unknown, raw: unknown): 
   if ("ok" in r) return r;
   const { shop, trade: t } = r;
   const ip = await clientIp();
-  const braked = (await brake(`web-est-ip:${ip}`, 12, 10 * MINUTE, "estimates")) ?? (await brake(`web-est-shop:${shop.id}`, 120, HOUR, "estimates"));
+  const braked = (await brake(`web-est-ip:${ip}`, 12, 10 * MINUTE, "estimates")) ?? (await brake(`web-est-shop:${shop.id}`, shopHourly(shop).estimates, HOUR, "estimates"));
   if (braked) return { ok: false, error: braked, code: "braked" };
   if (await webCapReached(shop)) return { ok: false, error: "This estimator has had a busy month and is resting. Leave your details and the shop will price it by hand.", code: "capped" };
   const input = cleanInput(raw);
@@ -311,7 +312,7 @@ export async function webRoofMeasure(slug: unknown, raw: unknown): Promise<{ ok:
   if ("ok" in r) return r;
   const { shop } = r;
   const ip = await clientIp();
-  const braked = (await brake(`web-roof-ip:${ip}`, 8, 10 * MINUTE, "measurements")) ?? (await brake(`web-est-shop:${shop.id}`, 120, HOUR, "estimates"));
+  const braked = (await brake(`web-roof-ip:${ip}`, 8, 10 * MINUTE, "measurements")) ?? (await brake(`web-est-shop:${shop.id}`, shopHourly(shop).estimates, HOUR, "estimates"));
   if (braked) return { ok: false, error: braked, code: "braked" };
   if (await webCapReached(shop)) return { ok: false, error: "This estimator has had a busy month and is resting. Leave your details and the shop will price it by hand.", code: "capped" };
   const input = cleanInput(raw);
@@ -369,7 +370,7 @@ export async function webHvacLookup(slug: unknown, raw: unknown): Promise<{ ok: 
   if ("ok" in r) return r;
   const { shop } = r;
   const ip = await clientIp();
-  const braked = (await brake(`web-hvac-ip:${ip}`, 6, 10 * MINUTE, "house lookups")) ?? (await brake(`web-est-shop:${shop.id}`, 120, HOUR, "estimates"));
+  const braked = (await brake(`web-hvac-ip:${ip}`, 6, 10 * MINUTE, "house lookups")) ?? (await brake(`web-est-shop:${shop.id}`, shopHourly(shop).estimates, HOUR, "estimates"));
   if (braked) return { ok: false, error: braked, code: "braked" };
   if (await webCapReached(shop)) return { ok: false, error: "This estimator has had a busy month and is resting. Leave your details and the shop will size it by hand.", code: "capped" };
   const input = cleanInput(raw);
@@ -458,7 +459,7 @@ export async function webFenceLot(slug: unknown, lat: unknown, lng: unknown): Pr
   if ("ok" in r) return r;
   const { shop } = r;
   if (typeof lat !== "number" || typeof lng !== "number" || !Number.isFinite(lat) || !Number.isFinite(lng)) return { ok: false, error: "Find the address first." };
-  const braked = (await brake(`web-lot-ip:${await clientIp()}`, 6, 10 * MINUTE, "lot lookups")) ?? (await brake(`web-est-shop:${shop.id}`, 120, HOUR, "estimates"));
+  const braked = (await brake(`web-lot-ip:${await clientIp()}`, 6, 10 * MINUTE, "lot lookups")) ?? (await brake(`web-est-shop:${shop.id}`, shopHourly(shop).estimates, HOUR, "estimates"));
   if (braked) return { ok: false, error: braked, code: "braked" };
   if (await webCapReached(shop)) return { ok: false, error: "This estimator has had a busy month and is resting.", code: "capped" };
   const trial = await takeTrialCap(shop.id, "fenceLookups", { dedupe: trialPointKey(lat, lng), coveredBy: ["hvacLookups", "roofMeasurements"] }).catch(() => ({ ok: true as const }));
@@ -476,7 +477,7 @@ export async function webFencePrice(slug: unknown, raw: unknown): Promise<{ ok: 
   if ("ok" in r) return r;
   const { shop } = r;
   const ip = await clientIp();
-  const braked = (await brake(`web-est-ip:${ip}`, 12, 10 * MINUTE, "estimates")) ?? (await brake(`web-est-shop:${shop.id}`, 120, HOUR, "estimates"));
+  const braked = (await brake(`web-est-ip:${ip}`, 12, 10 * MINUTE, "estimates")) ?? (await brake(`web-est-shop:${shop.id}`, shopHourly(shop).estimates, HOUR, "estimates"));
   if (braked) return { ok: false, error: braked, code: "braked" };
   if (await webCapReached(shop)) return { ok: false, error: "This estimator has had a busy month and is resting. Leave your details and the shop will price it by hand.", code: "capped" };
   const input = cleanInput(raw);
@@ -516,7 +517,7 @@ export async function webLead(slug: unknown, trade: unknown, token: unknown, raw
   if ("ok" in r) return r;
   const { shop } = r;
   const ip = await clientIp();
-  const braked = (await brake(`web-lead-ip:${ip}`, 6, 10 * MINUTE, "requests")) ?? (await brake(`web-lead-shop:${shop.id}`, 60, HOUR, "requests"));
+  const braked = (await brake(`web-lead-ip:${ip}`, 6, 10 * MINUTE, "requests")) ?? (await brake(`web-lead-shop:${shop.id}`, shopHourly(shop).leads, HOUR, "requests"));
   if (braked) return { ok: false, error: braked };
   const est = typeof token === "string" ? await readWebEstimate(token, shop.id) : null;
   if (!est) return { ok: false, error: "That estimate has expired — run it again, it only takes a moment." };
@@ -571,7 +572,7 @@ function deckLinkProps(link: ClientDesignLink, shop: WebShop): WebDeckProps {
 export async function webDeckStart(slug: unknown, rawAddress: unknown): Promise<{ ok: true; props: WebDeckProps } | (Fail & { code?: string })> {
   if (typeof slug !== "string" || typeof rawAddress !== "string") return { ok: false, error: "Something went wrong — try again." };
   const shop = await webShopBySlug(slug);
-  if (!shop || !(await webTradeLive(shop.id, "deck", shop.settings.trades.deck.on))) return { ok: false, error: "This estimator isn't turned on." };
+  if (!shop || !(await webShopServes(shop, "deck"))) return { ok: false, error: "This estimator isn't turned on." };
   try {
     await enforceRateLimit(`web-deck-start:${await clientIp()}`, 8, HOUR, "new designs");
   } catch (err) {
@@ -602,7 +603,7 @@ export async function webDeckResume(slug: unknown, token: unknown): Promise<{ ok
   const link = await readWebClientLink(token);
   if (!link || link.web?.slug !== slug) return { ok: false, error: "No such design." };
   const shop = await webShopBySlug(slug);
-  if (!shop || shop.id !== link.orgId || !(await webTradeLive(shop.id, "deck", shop.settings.trades.deck.on))) return { ok: false, error: "This estimator isn't turned on." };
+  if (!shop || shop.id !== link.orgId || !(await webShopServes(shop, "deck"))) return { ok: false, error: "This estimator isn't turned on." };
   return { ok: true, props: deckLinkProps(link, shop) };
 }
 
@@ -699,7 +700,7 @@ export async function webPageOffReason(slug: string, trade: string): Promise<{ t
 export async function webPageModel(slug: string, trade: string, host: string | null) {
   if (!isWebTrade(trade)) return null;
   const shop = await webShopBySlug(slug);
-  if (!shop || !(await webTradeLive(shop.id, trade, shop.settings.trades[trade].on))) return null;
+  if (!shop || !(await webShopServes(shop, trade))) return null;
   const base = await appBaseUrl();
   let appHost: string | null = null;
   try { appHost = new URL(base).host; } catch { appHost = null; }
