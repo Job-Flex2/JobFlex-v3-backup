@@ -61,6 +61,8 @@ export const ADMIN_NAV_SECTIONS: NavSection[] = [
       { label: "Plans", icon: "i-file", href: "/admin/plans" },
       { label: "Influencers", icon: "i-megaphone", href: "/admin/influencers" },
       { label: "Payouts", icon: "i-bank", href: "/admin/payouts" },
+      // Added 2026-10-28: Wisetack financing — who sees it (off / pilot / everyone), who applied, the clients' loans.
+      { label: "Financing", icon: "i-bank", href: "/admin/financing" },
       { label: "Referrals", icon: "i-gift", href: "/admin/referrals" },
     ],
   },

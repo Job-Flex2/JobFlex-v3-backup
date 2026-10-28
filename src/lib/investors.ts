@@ -261,6 +261,9 @@ export interface InvestorReport {
    *  here — all of them, and the part from the customers the period brought (signed up since the start day).
    *  read false = Stripe not read, with why; never a guess. */
   collected: { read: boolean; error: string | null; cents: number; invoices: number; wonCents: number };
+  /** JOBS PAID WITH FINANCING (2026-10-28, lib/financing): Wisetack's payouts to JobFlex contractors — Payment rows
+   *  provider WISETACK + PAID, all time, measured. The page shows the line only once there is one. */
+  financed: { jobs: number; cents: number };
   /** DAYS SINCE LAUNCH (2026-10-24): the day JobFlex launched (the setting, else the start day) and which day today
    *  is — the launch day is day 1. */
   launch: { date: string; day: number; set: boolean };
@@ -449,6 +452,9 @@ export async function investorReport({ refreshMeta = false }: { refreshMeta?: bo
     ? { read: true, error: null, cents: sum((c) => countedCustomers.has(c)), invoices: paid.payments.filter((p) => countedCustomers.has(p.customer)).length, wonCents: sum((c) => wonCustomers.has(c)) }
     : { read: false, error: paid.error, cents: 0, invoices: 0, wonCents: 0 };
 
+  const wisetackPaid = await db.payment.findMany({ where: { provider: "WISETACK", status: "PAID" }, select: { proposalId: true, amount: true } }).catch(() => []);
+  const financed = { jobs: new Set(wisetackPaid.map((p) => p.proposalId ?? "")).size, cents: Math.round(wisetackPaid.reduce((a, p) => a + p.amount, 0) * 100) };
+
   const cut = splitApart({ ...modelInput, visitors, outcomes }, whole);
   const figures = cut.card;
   const cardSince = cut.cardSince;
@@ -468,5 +474,5 @@ export async function investorReport({ refreshMeta = false }: { refreshMeta?: bo
   const dailyRows = whole.curve.filter((p) => !p.projected && p.date >= from30 && p.date >= cardSince && p.date <= today && !apartSet.has(p.date)).map((p) => ({
     date: p.date, spendCents: p.spendDayCents, source: p.spendSource === "projected" ? ("none" as const) : p.spendSource, clicks: clicksByDay.has(p.date) ? (clicksByDay.get(p.date) ?? 0) : null, signups: signupsByDay.get(p.date) ?? 0,
   }));
-  return { figures, settings, startDay: since, spend: { entries, byPlatform }, visitorsKnown: visitors !== null, payingUnpriced, before, firstAdDay, meta: { configured: metaAdsConfigured(), ...metaStatus }, periods, insights, dailyRows, collected, launch: launchDay(settings.launchDate ?? since, today, settings.launchDate !== null), at: new Date().toISOString() };
+  return { figures, settings, startDay: since, spend: { entries, byPlatform }, visitorsKnown: visitors !== null, payingUnpriced, before, firstAdDay, meta: { configured: metaAdsConfigured(), ...metaStatus }, periods, insights, dailyRows, collected, financed, launch: launchDay(settings.launchDate ?? since, today, settings.launchDate !== null), at: new Date().toISOString() };
 }

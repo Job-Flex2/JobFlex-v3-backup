@@ -1,7 +1,7 @@
 // WISETACK FINANCING — what each surface shows, from the rules (./state) and the words (./words): the editor's
 // switch, the client's page, the proposals row, the admin board. Pure; one place so the surfaces cannot disagree.
 
-import { coverMinor, coveredStageIds, fundedMinor, offerFor, restMinor, type Loan, type LoanState, type Offer, type OrgFinancing } from "./state";
+import { coverMinor, coveredStageIds, fundedMinor, offerFor, restMinor, type Loan, type LoanState, type MerchantState, type Offer, type OrgFinancing } from "./state";
 import { FIN, clientLoanWords, loanLine } from "./words";
 
 type Money = (minor: number) => string;
@@ -107,4 +107,26 @@ export function rowFinancing(i: { offered: boolean; loan: Loan | null; canBill: 
   if (!i.offered && !i.loan) return null;
   const sendable = !i.loan || DEAD.includes(i.loan.state);
   return { line: i.loan ? loanLine(i.loan, i.money) : null, canSend: i.offered && i.canBill && sendable };
+}
+
+const MERCHANT_STATES: readonly MerchantState[] = ["none", "started", "review", "needs_info", "approved", "declined", "paused"];
+const LOAN_STATES: readonly LoanState[] = ["sent", "started", "needs_action", "approved", "accepted", "done_asked", "paid", "declined", "expired", "canceled", "refunded"];
+
+/** JobFlex's board (/admin/financing): counts by state, what Wisetack paid out (measured), the share at the agreed rate. */
+export function boardSummary(orgs: Array<{ rec: OrgFinancing }>, loans: Loan[], paidCents: number, shareBps: number | null) {
+  const byState = Object.fromEntries(MERCHANT_STATES.map((s) => [s, 0])) as Record<MerchantState, number>;
+  for (const o of orgs) byState[o.rec.state] += 1;
+  const loansByState = Object.fromEntries(LOAN_STATES.map((s) => [s, 0])) as Record<LoanState, number>;
+  for (const l of loans) loansByState[l.state] += 1;
+  return { byState, loansByState, paidCents, shareCents: shareBps === null ? null : Math.round((paidCents * shareBps) / 10_000) };
+}
+
+/** The pilot list as typed: emails, any separators, lower case, each once. */
+export function pilotFromText(text: string): string[] {
+  const out: string[] = [];
+  for (const raw of text.split(/[\s,;]+/)) {
+    const e = raw.trim().toLowerCase();
+    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) && !out.includes(e)) out.push(e);
+  }
+  return out;
 }
