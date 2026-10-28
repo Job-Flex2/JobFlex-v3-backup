@@ -43,6 +43,9 @@ export async function startEstimateFromLead(leadId: string, estimator: string): 
   // and scope of work however long the estimate takes, address or no address
   // (lib/filingContext). The manual proposal reads the seed instead.
   const client = await ensureClientForLead(organizationId, lead, { create: !isEstimatorRole(role) });
+  // A Lead Center lead (2026-10-27): its pin, so the roof estimator reads the right building, and the PlatformLead
+  // whose hidden estimate (one the homeowner priced on /price) the estimator opens whole.
+  const platform = await db.platformLead.findFirst({ where: { matchedLeadId: lead.id, matchedOrgId: organizationId }, select: { id: true, lat: true, lng: true } }).catch(() => null);
   const carriesLead = engine !== "manual";
   if (client || carriesLead) {
     const filing: Filing = {
@@ -65,6 +68,9 @@ export async function startEstimateFromLead(leadId: string, estimator: string): 
     // The homeowner's own words beside the professional scope; nothing when they are the same text.
     words: words && words !== brief ? words : null,
     clientId: client?.id ?? null,
+    lat: platform?.lat ?? null,
+    lng: platform?.lng ?? null,
+    platformLeadId: platform?.id ?? null,
   });
   redirect(ESTIMATOR_PATH[engine] as Route);
 }

@@ -97,6 +97,7 @@ export default async function RoofEstimatorPage({ searchParams }: { searchParams
         aiEnabled={isOpenAIEnabled()}
         drawingEnabled={drawingEnabled}
         initialAddress={seed?.address && looksLikeStreetAddress(seed.address) ? seed.address : undefined}
+        leadEstimateId={seed?.platformLeadId ?? undefined}
         proposalId={proposalId}
         homeState={homeState}
       />

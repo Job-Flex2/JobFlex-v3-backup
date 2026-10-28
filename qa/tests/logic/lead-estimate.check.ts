@@ -3,7 +3,7 @@
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/lead-estimate.check.ts
 import { DEFAULT_ANSWERS, roofFactsFromSolar, roofRange, type RoofAnswers } from "../../../src/lib/publicEstimate/roof";
 import type { SolarRoofEstimate } from "../../../src/lib/roofSolarEstimate";
-import { PRICE_PLAN_TAG, estimateShort, estimateWords, leadEstimateFrom, parsePlanEstimate, suggestedLeadPriceCents, type LeadEstimate } from "../../../src/lib/leadCenter/estimate";
+import { PRICE_PLAN_TAG, estimateShort, estimateWords, leadEstimateFrom, parsePlanEstimate, reopenFromEstimate, suggestedLeadPriceCents, type LeadEstimate } from "../../../src/lib/leadCenter/estimate";
 
 let bad = 0;
 const check = (name: string, ok: boolean, extra = "") => {
@@ -31,6 +31,11 @@ check("…measured, once a measurement is on it", /· measured$/.test(estimateSh
 check("suggested price: priced $35, measured $60, measured + budget $75, exclusive doubles", suggestedLeadPriceCents({ ...e, budgetCents: null }, false) === 3500 && suggestedLeadPriceCents({ ...e, budgetCents: null, measurementId: "m" }, false) === 6000 && suggestedLeadPriceCents({ ...e, measurementId: "m" }, false) === 7500 && suggestedLeadPriceCents(e, true) === 7000);
 const notes = PRICE_PLAN_TAG + "\n" + JSON.stringify(e);
 check("a saved range reads back from a plan's notes; other notes do not", parsePlanEstimate(notes)?.range.mid === 16000 && parsePlanEstimate("Paint the fence") === null && parsePlanEstimate(null) === null && parsePlanEstimate(PRICE_PLAN_TAG + "\n{junk") === null);
+
+// ── the whole hidden estimate reopens in the buyer's roof estimator ──
+const r = reopenFromEstimate(e, "418 Linden Ave, Buffalo, NY 14216");
+check("the hidden estimate reopens whole: the manual takeoff, the spec, every line, the scope", r.manual.squares === 21 && r.manual.pitchLabel === "6/12" && r.manual.address === "418 Linden Ave, Buffalo, NY 14216" && r.spec.systemId === "architectural" && r.spec.tearOffLayers === 1 && r.materials.length === e.hidden.materials.length && r.labor.length === e.hidden.labor.length && r.scope === e.hidden.scopeText && r.assumptions.length === e.hidden.assumptions.length + 1, JSON.stringify({ m: r.manual, lines: r.materials.length + r.labor.length }));
+check("…the lines carry a name, a quantity, a unit and a price; the first assumption says where it came from", r.materials.every((l) => l.name && l.quantity > 0 && l.unit && l.unitPrice >= 0) && /priced on JobFlex by the homeowner/.test(r.assumptions[0]) && r.title === "Roof · 418 Linden Ave, Buffalo, NY 14216");
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);
