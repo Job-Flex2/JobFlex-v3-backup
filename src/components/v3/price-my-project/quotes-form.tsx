@@ -27,7 +27,7 @@ export function QuotesForm({ mode, site, priced, resume, onBack }: { mode: "quot
   const [emailRange, setEmailRange] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [sent, setSent] = React.useState<{ homePath: string } | null>(null);
+  const [sent, setSent] = React.useState<{ homePath: string | null } | null>(null);
   const att = useRequestAttachments();
   const hpRef = React.useRef<HTMLInputElement>(null);
 
@@ -74,10 +74,12 @@ export function QuotesForm({ mode, site, priced, resume, onBack }: { mode: "quot
   if (sent) {
     return (
       <div className={s.panel} data-price-sent>
-        <p className={s.ok}>Sent — check your inbox for your range. It stays on your home dashboard too.</p>
-        <div className={s.acts}>
-          <a className={s.btn} href={sent.homePath}>Open my home dashboard</a>
-        </div>
+        <p className={s.ok}>Sent — check your inbox for your range. It stays on your home dashboard too{sent.homePath ? "" : " — the link to it is in the email"}.</p>
+        {sent.homePath ? (
+          <div className={s.acts}>
+            <a className={s.btn} href={sent.homePath}>Open my home dashboard</a>
+          </div>
+        ) : null}
       </div>
     );
   }

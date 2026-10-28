@@ -380,6 +380,8 @@ export interface PriceRangeEmailInput {
   quotesUrl: string;
   quotesLabel: string;
   homeUrl: string;
+  /** The fine print, by where the number came from (lib/publicEstimate/roof disclaimerFor). */
+  fine: string;
 }
 
 /** "Your roof range" (2026-10-27): the number they saw, what's in it, and the one next step. */
@@ -396,7 +398,7 @@ export function buildPriceRangeEmail(i: PriceRangeEmailInput): EmailDoc {
     ],
     cta: { label: i.quotesLabel, href: i.quotesUrl },
     after: [`It stays on your home dashboard: ${i.homeUrl}`],
-    fine: "An estimate range from aerial data and local prices, not a quote. A local pro confirms on site.",
+    fine: i.fine,
     footer: PLATFORM_FOOTER,
   };
 }

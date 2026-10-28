@@ -15,8 +15,8 @@ import { locationIndex } from "@/lib/estimate/location-index";
 import { recordApiSpend } from "@/lib/apiSpend";
 import { unitCents } from "@/lib/paidApiCosts";
 import { roofGuideRange } from "@/lib/publicEstimate/guide";
-import { cacheFresh, cacheable, houseOrgId, pubRoofKey, readPubRoof, writePubRoof, type PubRoofCache } from "@/lib/publicEstimate/store";
-import { roofFactsFromSize, roofFactsFromSolar, roofRange, type MaterialId, type RoofAnswers } from "@/lib/publicEstimate/roof";
+import { cacheFresh, cacheable, houseOrgId, inUs, pubRoofKey, readPubRoof, writePubRoof, type PubRoofCache } from "@/lib/publicEstimate/store";
+import { disclaimerFor, roofFactsFromSize, roofFactsFromSolar, roofRange, type MaterialId, type RoofAnswers } from "@/lib/publicEstimate/roof";
 import { estimateShort, estimateWords, leadEstimateFrom, planNotesFor, type LeadEstimate } from "@/lib/leadCenter/estimate";
 import { buildPriceRangeEmail } from "@/lib/email/build/platform";
 import { renderEmail } from "@/lib/email/renderEmail";
@@ -71,7 +71,7 @@ export async function publicRoofRead(raw: unknown, caller: PublicCaller): Promis
     const e = err as { name?: string; retryAfterMs?: number };
     if (e?.name === "RateLimitError") {
       const mins = Math.max(1, Math.ceil((e.retryAfterMs ?? 60 * MINUTE) / MINUTE));
-      return { ok: false, error: `We've priced a lot of roofs from this connection — try again in ${mins} minute${mins === 1 ? "" : "s"}.` };
+      return { ok: false, error: `We're pricing a lot of roofs right now — try again in ${mins} minute${mins === 1 ? "" : "s"}.` };
     }
     if (err instanceof z.ZodError) return { ok: false, error: "Pick your address from the list, then try again." };
     console.error("[price] roof read failed:", err);
@@ -83,6 +83,7 @@ async function readInner(raw: unknown, caller: PublicCaller): Promise<PublicRoof
   const input = readSchema.parse(raw);
   // A filled honeypot is a script: refused before any brake counts it or any call is made.
   if (input.website && input.website.trim() !== "") return { ok: false, error: TRY_AGAIN };
+  if (!inUs(input.lat, input.lng)) return { ok: false, error: "We price homes in the US — pick a US address from the list." };
   const ip = await clientIp();
   await enforceRateLimit(`pubroof:${ip}`, READS_PER_HOUR, 60 * MINUTE, "reads");
   await enforceRateLimit("pubroof:global", 600, 60 * MINUTE, "reads");
@@ -204,6 +205,7 @@ async function sendRangeEmail(to: string, name: string | null, site: { address: 
         quotesUrl: quotes.url,
         quotesLabel: quotes.label,
         homeUrl: home ?? `${await appBaseUrl()}/home`,
+        fine: disclaimerFor(e.basis),
       }),
     );
     await sendEmail({ to, subject, html });
@@ -268,7 +270,7 @@ export async function publicRoofLead(raw: unknown): Promise<PublicRoofLeadResult
   }
 }
 
-export type PublicRoofEmailResult = { ok: true; homePath: string; planId: string } | { ok: false; error: string };
+export type PublicRoofEmailResult = { ok: true; homePath: string | null; planId: string } | { ok: false; error: string };
 
 /** "Email me this range": no lead, no consent box — the range becomes a planned project on their home dashboard,
  *  with the plan reminder (lib/home/reminders) nudging in two days; "Get quotes" from the email or the dashboard
@@ -279,17 +281,14 @@ export async function publicRoofEmail(raw: unknown): Promise<PublicRoofEmailResu
     if (input.website && input.website.trim() !== "") return { ok: false, error: TRY_AGAIN };
     const ip = await clientIp();
     await enforceRateLimit(`pubemail:${ip}`, 5, 10 * MINUTE, "emails");
+    await enforceRateLimit("pubemail:global", 60, 60 * MINUTE, "emails");
+    if (!inUs(input.lat, input.lng)) return { ok: false, error: "We price homes in the US — pick a US address from the list." };
     const estimate = await serverEstimate(input);
     if (!estimate) return { ok: false, error: "We lost the roof read — go back a step and price it again." };
-    const { home } = await findOrCreateHome({
-      name: input.name?.trim() || "Homeowner",
-      email: input.email,
-      address: input.address,
-      city: input.city,
-      state: input.state,
-      zip: input.zip,
-      timezone: input.timezone ?? null,
-    });
+    // The email alone names the home: nothing of the house goes onto a record that may be somebody else's (the plan
+    // carries the house), and the dashboard link is handed back on screen only to a first-timer — an existing home's
+    // key goes by email, as the intake does (the review of 2026-10-27).
+    const { home, isNew } = await findOrCreateHome({ name: input.name?.trim() || "Homeowner", email: input.email, timezone: input.timezone ?? null });
     const now = new Date();
     const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
     const plan = await db.homePlan.create({
@@ -305,7 +304,7 @@ export async function publicRoofEmail(raw: unknown): Promise<PublicRoofEmailResu
     });
     const base = await appBaseUrl();
     await sendRangeEmail(input.email, input.name?.trim() || null, input, estimate, { url: `${base}/price/roof?home=${encodeURIComponent(home.accessToken)}&plan=${encodeURIComponent(plan.id)}`, label: "Get quotes from local pros" }, await homeUrl(home.accessToken));
-    return { ok: true, homePath: homePath(home.accessToken), planId: plan.id };
+    return { ok: true, homePath: isNew ? homePath(home.accessToken) : null, planId: plan.id };
   } catch (err) {
     const e = err as { name?: string; retryAfterMs?: number };
     if (e?.name === "RateLimitError") return { ok: false, error: "That's a few emails from this connection — try again in a few minutes." };

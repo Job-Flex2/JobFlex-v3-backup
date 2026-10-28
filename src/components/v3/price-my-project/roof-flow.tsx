@@ -105,7 +105,7 @@ export function RoofFlow({ prefill, resume }: { prefill: Site | null; resume?: R
       ) : null}
 
       {form && site ? (
-        <QuotesForm mode={form.kind} site={site} priced={form.priced} resume={resume?.plan ?? null} onBack={() => setForm(null)} />
+        <QuotesForm mode={form.kind} site={site} priced={form.priced} resume={resume?.plan ?? null} onBack={() => { setForm(null); if (!read) setStep("address"); }} />
       ) : null}
 
       {step === "range" && site && read && !form ? (

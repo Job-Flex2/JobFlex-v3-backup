@@ -1394,7 +1394,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     void (async () => {
       const r = await openRoofLeadEstimate(leadEstimateId).catch((err: unknown) => ({ ok: false as const, error: errMsg(err) }));
       if (!r.ok) {
-        toast.error("Couldn't open the lead's estimate", r.error);
+        if (!("none" in r && r.none)) toast.error("Couldn't open the lead's estimate", r.error);
         return;
       }
       runManual({ squares: r.manual.squares, pitchLabel: r.manual.pitchLabel, address: r.manual.address });
@@ -1409,7 +1409,7 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
       setSampleEstimate(false);
       lastSpecRef.current = r.spec;
       leadSpecRef.current = r.spec;
-      toast.success("The homeowner's estimate is open", "Priced on JobFlex from an aerial read — measure before you sign.");
+      toast.success("The homeowner's estimate is open", r.basis === "solar" ? "Priced on JobFlex from an aerial read — measure before you sign." : "Priced on JobFlex from the home's square footage — measure before you sign.");
     })();
     // runManual is this render's handler; the lead opens once.
     // eslint-disable-next-line react-hooks/exhaustive-deps

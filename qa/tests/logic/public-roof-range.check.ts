@@ -3,7 +3,7 @@
 // a RANGE, never a number. Pure.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/public-roof-range.check.ts
 import type { SolarRoofEstimate } from "../../../src/lib/roofSolarEstimate";
-import { DEFAULT_ANSWERS, MATERIALS, budgetWords, moneyRange, roofFactsFromSize, roofFactsFromSolar, roofRange, type RoofAnswers } from "../../../src/lib/publicEstimate/roof";
+import { DEFAULT_ANSWERS, MATERIALS, budgetWords, disclaimerFor, moneyRange, roofFactsFromSize, roofFactsFromSolar, roofRange, type RoofAnswers } from "../../../src/lib/publicEstimate/roof";
 import { roofGuideRange } from "../../../src/lib/publicEstimate/guide";
 
 let bad = 0;
@@ -65,6 +65,8 @@ const alts = [{ material: "standing_seam" as const, range: metal }, { material: 
 check("a budget that covers it: says so, and what the next step up would need", budgetWords(r.high * 100, r, alts) === `That covers the architectural shingle. Standing-seam metal would need about ${"$" + (Math.round((metal.high - r.high) / 100) * 100).toLocaleString("en-US")} more.`, budgetWords(r.high * 100, r, alts));
 check("a budget under the range: says by how much, and what fits", /^That’s under the range for the architectural shingle by about \$[\d,]+; the 3-tab shingle fits\.$/.test(budgetWords((alts[1].range.high) * 100, r, alts)), budgetWords(alts[1].range.high * 100, r, alts));
 check("a budget under everything: says so plainly", /^That’s under the range for the architectural shingle by about \$[\d,]+\.$/.test(budgetWords(100_000, r, alts)), budgetWords(100_000, r, alts));
+
+check("the disclaimer says where the number came from: aerial data, or the home's size", disclaimerFor("solar") === "An estimate range from aerial data and local prices, not a quote. A local pro confirms on site." && disclaimerFor("size") === "An estimate range from your home’s size and local prices, not a quote. A local pro measures and confirms on site.");
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);

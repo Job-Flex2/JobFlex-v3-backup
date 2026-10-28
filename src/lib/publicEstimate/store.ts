@@ -13,8 +13,19 @@ export const HOUSE_ORG_KEY = "leadCenter:houseOrgId";
 
 export type PubRoofCache = { v: 1; at: string; solar: SolarRoofEstimate | null; error: string | null };
 
-export function pubRoofKey(input: { address: string; city?: string | null; state?: string | null; zip?: string | null }): string {
-  return `pubroof:${instantAddressKey(input)}`;
+/** The address AND the pin, to about 11 m: a pin dragged onto the house next door is another read, and a scripted
+ *  read at a warehouse's pin never answers the real visitor's pick (the review of 2026-10-27). */
+export function pubRoofKey(input: { address: string; city?: string | null; state?: string | null; zip?: string | null; lat: number; lng: number }): string {
+  return `pubroof:${instantAddressKey(input)}|${input.lat.toFixed(4)},${input.lng.toFixed(4)}`;
+}
+
+/** The pin stands in the US (the lower 48, Alaska or Hawaii) — the only place the roof read and the Lead Center serve. */
+export function inUs(lat: number, lng: number): boolean {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  const lower48 = lat >= 24.4 && lat <= 49.4 && lng >= -125 && lng <= -66.9;
+  const alaska = lat >= 51 && lat <= 72 && lng >= -180 && lng <= -129;
+  const hawaii = lat >= 18.9 && lat <= 22.3 && lng >= -160.3 && lng <= -154.7;
+  return lower48 || alaska || hawaii;
 }
 
 export function cacheFresh(row: PubRoofCache | null, now: Date): boolean {
