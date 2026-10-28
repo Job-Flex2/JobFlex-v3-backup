@@ -7,9 +7,10 @@
 
 import { HvacEstimatorForm } from "./hvac-estimator-form";
 import type { WaitingLead } from "@/lib/leadRules";
+import type { WebHvacSeed } from "@/lib/webHandoff";
 import s from "./hvac-estimator.module.css";
 
-export function HvacEstimatorContent({ aiEnabled, initialAddress, leads }: { aiEnabled: boolean; initialAddress?: string; leads?: WaitingLead[] }) {
+export function HvacEstimatorContent({ aiEnabled, initialAddress, leads, webHvac = null }: { aiEnabled: boolean; initialAddress?: string; leads?: WaitingLead[]; webHvac?: WebHvacSeed | null }) {
   return (
     <>
       <div className={s["page-head"]}>
@@ -18,7 +19,7 @@ export function HvacEstimatorContent({ aiEnabled, initialAddress, leads }: { aiE
           <h1 className={s["page-title"]}>HVAC estimator</h1>
         </div>
       </div>
-      <HvacEstimatorForm aiEnabled={aiEnabled} initialAddress={initialAddress} leads={leads} />
+      <HvacEstimatorForm aiEnabled={aiEnabled} initialAddress={initialAddress} leads={leads} webHvac={webHvac} />
     </>
   );
 }
