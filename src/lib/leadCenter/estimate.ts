@@ -114,3 +114,25 @@ export function parsePlanSite(notes: string | null | undefined): PlanSite | null
 export function planRangeWords(e: LeadEstimate): string {
   return `Roof range ${usd(e.range.low)}–${usd(e.range.high)} · ${e.materialLabel.toLowerCase()} — priced on JobFlex, not a quote`;
 }
+
+/** One line as the roof estimator's tables take it. */
+export type ReopenLine = { name: string; quantity: number; unitPrice: number; unit: string };
+
+/** The whole hidden estimate, as the buyer's roof estimator opens it: a hand takeoff (the squares and the pitch),
+ *  the spec with the homeowner's choices, every line, the scope and the assumptions — with one more on top saying
+ *  where it came from. No measurement, no linked proposal: Convert makes a new proposal. */
+export function reopenFromEstimate(e: LeadEstimate, address: string | null) {
+  const line = (l: LeadEstimate["hidden"]["materials"][number]): ReopenLine => ({ name: l.name, quantity: l.quantity, unitPrice: l.unitPrice, unit: l.unit });
+  return {
+    manual: { squares: Math.round(e.squares * 10) / 10, pitchLabel: e.pitchLabel, address },
+    spec: e.hidden.spec,
+    materials: e.hidden.materials.map(line),
+    labor: e.hidden.labor.map(line),
+    title: `Roof · ${address ?? "the lead's address"}`,
+    scope: e.hidden.scopeText,
+    assumptions: [
+      `This estimate was priced on JobFlex by the homeowner on ${e.at.slice(0, 10)}: ${estimateWords(e)} Priced at JobFlex's default catalog × the local index (${e.cityFactor}); your own rates apply once you re-price. ${e.basis === "solar" ? "The roof was read from aerial data, not measured" : "The roof size came from the home's square footage"} — measure before you sign.`,
+      ...e.hidden.assumptions,
+    ],
+  };
+}

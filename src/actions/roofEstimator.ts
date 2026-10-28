@@ -9,6 +9,8 @@ const estimateTotal = (d: { materials: Array<{ quantity: number; unitPrice: numb
   Math.round([...d.materials, ...d.labor].reduce((a, l) => a + l.quantity * l.unitPrice, 0));
 const money = (n: number) => `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 import { db } from "@/lib/db";
+import { reopenFromEstimate } from "@/lib/leadCenter/estimate";
+import { readLeadEstimates } from "@/lib/leadCenter/estimateStore";
 import { recordInventoryLink } from "@/lib/inventoryPick";
 import { clearFilingContext, filedClientId, leadProposalText, readFilingContext } from "@/lib/filingContext";
 import { getOpenAI, isOpenAIEnabled, samplingOptions, resolveOpenAIModel } from "@/lib/sdk/openai";
@@ -431,6 +433,36 @@ async function linkedRoofProposal(g: { organizationId: string; userId: string; r
   // An estimator works on their own proposals only (requireProposalStaff's scope).
   const theirs = (isSalesRole(g.role) || isEstimatorRole(g.role)) && p.ownerId !== g.userId;
   return { id: p.id, ref: proposalRef(p.publicId), title: p.title, status: p.status, lock: deckProposalLock(p.status, p.installments) ?? (theirs ? "theirs" : null), seen: deckProposalSeen(p.status) };
+}
+
+/** A Lead Center lead's hidden estimate (lib/leadCenter/estimate, 2026-10-27), as the form reopens a proposal: a hand
+ *  takeoff, the spec with the homeowner's choices, every line, the scope and the assumptions — only this company's
+ *  own matched lead. No measurement, no linked proposal: Convert makes a new one. */
+export type RoofFromLead = {
+  ok: true;
+  manual: RoofManualTakeoff;
+  spec: RoofPackageSpec;
+  title: string;
+  scope: string;
+  assumptions: string[];
+  materials: RoofTableLine[];
+  labor: RoofTableLine[];
+  /** The pin the homeowner confirmed: a Measure click reads this building. */
+  pin: { lat: number; lng: number } | null;
+};
+
+export async function openRoofLeadEstimate(platformLeadId: string): Promise<RoofFromLead | { ok: false; error: string }> {
+  const { organizationId } = await requireEstimatorOrManager();
+  await requirePage(organizationId, "roof-estimator");
+  const id = String(platformLeadId ?? "");
+  if (!id || id.length > 64) return { ok: false, error: "No lead." };
+  const pl = await db.platformLead.findFirst({ where: { id, matchedOrgId: organizationId }, select: { address: true, city: true, state: true, zip: true, lat: true, lng: true } });
+  if (!pl) return { ok: false, error: "That lead is not this company's." };
+  const e = (await readLeadEstimates([id])).get(id);
+  if (!e) return { ok: false, error: "This lead carries no priced estimate." };
+  const address = [pl.address, pl.city, [pl.state, pl.zip].filter(Boolean).join(" ")].filter((s) => s && s.trim()).join(", ") || null;
+  const r = reopenFromEstimate(e, address);
+  return { ok: true, ...r, pin: pl.lat != null && pl.lng != null ? { lat: pl.lat, lng: pl.lng } : null };
 }
 
 export type RoofFromProposal = {

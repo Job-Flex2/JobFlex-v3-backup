@@ -34,6 +34,11 @@ export type EstimateSeed = {
   words: string | null;
   /** The client record the lead is (found or made at hand-off, lib/leadClient); the estimate files under it. */
   clientId: string | null;
+  /** A Lead Center lead the homeowner priced on /price (2026-10-27): its pin, so the roof estimator reads the right
+   *  building, and the PlatformLead whose hidden estimate the estimator opens whole (actions/roofEstimator). */
+  lat?: number | null;
+  lng?: number | null;
+  platformLeadId?: string | null;
 };
 
 export function encodeSeed(seed: EstimateSeed): string {
@@ -60,6 +65,9 @@ export function decodeSeed(raw: string | null | undefined): EstimateSeed | null 
       projectType: text(s.projectType, 80),
       words: text(s.words, 3000),
       clientId: text(s.clientId, 64),
+      lat: typeof s.lat === "number" && Number.isFinite(s.lat) && Math.abs(s.lat) <= 90 ? s.lat : null,
+      lng: typeof s.lng === "number" && Number.isFinite(s.lng) && Math.abs(s.lng) <= 180 ? s.lng : null,
+      platformLeadId: text(s.platformLeadId, 64),
     };
   } catch {
     return null;

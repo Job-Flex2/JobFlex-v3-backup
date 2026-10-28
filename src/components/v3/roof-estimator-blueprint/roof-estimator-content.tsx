@@ -29,11 +29,14 @@ export function RoofEstimatorContent({
   aiEnabled,
   drawingEnabled = true,
   initialAddress,
+  leadEstimateId,
   proposalId,
   homeState = null,
 }: {
   /** A lead's address, typed into the search field on arrival (lib/estimateSeed). */
   initialAddress?: string;
+  /** A Lead Center lead the homeowner priced on /price (2026-10-27): its whole hidden estimate opens here. */
+  leadEstimateId?: string;
   /** A saved roof proposal to open again and update (2026-10-13). */
   proposalId?: string;
   /** The shop's own state — the brand picker's fallback when the roof has no address (2026-10-16). */
@@ -67,7 +70,7 @@ export function RoofEstimatorContent({
         drawingEnabled && evEnabled ? (
           <RoofEstimatorBlueprintForm aiEnabled={aiEnabled} />
         ) : (
-          <RoofEstimatorDataForm aiEnabled={aiEnabled} evEnabled={evEnabled} measurementEnabled={measurementEnabled} initialAddress={initialAddress} proposalId={proposalId} homeState={homeState} />
+          <RoofEstimatorDataForm aiEnabled={aiEnabled} evEnabled={evEnabled} measurementEnabled={measurementEnabled} initialAddress={initialAddress} leadEstimateId={leadEstimateId} proposalId={proposalId} homeState={homeState} />
         )
       ) : (
         <div className="card rf-card">

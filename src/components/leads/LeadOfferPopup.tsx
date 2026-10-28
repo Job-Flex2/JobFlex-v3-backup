@@ -41,6 +41,10 @@ interface Offer {
   expiresAt: string | null;
   /** A priced offer opens by payment (LeadPurchase); null = free. */
   priceCents: number | null;
+  /** The range the homeowner priced on /price (2026-10-27), in one line; null when they described instead. */
+  estimateShort: string | null;
+  /** "Exclusive — nobody else gets this lead". */
+  exclusive: boolean;
 }
 
 const POLL_MS = 45_000;
@@ -81,6 +85,8 @@ export function LeadOfferPopup() {
           attempt: 0,
           expiresAt: null,
           priceCents: null,
+          estimateShort: null,
+          exclusive: false,
         })),
       ];
       setOffers(list.filter((o) => !dismissed.current.has(o.id)));
@@ -209,6 +215,16 @@ export function LeadOfferPopup() {
                   <b>{current.detectedTrade ?? current.projectType ?? "Project"}</b>
                   {locationOf(current) ? ` · ${locationOf(current)}` : ""}
                 </div>
+                {current.estimateShort ? (
+                  <div className="jflp-meta" data-offer-range>
+                    <b>Priced by the homeowner:</b> {current.estimateShort}
+                  </div>
+                ) : null}
+                {current.exclusive ? (
+                  <div className="jflp-meta" data-offer-exclusive>
+                    <b>Exclusive — nobody else gets this lead</b>
+                  </div>
+                ) : null}
                 {current.description ? <p className="jflp-desc">{current.description}</p> : null}
                 {current.priceCents ? (
                   <div className="jflp-price">{priceLabel(current.priceCents)} to unlock contact</div>

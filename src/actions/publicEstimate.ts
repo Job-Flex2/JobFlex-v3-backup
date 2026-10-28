@@ -59,6 +59,8 @@ export type PublicRoofReadResult =
   | { ok: false; error: string };
 
 const TRY_AGAIN = "Something went wrong — try again.";
+/** Roof reads an hour from one connection — 10; a stand walking the flow many times sets PUBROOF_READS_PER_HOUR. */
+const READS_PER_HOUR = Math.max(1, Number(process.env.PUBROOF_READS_PER_HOUR) || 10);
 const NO_ROOF = "We couldn't read your roof from the sky.";
 
 /** The roof at this address, read from Google Solar — cached per address for 30 days. */
@@ -82,7 +84,7 @@ async function readInner(raw: unknown, caller: PublicCaller): Promise<PublicRoof
   // A filled honeypot is a script: refused before any brake counts it or any call is made.
   if (input.website && input.website.trim() !== "") return { ok: false, error: TRY_AGAIN };
   const ip = await clientIp();
-  await enforceRateLimit(`pubroof:${ip}`, 10, 60 * MINUTE, "reads");
+  await enforceRateLimit(`pubroof:${ip}`, READS_PER_HOUR, 60 * MINUTE, "reads");
   await enforceRateLimit("pubroof:global", 600, 60 * MINUTE, "reads");
 
   const idx = locationIndex(`${input.city}, ${input.state}`);
@@ -245,6 +247,8 @@ export async function publicRoofLead(raw: unknown): Promise<PublicRoofLeadResult
         estimate,
         homeKey: input.homeKey ?? null,
         planId: input.planId ?? null,
+        // They priced a roof: the trade is theirs, not a model's guess; the pin is the one they confirmed.
+        known: { trade: { trade: "Roofing", confidence: 1, reason: "the homeowner priced a roof on /price" }, lat: input.lat, lng: input.lng },
       },
     );
     if (input.emailRange !== false) {

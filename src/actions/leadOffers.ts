@@ -6,6 +6,9 @@ import { advanceCascade } from "@/lib/leadCenter/cascade";
 import { unmatchAndAdvance } from "@/lib/leadCenter/unmatch";
 import { acceptOfferTx, afterOfferAccepted } from "@/lib/leadCenter/accept";
 import { isPageLocked, requirePage } from "@/lib/customPageAccess";
+import { estimateShort } from "@/lib/leadCenter/estimate";
+import { readLeadEstimates } from "@/lib/leadCenter/estimateStore";
+import { exclusivesOf } from "@/lib/leadCenter/autoPrice";
 
 // Contractor responses to Lead Center offers. Guard parity with claimLead
 // (sales + managers). Every terminal transition is a CONDITIONAL updateMany on
@@ -29,6 +32,10 @@ export async function pendingLeadOffers(): Promise<
     expiresAt: string;
     /** The lead's price in cents; null = free. Contacts open on payment. */
     priceCents: number | null;
+    /** The range the homeowner priced on /price (2026-10-27): "$14,200–$19,800 · architectural shingle · 21 sq · aerial read"; null when they described instead. */
+    estimateShort: string | null;
+    /** "Exclusive — nobody else gets this lead" (the Lead Center's box). */
+    exclusive: boolean;
   }[]
 > {
   const ctx = await requireSalesOrManager();
@@ -53,6 +60,8 @@ export async function pendingLeadOffers(): Promise<
       },
     },
   });
+  const ids = offers.map((o) => o.platformLeadId);
+  const [estimates, exclusives] = await Promise.all([readLeadEstimates(ids), exclusivesOf(ids)]);
   return offers.map((o) => ({
     id: o.id,
     name: o.platformLead.name,
@@ -67,6 +76,11 @@ export async function pendingLeadOffers(): Promise<
     attempt: o.attempt,
     expiresAt: o.expiresAt.toISOString(),
     priceCents: o.priceCents && o.priceCents > 0 ? o.priceCents : null,
+    estimateShort: (() => {
+      const e = estimates.get(o.platformLeadId);
+      return e ? estimateShort(e) : null;
+    })(),
+    exclusive: exclusives.has(o.platformLeadId),
   }));
 }
 

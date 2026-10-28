@@ -9,7 +9,7 @@ import { type LeadEstimate } from "@/lib/leadCenter/estimate";
 import { writeLeadEstimate } from "@/lib/leadCenter/estimateStore";
 import { randomBytes } from "crypto";
 import { db } from "@/lib/db";
-import { detectTrade, routeDecision } from "@/lib/ai/detectTrade";
+import { detectTrade, routeDecision, type DetectedTrade } from "@/lib/ai/detectTrade";
 import { geocodeAddress } from "@/lib/maps";
 import { startCascade } from "@/lib/leadCenter/cascade";
 import { getRoutingMode, MANUAL_MODE_REASON } from "@/lib/leadCenter/routingMode";
@@ -90,6 +90,9 @@ export interface IntakeOptions {
   consent?: { text: string; at: Date; ip: string | null; page: string | null } | null;
   /** The range the homeowner priced in the home portal and the whole estimate under it (lib/leadCenter/estimate). */
   estimate?: LeadEstimate | null;
+  /** The trade the homeowner chose themselves (the /price flow is one trade): taken as read, no model asked, so the
+   *  lead routes even when the detector is off — and the pin they confirmed on the map, kept over a fresh geocode. */
+  known?: { trade: DetectedTrade; lat: number; lng: number } | null;
 }
 
 export async function createHomeownerLead(data: HomeownerIntake, opts: IntakeOptions) {
@@ -109,13 +112,15 @@ export async function createHomeownerLead(data: HomeownerIntake, opts: IntakeOpt
   // no longer carry a specialty picker. `projectType` stays accepted in the
   // schema for older clients but is only context, never the classification.
   const [detected, geo, scope] = await Promise.all([
-    detectTrade(`${data.projectType ?? ""}\n${data.description}`).catch(() => null),
-    geocodeOrReuse({
-      address: data.address,
-      city: data.city,
-      state: data.state,
-      zip: data.zip,
-    }).catch(() => null),
+    opts.known ? Promise.resolve(opts.known.trade) : detectTrade(`${data.projectType ?? ""}\n${data.description}`).catch(() => null),
+    opts.known
+      ? Promise.resolve({ lat: opts.known.lat, lng: opts.known.lng, city: data.city ?? null, state: data.state ?? null })
+      : geocodeOrReuse({
+          address: data.address,
+          city: data.city,
+          state: data.state,
+          zip: data.zip,
+        }).catch(() => null),
     // The scope the homeowner approved in the wizard, else written now from
     // the words and the answers.
     data.scope && data.scope.length >= 20

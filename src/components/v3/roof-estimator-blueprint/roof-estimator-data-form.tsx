@@ -37,7 +37,7 @@ import {
   saveIncludedStructures,
   setMainStructure,
 } from "@/actions/roofMeasurement";
-import { estimateRoof, convertRoofEstimateToProposal, loadRoofFromProposal, updateRoofProposal } from "@/actions/roofEstimator";
+import { estimateRoof, convertRoofEstimateToProposal, loadRoofFromProposal, openRoofLeadEstimate, updateRoofProposal } from "@/actions/roofEstimator";
 import { DECK_LOCK_WORDS, PROPOSAL_STATUS_WORDS, type LinkedDeckProposal } from "@/lib/deck/proposalEdit";
 // The card's own key for "this roof" (it counts the existing material and storeys too).
 import { factsKey } from "./roof-package-builder";
@@ -440,7 +440,7 @@ function StructureRow(p: {
   );
 }
 
-export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, measurementEnabled = false, initialAddress, proposalId, homeState = null }: { aiEnabled?: boolean; evEnabled?: boolean; measurementEnabled?: boolean; initialAddress?: string; proposalId?: string; homeState?: string | null } = {}) {
+export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, measurementEnabled = false, initialAddress, leadEstimateId, proposalId, homeState = null }: { aiEnabled?: boolean; evEnabled?: boolean; measurementEnabled?: boolean; initialAddress?: string; leadEstimateId?: string; proposalId?: string; homeState?: string | null } = {}) {
   const router = useRouter();
 
   // ── Screen ──
@@ -1382,6 +1382,39 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proposalId]);
 
+  // A LEAD CENTER LEAD THE HOMEOWNER PRICED (2026-10-27): the whole hidden estimate opens here the way a proposal
+  // reopens — a hand takeoff (the squares and the pitch), the package's choices, every line, the scope — once, on
+  // arrival from the lead page. Its pin becomes the search's point, so a Measure click reads that building. The
+  // spec is seeded once the takeoff's facts exist (the card keys a seed to the facts it was built on).
+  const openedLeadRef = React.useRef<string | null>(null);
+  const leadSpecRef = React.useRef<RoofPackageSpec | null>(null);
+  React.useEffect(() => {
+    if (!leadEstimateId || openedLeadRef.current === leadEstimateId) return;
+    openedLeadRef.current = leadEstimateId;
+    void (async () => {
+      const r = await openRoofLeadEstimate(leadEstimateId).catch((err: unknown) => ({ ok: false as const, error: errMsg(err) }));
+      if (!r.ok) {
+        toast.error("Couldn't open the lead's estimate", r.error);
+        return;
+      }
+      runManual({ squares: r.manual.squares, pitchLabel: r.manual.pitchLabel, address: r.manual.address });
+      if (r.pin && r.manual.address) setPicked({ address: r.manual.address, city: "", state: "", zip: "", lat: r.pin.lat, lng: r.pin.lng, formatted: r.manual.address });
+      const toLine = (l: { name: string; quantity: number; unitPrice: number; unit: string }): EditableLine => ({ id: nanoid(6), name: l.name, quantity: l.quantity, unitPrice: l.unitPrice, unit: l.unit });
+      setMaterials(r.materials.map(toLine));
+      setLabor(r.labor.map(toLine));
+      setTitle(r.title);
+      setScopeText(r.scope);
+      setAssumptions(r.assumptions);
+      setTablesEdited(false);
+      setSampleEstimate(false);
+      lastSpecRef.current = r.spec;
+      leadSpecRef.current = r.spec;
+      toast.success("The homeowner's estimate is open", "Priced on JobFlex from an aerial read — measure before you sign.");
+    })();
+    // runManual is this render's handler; the lead opens once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadEstimateId]);
+
   async function generate() {
     const t = totals;
     if (t?.squares == null) return;
@@ -2094,6 +2127,13 @@ export function RoofEstimatorDataForm({ aiEnabled = true, evEnabled = true, meas
           buildingUse: manual ? null : buildingUse,
         }
       : null;
+  // The lead's spec (above) is seeded once the hand takeoff's facts exist — the card keys a seed to its facts.
+  const leadFactsKey = roofFacts ? factsKey(roofFacts) : null;
+  React.useEffect(() => {
+    if (!leadSpecRef.current || !leadFactsKey) return;
+    setSeedSpec({ spec: leadSpecRef.current, key: leadFactsKey });
+    leadSpecRef.current = null;
+  }, [leadFactsKey]);
   // Does this roof read commercial? A weighted read of the roof, never a claim
   // about the building — the aerial data has no occupancy field — and the
   // contractor's answer is what prices anything (commercial.ts).
