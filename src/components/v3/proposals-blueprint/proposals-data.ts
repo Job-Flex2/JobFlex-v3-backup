@@ -129,6 +129,8 @@ export type ProposalRow = {
   /** What kind of job and which tool made it (2026-10-17, lib/proposalKind): "Deck · Deck Studio",
    *  "Kitchen remodel · Smart Proposal". The list marks every row and filters by `kind.family`. */
   kind?: ProposalKind;
+  /** Wisetack financing (lib/financing): the client's loan in one line, and whether the office may send the link. */
+  fin?: { line: string | null; canSend: boolean } | null;
 };
 
 export type ClientDesignState = {

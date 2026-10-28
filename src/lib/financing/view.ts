@@ -101,3 +101,10 @@ export function portalFinancingFrom(i: {
   if (!i.signed) return i.org.prequalUrl ? { ...base, mode: "prequal", loan: null } : null;
   return { ...base, mode: "apply", loan: loanView };
 }
+
+/** The proposals row: where the client's loan stands, and whether the office may send the financing link. */
+export function rowFinancing(i: { offered: boolean; loan: Loan | null; canBill: boolean; money: Money }): { line: string | null; canSend: boolean } | null {
+  if (!i.offered && !i.loan) return null;
+  const sendable = !i.loan || DEAD.includes(i.loan.state);
+  return { line: i.loan ? loanLine(i.loan, i.money) : null, canSend: i.offered && i.canBill && sendable };
+}

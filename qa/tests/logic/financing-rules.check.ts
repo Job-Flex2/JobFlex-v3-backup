@@ -21,7 +21,7 @@ import {
   type LoanSnapshot,
   type OrgFinancing,
 } from "../../../src/lib/financing/state";
-import { editorFinancing, portalFinancingFrom } from "../../../src/lib/financing/view";
+import { editorFinancing, portalFinancingFrom, rowFinancing } from "../../../src/lib/financing/view";
 
 let bad = 0;
 const check = (name: string, ok: boolean, extra = "") => {
@@ -166,6 +166,15 @@ check("not offered and no loan → nothing", pf({ offered: false }) === null);
 const p8 = pf({ loan: loan({ state: "approved", approvedMinor: 1_400_000 }) });
 check("approved, not accepted yet → status with a way back to Wisetack, nothing covered yet", p8?.mode === "status" && p8.loan?.url === "https://wisetack.example/apply/t1" && p8.coveredIds.length === 0 && p8.rest === null);
 check("Wisetack's own monthly words pass through untouched", pf({ monthly: "Monthly payment options available" })?.monthly === "Monthly payment options available");
+
+// ---- the proposals row (Task 9) ----
+const rf = (o: Partial<Parameters<typeof rowFinancing>[0]> = {}) => rowFinancing({ offered: true, loan: null, canBill: true, money: usd, ...o });
+check("not offered and no loan → nothing on the row", rowFinancing({ offered: false, loan: null, canBill: true, money: usd }) === null);
+check("offered, no loan, the office → Send financing link, no line", JSON.stringify(rf()) === JSON.stringify({ line: null, canSend: true }));
+check("an accepted loan → its line, nothing to send", JSON.stringify(rf({ loan: loan({ state: "accepted", approvedMinor: 1_400_000 }) })) === JSON.stringify({ line: "Loan accepted · $14,000", canSend: false }));
+check("a declined loan → its line, and the link can go again", JSON.stringify(rf({ loan: loan({ state: "declined" }) })) === JSON.stringify({ line: "Client wasn't approved", canSend: true }));
+check("a sales rep (no billing) → the line, never the button", rf({ canBill: false })?.canSend === false);
+check("a loan stays on the row after the switch went off", rf({ offered: false, loan: loan({ state: "paid", approvedMinor: 1_400_000, fundings: [{ id: "f", amountMinor: 1_400_000, at }] }) })?.line === "Paid $14,000 through Wisetack");
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);

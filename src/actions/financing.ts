@@ -3,7 +3,7 @@
 // the company to Wisetack's merchant terms. lib/financing/service does the work.
 import { revalidatePath } from "next/cache";
 import { requireManager, requireProposalStaff } from "@/lib/orgContext";
-import { linkExisting, loadEditorFinancing, orgFinancingView, refreshMerchant, setDefault, setProposalOffer, setYearStarted, startApplication } from "@/lib/financing/service";
+import { linkExisting, loadEditorFinancing, orgFinancingView, refreshMerchant, sendFinancingLinkFor, setDefault, setProposalOffer, setYearStarted, startApplication } from "@/lib/financing/service";
 import type { EditorFinancing } from "@/lib/financing/view";
 import type { OrgFinancing } from "@/lib/financing/state";
 
@@ -65,4 +65,11 @@ export async function setProposalFinancing(proposalId: string, on: boolean | nul
   if (!row) return { ok: false, error: "That proposal wasn't found." };
   revalidatePath("/dashboard/proposals");
   return { ok: true, row };
+}
+
+/** The proposals row: send the client the proposal opened at Pay over time (the office's, like Remind). */
+export async function sendFinancingLink(proposalId: string, via: "text" | "email" | "auto" = "auto"): Promise<Result<{ via: "text" | "email" }>> {
+  const { organizationId, user } = await requireManager();
+  const how = via === "text" || via === "email" ? via : "auto";
+  return sendFinancingLinkFor(organizationId, String(proposalId ?? ""), how, user.id);
 }

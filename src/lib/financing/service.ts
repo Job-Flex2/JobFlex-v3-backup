@@ -9,14 +9,19 @@ import { textOffice } from "@/lib/sms/send";
 import { appBaseUrl } from "@/lib/appUrl";
 import { OWNER_ROLE } from "@/lib/orgContext";
 import { settleInstallmentPayment } from "@/lib/payments/settle";
+import { sendText } from "@/lib/sms/send";
+import { brand, clip } from "@/lib/sms/format";
+import { toE164 } from "@/lib/phone";
+import { sendOrgEmail } from "@/lib/email/orgSend";
 import { getProvider, type MerchantSnapshot, type ProviderEvent } from "./provider";
 import { merchantPrefill, readinessFacts, type PrefillOrg, type PrefillOwner } from "./prefill";
 import { contractSchedule, APPROVED_CO_SELECT } from "@/lib/contractTotal";
 import { resolveSchedule } from "@/lib/paymentSchedule";
 import { planEnded } from "@/lib/paidCaps";
 import { coverMinor, coveredStageIds, loanSideEffects, nextLoanState, offerFor, orgLetIn, readiness, reminderDue, reuseLoan, type Funding, type Loan, type LoanSnapshot, type OrgFinancing } from "./state";
-import { listLoans, listOrgFinancing, orgIdForMerchantRef, proposalForLoanRef, readLoan, readOffer, readOrgFinancing, readSwitch, writeLoan, writeOffer, writeOrgFinancing } from "./store";
-import { editorFinancing, portalFinancingFrom, type EditorFinancing, type PortalFinancing } from "./view";
+import { listLoans, listOrgFinancing, orgIdForMerchantRef, proposalForLoanRef, readLoan, readLoans, readOffer, readOffers, readOrgFinancing, readSwitch, writeLoan, writeOffer, writeOrgFinancing } from "./store";
+import { editorFinancing, portalFinancingFrom, rowFinancing, type EditorFinancing, type PortalFinancing } from "./view";
+import { FIN } from "./words";
 
 export const SETTINGS_HREF = "/dashboard/settings?pane=payments&sub=financing";
 
@@ -380,4 +385,53 @@ export async function reconcileFinancing(now: Date): Promise<{ merchants: number
     tally.nudges += 1;
   }
   return tally;
+}
+
+/** The proposals list (desk + phone): each row's financing line and Send button. Empty when Wisetack is not connected. */
+export async function rowsFinancing(orgId: string, rows: { id: string; status: string; owed: number; canBill: boolean }[]): Promise<Map<string, { line: string | null; canSend: boolean }>> {
+  const out = new Map<string, { line: string | null; canSend: boolean }>();
+  if (!getProvider() || !rows.length) return out;
+  const ids = rows.map((r) => r.id);
+  const [view, loans, offers, ended] = await Promise.all([orgFinancingView(orgId), readLoans(ids), readOffers(ids), planEnded(orgId)]);
+  for (const r of rows) {
+    const owedMinor = Math.round(r.owed * 100);
+    const offer = offerFor({ letIn: view.letIn, org: view.rec, proposalOn: offers.get(r.id) ?? null, owedMinor, status: r.status, planEnded: ended });
+    const fin = rowFinancing({ offered: offer.offered, loan: loans.get(r.id) ?? null, canBill: r.canBill, money: usd });
+    if (fin) out.set(r.id, fin);
+  }
+  return out;
+}
+
+const escHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+
+/** The office sends the client the proposal opened at Pay over time — by text when the client has a phone and the
+ *  company texts its clients, else by email. The loan itself is made when the client presses the button. */
+export async function sendFinancingLinkFor(orgId: string, proposalId: string, via: "text" | "email" | "auto", actorId: string): Promise<{ ok: true; via: "text" | "email" } | { ok: false; error: string }> {
+  const money = await proposalMoney(orgId, proposalId);
+  if (!money) return { ok: false, error: "That proposal wasn't found." };
+  const p = money.proposal;
+  const [view, proposalOn, ended] = await Promise.all([orgFinancingView(orgId), readOffer(proposalId), planEnded(orgId)]);
+  const offer = offerFor({ letIn: view.letIn, org: view.rec, proposalOn, owedMinor: money.owedMinor, status: p.status, planEnded: ended });
+  if (!getProvider() || !offer.offered) return { ok: false, error: NOT_AVAILABLE };
+  const org = await db.organization.findUnique({ where: { id: orgId }, select: { id: true, name: true, smsClientsOn: true, gmailSettingsJson: true, gmailTokensJson: true, billingEmail: true } });
+  if (!org) return { ok: false, error: NOT_AVAILABLE };
+  const link = `${await appBaseUrl()}/portal/q/${encodeURIComponent(p.publicId)}#pay-over-time`;
+  const phone = org.smsClientsOn ? toE164(p.client?.phone ?? null) : null;
+  const email = p.client?.email?.trim() || null;
+  let how: "text" | "email" = via === "auto" ? (phone ? "text" : "email") : via;
+  if (how === "text") {
+    if (!phone) return { ok: false, error: org.smsClientsOn ? "This client has no mobile number on file." : "Texts to clients are off in Settings." };
+    const r = await sendText({ organizationId: orgId, to: phone, body: brand(org.name, `you can pay for "${clip(p.title, 50)}" over time with monthly payments through Wisetack. Check your rate (it won't affect your credit score): ${link} Reply STOP to opt out.`), kind: "client-financing" });
+    const went = r.ok && r.status !== "SKIPPED";
+    if (!went && !(via === "auto" && email)) return { ok: false, error: "The text didn't go — try email." };
+    if (!went) how = "email";
+  }
+  if (how === "email") {
+    if (!email) return { ok: false, error: "This client has no email on file." };
+    const first = (p.client?.name ?? "").trim().split(/\s+/)[0];
+    const html = `<p>${first ? `Hi ${escHtml(first)},` : "Hello,"}</p><p>You can pay for <b>${escHtml(p.title)}</b> over time with monthly payments through Wisetack. Checking your rate won't affect your credit score.</p><p><a href="${escHtml(link)}">Check your rate</a></p><p style="font-size:12px;color:#777">${escHtml(FIN.disclosure)}</p><p>${escHtml(org.name ?? "")}</p>`;
+    await sendOrgEmail(org, { to: email, subject: `Monthly payments for ${p.title}`, html });
+  }
+  await logActivity({ organizationId: orgId, actorId, kind: TRAIL_KINDS.PAY, summary: `Sent ${p.client?.name ?? "the client"} the financing link for "${p.title}" by ${how}`, proposalId, clientId: p.clientId });
+  return { ok: true, via: how };
 }

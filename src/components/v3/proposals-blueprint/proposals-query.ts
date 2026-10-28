@@ -18,6 +18,7 @@
 
 import { proposalKindOf, type KindEvent } from "@/lib/proposalKind";
 import { requireProposalStaff } from "@/lib/orgContext";
+import { rowsFinancing } from "@/lib/financing/service";
 import { db } from "@/lib/db";
 import { contractSchedule, contractTotal } from "@/lib/contractTotal";
 import { fromMinor, resolveSchedule } from "@/lib/paymentSchedule";
@@ -142,7 +143,7 @@ export async function readProposalBook(): Promise<ProposalRow[]> {
     (await db.membership.findMany({ where: { organizationId }, select: { userId: true, role: true } })).map((m) => [m.userId, m.role]),
   );
 
-  return proposals.map((p) => {
+  const rows = proposals.map((p) => {
     const materials = p.lineItems.map((l) => ({
       id: l.id,
       name: l.name,
@@ -257,6 +258,9 @@ export async function readProposalBook(): Promise<ProposalRow[]> {
       after: parseProposalPhotos(p.afterPhotos),
     } satisfies ProposalRow;
   });
+  // Wisetack financing (lib/financing): where each client's loan stands, and the office's Send financing link.
+  const fin = await rowsFinancing(organizationId, rows.map((r) => ({ id: r.id, status: r.status, owed: r.owed, canBill: r.canBill !== false }))).catch(() => new Map());
+  return fin.size ? rows.map((r) => ({ ...r, fin: fin.get(r.id) ?? null })) : rows;
 }
 
 /** The client's design link on a proposal, as its row says it (lib/deck/clientDesign standingLine). */
