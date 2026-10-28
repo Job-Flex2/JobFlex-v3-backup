@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireManager, requireProposalStaff } from "@/lib/orgContext";
 import { linkExisting, loadEditorFinancing, orgFinancingView, refreshMerchant, sendFinancingLinkFor, setDefault, setProposalOffer, setYearStarted, startApplication } from "@/lib/financing/service";
 import type { EditorFinancing } from "@/lib/financing/view";
+import { applyWisetackAnswer } from "@/lib/financing/desk";
 import type { OrgFinancing } from "@/lib/financing/state";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
@@ -72,4 +73,14 @@ export async function sendFinancingLink(proposalId: string, via: "text" | "email
   const { organizationId, user } = await requireManager();
   const how = via === "text" || via === "email" ? via : "auto";
   return sendFinancingLinkFor(organizationId, String(proposalId ?? ""), how, user.id);
+}
+
+/** Settings → Financing: the AI desk's financing answer becomes the Wisetack line (the owner pressed it). */
+export async function setWisetackDeskAnswer(): Promise<Result> {
+  const { organizationId } = await requireManager();
+  const view = await orgFinancingView(organizationId);
+  if (!view.letIn || view.rec.state !== "approved") return { ok: false, error: "Financing isn't approved for your account yet." };
+  if (!(await applyWisetackAnswer(organizationId))) return { ok: false, error: "Set up the AI desk first." };
+  revalidatePath("/dashboard/settings");
+  return { ok: true };
 }

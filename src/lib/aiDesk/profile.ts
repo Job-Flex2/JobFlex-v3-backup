@@ -393,3 +393,33 @@ export function briefCoverage(text: string): Array<{ key: string; label: string;
   const t = text || "";
   return COVERAGE.map((c) => ({ key: c.key, label: c.label, covered: c.re.test(t) || (!!c.alt && c.alt.test(t)) }));
 }
+
+/** The preset's own financing answers — the stock one and its yes / no fixes. A desk whose company is approved for
+ *  Wisetack replaces any of these with the Wisetack line (lib/aiDesk/profile withFinancingAnswer); words an owner
+ *  wrote themselves stay. */
+export const FINANCING_PRESET_ANSWERS = [
+  "The team can go over payment options with you at the estimate.",
+  "Yes — financing is available; the team goes over the options with the estimate.",
+  "We don't offer financing; the team goes over payment terms with the estimate.",
+] as const;
+
+const FINANCING_Q = /financ|monthly payment|payment plan|pay over time/i;
+
+/** Wisetack financing (2026-10-28): an approved company's desk answers the financing question with Wisetack's line —
+ *  added when the profile has no such question, put in place of a preset answer, never over the owner's own words. */
+export function withFinancingAnswer(p: DeskProfile, answer: DeskFaq | null): DeskProfile {
+  if (!answer) return p;
+  const i = p.faqs.findIndex((f) => FINANCING_Q.test(f.q));
+  if (i < 0) return p.faqs.length >= MAX_FAQS ? p : { ...p, faqs: [...p.faqs, answer] };
+  const a = p.faqs[i].a.trim();
+  if (a === answer.a || !(FINANCING_PRESET_ANSWERS as readonly string[]).includes(a)) return p;
+  return { ...p, faqs: p.faqs.map((f, j) => (j === i ? { q: f.q, a: answer.a } : f)) };
+}
+
+/** What the desk says about financing for an approved company: the Wisetack line ("ours"), or the owner's own words. */
+export function financingAnswerOf(p: DeskProfile, answerA: string): "ours" | "theirs" {
+  const f = p.faqs.find((x) => FINANCING_Q.test(x.q));
+  if (!f) return "ours";
+  const a = f.a.trim();
+  return a === answerA || (FINANCING_PRESET_ANSWERS as readonly string[]).includes(a) ? "ours" : "theirs";
+}

@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, Check, Circle, Landmark, Link2, RefreshCw } from "lucide-react";
-import { applyForFinancing, checkFinancingStatus, linkWisetackAccount, setFinancingDefault, setFinancingYearStarted } from "@/actions/financing";
+import { applyForFinancing, checkFinancingStatus, linkWisetackAccount, setFinancingDefault, setFinancingYearStarted, setWisetackDeskAnswer } from "@/actions/financing";
 import type { OrgFinancing } from "@/lib/financing/state";
 import { FIN, feeLine, limitsLine, merchantWords, readinessLabel } from "@/lib/financing/words";
 import type { FinancingSettingsData } from "../settings-data";
@@ -37,6 +37,7 @@ export function FinancingSubpane({ d, mobile = false, returned = false }: { d: F
   const [linkOpen, setLinkOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [year, setYear] = useState(rec.yearStarted ? String(rec.yearStarted) : "");
+  const [desk, setDesk] = useState(d.deskAnswer);
   const words = merchantWords(rec.state);
   const primary = `${styles.button} ${styles.primary}`;
   const canApply = d.canManage && (rec.state === "none" || rec.state === "declined");
@@ -232,7 +233,29 @@ export function FinancingSubpane({ d, mobile = false, returned = false }: { d: F
               <CopyBox value={rec.prequalUrl} />
             </div>
           ) : null}
-          {d.deskAnswer === "ours" ? <p data-fin-desk>Your AI desk tells callers you offer monthly payments through Wisetack.</p> : null}
+          {desk === "ours" ? <p data-fin-desk>Your AI desk tells callers you offer monthly payments through Wisetack.</p> : null}
+          {desk === "theirs" ? (
+            <div data-fin-desk-theirs>
+              <p>Your AI desk has its own answer about financing. Use Wisetack&rsquo;s instead?</p>
+              {d.canManage ? (
+                <button
+                  className={styles.button}
+                  type="button"
+                  disabled={busy !== null}
+                  onClick={() =>
+                    void run("desk", () => setWisetackDeskAnswer()).then((r) => {
+                      if (!r) return;
+                      if (r.ok) setDesk("ours");
+                      else setErr(r.error);
+                    })
+                  }
+                  data-fin-desk-fix
+                >
+                  Use the Wisetack answer
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           <p style={{ fontSize: 12, opacity: 0.75 }}>{FIN.disclosure}</p>
         </div>
       ) : null}

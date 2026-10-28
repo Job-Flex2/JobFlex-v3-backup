@@ -53,6 +53,7 @@ import { metaConnectionView } from "@/lib/meta/connections";
 import { getPaymentConnectionStatus } from "@/lib/payments/connections";
 import { parseNotificationPrefs } from "@/lib/notificationPrefsShared";
 import { financingReadiness, orgFinancingView } from "@/lib/financing/service";
+import { deskAnswerState } from "@/lib/financing/desk";
 import {
   parseGmailSettings,
   parsePaymentSettings,
@@ -102,7 +103,8 @@ export function statusBadge(status: string | null): Badge | null {
 async function loadFinancingSettings(organizationId: string, role: string): Promise<SettingsData["payments"]["financing"]> {
   const view = await orgFinancingView(organizationId);
   if (!view.letIn || !view.available) return null;
-  return { rec: view.rec, readiness: await financingReadiness(organizationId, view.rec), canManage: isOwnerOrManager(role), deskAnswer: "none" };
+  const [readiness, deskAnswer] = await Promise.all([financingReadiness(organizationId, view.rec), deskAnswerState(organizationId)]);
+  return { rec: view.rec, readiness, canManage: isOwnerOrManager(role), deskAnswer };
 }
 
 export async function loadSettingsData(ctx: SettingsOrgContext, opts: { billingLive?: boolean } = {}): Promise<SettingsData | null> {
