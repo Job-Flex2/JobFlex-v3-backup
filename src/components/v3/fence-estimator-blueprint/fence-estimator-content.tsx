@@ -22,9 +22,10 @@ import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { useBlueprintContent } from "@/components/v3/blueprint-shell/use-blueprint-content";
 import { initFenceEstimatorContent } from "./fence-estimator-behavior";
+import type { WebFenceSeed } from "@/lib/webHandoff";
 import { Sprite } from "./sprite";
 
-export function FenceEstimatorContent({ initialAddress }: { initialAddress?: string } = {}) {
+export function FenceEstimatorContent({ initialAddress, webFence = null }: { initialAddress?: string; webFence?: WebFenceSeed | null } = {}) {
   // "Convert to proposal" creates a real proposal and has to land on it. A
   // behavior module is plain DOM with no React tree, so the only client-side
   // router on this page is the one THIS component can hold — it is handed down
@@ -47,8 +48,9 @@ export function FenceEstimatorContent({ initialAddress }: { initialAddress?: str
       initFenceEstimatorContent(content, {
         navigate: (href) => routerRef.current.push(href as Route),
         initialAddress,
+        initialFence: webFence,
       }),
-    [initialAddress],
+    [initialAddress, webFence],
   );
   useBlueprintContent(init);
 
