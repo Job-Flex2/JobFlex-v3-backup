@@ -692,8 +692,8 @@ export function initProposalsContent(
       '<tr class="prow-pay ppl--' + state + chain.replace(/prow--/g, "prow-pay--") + '" data-id="' + esc(p.id) + '"' +
       (chain && p.projectId ? ' data-grp="' + esc(p.projectId) + '"' : "") +
       '><td colspan="6"><div class="ppl">' +
-      '<div class="ppl-head"><span class="ppl-lbl"><svg class="ic"><use href="#i-card"/></svg>Payments</span>' +
-      '<span class="ppl-sum">' + sum + "</span>" +
+      '<div class="ppl-head"><div class="ppl-title"><span class="ppl-lbl"><svg class="ic"><use href="#i-card"/></svg>Payments</span>' +
+      '<span class="ppl-sum">' + sum + "</span></div>" +
       (state === "collect" || state === "paid" ? '<span class="ppl-meter" role="progressbar" aria-label="Paid so far" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pctPaid + '"><span style="width:' + pctPaid + '%"></span></span>' : "") +
       "</div>" +
       '<div class="ppl-body">' +
@@ -710,6 +710,8 @@ export function initProposalsContent(
     const busy = next?.status === "PENDING";
     return (
       '<span class="ppl-acts">' +
+      // What the three buttons act on, said once above them.
+      '<span class="ppl-acts-k">Collect · ' + esc(what) + "</span>" +
       (next
         ? '<button class="ppl-act ppl-act--paid" type="button" data-act="markpaid"' + inst + (busy ? " disabled" : "") + ' title="' + esc("Record " + what + " as paid by hand") + '"><svg class="ic"><use href="#i-check"/></svg>Mark paid</button>'
         : '<button class="ppl-act ppl-act--paid" type="button" data-act="paidfull" title="' + esc("Record " + what + " as paid by hand") + '"><svg class="ic"><use href="#i-check"/></svg>Mark paid</button>') +
@@ -773,7 +775,8 @@ export function initProposalsContent(
       ">" +
       // The title is a real link to the proposal (⌘-click opens a tab); a
       // click anywhere else on the row follows it too — see openFromRow.
-      "<td>" +
+      // Each card carries its own column labels (owner, 2026-10-28: "attached to every card").
+      '<td><span class="pt-lbl">Proposal</span>' +
       kindHtml(p) +
       '<a class="pt-title pt-link" href="' +
       proposalHref(p.id) +
@@ -794,7 +797,7 @@ export function initProposalsContent(
       "</div>" +
       clientDesignHtml(p) +
       "</td>" +
-      '<td><span class="pstatus ' +
+      '<td><span class="pt-lbl">Status</span><span class="pstatus ' +
       st.cls +
       (p.fresh && bloomOnce(p.id, p.fresh.accepted ? "accepted" : "declined", p.fresh.accepted ?? p.fresh.declined) ? " pstatus--fresh" : "") +
       '"' +
@@ -802,18 +805,18 @@ export function initProposalsContent(
       ">" +
       esc(st.label) +
       "</span></td>" +
-      '<td class="c pt-total"><span class="pt-money">' +
+      '<td class="c pt-total"><span class="pt-lbl">Total</span><span class="pt-money">' +
       fmtMoney(p.contract ?? p.total) +
       "</span>" +
       (p.status === "ACCEPTED" || p.status === "COMPLETED" || p.status === "PAID" ? paidCellHtml(p) : "") +
       "</td>" +
-      '<td class="c">' + viewsCellHtml(p) + '</td>' +
-      '<td><span class="pt-mono">' + esc(p.updated) + '</span></td>' +
+      '<td class="c"><span class="pt-lbl">Views</span>' + viewsCellHtml(p) + '</td>' +
+      '<td><span class="pt-lbl">Updated</span><span class="pt-mono">' + esc(p.updated) + '</span></td>' +
       // The member's mark — name, role and their color (lib/team/who); the
       // given-name plate only when the owner is no longer on the org. Nothing
       // on the reader's own proposals (owner, 2026-09-25): the column names
       // someone else, and hides itself when every proposal is the reader's.
-      '<td class="td-owner">' +
+      '<td class="td-owner"><span class="pt-lbl">Owner</span>' +
       (p.mine ? "" : p.ownerWho ? whoHtml(p.ownerWho) : '<span class="pt-mono">' + esc(p.owner) + "</span>") +
       "</td>" +
       "</tr>" +
