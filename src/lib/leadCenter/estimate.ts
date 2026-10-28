@@ -53,6 +53,11 @@ export type WebLeadEstimate = {
 
 export type LeadEstimate = RoofLeadEstimate | WebLeadEstimate;
 
+/** One auto-price switch per trade (lib/leadCenter/autoPrice): the roof, and (2026-10-28) the four house estimators. */
+export const PRICED_TRADES = ["roof", "deck", "fence", "hvac", "smart"] as const;
+export type PricedTrade = (typeof PRICED_TRADES)[number];
+export const isPricedTrade = (v: unknown): v is PricedTrade => typeof v === "string" && (PRICED_TRADES as readonly string[]).includes(v);
+
 export const LEAD_ESTIMATE_KEY = (leadId: string) => `leadestimate:${leadId}`;
 
 /** The row as kept (SyncState `leadestimate:<leadId>`), taken only when it is one of ours. */

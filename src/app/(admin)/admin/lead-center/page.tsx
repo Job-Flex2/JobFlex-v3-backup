@@ -15,9 +15,10 @@ import { orgRatingsByIds } from "@/lib/reviews/publicSummary";
 import { SEO_SOURCE_RE } from "@/lib/seo/links";
 import { seoTrade } from "@/lib/seo/trades";
 import { seoCity } from "@/lib/seo/cities";
-import { PRICE_PLAN_TAG, estimateShort, parsePlanEstimate, parsePlanSite } from "@/lib/leadCenter/estimate";
+import { PRICE_PLAN_TAG, PRICED_TRADES, estimateShort, parsePlanEstimate, parsePlanSite, type PricedTrade } from "@/lib/leadCenter/estimate";
 import { readLeadEstimates } from "@/lib/leadCenter/estimateStore";
 import { autoPriceOn, exclusivesOf } from "@/lib/leadCenter/autoPrice";
+import { houseOrgId } from "@/lib/publicEstimate/store";
 import {
   AdminLeadCenterContent,
   type SavedRangeDTO,
@@ -135,10 +136,11 @@ export default async function AdminLeadCenterPage() {
   const purchases = await purchasesByPlatformLead(platformLeads.map((p) => p.id));
   // The estimate a homeowner priced on /price rides beside its lead (lib/leadCenter/estimate, 2026-10-27), with
   // "exclusive" and the per-trade auto-price switch (lib/leadCenter/autoPrice).
-  const [estimates, exclusives, autoPriceRoof, savedPlans] = await Promise.all([
+  const [estimates, exclusives, autoPriceAll, houseOrg, savedPlans] = await Promise.all([
     readLeadEstimates(platformLeads.map((p) => p.id)),
     exclusivesOf(platformLeads.map((p) => p.id)),
-    autoPriceOn("roof"),
+    Promise.all(PRICED_TRADES.map((t) => autoPriceOn(t))),
+    houseOrgId(),
     // "Priced, not asking yet" (owner, 2026-10-27): ranges people only asked to have emailed — counted and shown with
     // their city, never their name or email, never routed or priced.
     db.homePlan
@@ -382,7 +384,8 @@ export default async function AdminLeadCenterPage() {
       orgs={orgPicks}
       stats={stats}
       routingMode={routingMode}
-      autoPrice={{ roof: autoPriceRoof }}
+      autoPrice={Object.fromEntries(PRICED_TRADES.map((t, i) => [t, autoPriceAll[i]])) as Record<PricedTrade, boolean>}
+      houseOrgId={houseOrg}
       savedRanges={savedRanges}
       testLink={testLink}
     />

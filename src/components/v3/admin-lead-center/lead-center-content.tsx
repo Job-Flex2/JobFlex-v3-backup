@@ -46,11 +46,12 @@ import {
   routeAllWaitingLeads,
   setLeadRoutingMode,
   setLeadAutoPrice,
+  setHouseOrg,
   setLeadExclusive,
   setOrganizationInternal,
   setPlatformLeadPrice,
 } from "@/actions/adminLeadCenter";
-import { TRADE_NOUN, estimatorNameFor, suggestedLeadPriceCents, type LeadEstimate } from "@/lib/leadCenter/estimate";
+import { PRICED_TRADES, TRADE_NOUN, estimatorNameFor, suggestedLeadPriceCents, type LeadEstimate, type PricedTrade } from "@/lib/leadCenter/estimate";
 import type { RoutingMode } from "@/lib/leadCenter/routingMode";
 import { LeadMap, type MapFilter } from "./lead-map";
 import {
@@ -380,12 +381,16 @@ function eligibility(o: OrgPickDTO): string {
 
 type DetailHandle = { open: (lead: PlatformLeadDTO) => void };
 
+/** The switch's word for each priced trade. */
+const TRADE_WORD: Record<PricedTrade, string> = { roof: "Roof", deck: "Deck", fence: "Fence", hvac: "Heating & cooling", smart: "Any project" };
+
 export function AdminLeadCenterContent({
   leads,
   orgs,
   stats,
   routingMode,
   autoPrice,
+  houseOrgId,
   savedRanges,
   testLink,
 }: {
@@ -394,7 +399,9 @@ export function AdminLeadCenterContent({
   stats: StatsDTO;
   routingMode: RoutingMode;
   /** "Charge the suggested price on automatic routing", per trade (lib/leadCenter/autoPrice). */
-  autoPrice: { roof: boolean };
+  autoPrice: Record<PricedTrade, boolean>;
+  /** The internal org the house estimators run as (lib/publicEstimate/store), null until one is picked. */
+  houseOrgId: string | null;
   /** "Priced, not asking yet": ranges people saved but did not ask quotes for — counts and ranges, nothing to route. */
   savedRanges: SavedRangeDTO[];
   /** The /homeowner?test=<key> link, whole; null until one is created. */
@@ -414,21 +421,41 @@ export function AdminLeadCenterContent({
   const [placingId, setPlacingId] = useState<string | null>(null);
   const [mapFilter, setMapFilter] = useState<MapFilter>("leads");
   const [mode, setMode] = useState<RoutingMode>(routingMode);
-  const [autoRoof, setAutoRoof] = useState<boolean>(autoPrice.roof);
+  const [auto, setAuto] = useState<Record<PricedTrade, boolean>>(autoPrice);
   const [autoBusy, setAutoBusy] = useState(false);
-  async function switchAutoPrice(next: boolean) {
+  async function switchAutoPrice(trade: PricedTrade, next: boolean) {
     if (autoBusy) return;
     setAutoBusy(true);
-    setAutoRoof(next);
+    setAuto((a) => ({ ...a, [trade]: next }));
+    const noun = TRADE_WORD[trade];
     try {
-      await setLeadAutoPrice("roof", next);
-      toast.success(next ? "Roof leads priced on automatic routing" : "Roof leads go out unpriced again", next ? "An unpriced roof lead the homeowner priced goes out at the suggested price, and keeps it." : "New offers go out free unless you type a price; a lead already priced keeps its price.");
+      await setLeadAutoPrice(trade, next);
+      toast.success(next ? `${noun} leads priced on automatic routing` : `${noun} leads go out unpriced again`, next ? `An unpriced ${noun.toLowerCase()} lead the homeowner priced goes out at the suggested price, and keeps it.` : "New offers go out free unless you type a price; a lead already priced keeps its price.");
       router.refresh();
     } catch (err) {
-      setAutoRoof(!next);
+      setAuto((a) => ({ ...a, [trade]: !next }));
       toast.error("Couldn't save the switch", actionError(err));
     } finally {
       setAutoBusy(false);
+    }
+  }
+  // THE HOUSE ORG (2026-10-28): which of JobFlex's own organizations the house estimators run as; none = closed.
+  const [house, setHouse] = useState<string>(houseOrgId ?? "");
+  const [houseBusy, setHouseBusy] = useState(false);
+  async function pickHouse(next: string) {
+    if (houseBusy) return;
+    setHouseBusy(true);
+    const before = house;
+    setHouse(next);
+    try {
+      await setHouseOrg(next || null);
+      toast.success(next ? "House estimators on" : "House estimators off", next ? "Deck, fence, heating & cooling and any project price themselves on /price and land here as leads." : "The /price cards describe and match again; the house pages are closed.");
+      router.refresh();
+    } catch (err) {
+      setHouse(before);
+      toast.error("Couldn't save the house org", actionError(err));
+    } finally {
+      setHouseBusy(false);
     }
   }
   const [modeBusy, setModeBusy] = useState(false);
@@ -557,9 +584,21 @@ export function AdminLeadCenterContent({
             ))}
           </div>
           {/* THE SUGGESTED PRICE ON AUTOMATIC ROUTING (owner, 2026-10-27): per trade, off until turned on. */}
-          <label className={styles.autoPrice} data-lead-auto-price="roof">
-            <input type="checkbox" role="switch" aria-checked={autoRoof} checked={autoRoof} disabled={autoBusy} onChange={(e) => void switchAutoPrice(e.target.checked)} />
-            <span>Charge the suggested price on automatic routing · roof</span>
+          {PRICED_TRADES.map((t) => (
+            <label key={t} className={styles.autoPrice} data-lead-auto-price={t}>
+              <input type="checkbox" role="switch" aria-checked={auto[t]} checked={auto[t]} disabled={autoBusy} onChange={(e) => void switchAutoPrice(t, e.target.checked)} />
+              <span>Charge the suggested price on automatic routing · {TRADE_WORD[t].toLowerCase()}</span>
+            </label>
+          ))}
+          {/* THE HOUSE ORG (2026-10-28): the house estimators run as one of JobFlex's own organizations. */}
+          <label className={styles.autoPrice} data-lead-house-org>
+            <span>House estimators</span>
+            <select value={house} disabled={houseBusy} onChange={(e) => void pickHouse(e.target.value)} aria-label="The organization the house estimators run as">
+              <option value="">— off —</option>
+              {orgs.filter((o) => o.isInternal).map((o) => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
           </label>
           {/* Who hears that a request came in, and when (2026-10-03). */}
           <Link className="btn btn-ghost" href={"/admin/lead-center/alerts" as Route}>
