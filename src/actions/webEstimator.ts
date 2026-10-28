@@ -38,7 +38,10 @@ import {
   money,
   bandWords,
   shopHourly,
+  isHouse,
+  HOUSE_SLUG,
 } from "@/lib/webEstimator";
+import { createHouseLead } from "@/lib/publicEstimate/houseLead";
 import {
   bumpWebCount,
   createWebLead,
@@ -512,7 +515,7 @@ function cleanInput(raw: unknown): { address: WebAddress; choice: string | null;
 }
 
 /** "Get my full quote": the lead for the shop, a confirmation for the homeowner. */
-export async function webLead(slug: unknown, trade: unknown, token: unknown, raw: unknown): Promise<{ ok: true; leadId: string } | Fail> {
+export async function webLead(slug: unknown, trade: unknown, token: unknown, raw: unknown): Promise<{ ok: true; leadId: string; next?: string } | Fail> {
   const r = await liveShop(slug, trade);
   if ("ok" in r) return r;
   const { shop } = r;
@@ -527,8 +530,14 @@ export async function webLead(slug: unknown, trade: unknown, token: unknown, raw
   if (name.length < 2) return { ok: false, error: "Your name, please." };
   if (phone.replace(/\D/g, "").length < 10) return { ok: false, error: "A phone number with the area code, please." };
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: "That email doesn't look right." };
-  if (c.consent !== true) return { ok: false, error: "Tick the box so the shop may contact you." };
+  if (c.consent !== true) return { ok: false, error: isHouse(shop) ? "Tick the box so a local pro may contact you." : "Tick the box so the shop may contact you." };
   if (typeof c.company === "string" && c.company.trim()) return { ok: true, leadId: "ok" };   // the honeypot: a bot filled the hidden field
+  if (isHouse(shop)) {
+    // THE HOUSE (2026-10-28): a Lead Center lead with the estimate beside it; the request page next.
+    if (!email) return { ok: false, error: "Your email, please — your request page and your dashboard are sent there." };
+    const r = await createHouseLead(shop, est, { name, phone, email, note }, { ip, page: `/estimate/${HOUSE_SLUG}/${est.trade}` });
+    return { ok: true, leadId: r.platformLeadId, next: r.next };
+  }
   const { leadId } = await createWebLead(shop, est, { name, phone, email, note });
   return { ok: true, leadId };
 }
@@ -633,7 +642,7 @@ export async function webDeckPrice(token: unknown, raw: unknown): Promise<{ ok: 
 
 /** "GET MY FULL QUOTE": the design goes to the shop as a studio draft (the bell rings), the lead is made with the
  *  price they saw, the homeowner gets the confirmation, and the link joins the shop's client designs. */
-export async function webDeckSend(token: unknown, raw: unknown): Promise<{ ok: true; at: string; leadId: string } | Fail> {
+export async function webDeckSend(token: unknown, raw: unknown): Promise<{ ok: true; at: string; leadId: string; next?: string } | Fail> {
   if (typeof token !== "string" || !CLIENT_TOKEN_RE.test(token)) return { ok: false, error: "No such design." };
   const link = await readWebClientLink(token);
   if (!link || !link.web) return { ok: false, error: "This design link has closed." };
@@ -653,6 +662,8 @@ export async function webDeckSend(token: unknown, raw: unknown): Promise<{ ok: t
   }
   const shop = await webShopBySlug(link.web.slug);
   if (!shop || shop.id !== link.orgId) return { ok: false, error: "This estimator isn't turned on." };
+  // The house (2026-10-28) needs the email before anything is made: the request page and the dashboard hang off it.
+  if (isHouse(shop) && !email) return { ok: false, error: "Your email, please — your request page and your dashboard are sent there." };
   if (link.web.leadId) {
     // Sent before: the design goes again to the same draft; the lead already exists.
     const again = await sendDeckClientDesign(token, { design: r.design, note, name, phone });
@@ -671,6 +682,13 @@ export async function webDeckSend(token: unknown, raw: unknown): Promise<{ ok: t
     summary: priced.summary, choice: priced.choice, cents: priced.cents, band, show: ts.show,
     facts: { design: priced.design, draftId: after.draftId, token, areaSqFt: priced.areaSqFt, pricePerSqFt: priced.pricePerSqFt, designedOnline: true },
   });
+  if (isHouse(shop)) {
+    // THE HOUSE: a Lead Center lead with the design and the price beside it; the link files under the house org's
+    // client designs with the platform lead's id; the homeowner goes to their request page.
+    const r = await createHouseLead(shop, est, { name, phone, email, note: note || null }, { ip: await clientIp(), page: `/estimate/${HOUSE_SLUG}/deck` });
+    await fileWebClientLink(token, { leadId: r.platformLeadId, clientEmail: email }).catch((err) => console.warn("[web-deck] link not filed:", err));
+    return { ok: true, at: sent.at, leadId: r.platformLeadId, next: r.next };
+  }
   const { leadId } = await createWebLead(shop, est, { name, phone, email: email || null, note: note || null });
   await fileWebClientLink(token, { leadId, clientEmail: email || null }).catch((err) => console.warn("[web-deck] link not filed:", err));
   return { ok: true, at: sent.at, leadId };

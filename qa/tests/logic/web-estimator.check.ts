@@ -82,5 +82,13 @@ check("the lead's words", /roof estimator on your website/.test(d) && /26 square
 const m = homeownerEmail({ shop: "Ridgeline Roofing", trade: "roof", band: b, show: "range", summary: "Your roof measures about 26 squares at a 6:12 pitch.", choice: "GAF Timberline HDZ in Charcoal", phone: "(555) 010-2030" });
 check("the homeowner's email", m.subject === "Your roof, priced — $15,600 – $19,800 — Ridgeline Roofing" && /will be in touch to confirm the details at \(555\) 010-2030/.test(m.text) && /aerial imagery/.test(m.text), m.subject);
 
+// ── THE HOUSE (2026-10-28): the same email in JobFlex's words — a local pro will call, the request page's link ──
+const hm = homeownerEmail({ shop: "JobFlex", trade: "fence", band: { low: 7200, high: 9400 }, show: "range", summary: "180 ft of fence in 3 runs, 1 walk gate.", choice: "Cedar privacy, 6 ft", phone: "(716) 555-0100", house: { url: "https://www.jobflex.app/request/abc" } });
+check(
+  "the house's email: JobFlex in the subject, a local pro will call, the request page's link, no 'website'",
+  hm.subject === "Your fence, priced — $7,200 – $9,400 — JobFlex" && /Thanks for pricing your fence on JobFlex\./.test(hm.text) && /JobFlex is sending it to a local pro, who will be in touch to confirm the details at \(716\) 555-0100\./.test(hm.text) && /Follow your request: https:\/\/www\.jobflex\.app\/request\/abc/.test(hm.text) && !/website/.test(hm.text),
+  hm.text,
+);
+
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);

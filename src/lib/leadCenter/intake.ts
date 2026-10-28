@@ -91,8 +91,9 @@ export interface IntakeOptions {
   /** The range the homeowner priced in the home portal and the whole estimate under it (lib/leadCenter/estimate). */
   estimate?: LeadEstimate | null;
   /** The trade the homeowner chose themselves (the /price flow is one trade): taken as read, no model asked, so the
-   *  lead routes even when the detector is off — and the pin they confirmed on the map, kept over a fresh geocode. */
-  known?: { trade: DetectedTrade; lat: number; lng: number } | null;
+   *  lead routes even when the detector is off — and the pin they confirmed on the map, kept over a fresh geocode.
+   *  No pin (a house page without a map, 2026-10-28): the trade still stands and the address is geocoded as usual. */
+  known?: { trade: DetectedTrade; lat?: number | null; lng?: number | null } | null;
 }
 
 export async function createHomeownerLead(data: HomeownerIntake, opts: IntakeOptions) {
@@ -113,7 +114,7 @@ export async function createHomeownerLead(data: HomeownerIntake, opts: IntakeOpt
   // schema for older clients but is only context, never the classification.
   const [detected, geo, scope] = await Promise.all([
     opts.known ? Promise.resolve(opts.known.trade) : detectTrade(`${data.projectType ?? ""}\n${data.description}`).catch(() => null),
-    opts.known
+    opts.known?.lat != null && opts.known?.lng != null
       ? Promise.resolve({ lat: opts.known.lat, lng: opts.known.lng, city: data.city ?? null, state: data.state ?? null })
       : geocodeOrReuse({
           address: data.address,
