@@ -77,6 +77,7 @@ export function SettingsContent({
     gmail: params.get("gmail") ?? undefined,
     stripe: params.get("stripe") ?? undefined,
     square: params.get("square") ?? undefined,
+    financing: params.get("financing") ?? undefined,
   };
   // A processor sub-tab (?sub=stripe|square|stax) always means Payments now —
   // older links still say ?tab=integrations (owner, 2026-09-26).

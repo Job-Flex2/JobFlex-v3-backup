@@ -52,6 +52,7 @@ import { metaAllowed } from "@/lib/meta/graph";
 import { metaConnectionView } from "@/lib/meta/connections";
 import { getPaymentConnectionStatus } from "@/lib/payments/connections";
 import { parseNotificationPrefs } from "@/lib/notificationPrefsShared";
+import { financingReadiness, orgFinancingView } from "@/lib/financing/service";
 import {
   parseGmailSettings,
   parsePaymentSettings,
@@ -96,6 +97,14 @@ export function statusBadge(status: string | null): Badge | null {
 /** `billingLive`: the page opened on the Billing pane — only then does the
  *  owner's manage window read Stripe (price term, card). Every other pane,
  *  and every other role, costs Stripe nothing. */
+/** Settings → Payments → Financing (lib/financing): null while JobFlex's switch keeps the account out or Wisetack is
+ *  not connected on this deployment — the tab does not exist then. */
+async function loadFinancingSettings(organizationId: string, role: string): Promise<SettingsData["payments"]["financing"]> {
+  const view = await orgFinancingView(organizationId);
+  if (!view.letIn || !view.available) return null;
+  return { rec: view.rec, readiness: await financingReadiness(organizationId, view.rec), canManage: isOwnerOrManager(role), deskAnswer: "none" };
+}
+
 export async function loadSettingsData(ctx: SettingsOrgContext, opts: { billingLive?: boolean } = {}): Promise<SettingsData | null> {
   const { organizationId, user, role } = ctx;
 
@@ -210,6 +219,7 @@ export async function loadSettingsData(ctx: SettingsOrgContext, opts: { billingL
       depositPct: String(payment.depositPct),
       receiptsOnPayment: payment.receiptsOnPayment,
       platformFeePct: connections.platformFeePct,
+      financing: await loadFinancingSettings(organizationId, role),
     },
     billing: {
       planName,

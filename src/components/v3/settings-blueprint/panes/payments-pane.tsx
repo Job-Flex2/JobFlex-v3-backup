@@ -17,9 +17,10 @@ import { useState } from "react";
 
 import { ProcessorSubpane } from "./processor-subpane";
 import { StaxSubpane } from "./stax-subpane";
+import { FinancingSubpane } from "./financing-subpane";
 import {
   COMING_SOON_TAB,
-  PAYMENT_SUBTABS,
+  paymentSubTabs,
   PROCESSOR_OAUTH_NOTICE,
   comingSoonNote,
   isVisibleSubTab,
@@ -29,15 +30,17 @@ import {
 
 export function PaymentsPane({ data, sub: wanted, notice }: PaneProps) {
   const { stripe, square, connections } = data.integrations;
-  const returnedFrom: SubTabKey | undefined = notice?.square ? "square" : notice?.stripe ? "stripe" : undefined;
+  const financing = data.payments.financing;
+  const tabs = paymentSubTabs({ financing: financing !== null });
+  const returnedFrom: SubTabKey | undefined = notice?.square ? "square" : notice?.stripe ? "stripe" : notice?.financing && financing ? "financing" : undefined;
   const [sub, setSub] = useState<SubTabKey>(
-    isVisibleSubTab(wanted, PAYMENT_SUBTABS) ? (wanted as SubTabKey) : (returnedFrom ?? "stripe"),
+    isVisibleSubTab(wanted, tabs) ? (wanted as SubTabKey) : (returnedFrom ?? "stripe"),
   );
   // A later jump to a provider (?sub=) lands on its tab.
   const [seenWanted, setSeenWanted] = useState(wanted);
   if (wanted !== seenWanted) {
     setSeenWanted(wanted);
-    if (isVisibleSubTab(wanted, PAYMENT_SUBTABS)) setSub(wanted as SubTabKey);
+    if (isVisibleSubTab(wanted, tabs)) setSub(wanted as SubTabKey);
   }
 
   const oauth = notice?.stripe
@@ -74,7 +77,7 @@ export function PaymentsPane({ data, sub: wanted, notice }: PaneProps) {
         </div>
       ) : null}
       <div className="sub">
-        {PAYMENT_SUBTABS.map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab.key}
             className={tab.key === sub ? "sub-b on" : "sub-b"}
@@ -97,6 +100,11 @@ export function PaymentsPane({ data, sub: wanted, notice }: PaneProps) {
       <div className={sub === "stax" ? "subpane on" : "subpane"}>
         <StaxSubpane conns={connections} />
       </div>
+      {financing ? (
+        <div className={sub === "financing" ? "subpane on" : "subpane"}>
+          <FinancingSubpane d={financing} returned={notice?.financing === "back"} />
+        </div>
+      ) : null}
     </>
   );
 }

@@ -3,6 +3,7 @@
 import { GmailConnection } from "@/components/v3/settings-blueprint/panes/gmail-connection";
 import { ProcessorSubpane } from "@/components/v3/settings-blueprint/panes/processor-subpane";
 import { StaxSubpane } from "@/components/v3/settings-blueprint/panes/stax-subpane";
+import { FinancingSubpane } from "@/components/v3/settings-blueprint/panes/financing-subpane";
 import { MetaConnection } from "@/components/v3/settings-blueprint/meta-connection";
 
 // SETTINGS · HANDHELD — /dashboard/settings on a phone, and the standalone
@@ -824,6 +825,13 @@ function PaymentsPane({
         <SaveBar onSave={() => saveBankTransferSettings({ enabled: bankOn, instructions: bankText })} />
       </section>
 
+      {/* ── Financing (Wisetack, 2026-10-28) — only once JobFlex lets the account in ── */}
+      {p.financing ? (
+        <section className="mst-card" id="financing">
+          <FinancingSubpane d={p.financing} mobile returned={notice?.financing === "back"} />
+        </section>
+      ) : null}
+
       {/* ── Defaults ── */}
       <section className="mst-card">
         <CardHeader card={PAYMENT_DEFAULTS_CARD} />
@@ -1254,6 +1262,7 @@ export function MobileSettings({
     gmail: params.get("gmail") ?? undefined,
     stripe: params.get("stripe") ?? undefined,
     square: params.get("square") ?? undefined,
+    financing: params.get("financing") ?? undefined,
   };
 
   const [active, setActive] = useState<RailKey>(
