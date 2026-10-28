@@ -21,6 +21,8 @@
 import { requirePlatformAdmin } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { findMembers, readWorkingNow, screenRuns } from "@/lib/adminActivityRead";
+import { readActivityInsights } from "@/lib/activityInsightsRead";
+import { TEAM_TZ } from "@/lib/adminTasks/teamShared";
 import {
   AdminActivityContent,
   type ActivityEventDTO,
@@ -54,6 +56,9 @@ export default async function AdminActivityPage({ searchParams }: { searchParams
 
   // A search narrows every count and the trail to the members it finds.
   const q = (sp.q ?? "").trim().slice(0, 80);
+  // The analyst (2026-10-28): what members do across every workspace, read beside the rest; a search narrows the
+  // page to people, so it steps aside then. A failed read leaves the page without it, never without the trail.
+  const insightsP = q.length >= 2 ? Promise.resolve(null) : readActivityInsights(since, now, TEAM_TZ).catch(() => null);
   const [found, working] = await Promise.all([q.length >= 2 ? findMembers(q) : Promise.resolve(null), readWorkingNow(now).catch(() => [])]);
   const foundIds = found?.map((u) => u.id) ?? null;
   const who = foundIds ? { in: foundIds } : { not: null };
@@ -342,5 +347,6 @@ export default async function AdminActivityPage({ searchParams }: { searchParams
     feedTruncated: events.length >= FEED_LIMIT || roofRows.length >= ESTIMATE_LIMIT || hvacRows.length >= ESTIMATE_LIMIT || views.length >= VIEW_LIMIT,
   };
 
-  return <AdminActivityContent range={range} users={userRows} feed={feed} proposals={proposals} totals={totals} now={now} q={q} found={found ? found.length : null} working={working} />;
+  const insights = await insightsP;
+  return <AdminActivityContent range={range} users={userRows} feed={feed} proposals={proposals} totals={totals} now={now} q={q} found={found ? found.length : null} working={working} insights={insights} />;
 }

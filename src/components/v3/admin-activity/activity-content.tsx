@@ -26,6 +26,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { refreshWorkingNow } from "@/actions/adminActivity";
 import type { WorkingNowRow } from "@/lib/adminActivityRead";
+import type { ActivityInsights } from "@/lib/activityInsights";
+import { InsightsPanel } from "./insights-panel";
 import { longDate, money, relative, shortDate } from "@/lib/format";
 import { TEAM_TZ } from "@/lib/adminTasks/teamShared";
 import { Chip, Empty, Ic, KpiStrip, Sheet, type Tone, cx, useMdl, useReveal } from "@/components/v3/admin-influencers/admin-ui";
@@ -229,6 +231,7 @@ export function AdminActivityContent({
   q,
   found,
   working: workingAtLoad,
+  insights,
 }: {
   range: ActivityRange;
   users: ActivityUserRow[];
@@ -240,6 +243,8 @@ export function AdminActivityContent({
   found: number | null;
   /** Everyone in the app in the last ten minutes, as the page loaded; refreshed here every half minute. */
   working: WorkingNowRow[];
+  /** The analyst's reading of the range (2026-10-28); null under a search or when the read failed. */
+  insights: ActivityInsights | null;
   /** The server's clock at render. "4m ago" is drawn from it, so the server's
    *  HTML and the hydrating page agree (QA F-7f3279fd); this browser's clock
    *  takes over after mount. */
@@ -484,6 +489,9 @@ export function AdminActivityContent({
           { label: "Estimates made", value: String(totals.estimates) },
         ]}
       />
+
+      {/* ── what members do: the analyst (2026-10-28) ── */}
+      {insights && !q && <InsightsPanel insights={insights} rangeWords={range === "all" ? "All time" : `Last ${RANGE_LABEL[range]}`} zoneWords="Pacific time" />}
 
       {/* ── by user ── */}
       <section className="card rv">
