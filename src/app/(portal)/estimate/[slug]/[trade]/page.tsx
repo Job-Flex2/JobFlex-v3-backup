@@ -11,6 +11,8 @@ import { WebEstimate } from "@/components/v3/web-estimate/web-estimate";
 import { WebDeck } from "@/components/v3/web-estimate/web-deck";
 import { WebRoof } from "@/components/v3/web-estimate/web-roof";
 import { WebHvac } from "@/components/v3/web-estimate/web-hvac";
+import { WebSmart } from "@/components/v3/web-estimate/web-smart";
+import { WebFence } from "@/components/v3/web-estimate/web-fence";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +78,22 @@ export default async function WebEstimatePage({ params, searchParams }: { params
     return (
       <main style={{ minHeight: "100vh", background: embed ? "#fff" : "#f5f3ee" }}>
         <WebHvac shop={m.shop} title={m.title} basis={m.basis} askEmail={m.askEmail} embed={embed} />
+      </main>
+    );
+  }
+  if (m.trade === "smart") {
+    // Smart Proposal itself (2026-10-28): the project in their words and photos, the intake's questions, the price.
+    return (
+      <main style={{ minHeight: "100vh", background: embed ? "#fff" : "#f5f3ee" }}>
+        <WebSmart shop={m.shop} title={m.title} basis={m.basis} askEmail={m.askEmail} embed={embed} />
+      </main>
+    );
+  }
+  if (m.trade === "fence") {
+    // Fence Studio itself (2026-10-28): the lot from the air, the fence drawn on it, in 3D, the price.
+    return (
+      <main style={{ minHeight: "100vh", background: embed ? "#fff" : "#f5f3ee" }}>
+        <WebFence shop={m.shop} title={m.title} basis={m.basis} askEmail={m.askEmail} choices={m.choices} embed={embed} />
       </main>
     );
   }

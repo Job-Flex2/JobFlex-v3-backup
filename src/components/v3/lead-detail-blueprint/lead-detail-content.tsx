@@ -9,6 +9,7 @@ import type { Route } from "next";
 import { AirVent, Fence, FilePen, type LucideIcon } from "lucide-react";
 import { startEstimateFromLead, writeLeadScope } from "@/actions/leadEstimate";
 import { openWebLeadInEstimator } from "@/actions/webEstimator";
+import type { WebTrade } from "@/lib/webEstimator";
 import { ESTIMATOR_LABEL, estimatorFor, looksLikeStreetAddress, type EstimatorId } from "@/lib/leadRules";
 import { EstimateCardButton } from "./estimate-card-button";
 import { JobFolder, type JobFolderProps } from "./job-folder";
@@ -100,7 +101,7 @@ export type LeadDetailProps = {
   /** The homeowner's job folder (lib/home/files); null for a lead with none. */
   folder?: JobFolderProps | null;
   /** A lead from the shop's website estimator (2026-10-27, lib/webEstimator): what the homeowner saw. */
-  website?: { trade: "roof" | "hvac" | "fence" | "deck"; estimator: string; summary: string; choice: string; price: string; show: "range" | "exact"; note: string | null; handoff: string } | null;
+  website?: { trade: WebTrade; estimator: string; summary: string; choice: string; price: string; show: "range" | "exact"; note: string | null; handoff: string } | null;
 };
 
 export function LeadDetailContent({ lead, canEstimate, scopeFailed, contactsLocked = false, paid = null, folder = null, website = null }: LeadDetailProps) {

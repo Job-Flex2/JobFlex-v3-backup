@@ -12,7 +12,7 @@
 // PREVIEW (owner): until the WEB_OPEN switch is on, only platform admins see the pane and can turn a trade on, and
 // nothing is billed; the Stripe line per trade comes when the owner has tested the flow. Not on the pricing page.
 
-export const WEB_TRADES = ["roof", "hvac", "fence", "deck"] as const;
+export const WEB_TRADES = ["roof", "hvac", "fence", "deck", "smart"] as const;
 export type WebTrade = (typeof WEB_TRADES)[number];
 export const isWebTrade = (v: unknown): v is WebTrade => typeof v === "string" && (WEB_TRADES as readonly string[]).includes(v);
 
@@ -28,7 +28,7 @@ export interface WebTradeInfo {
   /** The Stripe price's jfKind (lib/stripePriceCache) — one price per trade. */
   kind: string;
   /** The estimator the lead opens in (lib/estimateSeed EstimatorId). */
-  estimator: "roof" | "hvac" | "fence" | "deck";
+  estimator: "roof" | "hvac" | "fence" | "deck" | "smart";
   /** Said under the price on the public page: where the number comes from. */
   basis: string;
 }
@@ -38,6 +38,8 @@ export const WEB_TRADE: Record<WebTrade, WebTradeInfo> = {
   hvac: { name: "HVAC estimator on your website", title: "Your new system, priced", button: "Price my new system", cents: 7900, kind: "web-hvac", estimator: "hvac", basis: "Sized to the house with a Manual J-style load. The final price follows a visit." },
   fence: { name: "Fence estimator on your website", title: "Your fence, priced", button: "Price my fence", cents: 9900, kind: "web-fence", estimator: "fence", basis: "Priced per foot in this area. The final price follows a visit." },
   deck: { name: "Deck Studio on your website", title: "Your deck, designed and priced", button: "Design my deck", cents: 15000, kind: "web-deck", estimator: "deck", basis: "Priced from the design, to code. The final price follows a visit." },
+  // Smart Proposal for remodelers (owner, 2026-10-28) — no price named; $99 a month stands in.
+  smart: { name: "Smart Proposal on your website", title: "Your project, priced", button: "Price my project", cents: 9900, kind: "web-smart", estimator: "smart", basis: "Priced from your description and photos. The final price follows a visit." },
 };
 
 /** What the shop asks the homeowner for before the full quote. Name and one way to reach them are always asked. */
@@ -70,7 +72,7 @@ export const SPREAD_MAX = 0.3;
 export const defaultTradeSettings = (): WebTradeSettings => ({ on: false, show: "range", spread: 0.12, materials: [], askEmail: true, note: "" });
 
 export function defaultWebEstimatorSettings(): WebEstimatorSettings {
-  return { domains: [], monthlyCap: DEFAULT_MONTHLY_CAP, trades: { roof: defaultTradeSettings(), hvac: defaultTradeSettings(), fence: defaultTradeSettings(), deck: defaultTradeSettings() } };
+  return { domains: [], monthlyCap: DEFAULT_MONTHLY_CAP, trades: Object.fromEntries(WEB_TRADES.map((t) => [t, defaultTradeSettings()])) as Record<WebTrade, WebTradeSettings> };
 }
 
 /** Whatever was stored, as settings: unknown fields dropped, numbers clamped, hosts cleaned. */
@@ -163,6 +165,7 @@ export const HANDOFF_WORDS: Record<WebTrade, string> = {
   hvac: "Opens with their address and what they told you; look up the house, size it, and price the install.",
   fence: "Opens on their lot with your price book; draw the lines they described and the proposal prices itself.",
   deck: "Opens as a draft with their deck designed and priced the way they saw it — adjust, then send the proposal.",
+  smart: "Opens Smart Proposal with their words as the brief — run it in your own method and send the proposal.",
 };
 
 /** May the button run on `host`? Empty list = anywhere; a listed domain covers its subdomains; the app itself always. */
@@ -178,7 +181,7 @@ export function hostAllowed(domains: readonly string[], host: string | null | un
 
 /** Stored on the Lead: the existing "Website" source (lib/leads/sources — the shop's own side), the trade as the project type. */
 export const WEB_LEAD_SOURCE = "WEBSITE";
-export const PROJECT_TYPE: Record<WebTrade, string> = { roof: "Roofing", hvac: "HVAC", fence: "Fence", deck: "Deck" };
+export const PROJECT_TYPE: Record<WebTrade, string> = { roof: "Roofing", hvac: "HVAC", fence: "Fence", deck: "Deck", smart: "Remodel" };
 
 /** The month a counter belongs to, in the shop's calendar: "2026-10". */
 export const monthKey = (d: Date = new Date()): string => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;

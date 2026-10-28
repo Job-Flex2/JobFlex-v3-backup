@@ -29,6 +29,7 @@ const TRADE_WORDS: Record<WebTrade, { ask: string; pick: string; cta: string }> 
   hvac: { ask: "Where is the house?", pick: "What kind of system?", cta: "Size my system" },
   fence: { ask: "Where is the fence going?", pick: "What style?", cta: "Price my fence" },
   deck: { ask: "Where is the deck going?", pick: "Start from a deck like…", cta: "Price my deck" },
+  smart: { ask: "Where is the project?", pick: "What kind of work?", cta: "Price my project" },
 };
 
 export function WebEstimate(p: WebEstimateProps) {
