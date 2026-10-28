@@ -422,7 +422,7 @@ export function AdminLeadCenterContent({
     setAutoRoof(next);
     try {
       await setLeadAutoPrice("roof", next);
-      toast.success(next ? "Roof leads priced on automatic routing" : "Roof leads go out as before", next ? "An unpriced roof lead the homeowner priced goes out at the suggested price." : "Only a price you typed is charged.");
+      toast.success(next ? "Roof leads priced on automatic routing" : "Roof leads go out unpriced again", next ? "An unpriced roof lead the homeowner priced goes out at the suggested price, and keeps it." : "New offers go out free unless you type a price; a lead already priced keeps its price.");
       router.refresh();
     } catch (err) {
       setAutoRoof(!next);
@@ -1667,7 +1667,7 @@ function PriceBlock({ lead }: { lead: PlatformLeadDTO }) {
       </div>
       {suggested != null ? (
         <div className={cx(ui.hint, styles.priceHint)} data-lead-suggested>
-          Suggested: {usd(suggested)} — priced by the homeowner{lead.estimate?.measurementId ? ", measured" : ""}{lead.estimate?.budgetCents ? ", with a budget" : ""}{exclusive ? ", exclusive" : ""}.{" "}
+          Suggested: {usd(suggested)} — priced by the homeowner{lead.estimate?.measurementId ? ", measured" : ""}{lead.estimate?.measurementId && lead.estimate?.budgetCents ? ", with a budget" : ""}{exclusive ? ", exclusive" : ""}.{" "}
           <button type="button" className={cx("btn btn-ghost", ui.btnSm)} disabled={busy || parsed === suggested} onClick={() => setDraft(String(suggested / 100))} data-lead-use-suggested>
             Use it
           </button>

@@ -362,7 +362,7 @@ export default async function RequestPage({ params }: { params: Promise<{ token:
             {v.estimate && (
               <div className={s.scope} data-request-range>
                 <p><b>Your range: {v.estimate.range}</b> · {v.estimate.material} · {v.estimate.basis}</p>
-                <p>An estimate range from aerial data and local prices, not a quote. A local pro confirms on site.</p>
+                <p>{v.estimate.basis === "from your home's size" ? "An estimate range from your home’s size and local prices, not a quote. A local pro measures and confirms on site." : "An estimate range from aerial data and local prices, not a quote. A local pro confirms on site."}</p>
               </div>
             )}
             {v.scope && (

@@ -449,9 +449,11 @@ export type RoofFromLead = {
   labor: RoofTableLine[];
   /** The pin the homeowner confirmed: a Measure click reads this building. */
   pin: { lat: number; lng: number } | null;
+  /** Where the homeowner's number came from — the toast says which. */
+  basis: "solar" | "size";
 };
 
-export async function openRoofLeadEstimate(platformLeadId: string): Promise<RoofFromLead | { ok: false; error: string }> {
+export async function openRoofLeadEstimate(platformLeadId: string): Promise<RoofFromLead | { ok: false; error: string; none?: boolean }> {
   const { organizationId } = await requireEstimatorOrManager();
   await requirePage(organizationId, "roof-estimator");
   const id = String(platformLeadId ?? "");
@@ -459,10 +461,10 @@ export async function openRoofLeadEstimate(platformLeadId: string): Promise<Roof
   const pl = await db.platformLead.findFirst({ where: { id, matchedOrgId: organizationId }, select: { address: true, city: true, state: true, zip: true, lat: true, lng: true } });
   if (!pl) return { ok: false, error: "That lead is not this company's." };
   const e = (await readLeadEstimates([id])).get(id);
-  if (!e) return { ok: false, error: "This lead carries no priced estimate." };
+  if (!e) return { ok: false, error: "This lead carries no priced estimate.", none: true };
   const address = [pl.address, pl.city, [pl.state, pl.zip].filter(Boolean).join(" ")].filter((s) => s && s.trim()).join(", ") || null;
   const r = reopenFromEstimate(e, address);
-  return { ok: true, ...r, pin: pl.lat != null && pl.lng != null ? { lat: pl.lat, lng: pl.lng } : null };
+  return { ok: true, ...r, pin: pl.lat != null && pl.lng != null ? { lat: pl.lat, lng: pl.lng } : null, basis: e.basis };
 }
 
 export type RoofFromProposal = {

@@ -35,7 +35,8 @@ async function resumeFrom(key: string, planId: string): Promise<Resume | null> {
         answers: e.answers,
         budgetCents: e.budgetCents,
         homeSqft,
-        range: { low: e.range.low, mid: e.range.mid, high: e.range.high, squares: e.squares, pitchLabel: e.pitchLabel, basis: e.basis, scope: [], cityFactor: e.cityFactor, cityWords: null, hidden: e.hidden },
+        // The form needs the number and the choices only; the hidden lines stay on the server.
+        range: { low: e.range.low, mid: e.range.mid, high: e.range.high, squares: e.squares, pitchLabel: e.pitchLabel, basis: e.basis, scope: [], cityFactor: e.cityFactor, cityWords: null, hidden: { facts: e.hidden.facts, spec: e.hidden.spec, materials: [], labor: [], assumptions: [], scopeText: "" } },
       },
     };
   } catch {

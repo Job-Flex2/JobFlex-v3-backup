@@ -104,6 +104,11 @@ export function parsePlanEstimate(notes: string | null | undefined): LeadEstimat
   }
 }
 
+/** A saved range's plan is nudged ONCE (nobody consented to more); an ordinary plan keeps its follow-up. */
+export function planNudgesOnce(notes: string | null | undefined): boolean {
+  return parsePlanEstimate(notes) !== null;
+}
+
 export function parsePlanSite(notes: string | null | undefined): PlanSite | null {
   if (!parsePlanEstimate(notes)) return null;
   const site = (JSON.parse(notes!.slice(PRICE_PLAN_TAG.length + 1)) as { site?: PlanSite }).site;

@@ -139,16 +139,17 @@ async function main() {
   // ── an order that never arrived ──
   const key = instantAddressKey({ address: "9 Slow Rd", city: "Testville", state: "KS", zip: "67000" });
   const placedAt = new Date(Date.now() - PENDING_EXPIRE_MS - 60_000);
-  const stale = await db.instantOrder.create({ data: { organizationId: A.org.id, addressKey: key, requestId: `qa-${rid()}`, packs: JSON.stringify(["property_data_id_002", "property_data_id_003", "property_data_id_004", "property_data_id_005", "property_data_id_007"]), createdAt: placedAt } });
+  // The roof is counted once, when its AREA pack is accepted ($2.40, lib/paidApiCosts); an expired area order gives it back.
+  const stale = await db.instantOrder.create({ data: { organizationId: A.org.id, addressKey: key, requestId: `qa-${rid()}`, packs: JSON.stringify([PD_PACK.ROOF_AREA, "property_data_id_002", "property_data_id_003", "property_data_id_004", "property_data_id_005", "property_data_id_007"]), createdAt: placedAt } });
   const freshOrder = await db.instantOrder.create({ data: { organizationId: A.org.id, addressKey: key, requestId: `qa-${rid()}`, packs: JSON.stringify([PD_PACK.ROOF_AREA]) } });
-  const cents = unitCents("eagleview", "pack", 5);
-  await db.apiSpendDaily.create({ data: { organizationId: A.org.id, day: utcDay(placedAt), service: "eagleview", op: "pack", calls: 2, cents: cents + 1500 } });
+  const cents = unitCents("eagleview", "roof");
+  await db.apiSpendDaily.create({ data: { organizationId: A.org.id, day: utcDay(placedAt), service: "eagleview", op: "roof", calls: 2, cents: cents + 1500 } });
   const closed = await expireStaleInstantOrders({ organizationId: A.org.id });
   const s1 = await db.instantOrder.findUnique({ where: { id: stale.id } });
   const s2 = await db.instantOrder.findUnique({ where: { id: freshOrder.id } });
   check("pending over 10 minutes: closed as failed, with the reason", closed === 1 && s1?.status === "failed" && (s1.error ?? "").startsWith(EXPIRED_ORDER_ERROR), s1);
   check("…a fresh order stays pending", s2?.status === "pending");
-  const spend = await db.apiSpendDaily.findFirst({ where: { organizationId: A.org.id, service: "eagleview", op: "pack" } });
+  const spend = await db.apiSpendDaily.findFirst({ where: { organizationId: A.org.id, service: "eagleview", op: "roof" } });
   check("…taken off the spend count of the day it was placed", spend?.calls === 1 && Math.abs((spend?.cents ?? 0) - 1500) < 0.01, spend);
   check("…once: a second sweep closes nothing", (await expireStaleInstantOrders({ organizationId: A.org.id })) === 0);
 }

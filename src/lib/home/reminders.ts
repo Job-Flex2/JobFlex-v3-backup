@@ -12,7 +12,7 @@ import { renderEmail } from "@/lib/email/renderEmail";
 import { buildHomePlanReminder } from "@/lib/email/build/platform";
 import { homeUrl } from "./portal";
 import { FOLLOW_UP_MS, planWhen } from "./dates";
-import { parsePlanEstimate, planRangeWords } from "@/lib/leadCenter/estimate";
+import { parsePlanEstimate, planNudgesOnce, planRangeWords } from "@/lib/leadCenter/estimate";
 
 export async function sendPlanReminders(now = new Date()): Promise<{ reminded: number; failed: number }> {
   const rows = await db.homePlan.findMany({
@@ -31,7 +31,8 @@ export async function sendPlanReminders(now = new Date()): Promise<{ reminded: n
     // The first reminder books the follow-up; the follow-up ends the series.
     const claimed = await db.homePlan.updateMany({
       where: { id: plan.id, remindAt: plan.remindAt, ...(plan.remindedAt ? { remindedAt: plan.remindedAt } : { remindedAt: null }) },
-      data: { remindedAt: now, remindAt: followUp ? null : new Date(now.getTime() + FOLLOW_UP_MS) },
+      // A saved range (2026-10-27) is nudged once: its two-day note, no follow-up.
+      data: { remindedAt: now, remindAt: followUp || planNudgesOnce(plan.notes) ? null : new Date(now.getTime() + FOLLOW_UP_MS) },
     });
     if (claimed.count === 0) continue;
     try {

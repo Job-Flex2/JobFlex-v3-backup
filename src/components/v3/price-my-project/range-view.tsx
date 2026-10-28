@@ -8,6 +8,7 @@ import {
   MATERIALS,
   budgetWords,
   materialWords,
+  disclaimerFor,
   moneyRange,
   roofFactsFromSize,
   roofFactsFromSolar,
@@ -19,8 +20,6 @@ import {
 import type { RoofRead } from "./roof-flow";
 import type { Site } from "./place-field";
 import s from "./price.module.css";
-
-export const DISCLAIMER = "An estimate range from aerial data and local prices, not a quote. A local pro confirms on site.";
 
 export type Priced = { range: RoofRange; answers: RoofAnswers; budgetCents: number | null; homeSqft: number | null };
 
@@ -180,7 +179,7 @@ export function RangeView({
               Email me this range
             </button>
           </div>
-          <p className={s.disclaim}>{DISCLAIMER}</p>
+          <p className={s.disclaim}>{disclaimerFor(range.basis)}</p>
         </div>
       ) : null}
 

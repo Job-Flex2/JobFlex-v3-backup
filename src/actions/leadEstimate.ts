@@ -5,6 +5,7 @@
 // the contractor there. Estimator-or-manager, and only a lead of the
 // signed-in company.
 
+import { readLeadEstimates } from "@/lib/leadCenter/estimateStore";
 import type { Route } from "next";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -46,6 +47,8 @@ export async function startEstimateFromLead(leadId: string, estimator: string): 
   // A Lead Center lead (2026-10-27): its pin, so the roof estimator reads the right building, and the PlatformLead
   // whose hidden estimate (one the homeowner priced on /price) the estimator opens whole.
   const platform = await db.platformLead.findFirst({ where: { matchedLeadId: lead.id, matchedOrgId: organizationId }, select: { id: true, lat: true, lng: true } }).catch(() => null);
+  // Only a lead that carries a priced estimate opens one (a described lead opens the estimator as before).
+  const priced = platform ? (await readLeadEstimates([platform.id])).has(platform.id) : false;
   const carriesLead = engine !== "manual";
   if (client || carriesLead) {
     const filing: Filing = {
@@ -70,7 +73,7 @@ export async function startEstimateFromLead(leadId: string, estimator: string): 
     clientId: client?.id ?? null,
     lat: platform?.lat ?? null,
     lng: platform?.lng ?? null,
-    platformLeadId: platform?.id ?? null,
+    platformLeadId: priced && platform ? platform.id : null,
   });
   redirect(ESTIMATOR_PATH[engine] as Route);
 }

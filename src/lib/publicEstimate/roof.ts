@@ -161,6 +161,13 @@ export function roofRange(facts: RoofFacts, answers: RoofAnswers, city: { factor
   };
 }
 
+/** The one line under every range, by where the number came from. */
+export function disclaimerFor(basis: "solar" | "size"): string {
+  return basis === "solar"
+    ? "An estimate range from aerial data and local prices, not a quote. A local pro confirms on site."
+    : "An estimate range from your home’s size and local prices, not a quote. A local pro measures and confirms on site.";
+}
+
 /** "$14,200–$19,800". */
 export function moneyRange(r: Pick<RoofRange, "low" | "high">): string {
   const usd = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
