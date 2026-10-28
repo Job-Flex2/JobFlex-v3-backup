@@ -89,6 +89,9 @@ export interface ClientDesignLink {
   seenAt: string | null;
   /** When what came back was priced onto a proposal (a convert or an update with this link); null = not yet. */
   pricedAt: string | null;
+  /** A link the shop's WEBSITE made for a visitor (2026-10-28, lib/webEstimator): nobody knows them yet; the send
+   *  makes the lead (`leadId`), and only then does the link join the shop's list. `priced` = the visitor saw a price. */
+  web?: { slug: string; leadId: string | null; priced: boolean } | null;
 }
 
 /** The row the contractor's list shows. */
@@ -159,6 +162,9 @@ export function parseClientLink(cursor: string): ClientDesignLink | null {
       byName: strOrNull(raw.byName, 120),
       seenAt: iso(raw.seenAt),
       pricedAt: iso(raw.pricedAt),
+      ...(raw.web && typeof raw.web === "object" && typeof (raw.web as { slug?: unknown }).slug === "string"
+        ? { web: { slug: str((raw.web as Record<string, unknown>).slug, 64), leadId: strOrNull((raw.web as Record<string, unknown>).leadId, 64), priced: (raw.web as Record<string, unknown>).priced === true } }
+        : {}),
     };
   } catch {
     return null;

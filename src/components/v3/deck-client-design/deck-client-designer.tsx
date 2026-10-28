@@ -271,6 +271,15 @@ export interface DeckClientDesignerProps {
   expired: boolean;
   /** The proposal this design became, once the contractor has sent it (2026-10-13): the client's own page. */
   proposal?: { url: string; status: string; sentAt: string | null; acceptedAt: string | null } | null;
+  /** ON THE SHOP'S OWN WEBSITE (2026-10-28, actions/webEstimator): nobody knows the visitor yet. The last step shows
+   *  the price at the end — the shop's book on what they designed — and "Get my full quote" sends the design and
+   *  makes the lead. Null/absent = the contractor's client link, as before. */
+  website?: {
+    askEmail: boolean;
+    leadId: string | null;
+    price: (design: DeckDesign) => Promise<{ ok: true; words: string; summary: string; show: "range" | "exact"; basis: string } | { ok: false; error: string }>;
+    send: (input: { design: DeckDesign; note: string; name: string; phone: string; email: string; consent: boolean; company: string }) => Promise<{ ok: true; at: string; leadId: string } | { ok: false; error: string }>;
+  } | null;
 }
 
 export function DeckClientDesigner(props: DeckClientDesignerProps) {
@@ -494,7 +503,35 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
   const [sending, setSending] = React.useState(false);
   const [sendError, setSendError] = React.useState<string | null>(null);
   const changedSinceSent = !!sent && sent.design !== design;
+  /* ── the website's last step: the price at the end, then the full quote ── */
+  const [email, setEmail] = React.useState("");
+  const [consent, setConsent] = React.useState(false);
+  const [company, setCompany] = React.useState("");
+  const [pricing, setPricing] = React.useState(false);
+  const [priceError, setPriceError] = React.useState<string | null>(null);
+  const [priced, setPriced] = React.useState<{ for: DeckDesign; words: string; summary: string; show: "range" | "exact"; basis: string } | null>(null);
+  const [sentLeadId, setSentLeadId] = React.useState<string | null>(null);
+  const seePrice = async () => {
+    if (!props.website) return;
+    setPricing(true);
+    setPriceError(null);
+    const r = await props.website.price(design);
+    setPricing(false);
+    if (r.ok) setPriced({ for: design, words: r.words, summary: r.summary, show: r.show, basis: r.basis });
+    else setPriceError(r.error);
+  };
   const send = async () => {
+    if (props.website) {
+      if (!name.trim()) { setSendError("Your name, please."); document.getElementById("client-name")?.focus(); return; }
+      if (phone.replace(/\D/g, "").length < 10) { setSendError(`A phone number ${shopName} can reach you at, please.`); return; }
+      if (!consent) { setSendError(`Tick the box so ${shopName} may contact you.`); return; }
+      setSending(true);
+      setSendError(null);
+      const res = await props.website.send({ design, note, name, phone, email, consent, company });
+      setSending(false);
+      if (res.ok) { setSent({ at: res.at, design }); setSentLeadId(res.leadId); setSaveState("saved"); } else setSendError(res.error);
+      return;
+    }
     if (!name.trim()) {
       setSendError("Type your name so " + shopName + " knows whose design it is.");
       document.getElementById("client-name")?.focus();
@@ -592,7 +629,7 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
         <div className={s.intro}>
           <h1 className={s.h1}>{first ? `${first}, design your ${hasRoof(design) && !withDeck ? design.structure : "deck"}` : "Design your deck"}</h1>
           <p className={s.lead}>
-            {start === "mine" ? <>This is the design {shopName} drew{props.address ? <> for <b>{props.address}</b></> : null}. Change anything you like — the size, the stairs, the railing, the boards — and press <b>Send</b> when it looks right.</> : <>Pick what you&apos;d like, set its size, stairs, railing and boards{props.address ? <> for <b>{props.address}</b></> : null}, and press <b>Send</b>. {shopName} checks it against the building code and sends you the price.</>}
+            {props.website ? <>Design it here in 3D — the size, the stairs, the railing, the boards, a roof if you like. See the price at the end, and {shopName} sends the full quote.</> : start === "mine" ? <>This is the design {shopName} drew{props.address ? <> for <b>{props.address}</b></> : null}. Change anything you like — the size, the stairs, the railing, the boards — and press <b>Send</b> when it looks right.</> : <>Pick what you&apos;d like, set its size, stairs, railing and boards{props.address ? <> for <b>{props.address}</b></> : null}, and press <b>Send</b>. {shopName} checks it against the building code and sends you the price.</>}
           </p>
         </div>
 
@@ -846,6 +883,67 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
               </Section>
             ) : null}
 
+            {props.website ? (
+              <Section n={next()} id="step-send" title="Your price, then the full quote" sub={`See the price for what you designed, then leave your details — ${shopName} sends the full, line-by-line quote.`}>
+                <ul className={s.summary} data-client-summary>
+                  {pickedLines(design).map((l) => (
+                    <li key={l}>{l}</li>
+                  ))}
+                </ul>
+                {priced && priced.for === design ? (
+                  <div className={s.webPrice} data-web-band>
+                    <div className={s.webPriceKicker}>{priced.show === "exact" ? "Your estimated price" : "Your estimated price range"}</div>
+                    <div className={s.webPriceBig}>{priced.words}</div>
+                    <div className={s.webPriceBasis}>{priced.basis}</div>
+                    <p className={s.webPriceSum}>{priced.summary}</p>
+                  </div>
+                ) : (
+                  <button type="button" className={s.sendBtn} onClick={() => void seePrice()} disabled={pricing} data-web-run>
+                    {pricing ? "Pricing…" : priced ? "The design changed — price it again" : "See my price"}
+                  </button>
+                )}
+                {priceError ? <p className={s.error} role="alert">{priceError}</p> : null}
+                {priced && priced.for === design ? (
+                  <>
+                    <div className={s.grid2}>
+                      <label className={s.field}>
+                        <span className={s.lbl}>Your name</span>
+                        <input id="client-name" className={s.in} value={name} autoComplete="name" onChange={(e) => setName(e.target.value)} data-web-name />
+                      </label>
+                      <label className={s.field}>
+                        <span className={s.lbl}>Phone</span>
+                        <input className={s.in} value={phone} inputMode="tel" autoComplete="tel" onChange={(e) => setPhone(e.target.value)} data-web-phone />
+                      </label>
+                    </div>
+                    {props.website.askEmail ? (
+                      <label className={s.field}>
+                        <span className={s.lbl}>Email — for your copy of the price</span>
+                        <input className={s.in} type="email" value={email} autoComplete="email" onChange={(e) => setEmail(e.target.value)} data-web-email />
+                      </label>
+                    ) : null}
+                    <label className={s.field}>
+                      <span className={s.lbl}>Anything else?</span>
+                      <textarea className={s.area} rows={3} maxLength={1500} value={note} placeholder="Lights, a hot tub, built-in benches, when you'd like it built…" onChange={(e) => setNote(e.target.value)} data-web-note />
+                    </label>
+                    <label className={s.consent}>
+                      <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} data-web-consent />
+                      <span>{shopName} may call, text or email me about this deck.</span>
+                    </label>
+                    <input className={s.hp} tabIndex={-1} autoComplete="off" value={company} onChange={(e) => setCompany(e.target.value)} aria-hidden="true" name="company" />
+                    {sendError ? <p className={s.error} role="alert">{sendError}</p> : null}
+                    {sent && !changedSinceSent ? (
+                      <div className={s.sentBox} data-client-sent data-web-lead={sentLeadId ?? props.website.leadId ?? ""}>
+                        <b>Sent ✓</b> {shopName} has your design and the price you saw, and will send the full quote{phone ? ` — ${phone}` : ""}.
+                      </div>
+                    ) : null}
+                    <button type="button" className={s.sendBtn} onClick={() => void send()} disabled={sending} data-web-send>
+                      {sending ? "Sending…" : sent ? (changedSinceSent ? "Send the changes" : "Send again") : "Get my full quote"}
+                    </button>
+                    <p className={s.fine}>No account, no payment. {shopName} sees your design only when you send it.</p>
+                  </>
+                ) : null}
+              </Section>
+            ) : (
             <Section n={next()} id="step-send" title={`Send it to ${shopName}`} sub="Look it over, add anything we should know, and send. You can change it and send again later.">
               <ul className={s.summary} data-client-summary>
                 {pickedLines(design).map((l) => (
@@ -899,12 +997,13 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
               </button>
               <p className={s.fine}>No prices on this page — {shopName} prices your design and sends it to you.</p>
             </Section>
+            )}
           </div>
         </div>
 
         <div className={s.dock} data-client-dock>
           <span className={s.dockWhat}>{sent && !changedSinceSent ? `Sent to ${shopName} ✓` : what}</span>
-          <button type="button" className={s.dockBtn} onClick={toSend}>{sent && !changedSinceSent ? "Review" : "Review & send →"}</button>
+          <button type="button" className={s.dockBtn} onClick={toSend}>{sent && !changedSinceSent ? "Review" : props.website ? "See my price →" : "Review & send →"}</button>
         </div>
       </div>
     </main>

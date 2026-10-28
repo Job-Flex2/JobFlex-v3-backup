@@ -135,6 +135,11 @@ export function WebEstimatorForm() {
                       <span>Ask for their email too</span>
                     </label>
                   </div>
+                  {t === "deck" ? (
+                    <div className={styles.field}>
+                      <span>What they design <small>the whole Deck Studio in 3D — kinds, size and shape, height, stairs, railing, boards, roofs, a lower level, a photo of their house wall. The price at the end is your rate book on what they drew.</small></span>
+                    </div>
+                  ) : (
                   <div className={styles.field}>
                     <span>What they may pick <small>none ticked = all of these</small></span>
                     <div className={styles.chips}>
@@ -148,6 +153,7 @@ export function WebEstimatorForm() {
                       })}
                     </div>
                   </div>
+                  )}
                   <label className={styles.field}>
                     <span>Under the price <small>your own words, or leave the standard line</small></span>
                     <input value={ts.note} placeholder={info.basis} maxLength={200} onChange={(e) => setTrade(t, { note: e.target.value })} data-web-note={t} />
