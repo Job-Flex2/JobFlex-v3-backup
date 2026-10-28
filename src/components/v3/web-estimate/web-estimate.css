@@ -67,3 +67,15 @@
 .we-foot { margin-top: 22px; font-size: 12.5px; line-height: 1.5; color: var(--we-muted); text-align: center; }
 .we-foot b { color: var(--we-ink); }
 @media (max-width: 520px) { .we-choices, .we-qs { grid-template-columns: 1fr; } .we-card { padding: 20px 16px; } }
+/* the roof on the website (2026-10-28): the live map with the pin, the measurement card */
+.we-map { margin: 14px 0 6px; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 1px var(--we-hair); background: #e9e7e1; }
+.we-map > div:first-child { min-height: 280px; }
+.we-map .we-fine { margin: 8px 12px 10px; }
+.we-facts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 14px; margin: 14px 0 8px; padding: 0; }
+.we-facts > div { padding: 12px 14px; border-radius: 10px; background: var(--we-paper); }
+.we-facts dt { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--we-muted); }
+.we-facts dd { margin: 4px 0 0; font-size: 18px; color: var(--we-ink); }
+.we-facts dd b { font-size: 24px; font-weight: 850; letter-spacing: -0.02em; }
+.we-facts dd small { font-size: 13px; color: var(--we-muted); }
+.we-h2 { margin: 18px 0 8px; font-size: 20px; font-weight: 850; letter-spacing: -0.02em; }
+@media (max-width: 520px) { .we-facts { grid-template-columns: 1fr 1fr; } }

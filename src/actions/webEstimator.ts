@@ -14,7 +14,7 @@ import { NoOrgError, UnauthorizedError, isOwnerRole, requireEstimatorOrManager, 
 import { dollars, webAddonPriceWords, webModeBills, webTradeServes, type AddonInterval, type WebAddonLine, type WebBillingMode } from "@/lib/webAddon";
 import { addWebAddon, quoteWebAddon as quoteWebLine, removeWebAddon, webAddonLines, webBilling, webTradeLive } from "@/lib/webAddonBilling";
 import { HOUR, MINUTE, RateLimitError, clientIp, enforceRateLimit } from "@/lib/rateLimit";
-import { noteRequestOrg } from "@/lib/trialMeter";
+import { noteRequestOrg, takeTrialCap } from "@/lib/trialMeter";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { startEstimateFromLead } from "@/actions/leadEstimate";
 import {
@@ -47,12 +47,18 @@ import {
   webShopBySlug,
   writeWebSettings,
   type WebShop,
+  readWebRoof,
+  storeWebRoof,
+  readWebHvac,
+  storeWebHvac,
+  updateWebHvac,
 } from "@/lib/webEstimatorServer";
-import { priceWebDeckDesign, runWebTrade, webDeckBase, webTradeAllChoices, webTradeChoices, webTradeQuestions, type WebAddress, type WebChoice, type WebQuestion } from "@/lib/webEstimatorTrades";
+import { imageryWords, measureWebRoof, priceWebDeckDesign, priceWebRoof, runWebTrade, sizeWebHvac, webDeckBase, webTradeAllChoices, webTradeChoices, webTradeQuestions, type WebAddress, type WebChoice, type WebQuestion } from "@/lib/webEstimatorTrades";
 import { randomBytes } from "node:crypto";
 import { CLIENT_TOKEN_RE, mergeClientDesign, type ClientDesignLink } from "@/lib/deck/clientDesign";
 import { normalizeDeckDesign, type DeckDesign } from "@/lib/deck/design";
 import { fileWebClientLink, readWebClientLink, sendDeckClientDesign, writeWebClientLink } from "@/actions/deckClientDesign";
+import { lookupSiteFacts } from "@/lib/hvac/siteLookup";
 
 type Fail = { ok: false; error: string };
 const DENIED = "You don't have access to this.";
@@ -275,6 +281,150 @@ export async function webEstimate(slug: unknown, trade: unknown, raw: unknown): 
   const rec = await storeWebEstimate({ organizationId: shop.id, trade: t, address: input.address.address.trim(), city: out.city, state: out.state, zip: out.zip, summary: out.summary, choice: out.choice, cents: out.cents, band, show: ts.show, facts: out.facts });
   await bumpWebCount(shop.id, "estimates").catch(() => {});
   return { ok: true, estimate: { token: rec.token, summary: out.summary, choice: out.choice, band, show: ts.show, basis: ts.note || WEB_TRADE[t].basis, askEmail: ts.askEmail } };
+}
+
+// ── THE ROOF ON THE WEBSITE (2026-10-28): measured from the air first and shown on their house; then each material
+// they try is priced from that one measurement (no second aerial call); the lead carries the measurement.
+
+export interface WebRoofFacts {
+  squares: number;
+  areaSqft: number;
+  footprintSqft: number;
+  pitchLabel: string;
+  segmentCount: number;
+  imagery: string | null;
+  pin: { lat: number; lng: number };
+}
+
+export async function webRoofMeasure(slug: unknown, raw: unknown): Promise<{ ok: true; token: string; facts: WebRoofFacts; choices: WebChoice[] } | (Fail & { code?: string })> {
+  const r = await liveShop(slug, "roof");
+  if ("ok" in r) return r;
+  const { shop } = r;
+  const ip = await clientIp();
+  const braked = (await brake(`web-roof-ip:${ip}`, 8, 10 * MINUTE, "measurements")) ?? (await brake(`web-est-shop:${shop.id}`, 120, HOUR, "estimates"));
+  if (braked) return { ok: false, error: braked, code: "braked" };
+  if (await webCapReached(shop)) return { ok: false, error: "This estimator has had a busy month and is resting. Leave your details and the shop will price it by hand.", code: "capped" };
+  const input = cleanInput(raw);
+  if (!input) return { ok: false, error: "Type the address of the house.", code: "address" };
+  await noteRequestOrg(shop.id).catch(() => {});
+  const m = await measureWebRoof(shop, input.address);
+  if (!m.ok) return { ok: false, error: m.error, code: m.code };
+  const rec = await storeWebRoof(shop.id, m.measure);
+  const est = m.measure.est;
+  return {
+    ok: true,
+    token: rec.token,
+    facts: { squares: Math.round(est.areaSqft / 100), areaSqft: Math.round(est.areaSqft), footprintSqft: Math.round(est.footprintSqft), pitchLabel: est.pitchLabel, segmentCount: est.segmentCount, imagery: imageryWords(est.imageryDate), pin: { lat: m.measure.pin.lat, lng: m.measure.pin.lng } },
+    choices: webTradeChoices(shop, "roof"),
+  };
+}
+
+export async function webRoofPrice(slug: unknown, token: unknown, choice: unknown): Promise<{ ok: true; estimate: WebEstimateView } | (Fail & { code?: string })> {
+  const r = await liveShop(slug, "roof");
+  if ("ok" in r) return r;
+  const { shop } = r;
+  if (typeof token !== "string") return { ok: false, error: "Measure the roof first.", code: "input" };
+  const rec = await readWebRoof(token, shop.id);
+  if (!rec) return { ok: false, error: "That measurement has aged out — measure the roof again.", code: "input" };
+  const ip = await clientIp();
+  const braked = await brake(`web-est-ip:${ip}`, 12, 10 * MINUTE, "estimates");
+  if (braked) return { ok: false, error: braked, code: "braked" };
+  const out = await priceWebRoof(shop, rec.measure, typeof choice === "string" && choice.length <= 60 ? choice : null);
+  if (!out.ok) return { ok: false, error: out.error, code: out.code };
+  const ts = shop.settings.trades.roof;
+  const band = priceBand(out.cents, ts.show, ts.spread);
+  const est = await storeWebEstimate({ organizationId: shop.id, trade: "roof", address: rec.measure.address.address.trim(), city: out.city, state: out.state, zip: out.zip, summary: out.summary, choice: out.choice, cents: out.cents, band, show: ts.show, facts: out.facts });
+  await bumpWebCount(shop.id, "estimates").catch(() => {});
+  return { ok: true, estimate: { token: est.token, summary: out.summary, choice: out.choice, band, show: ts.show, basis: ts.note || WEB_TRADE.roof.basis, askEmail: ts.askEmail } };
+}
+
+// ── HVAC ON THE WEBSITE (2026-10-28): the house looked up first — the assessor's living area, year built, storeys, the
+// footprint, the elevation, the county's design day (lib/hvac/siteLookup, behind the website's brakes and the shop's
+// cap) — confirmed by the homeowner; then the load and the shop's three tiers, each priced; they pick one.
+
+export interface WebHouse {
+  livingSqft: number | null;
+  storeys: number | null;
+  yearBuilt: number | null;
+  footprintSqft: number | null;
+  elevationFt: number | null;
+  county: string | null;
+  state: string;
+  sources: Record<string, string>;
+  warnings: string[];
+}
+
+export async function webHvacLookup(slug: unknown, raw: unknown): Promise<{ ok: true; token: string; house: WebHouse } | (Fail & { code?: string })> {
+  const r = await liveShop(slug, "hvac");
+  if ("ok" in r) return r;
+  const { shop } = r;
+  const ip = await clientIp();
+  const braked = (await brake(`web-hvac-ip:${ip}`, 6, 10 * MINUTE, "house lookups")) ?? (await brake(`web-est-shop:${shop.id}`, 120, HOUR, "estimates"));
+  if (braked) return { ok: false, error: braked, code: "braked" };
+  if (await webCapReached(shop)) return { ok: false, error: "This estimator has had a busy month and is resting. Leave your details and the shop will size it by hand.", code: "capped" };
+  const input = cleanInput(raw);
+  if (!input) return { ok: false, error: "Type the address of the house.", code: "address" };
+  await noteRequestOrg(shop.id).catch(() => {});
+  const a = input.address;
+  const address = [a.address, a.city, [a.state, a.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  const trial = await takeTrialCap(shop.id, "hvacLookups", { dedupe: `hvac:${address.toLowerCase().replace(/\s+/g, " ")}` }).catch(() => ({ ok: true as const }));
+  if (!trial.ok) return { ok: false, error: "This estimator is resting for now. Leave your details and the shop will size it in person.", code: "capped" };
+  const looked = await lookupSiteFacts({ address, state: a.state || undefined, ...(a.lat != null && a.lng != null ? { lat: a.lat, lng: a.lng } : {}) }, shop.id);
+  if (!looked.ok) return { ok: false, error: "We couldn't find that address. Check the street, the city and the state.", code: "address" };
+  const f = looked.facts;
+  if (!f.state) f.state = a.state || shop.state || "";
+  const rec = await storeWebHvac(shop.id, a, f);
+  return {
+    ok: true,
+    token: rec.token,
+    house: { livingSqft: f.livingSqft ?? null, storeys: f.storeys ?? null, yearBuilt: f.yearBuilt ?? null, footprintSqft: f.footprintSqft ? Math.round(f.footprintSqft) : null, elevationFt: f.elevationFt ?? null, county: f.county ?? null, state: f.state, sources: { ...(f.sources as Record<string, string>) }, warnings: looked.warnings },
+  };
+}
+
+export interface WebHvacSizedView {
+  load: { heatingBtuh: number; coolingTotalBtuh: number; coolingTons: number };
+  design: { heatingF: number; coolingF: number; county: string };
+  outdoorKind: "heat-pump" | "air-conditioner";
+  summary: string;
+  tiers: Array<{ tier: "value" | "mid" | "premium"; label: string; unit: string; words: string }>;
+}
+
+export async function webHvacSize(slug: unknown, token: unknown, raw: unknown): Promise<{ ok: true; sized: WebHvacSizedView } | (Fail & { code?: string })> {
+  const r = await liveShop(slug, "hvac");
+  if ("ok" in r) return r;
+  const { shop } = r;
+  if (typeof token !== "string") return { ok: false, error: "Look up the house first.", code: "input" };
+  const rec = await readWebHvac(token, shop.id);
+  if (!rec) return { ok: false, error: "That lookup has aged out — look up the house again.", code: "input" };
+  const ip = await clientIp();
+  const braked = await brake(`web-est-ip:${ip}`, 12, 10 * MINUTE, "estimates");
+  if (braked) return { ok: false, error: braked, code: "braked" };
+  const input = cleanInput({ address: rec.address, ...(raw && typeof raw === "object" ? raw : {}) });
+  const ans = input?.answers ?? {};
+  const num = (v: unknown, lo: number, hi: number, fb: number | undefined) => { const x = Number(v); return Number.isFinite(x) && x > 0 ? Math.min(hi, Math.max(lo, Math.round(x))) : fb; };
+  const site = { ...rec.site, livingSqft: num(ans.sqft, 400, 8000, rec.site.livingSqft), storeys: num(ans.storeys, 1, 3, rec.site.storeys ?? 1), yearBuilt: num(ans.year, 1850, 2030, rec.site.yearBuilt ?? 1995) };
+  const parts = { city: rec.address.city || null, state: rec.address.state || site.state || null, zip: rec.address.zip || null };
+  const sized = await sizeWebHvac(shop, site, parts, ans, input?.choice ?? null);
+  if (!sized.ok) return { ok: false, error: sized.error, code: sized.code };
+  await updateWebHvac({ ...rec, site, sized });
+  const ts = shop.settings.trades.hvac;
+  const words = (cents: number) => { const b = priceBand(cents, ts.show, ts.spread); return ts.show === "exact" ? money(b.low) : bandWords(b); };
+  return { ok: true, sized: { load: sized.load, design: sized.design, outdoorKind: sized.outdoorKind, summary: sized.tiers[0].summary, tiers: sized.tiers.map((t) => ({ tier: t.tier, label: t.label, unit: t.unit, words: words(t.cents) })) } };
+}
+
+export async function webHvacPrice(slug: unknown, token: unknown, tier: unknown): Promise<{ ok: true; estimate: WebEstimateView } | (Fail & { code?: string })> {
+  const r = await liveShop(slug, "hvac");
+  if ("ok" in r) return r;
+  const { shop } = r;
+  if (typeof token !== "string") return { ok: false, error: "Size the system first.", code: "input" };
+  const rec = await readWebHvac(token, shop.id);
+  if (!rec || !rec.sized) return { ok: false, error: "Size the system first.", code: "input" };
+  const t = rec.sized.tiers.find((x) => x.tier === tier) ?? rec.sized.tiers.find((x) => x.tier === "mid") ?? rec.sized.tiers[0];
+  const ts = shop.settings.trades.hvac;
+  const band = priceBand(t.cents, ts.show, ts.spread);
+  const est = await storeWebEstimate({ organizationId: shop.id, trade: "hvac", address: rec.address.address.trim(), city: rec.sized.city, state: rec.sized.state, zip: rec.sized.zip, summary: t.summary, choice: t.choice, cents: t.cents, band, show: ts.show, facts: t.facts });
+  await bumpWebCount(shop.id, "estimates").catch(() => {});
+  return { ok: true, estimate: { token: est.token, summary: t.summary, choice: t.choice, band, show: ts.show, basis: ts.note || WEB_TRADE.hvac.basis, askEmail: ts.askEmail } };
 }
 
 function cleanInput(raw: unknown): { address: WebAddress; choice: string | null; answers: Record<string, string | number> } | null {

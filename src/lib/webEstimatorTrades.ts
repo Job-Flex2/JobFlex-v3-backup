@@ -182,8 +182,14 @@ function roofFacts(est: SolarRoofEstimate, state: string | null): RoofFacts {
   };
 }
 
-async function roofEstimate(shop: WebShop, input: WebTradeInput): Promise<WebTradeOutcome> {
-  const a = input.address, p = parts(a);
+/** THE ROOF MEASURED FROM THE AIR, kept apart from the pricing (2026-10-28): the website measures once, shows it on
+ *  the house, and prices each material the homeowner tries from that one measurement. */
+export interface WebRoofMeasure { est: SolarRoofEstimate; pin: NonNullable<Awaited<ReturnType<typeof pinFor>>>; parts: ReturnType<typeof parts>; address: WebAddress }
+export type WebRoofMeasureResult = { ok: true; measure: WebRoofMeasure } | Extract<WebTradeOutcome, { ok: false }>;
+
+export async function measureWebRoof(shop: WebShop, a: WebAddress): Promise<WebRoofMeasureResult> {
+  void shop;
+  const p = parts(a);
   const pin = await pinFor(a);
   if (!pin) return { ok: false, error: "We couldn't find that address. Check the street and the city.", code: "address" };
   let est: SolarRoofEstimate;
@@ -196,7 +202,13 @@ async function roofEstimate(shop: WebShop, input: WebTradeInput): Promise<WebTra
     if (err instanceof SolarUnavailableError && err.kind === "no-coverage") return { ok: false, error: "We couldn't measure this roof from the air. Leave your details and we'll measure it in person.", code: "no-coverage" };
     return { ok: false, error: "The aerial measurement isn't answering right now. Leave your details and we'll measure it.", code: "unavailable" };
   }
-  const family = (ROOF_FAMILIES.find((f) => f.id === input.choice)?.id ?? "asphalt") as RoofFamily;
+  return { ok: true, measure: { est, pin, parts: p, address: a } };
+}
+
+/** The measured roof in the family the homeowner picked, priced in the shop's book (its systems, brands, rates). */
+export async function priceWebRoof(shop: WebShop, m: WebRoofMeasure, pick: string | null): Promise<WebTradeOutcome> {
+  const { est, pin, parts: p } = m;
+  const family = (ROOF_FAMILIES.find((f) => f.id === pick)?.id ?? "asphalt") as RoofFamily;
   const state = p.state || pin.state?.toUpperCase() || shop.state;
   const facts = roofFacts(est, state);
   const book = await roofBook(shop.id);
@@ -217,6 +229,19 @@ async function roofEstimate(shop: WebShop, input: WebTradeInput): Promise<WebTra
   };
 }
 
+async function roofEstimate(shop: WebShop, input: WebTradeInput): Promise<WebTradeOutcome> {
+  const m = await measureWebRoof(shop, input.address);
+  if (!m.ok) return m;
+  return priceWebRoof(shop, m.measure, input.choice);
+}
+
+/** "June 2025" from the imagery's date, whatever shape Solar gave it. */
+export function imageryWords(d: unknown): string | null {
+  if (typeof d === "string" && d) { const t = Date.parse(d.length === 7 ? `${d}-01` : d); return Number.isNaN(t) ? d : new Date(t).toLocaleDateString("en-US", { month: "long", year: "numeric" }); }
+  if (d && typeof d === "object" && typeof (d as { year?: unknown }).year === "number") { const o = d as { year: number; month?: number }; return o.month ? new Date(o.year, o.month - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" }) : String(o.year); }
+  return null;
+}
+
 // HVAC — the homeowner's answers → a Manual J-style load → the shop's tiers, the chosen one priced
 
 async function hvacBook(organizationId: string): Promise<{ card: HvacRateCard; catalog: CatalogItem[] }> {
@@ -232,6 +257,51 @@ async function hvacBook(organizationId: string): Promise<{ card: HvacRateCard; c
   return { card, catalog };
 }
 
+/** HVAC ON THE WEBSITE (2026-10-28): the house looked up (lib/hvac/siteLookup), the homeowner's answers, then the
+ *  load and EVERY tier priced in the shop's book — the homeowner picks one. The old one-shot path (runWebTrade) takes
+ *  the middle tier. */
+export interface WebHvacTier { tier: "value" | "mid" | "premium"; label: string; unit: string; cents: number; summary: string; choice: string; facts: Record<string, unknown> }
+export interface WebHvacSized {
+  ok: true;
+  load: { heatingBtuh: number; coolingTotalBtuh: number; coolingTons: number };
+  design: { heatingF: number; coolingF: number; county: string };
+  outdoorKind: "heat-pump" | "air-conditioner";
+  tiers: WebHvacTier[];
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+}
+
+export async function sizeWebHvac(shop: WebShop, site: HvacSiteFacts, p: { city: string | null; state: string | null; zip: string | null }, ans: Record<string, string | number>, pick: string | null): Promise<WebHvacSized | Extract<WebTradeOutcome, { ok: false }>> {
+  const sqft = site.livingSqft ?? 0;
+  if (!sqft || sqft < 400) return { ok: false, error: "How many square feet does the system heat and cool?", code: "input" };
+  const model = modelFromSite(site);
+  const existing = String(ans.existing || "split-ac-furnace");
+  applyStatedNested(model, "existing.kind", ["split-ac-furnace", "split-heat-pump", "furnace-only", "none"].includes(existing) ? existing : "split-ac-furnace");
+  applyStatedNested(model, "gas.available", String(ans.gas || "yes") !== "no");
+  const outdoorKind = pick === "heat-pump" ? "heat-pump" : "air-conditioner";
+  const { card, catalog } = await hvacBook(shop.id);
+  const { conditions } = designConditionsFor(site.state, site.county, site.elevationFt ?? 0);
+  const job = "replace-system" as const;
+  const engine = runEngine(model, { conditions, catalog, job, outdoorKind });
+  const tiers = tiersFor(engine, model, card, catalog, { job }, (id) => runEngine(model, { catalog, job, outdoorKind, pick: id, conditions }));
+  if (!tiers.length) return { ok: false, error: "We couldn't size a system from those answers. Leave your details and we'll size it in person.", code: "unavailable" };
+  const tons = engine.load.coolingTons;
+  const load = { heatingBtuh: engine.load.heatingBtuh, coolingTotalBtuh: engine.load.coolingTotalBtuh, coolingTons: tons };
+  const summary = `A ${tons.toFixed(1)}-ton system for ${sqft.toLocaleString("en-US")} sq ft: about ${Math.round(engine.load.heatingBtuh).toLocaleString("en-US")} BTU/h of heating and ${Math.round(engine.load.coolingTotalBtuh).toLocaleString("en-US")} of cooling on the design day.`;
+  const kindWords = outdoorKind === "heat-pump" ? "Heat pump" : "Air conditioner + furnace";
+  const all = tiers.map((t) => ({ tier: t.tier, label: TIER_LABEL[t.tier], unit: `${t.candidate.item.brand} ${t.candidate.item.model}`, subtotal: t.subtotal }));
+  const pin = site.lat !== undefined && site.lng !== undefined ? { lat: site.lat, lng: site.lng } : null;
+  return {
+    ok: true, load, design: { heatingF: conditions.heatingF, coolingF: conditions.coolingF, county: conditions.county }, outdoorKind, ...p,
+    tiers: tiers.map((t) => ({
+      tier: t.tier, label: TIER_LABEL[t.tier], unit: `${t.candidate.item.brand} ${t.candidate.item.model}`, cents: Math.round(t.subtotal * 100), summary,
+      choice: `${kindWords}, the ${TIER_LABEL[t.tier].toLowerCase()} tier (${t.candidate.item.brand} ${t.candidate.item.model})`,
+      facts: { sqft, storeys: site.storeys, yearBuilt: site.yearBuilt, existing, gas: String(ans.gas || "yes"), outdoorKind, county: site.county ?? null, load, tiers: all, tier: t.tier, pin, lookedUp: Object.keys(site.sources ?? {}).length > 0, footprintSqft: site.footprintSqft ?? null, elevationFt: site.elevationFt ?? null },
+    })),
+  };
+}
+
 async function hvacEstimate(shop: WebShop, input: WebTradeInput): Promise<WebTradeOutcome> {
   const a = input.address, p = parts(a), ans = input.answers ?? {};
   const sqft = clampN(n(ans.sqft, 0), 400, 8000);
@@ -240,26 +310,10 @@ async function hvacEstimate(shop: WebShop, input: WebTradeInput): Promise<WebTra
   const state = p.state || pin?.state?.toUpperCase() || shop.state;
   if (!state) return { ok: false, error: "Which state is the house in?", code: "address" };
   const site: HvacSiteFacts = { address: fullAddress(a), state, county: pin?.county, lat: pin?.lat, lng: pin?.lng, livingSqft: sqft, storeys: clampN(n(ans.storeys, 1), 1, 3), yearBuilt: clampN(n(ans.year, 1995), 1850, 2030), sources: {} };
-  const model = modelFromSite(site);
-  const existing = String(ans.existing || "split-ac-furnace");
-  applyStatedNested(model, "existing.kind", ["split-ac-furnace", "split-heat-pump", "furnace-only", "none"].includes(existing) ? existing : "split-ac-furnace");
-  applyStatedNested(model, "gas.available", String(ans.gas || "yes") !== "no");
-  const outdoorKind = input.choice === "heat-pump" ? "heat-pump" : "air-conditioner";
-  const { card, catalog } = await hvacBook(shop.id);
-  const { conditions } = designConditionsFor(state, site.county, 0);
-  const job = "replace-system" as const;
-  const engine = runEngine(model, { conditions, catalog, job, outdoorKind });
-  const tiers = tiersFor(engine, model, card, catalog, { job }, (id) => runEngine(model, { catalog, job, outdoorKind, pick: id, conditions }));
-  const mid = tiers.find((t) => t.tier === "mid") ?? tiers[1] ?? tiers[0];
-  if (!mid) return { ok: false, error: "We couldn't size a system from those answers. Leave your details and we'll size it in person.", code: "unavailable" };
-  const tons = engine.load.coolingTons;
-  const unit = mid.candidate.item;
-  const summary = `A ${tons.toFixed(1)}-ton system for ${sqft.toLocaleString("en-US")} sq ft: about ${Math.round(engine.load.heatingBtuh).toLocaleString("en-US")} BTU/h of heating and ${Math.round(engine.load.coolingTotalBtuh).toLocaleString("en-US")} of cooling on the design day.`;
-  const choice = `${outdoorKind === "heat-pump" ? "Heat pump" : "Air conditioner + furnace"}, the ${TIER_LABEL[mid.tier].toLowerCase()} tier (${unit.brand} ${unit.model})`;
-  return {
-    ok: true, summary, choice, cents: Math.round(mid.subtotal * 100), ...p,
-    facts: { sqft, storeys: site.storeys, yearBuilt: site.yearBuilt, existing, gas: String(ans.gas || "yes"), outdoorKind, county: site.county ?? null, load: { heatingBtuh: engine.load.heatingBtuh, coolingTotalBtuh: engine.load.coolingTotalBtuh, coolingTons: tons }, tiers: tiers.map((t) => ({ tier: t.tier, label: TIER_LABEL[t.tier], unit: `${t.candidate.item.brand} ${t.candidate.item.model}`, subtotal: t.subtotal })), pin },
-  };
+  const r = await sizeWebHvac(shop, site, p, ans, input.choice);
+  if (!r.ok) return r;
+  const mid = r.tiers.find((t) => t.tier === "mid") ?? r.tiers[1] ?? r.tiers[0];
+  return { ok: true, summary: mid.summary, choice: mid.choice, cents: mid.cents, ...p, facts: mid.facts };
 }
 
 // FENCE — the feet they measure, the style and height, the gates → the shop's rates in this market

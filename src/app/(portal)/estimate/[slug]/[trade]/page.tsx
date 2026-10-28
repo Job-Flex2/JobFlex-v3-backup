@@ -9,6 +9,7 @@ import { notFound } from "next/navigation";
 import { webPageModel, webPageOffReason } from "@/actions/webEstimator";
 import { WebEstimate } from "@/components/v3/web-estimate/web-estimate";
 import { WebDeck } from "@/components/v3/web-estimate/web-deck";
+import { WebRoof } from "@/components/v3/web-estimate/web-roof";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,14 @@ export default async function WebEstimatePage({ params, searchParams }: { params
     return (
       <main style={{ minHeight: "100vh", background: embed ? "#fff" : "#f5f3ee" }}>
         <WebDeck shop={m.shop} title={m.title} embed={embed} />
+      </main>
+    );
+  }
+  if (m.trade === "roof") {
+    // The roof estimator itself (2026-10-28): the live map with the pin, measured from the air, the material, the price.
+    return (
+      <main style={{ minHeight: "100vh", background: embed ? "#fff" : "#f5f3ee" }}>
+        <WebRoof shop={m.shop} title={m.title} basis={m.basis} askEmail={m.askEmail} choices={m.choices} embed={embed} />
       </main>
     );
   }
