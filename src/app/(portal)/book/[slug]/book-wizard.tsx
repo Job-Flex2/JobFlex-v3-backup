@@ -4,15 +4,29 @@
 // time, who and where (with the one or two questions that matter for that
 // visit), the receipt. Everything the shop set up is in `services`; the
 // open times come from the calendar through bookingAvailability.
+// Styled by ../book-public.css (2026-10-28): every class here is `jfb-*` under `.jf-book`.
 
 import { bookingConsentText } from "@/lib/sms/registrationShared";
 import { useState, useTransition } from "react";
 import { bookingAvailability, createBookingPublic, type PublicDay } from "@/actions/booking";
 import type { BookingService } from "@/lib/booking";
 
-const BTN = "rounded-[10px] bg-[color:var(--ink,#111)] px-4 py-2.5 text-[13px] font-medium text-[color:var(--paper,#fff)] disabled:opacity-50";
-const GHOST = "rounded-[10px] border border-[color:var(--ink,#111)] px-4 py-2.5 text-[13px] font-medium";
-const IN = "w-full rounded-[10px] border border-[color:var(--ink-line,#ccc)] px-3 py-2 text-[14px]";
+const hours = (minutes: number) => `${Math.round((minutes / 60) * 10) / 10} h`;
+
+// The day picker and the time grid — shared with the customer's own manage link.
+export function DayPicker({ days, day, onDay }: { days: PublicDay[]; day: string | null; onDay: (d: string) => void }) {
+  return (
+    <div className="jfb-days" role="tablist" aria-label="Day" data-book-days>
+      {days.map((d) => (
+        <button key={d.day} type="button" role="tab" aria-selected={day === d.day} onClick={() => onDay(d.day)} className={`jfb-day${day === d.day ? " is-on" : ""}`}>
+          <span className="jfb-day-w">{d.weekday.slice(0, 3)}</span>
+          <span className="jfb-day-d">{d.day.slice(5).replace("-", "/")}</span>
+          <span className="jfb-day-n">{d.slots.length} open</span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function BookWizard({ slug, orgName, services, intro, arrivalWindow }: { slug: string; orgName: string; services: BookingService[]; intro?: string; arrivalWindow: number }) {
   const [service, setService] = useState<BookingService | null>(null);
@@ -64,25 +78,34 @@ export function BookWizard({ slug, orgName, services, intro, arrivalWindow }: { 
   };
 
   return (
-    <div data-book-step={step}>
-      <ol className="flex gap-2 text-[11px] uppercase tracking-[0.14em] text-[color:var(--ink-muted,#666)] mb-4">
+    <div className="jfb-wizard" data-book-step={step}>
+      <ol className="jfb-steps" aria-label="Steps">
         {["Service", "Time", "Details", "Booked"].map((s, i) => (
-          <li key={s} className={i + 1 === step ? "font-semibold text-[color:var(--ink,#111)]" : ""}>{i + 1}. {s}</li>
+          <li key={s} className={`jfb-step${i + 1 === step ? " is-on" : i + 1 < step ? " is-done" : ""}`} aria-current={i + 1 === step ? "step" : undefined}>
+            <span className="jfb-step-n">{i + 1 < step ? "✓" : i + 1}</span>
+            <span className="jfb-step-l">{s}</span>
+          </li>
         ))}
       </ol>
 
       {step === 1 && (
         <>
-          {intro && <p className="mb-4 text-[14px]">{intro}</p>}
-          <div className="grid gap-3" data-book-services>
+          {intro && <p className="jfb-intro">{intro}</p>}
+          <h2 className="jfb-h2">What do you need?</h2>
+          <div className="jfb-services" data-book-services>
             {services.map((s) => (
-              <button key={s.key} type="button" onClick={() => pickService(s)} className="text-left rounded-[12px] border border-[color:var(--ink-line,#ddd)] p-4 hover:border-[color:var(--ink,#111)]" data-book-service={s.key}>
-                <div className="flex items-baseline justify-between gap-3">
-                  <div className="font-semibold text-[15px]">{s.label}{s.urgent ? <span className="ml-2 text-[11px] uppercase tracking-wide text-[#a83232]">today / tomorrow</span> : null}</div>
-                  <div className="text-[13px] text-[color:var(--ink-muted,#666)] whitespace-nowrap">{Math.round(s.minutes / 60 * 10) / 10} h</div>
-                </div>
-                <div className="text-[13px] mt-1">{s.priceText}{s.memberPriceText ? <span className="text-[color:var(--ink-muted,#666)]"> · members: {s.memberPriceText.toLowerCase()}</span> : null}</div>
-                {s.description && <div className="text-[13px] text-[color:var(--ink-muted,#666)] mt-1">{s.description}</div>}
+              <button key={s.key} type="button" onClick={() => pickService(s)} className="jfb-service" data-book-service={s.key}>
+                <span className="jfb-service-top">
+                  <span className="jfb-service-n">{s.label}</span>
+                  <span className="jfb-service-h">{hours(s.minutes)}</span>
+                </span>
+                {s.urgent ? <span className="jfb-urgent">today / tomorrow</span> : null}
+                <span className="jfb-service-p">
+                  {s.priceText}
+                  {s.memberPriceText ? <em> · members: {s.memberPriceText.toLowerCase()}</em> : null}
+                </span>
+                {s.description && <span className="jfb-service-d">{s.description}</span>}
+                <span className="jfb-service-go" aria-hidden="true">Choose →</span>
               </button>
             ))}
           </div>
@@ -91,31 +114,30 @@ export function BookWizard({ slug, orgName, services, intro, arrivalWindow }: { 
 
       {step === 2 && service && (
         <>
-          <div className="flex items-center justify-between mb-3">
-            <div className="font-semibold">{service.label}</div>
-            <button type="button" className="text-[13px] underline" onClick={() => setService(null)}>change</button>
+          <div className="jfb-pick">
+            <div className="jfb-pick-v">
+              <span className="jfb-pick-k">Service</span>
+              <strong>{service.label}</strong>
+            </div>
+            <button type="button" className="jfb-change" onClick={() => setService(null)}>change</button>
           </div>
+          <h2 className="jfb-h2">Pick a time</h2>
           {!days ? (
-            <p className="text-[14px] text-[color:var(--ink-muted,#666)]">Checking the calendar…</p>
+            <p className="jfb-wait" aria-live="polite">Checking the calendar…</p>
           ) : days.length === 0 ? (
-            <p className="text-[14px]">Nothing open in the next few weeks — please call {orgName}.</p>
+            <p className="jfb-state">Nothing open in the next few weeks — please call {orgName}.</p>
           ) : (
             <>
-              <div className="flex flex-wrap gap-2 mb-4" data-book-days>
-                {days.map((d) => (
-                  <button key={d.day} type="button" onClick={() => setDay(d.day)} className={`rounded-[10px] border px-3 py-2 text-[13px] ${day === d.day ? "border-[color:var(--ink,#111)] bg-[color:var(--ink,#111)] text-white" : "border-[color:var(--ink-line,#ddd)]"}`}>
-                    {d.weekday.slice(0, 3)} {d.day.slice(5).replace("-", "/")}
-                  </button>
-                ))}
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2" data-book-slots>
+              <DayPicker days={days} day={day} onDay={setDay} />
+              <div className="jfb-slots" data-book-slots>
                 {(days.find((d) => d.day === day)?.slots ?? []).map((s) => (
-                  <button key={s.iso} type="button" onClick={() => setSlot(s)} className="rounded-[10px] border border-[color:var(--ink-line,#ddd)] px-3 py-2 text-[13px] hover:border-[color:var(--ink,#111)]">{s.label}</button>
+                  <button key={s.iso} type="button" onClick={() => setSlot(s)} className="jfb-slot">{s.label}</button>
                 ))}
               </div>
-              {arrivalWindow > 0 && <p className="mt-3 text-[12px] text-[color:var(--ink-muted,#666)]">Times are arrival windows — the technician arrives inside the window and calls on the way.</p>}
+              {arrivalWindow > 0 && <p className="jfb-hint">Times are arrival windows — the technician arrives inside the window and calls on the way.</p>}
             </>
           )}
+          {err && <p className="jfb-err" role="alert">{err}</p>}
         </>
       )}
 
@@ -125,59 +147,63 @@ export function BookWizard({ slug, orgName, services, intro, arrivalWindow }: { 
             e.preventDefault();
             submit();
           }}
-          className="grid gap-3"
+          className="jfb-form"
           data-book-details
         >
-          <div className="flex items-center justify-between">
-            <div className="font-semibold">{service.label} · {slot.label}</div>
-            <button type="button" className="text-[13px] underline" onClick={() => setSlot(null)}>change</button>
+          <div className="jfb-pick">
+            <div className="jfb-pick-v">
+              <span className="jfb-pick-k">{service.label}</span>
+              <strong>{slot.label}</strong>
+            </div>
+            <button type="button" className="jfb-change" onClick={() => setSlot(null)}>change</button>
           </div>
           {(service.questions ?? []).map((q) => (
-            <div key={q.key}>
-              <div className="text-[12px] font-medium mb-1">{q.label}</div>
+            <div key={q.key} className="jfb-fld">
+              <div className="jfb-lbl">{q.label}</div>
               {q.options ? (
-                <div className="flex flex-wrap gap-2">
+                <div className="jfb-opts">
                   {q.options.map((o) => (
-                    <button key={o} type="button" onClick={() => setAnswers((a) => ({ ...a, [q.key]: o }))} className={`rounded-full border px-3 py-1 text-[13px] ${answers[q.key] === o ? "border-[color:var(--ink,#111)] bg-[color:var(--ink,#111)] text-white" : "border-[color:var(--ink-line,#ddd)]"}`}>{o}</button>
+                    <button key={o} type="button" aria-pressed={answers[q.key] === o} onClick={() => setAnswers((a) => ({ ...a, [q.key]: o }))} className={`jfb-opt${answers[q.key] === o ? " is-on" : ""}`}>{o}</button>
                   ))}
                 </div>
               ) : (
-                <input className={IN} value={answers[q.key] ?? ""} onChange={(e) => setAnswers((a) => ({ ...a, [q.key]: e.target.value }))} />
+                <input className="jfb-in" aria-label={q.label} value={answers[q.key] ?? ""} onChange={(e) => setAnswers((a) => ({ ...a, [q.key]: e.target.value }))} />
               )}
             </div>
           ))}
-          <label className="text-[12px] font-medium">Full name<input className={IN} required minLength={2} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoComplete="name" /></label>
-          <div className="grid sm:grid-cols-2 gap-3">
-            <label className="text-[12px] font-medium">Email<input className={IN} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="email" placeholder="for the confirmation" /></label>
-            <label className="text-[12px] font-medium">Phone<input className={IN} type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} autoComplete="tel" /></label>
+          <label className="jfb-fld"><span className="jfb-lbl">Full name</span><input className="jfb-in" required minLength={2} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoComplete="name" /></label>
+          <div className="jfb-two">
+            <label className="jfb-fld"><span className="jfb-lbl">Email</span><input className="jfb-in" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="email" placeholder="for the confirmation" /></label>
+            <label className="jfb-fld"><span className="jfb-lbl">Phone</span><input className="jfb-in" type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} autoComplete="tel" /></label>
           </div>
           {/* Texting consent (2026-10-02): the opt-in every contractor's own texting number is registered on (lib/sms/consent). */}
-          <label className="flex items-start gap-2 text-[12px] leading-snug" data-sms-optin>
-            <input type="checkbox" className="mt-[2px] h-4 w-4 shrink-0" checked={form.smsOk} onChange={(e) => setForm({ ...form, smsOk: e.target.checked })} />
+          <label className="jfb-consent" data-sms-optin>
+            <input type="checkbox" checked={form.smsOk} onChange={(e) => setForm({ ...form, smsOk: e.target.checked })} />
             <span>
-              <b className="font-medium">{bookingConsentText(orgName).lead}</b> {bookingConsentText(orgName).rest}{" "}
+              <b>{bookingConsentText(orgName).lead}</b> {bookingConsentText(orgName).rest}{" "}
               {/* The terms and the privacy policy beside the box (2026-10-12) — carriers look for them next to the consent. */}
-              <a className="underline" href={`/book/${encodeURIComponent(slug)}/texting`} target="_blank" rel="noreferrer">Texting terms</a> ·{" "}
-              <a className="underline" href={`/book/${encodeURIComponent(slug)}/privacy`} target="_blank" rel="noreferrer">Privacy policy</a>
+              <a href={`/book/${encodeURIComponent(slug)}/texting`} target="_blank" rel="noreferrer">Texting terms</a> ·{" "}
+              <a href={`/book/${encodeURIComponent(slug)}/privacy`} target="_blank" rel="noreferrer">Privacy policy</a>
             </span>
           </label>
-          <label className="text-[12px] font-medium">Address of the visit<input className={IN} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} autoComplete="street-address" /></label>
-          <label className="text-[12px] font-medium">Anything else?<textarea className={IN} rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
-          <p className="text-[12px] text-[color:var(--ink-muted,#666)]">On a service plan? Use the email on your plan — your member price applies automatically.</p>
-          {err && <p className="text-[13px] text-[#a83232]" role="alert">{err}</p>}
-          <div className="flex gap-2">
-            <button type="submit" className={BTN} disabled={pending} data-book-submit>{pending ? "Booking…" : "Book this visit"}</button>
-            <button type="button" className={GHOST} onClick={() => setSlot(null)}>Back</button>
+          <label className="jfb-fld"><span className="jfb-lbl">Address of the visit</span><input className="jfb-in" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} autoComplete="street-address" /></label>
+          <label className="jfb-fld"><span className="jfb-lbl">Anything else?</span><textarea className="jfb-in jfb-ta" rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
+          <p className="jfb-hint">On a service plan? Use the email on your plan — your member price applies automatically.</p>
+          {err && <p className="jfb-err" role="alert">{err}</p>}
+          <div className="jfb-acts">
+            <button type="submit" className="jfb-btn jfb-btn--primary" disabled={pending} data-book-submit>{pending ? "Booking…" : "Book this visit"}</button>
+            <button type="button" className="jfb-btn" onClick={() => setSlot(null)}>Back</button>
           </div>
         </form>
       )}
 
       {step === 4 && receipt && (
-        <div className="rounded-[12px] border border-[color:var(--ink,#111)] p-4" data-book-receipt>
-          <div className="quiet-caps mb-1">Booked</div>
-          <div className="text-[18px] font-semibold">{receipt.when}</div>
-          <p className="mt-2 text-[14px]">{receipt.serviceLabel} · {receipt.priceText}{receipt.member ? " · member" : ""}. {orgName} calls on the way{form.email ? `; the confirmation is in your email` : ""}.</p>
-          <a className="mt-3 inline-block text-[13px] underline" href={`/book/manage/${receipt.manageToken}`}>Change or cancel this visit</a>
+        <div className="jfb-receipt" data-book-receipt>
+          <div className="jfb-receipt-mark" aria-hidden="true">✓</div>
+          <div className="jfb-kicker">Booked</div>
+          <div className="jfb-receipt-when">{receipt.when}</div>
+          <p className="jfb-receipt-p">{receipt.serviceLabel} · {receipt.priceText}{receipt.member ? " · member" : ""}. {orgName} calls on the way{form.email ? `; the confirmation is in your email` : ""}.</p>
+          <a className="jfb-btn" href={`/book/manage/${receipt.manageToken}`}>Change or cancel this visit</a>
         </div>
       )}
     </div>

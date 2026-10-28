@@ -3,6 +3,7 @@
 // opt-in data reach third parties (30477, 30521) — the sharing paragraph below is the carriers' own wording.
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import "../../book-public.css";
 import { SMS_PAGES_UPDATED, phoneWords, smsCompany } from "../sms-company";
 
 export const dynamic = "force-dynamic";
@@ -17,9 +18,9 @@ export default async function CompanyPrivacyPage({ params }: { params: Promise<{
   if (!c) notFound();
   const phone = phoneWords(c.phone);
   return (
-    <main className="min-h-screen bg-[color:var(--paper,#f4f2ec)] px-4 py-10" data-sms-privacy>
-      <article className="mx-auto w-full max-w-2xl rounded-[14px] border border-[color:var(--ink-line,#ddd)] bg-white p-6 sm:p-8 text-[15px] leading-relaxed">
-        <div className="quiet-caps mb-2">{c.name}</div>
+    <main className="jf-book" data-sms-privacy>
+      <article className="jfb-sheet jfb-legal">
+        <div className="jfb-kicker">{c.name}</div>
         <h1 className="text-[26px] font-semibold leading-tight">Privacy policy</h1>
         <p className="mt-1 text-[13px] text-[color:var(--ink-muted,#666)]">{c.name} · updated {SMS_PAGES_UPDATED}</p>
 

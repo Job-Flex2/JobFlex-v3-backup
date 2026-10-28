@@ -1,0 +1,223 @@
+/* ============================================================
+   ONLINE BOOKING — the office page (redrawn 2026-10-28).
+   Plain stylesheet, every rule under `.jf-booking` (a CSS Module's
+   unscoped element rules once flattened the whole app). The Blueprint
+   sheet: white cards in a 2 px ink frame, square corners, ink labels,
+   blue primary actions with a white face, hard 2 px press offset on
+   hover only. Sizes follow the owner's clarity rules: 15–16 px working
+   text, 44 px controls, the key values large.
+   ============================================================ */
+
+.jf-booking {
+  --bk-ink: var(--ink, #0a0a0a);
+  --bk-soft: var(--ink-soft, #2a2a2a);
+  --bk-muted: var(--ink-muted, #555);
+  --bk-line: var(--ink-line, rgba(10, 10, 10, 0.12));
+  --bk-blue: var(--accent, #1854a0);
+  --bk-blue-ink: var(--accent-ink, #0e3d7a);
+  --bk-blue-soft: var(--accent-soft, rgba(24, 84, 160, 0.08));
+  --bk-ok: var(--emerald, #3a7d44);
+  --bk-ok-ink: #2c6335;
+  --bk-bad: var(--rose, #a83232);
+  --bk-warn: var(--amber, #b88420);
+  --bk-warn-ink: #7a5714;
+  display: grid;
+  gap: 20px;
+  padding-bottom: 40px;
+  color: var(--bk-ink);
+  font-family: var(--font-sans, Inter, system-ui, sans-serif);
+  line-height: 1.45;
+}
+.jf-booking *, .jf-booking *::before, .jf-booking *::after { box-sizing: border-box; }
+.jf-booking ::selection { background: var(--bk-blue); color: #fff; }
+
+/* ── icons and buttons ── */
+.jf-booking .bk-ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.jf-booking .bk-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 0 18px; margin: 0;
+  border: 2px solid var(--bk-ink); border-radius: var(--radius, 2px);
+  background: #fff; color: var(--bk-ink);
+  font: 800 14px/1 var(--font-sans, Inter, system-ui, sans-serif); letter-spacing: 0.01em; text-transform: none;
+  text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+.jf-booking .bk-btn:hover { transform: translate(-1px, -1px); box-shadow: 2px 2px 0 var(--bk-ink); }
+.jf-booking .bk-btn:active { transform: none; box-shadow: none; }
+.jf-booking .bk-btn:focus-visible { outline: 3px solid var(--bk-blue); outline-offset: 2px; }
+.jf-booking .bk-btn--primary { background: var(--bk-blue); color: #fff; }
+.jf-booking .bk-btn--primary:hover { background: var(--bk-blue-ink); }
+.jf-booking .bk-btn--ghost:hover { background: var(--paper, #f2f0eb); }
+.jf-booking .bk-btn--ok { border-color: var(--bk-ok); color: var(--bk-ok-ink); background: color-mix(in srgb, var(--bk-ok) 8%, #fff); }
+.jf-booking .bk-btn--ok:hover { box-shadow: 2px 2px 0 var(--bk-ok); }
+.jf-booking .bk-btn--danger { border-color: var(--bk-bad); color: var(--bk-bad); }
+.jf-booking .bk-btn--danger:hover { background: color-mix(in srgb, var(--bk-bad) 7%, #fff); box-shadow: 2px 2px 0 var(--bk-bad); }
+.jf-booking .bk-btn--sm { min-height: 40px; padding: 0 14px; font-size: 13.5px; }
+
+/* ── page head ── */
+.jf-booking .bk-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; flex-wrap: wrap; padding-top: 6px; }
+.jf-booking .bk-kicker { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 11px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: var(--bk-muted); }
+.jf-booking .bk-kicker::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--bk-blue); }
+.jf-booking .bk-title { margin: 0; font-size: 46px; font-weight: 900; line-height: 0.95; letter-spacing: -0.03em; text-transform: uppercase; }
+.jf-booking .bk-head-acts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.jf-booking .bk-state { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border: 2px solid currentColor; font-size: 14px; font-weight: 800; }
+.jf-booking .bk-state i { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+.jf-booking .bk-state.is-on { color: var(--bk-ok-ink); background: color-mix(in srgb, var(--bk-ok) 8%, #fff); }
+.jf-booking .bk-state.is-off { color: var(--bk-bad); background: color-mix(in srgb, var(--bk-bad) 6%, #fff); }
+
+/* ── cards ── */
+.jf-booking .bk-card { padding: 24px; border: 2px solid var(--bk-ink); border-radius: var(--radius, 2px); background: #fff; min-width: 0; }
+.jf-booking .bk-card-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.jf-booking .bk-h2 { margin: 0; font-size: 20px; font-weight: 900; letter-spacing: 0.01em; text-transform: uppercase; }
+.jf-booking .bk-h3 { margin: 0 0 10px; padding: 0; font-size: 13px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--bk-ink); }
+.jf-booking .bk-count { font: 700 13px/1 var(--font-mono, ui-monospace, monospace); letter-spacing: 0.06em; color: var(--bk-muted); white-space: nowrap; }
+.jf-booking .bk-lead { margin: 6px 0 16px; font-size: 15.5px; color: var(--bk-soft); }
+.jf-booking .bk-note { margin: 4px 0 10px; font-size: 14.5px; color: var(--bk-soft); }
+.jf-booking .bk-sub { display: block; margin-top: 3px; font-size: 14px; color: var(--bk-muted); overflow-wrap: anywhere; }
+
+/* ── the link ── */
+.jf-booking .bk-link { display: grid; gap: 0; }
+.jf-booking .bk-link-main { padding-bottom: 6px; }
+.jf-booking .bk-copy { display: flex; gap: 10px; align-items: stretch; }
+.jf-booking .bk-copy-in {
+  flex: 1 1 auto; min-width: 0; min-height: 52px; padding: 0 16px;
+  border: 2px solid var(--bk-ink); border-radius: var(--radius, 2px); background: var(--paper, #f2f0eb);
+  font: 600 17px/1.2 var(--font-mono, ui-monospace, monospace); color: var(--bk-ink);
+}
+.jf-booking .bk-copy .bk-btn { min-height: 52px; }
+.jf-booking .bk-copy--code .bk-copy-in { min-height: 84px; padding: 12px 14px; font-size: 13px; line-height: 1.5; resize: vertical; }
+.jf-booking .bk-copy--code { align-items: flex-start; }
+.jf-booking .bk-copy-in:focus { outline: 3px solid var(--bk-blue); outline-offset: 2px; }
+.jf-booking .bk-more { border-top: 1.5px solid var(--bk-line); margin-top: 16px; padding-top: 14px; }
+.jf-booking .bk-more + .bk-more { margin-top: 0; }
+.jf-booking .bk-more > summary { display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer; font-size: 15px; font-weight: 800; list-style: none; }
+.jf-booking .bk-more > summary::-webkit-details-marker { display: none; }
+.jf-booking .bk-more > summary::before { content: "+"; display: inline-grid; place-items: center; width: 22px; height: 22px; border: 2px solid var(--bk-ink); font: 800 15px/1 var(--font-mono, monospace); }
+.jf-booking .bk-more[open] > summary::before { content: "–"; }
+.jf-booking .bk-more[open] > summary { margin-bottom: 10px; }
+.jf-booking .bk-list { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 15px; color: var(--bk-soft); }
+
+/* ── the numbers ── */
+.jf-booking .bk-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 2px solid var(--bk-ink); background: #fff; }
+.jf-booking .bk-kpi { padding: 18px 22px; border-left: 1.5px solid var(--bk-line); min-width: 0; }
+.jf-booking .bk-kpi:first-child { border-left: 0; }
+.jf-booking .bk-kpi-lbl { font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--bk-soft); }
+.jf-booking .bk-kpi-val { margin-top: 6px; font-size: 40px; font-weight: 900; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.jf-booking .bk-kpi-val.is-on { color: var(--bk-ok-ink); }
+.jf-booking .bk-kpi-val.is-off { color: var(--bk-bad); }
+.jf-booking .bk-kpi-sub { margin-top: 8px; font-size: 14px; color: var(--bk-muted); overflow-wrap: anywhere; }
+
+/* ── who booked ── */
+.jf-booking .bk-empty { padding: 26px 20px; border: 2px dashed var(--bk-line); font-size: 15.5px; color: var(--bk-soft); text-align: center; }
+.jf-booking .bk-empty strong { color: var(--bk-ink); }
+.jf-booking .bk-visits { list-style: none; margin: 0; padding: 0; border-top: 2px solid var(--bk-ink); }
+.jf-booking .bk-visit {
+  display: grid; grid-template-columns: 150px minmax(0, 1.3fr) minmax(0, 1.2fr) 100px auto; gap: 18px; align-items: center;
+  padding: 16px 4px; border-bottom: 1.5px solid var(--bk-line);
+}
+.jf-booking .bk-visit:last-child { border-bottom: 0; }
+.jf-booking .bk-visit.is-canceled .bk-when, .jf-booking .bk-visit.is-canceled .bk-who, .jf-booking .bk-visit.is-canceled .bk-svc { opacity: 0.55; }
+.jf-booking .bk-when { display: grid; gap: 2px; }
+.jf-booking .bk-when-d { font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--bk-soft); }
+.jf-booking .bk-when-t { font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.jf-booking .bk-who-n { font-size: 16.5px; font-weight: 800; color: var(--bk-ink); text-decoration: none; }
+.jf-booking a.bk-who-n:hover { color: var(--bk-blue); text-decoration: underline; text-underline-offset: 3px; }
+.jf-booking .bk-svc-n { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 15.5px; font-weight: 700; }
+.jf-booking .bk-tag { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border: 1.5px solid currentColor; font-size: 12px; font-weight: 800; }
+.jf-booking .bk-tag--member { color: var(--bk-ok-ink); }
+.jf-booking .bk-tag--lead { color: var(--bk-blue); }
+.jf-booking .bk-tag--urgent { color: var(--bk-bad); margin-left: 8px; }
+.jf-booking .bk-status { justify-self: start; display: inline-flex; align-items: center; height: 30px; padding: 0 10px; border: 2px solid currentColor; font-size: 13px; font-weight: 800; }
+.jf-booking .bk-status.is-booked, .jf-booking .bk-status.is-rescheduled { color: var(--bk-blue); }
+.jf-booking .bk-status.is-done { color: var(--bk-ok-ink); }
+.jf-booking .bk-status.is-canceled { color: var(--bk-bad); }
+.jf-booking .bk-acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.jf-booking .bk-acts form { margin: 0; }
+
+/* ── hours, rules, services ── */
+.jf-booking .bk-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.jf-booking .bk-form { display: grid; gap: 18px; margin: 0; }
+.jf-booking .bk-fld { display: grid; gap: 6px; min-width: 0; }
+.jf-booking .bk-lbl { font-size: 14px; font-weight: 800; color: var(--bk-ink); }
+.jf-booking .bk-in {
+  width: 100%; min-height: 44px; padding: 0 12px; margin: 0;
+  border: 2px solid var(--bk-ink); border-radius: var(--radius, 2px); background: #fff;
+  font: 500 16px/1.3 var(--font-sans, Inter, system-ui, sans-serif); color: var(--bk-ink);
+}
+.jf-booking .bk-in::placeholder { color: #767676; }
+.jf-booking .bk-in:focus { outline: 3px solid var(--bk-blue); outline-offset: 1px; }
+.jf-booking select.bk-in { cursor: pointer; }
+.jf-booking .bk-ta { min-height: 96px; padding: 10px 12px; line-height: 1.45; resize: vertical; }
+.jf-booking .bk-unit { display: flex; align-items: center; gap: 10px; }
+.jf-booking .bk-unit .bk-in { flex: 0 1 120px; }
+.jf-booking .bk-unit em { font-style: normal; font-size: 14px; color: var(--bk-muted); }
+.jf-booking .bk-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 18px; }
+.jf-booking .bk-form-acts { display: flex; gap: 10px; flex-wrap: wrap; padding-top: 4px; }
+.jf-booking .bk-chk { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 15px; font-weight: 600; cursor: pointer; }
+.jf-booking .bk-chk input, .jf-booking .bk-switch input[type="checkbox"] { width: 20px; height: 20px; margin: 0; accent-color: var(--bk-blue); cursor: pointer; }
+
+.jf-booking .bk-switch { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 14px 16px; border: 2px solid var(--bk-ink); background: var(--paper, #f2f0eb); cursor: pointer; }
+.jf-booking .bk-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.jf-booking .bk-switch-box { position: relative; width: 48px; height: 26px; border: 2px solid var(--bk-ink); background: #fff; }
+.jf-booking .bk-switch-box::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: var(--bk-ink); transition: transform 0.15s ease, background 0.15s ease; }
+.jf-booking .bk-switch input:checked + .bk-switch-box { background: var(--bk-blue); border-color: var(--bk-blue); }
+.jf-booking .bk-switch input:checked + .bk-switch-box::after { transform: translateX(22px); background: #fff; }
+.jf-booking .bk-switch input:focus-visible + .bk-switch-box { outline: 3px solid var(--bk-blue); outline-offset: 2px; }
+.jf-booking .bk-switch strong { display: block; font-size: 16px; }
+.jf-booking .bk-switch em { display: block; font-style: normal; font-size: 14px; color: var(--bk-muted); }
+
+.jf-booking .bk-hours { margin: 0; padding: 0; border: 0; min-width: 0; }
+.jf-booking .bk-hour { display: grid; grid-template-columns: 110px auto minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; padding: 6px 0; border-top: 1.5px solid var(--bk-line); }
+.jf-booking .bk-hour:last-child { border-bottom: 1.5px solid var(--bk-line); }
+.jf-booking .bk-hour-d { font-size: 15px; font-weight: 800; }
+.jf-booking .bk-hour .bk-chk { min-height: 40px; font-size: 14px; }
+.jf-booking .bk-in--time { min-height: 40px; font-variant-numeric: tabular-nums; }
+.jf-booking .bk-to { font-size: 14px; color: var(--bk-muted); }
+/* A closed day dims its times (the checkbox stays the source of truth the server reads). */
+.jf-booking .bk-hour:has(.bk-chk input:checked) .bk-in--time,
+.jf-booking .bk-hour:has(.bk-chk input:checked) .bk-to { opacity: 0.35; }
+
+.jf-booking .bk-svcs { border-top: 2px solid var(--bk-ink); }
+.jf-booking .bk-svc-row { border-bottom: 1.5px solid var(--bk-line); }
+.jf-booking .bk-svc-row > summary {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 14px;
+  min-height: 64px; padding: 12px 4px; cursor: pointer; list-style: none;
+}
+.jf-booking .bk-svc-row > summary::-webkit-details-marker { display: none; }
+.jf-booking .bk-svc-row > summary:hover { background: var(--paper, #f2f0eb); }
+.jf-booking .bk-svc-row > summary:focus-visible { outline: 3px solid var(--bk-blue); outline-offset: -3px; }
+.jf-booking .bk-svc-main { display: grid; gap: 3px; min-width: 0; }
+.jf-booking .bk-svc-main strong { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 800; }
+.jf-booking .bk-svc-meta { font-size: 14px; color: var(--bk-muted); }
+.jf-booking .bk-svc-price { display: grid; justify-items: end; gap: 2px; font-size: 15px; font-weight: 800; text-align: right; }
+.jf-booking .bk-svc-price em { font-style: normal; font-size: 13px; font-weight: 600; color: var(--bk-ok-ink); }
+.jf-booking .bk-edit { display: inline-flex; align-items: center; height: 36px; padding: 0 12px; border: 2px solid var(--bk-ink); font-size: 13px; font-weight: 800; }
+.jf-booking .bk-svc-row[open] .bk-edit { background: var(--bk-ink); color: #fff; }
+.jf-booking .bk-svc-row--add > summary { grid-template-columns: minmax(0, 1fr); color: var(--bk-blue); }
+.jf-booking .bk-svc-row--add > summary strong { color: var(--bk-blue); }
+.jf-booking .bk-svc-form { padding: 6px 4px 20px; }
+.jf-booking .bk-reset { margin: 16px 0 0; }
+
+/* ── narrower desks and phones ── */
+@media (max-width: 1180px) {
+  .jf-booking .bk-two { grid-template-columns: minmax(0, 1fr); }
+  .jf-booking .bk-visit { grid-template-columns: 130px minmax(0, 1fr) minmax(0, 1fr); }
+  .jf-booking .bk-status { grid-column: 1; }
+  .jf-booking .bk-acts { grid-column: 2 / -1; }
+}
+@media (max-width: 768px) {
+  .jf-booking .bk-title { font-size: 34px; }
+  .jf-booking .bk-card { padding: 18px; }
+  .jf-booking .bk-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .jf-booking .bk-kpi:nth-child(3) { border-left: 0; }
+  .jf-booking .bk-kpi:nth-child(n + 3) { border-top: 1.5px solid var(--bk-line); }
+  .jf-booking .bk-kpi-val { font-size: 32px; }
+  .jf-booking .bk-copy { flex-direction: column; }
+  .jf-booking .bk-visit { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .jf-booking .bk-status, .jf-booking .bk-acts { grid-column: auto; justify-content: flex-start; }
+  .jf-booking .bk-grid { grid-template-columns: minmax(0, 1fr); }
+  /* Day and its Closed box on one line, the two times with "to" between them on the next. */
+  .jf-booking .bk-hour { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); row-gap: 6px; padding: 10px 0; }
+  .jf-booking .bk-hour-d { grid-column: 1 / 3; }
+  .jf-booking .bk-hour .bk-chk { grid-column: 3; justify-self: end; }
+}
