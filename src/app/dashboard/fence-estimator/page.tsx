@@ -11,18 +11,23 @@ import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { FenceEstimatorContent } from "@/components/v3/fence-estimator-blueprint/fence-estimator-content";
 import { readEstimateSeed } from "@/lib/estimateSeed";
+import { readWebLeadFor } from "@/lib/webEstimatorServer";
+import { fenceSeedFromWebLead } from "@/lib/webHandoff";
 import { EstimateSeedStrip } from "@/components/v3/estimate-seed-strip";
 import { looksLikeStreetAddress } from "@/lib/leadRules";
 import { requireOrg } from "@/lib/orgContext";
 import { customPageGate } from "@/components/v3/upgrade-gate/custom-page-gate";
 
-/** The hand-off seed for this company's fence estimator, or null — never an error. */
+/** The hand-off seed for this company's fence estimator, or null — never an error. With it, the fence a website
+ *  or house lead was priced on (lib/webHandoff, 2026-10-28), when the lead carries one. */
 async function readFenceSeed() {
   try {
     const { organizationId } = await requireOrg();
-    return await readEstimateSeed(organizationId, "fence");
+    const seed = await readEstimateSeed(organizationId, "fence");
+    const rec = seed ? await readWebLeadFor(seed.leadId, organizationId, "fence") : null;
+    return { seed, webFence: rec ? fenceSeedFromWebLead(rec) : null };
   } catch {
-    return null;
+    return { seed: null, webFence: null };
   }
 }
 
@@ -52,11 +57,11 @@ export default async function FenceEstimatorPage() {
   // Only a street address, though (2026-09-26): a lead with just a town or a
   // ZIP opens here too now, and Find on "Everett, WA" would put a whole city
   // on the map as if it were the site. The strip still shows what the lead gave.
-  const seed = await readFenceSeed();
+  const { seed, webFence } = await readFenceSeed();
   return (
     <>
       <EstimateSeedStrip seed={seed} />
-      <FenceEstimatorContent initialAddress={seed?.address && looksLikeStreetAddress(seed.address) ? seed.address : undefined} />
+      <FenceEstimatorContent initialAddress={seed?.address && looksLikeStreetAddress(seed.address) ? seed.address : undefined} webFence={webFence} />
     </>
   );
 }

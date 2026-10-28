@@ -30,6 +30,7 @@ import {
   webSettingsKey,
   type WebEstimatorSettings,
   type WebMonthCounts,
+  type WebTrade,
   type WebShop,
   type WebEstimateRecord,
   type WebLeadContact,
@@ -184,6 +185,13 @@ export async function readWebHvac(token: string, organizationId: string): Promis
 
 export async function readWebLead(leadId: string): Promise<WebLeadRecord | null> {
   return readJson<WebLeadRecord>(await readKey(webLeadKey(leadId)));
+}
+
+/** The record for an estimator's page (lib/webHandoff, 2026-10-28): this org's, this trade's — else nothing. */
+export async function readWebLeadFor(leadId: string, organizationId: string, trade: WebTrade): Promise<WebLeadRecord | null> {
+  if (!/^[\w-]{1,64}$/.test(leadId)) return null;
+  const rec = await readWebLead(leadId).catch(() => null);
+  return rec && rec.trade === trade && rec.estimate?.organizationId === organizationId ? rec : null;
 }
 
 /** "Get my full quote": the Lead on the shop's My leads, the shop's usual alert, a confirmation to the homeowner. */

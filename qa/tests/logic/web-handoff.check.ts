@@ -1,0 +1,33 @@
+// OPENING PRICED (lib/webHandoff, 2026-10-28): a website or house lead's record (webLead:<leadId>) turned into what
+// each estimator applies at open — the fence as drawn, the house with its tier, the smart lines. Pure parts only; the
+// estimators themselves are walked on the stand.
+//   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/web-handoff.check.ts
+import { fenceSeedFromWebLead } from "../../../src/lib/webHandoff";
+import type { WebLeadRecord } from "../../../src/lib/webEstimator";
+
+let bad = 0;
+const check = (name: string, ok: boolean, extra = "") => {
+  if (!ok) bad++;
+  console.log(`${ok ? "ok  " : "FAIL"} ${name}${extra ? " — " + extra : ""}`);
+};
+
+const base: WebLeadRecord = {
+  leadId: "lead_1", trade: "fence", at: "2026-10-28T12:00:00Z", contact: { name: "Sarah Stand", phone: "(716) 555-0100", email: "s@example.com", note: null },
+  estimate: {
+    token: "tok", organizationId: "org_buyer", trade: "fence", at: "2026-10-28T11:00:00Z", address: "418 Linden Ave", city: "Buffalo", state: "NY", zip: "14216",
+    summary: "180 ft of fence in 3 runs, 1 walk gate.", choice: "Cedar privacy, 6 ft", cents: 821000, band: { low: 7200, high: 9400 }, show: "range",
+    facts: { runsFt: [60, 60, 60], type: "cedar-privacy", heightFt: 6, gates: 1, doubles: 0, drawn: true, points: [{ x: 0, y: 0 }, { x: 60, y: 0 }, { x: 60, y: 60 }, { x: 0, y: 60 }], pin: { lat: 42.948, lng: -78.853 } },
+  },
+};
+const withFacts = (facts: Record<string, unknown>, trade: WebLeadRecord["trade"] = "fence"): WebLeadRecord => ({ ...base, trade, estimate: { ...base.estimate, trade, facts } });
+
+// ── the fence ──
+const drawn = fenceSeedFromWebLead(base);
+check("a drawn fence: the pin, the points, the style, the height, the gates, the runs", !!drawn && drawn.pin?.lat === 42.948 && drawn.pin?.lng === -78.853 && drawn.points.length === 4 && drawn.points[2].x === 60 && drawn.type === "cedar-privacy" && drawn.heightFt === 6 && drawn.gates === 1 && drawn.doubles === 0 && drawn.runsFt.join() === "60,60,60", JSON.stringify(drawn));
+const typed = fenceSeedFromWebLead(withFacts({ runsFt: [150], type: "vinyl-privacy", heightFt: 6, gates: 2, doubles: 1, drawn: false, points: null, pin: null }));
+check("typed feet: no points, no pin, the runs", !!typed && typed.points.length === 0 && typed.pin === null && typed.runsFt.join() === "150" && typed.gates === 2 && typed.doubles === 1 && typed.type === "vinyl-privacy", JSON.stringify(typed));
+check("the height and the gates default when missing; odd points are dropped", (() => { const s = fenceSeedFromWebLead(withFacts({ runsFt: [40], type: "x", points: [{ x: 1 }, "bad", { x: 2, y: 3 }] })); return !!s && s.heightFt === 6 && s.gates === 0 && s.doubles === 0 && s.points.length === 1 && s.points[0].y === 3; })());
+check("not a fence, or no runs: nothing", fenceSeedFromWebLead(withFacts(base.estimate.facts, "hvac")) === null && fenceSeedFromWebLead(withFacts({})) === null && fenceSeedFromWebLead(withFacts({ runsFt: [] })) === null);
+
+console.log(bad ? `\n${bad} FAILED` : "\nall passed");
+process.exit(bad ? 1 : 0);
