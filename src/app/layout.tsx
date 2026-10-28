@@ -59,8 +59,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         {/* Meta Pixel Code — the ad owner's snippet, word for word (2026-10-17).
             Every page of the live site only (VERCEL_ENV=production: not preview,
-            not local, not the QA Lab), no consent gate. Lead, CompleteRegistration
-            and StartTrial go from the dashboard layout. */}
+            not local, not the QA Lab), no consent gate. The one other event is
+            Lead (lib/metaLead). */}
         {process.env.VERCEL_ENV === "production" ? (
           <>
             <Script

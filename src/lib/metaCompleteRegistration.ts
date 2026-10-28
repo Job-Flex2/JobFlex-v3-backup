@@ -1,7 +1,6 @@
 // META CompleteRegistration (owner, 2026-10-23: "send sign-ups to Meta again"). Since the pixel was replaced on
 // 2026-10-17 Meta heard Lead (the email step) and, from 2026-10-22, StartTrial (a card on Stripe) — never a finished
-// sign-up, so a campaign had no sign-up to learn from. Since 2026-10-26 (owner: "leads = signups") Lead goes with this
-// event, from the dashboard layout, instead of at the email step. This is the server half: whether the event is due. The browser
+// sign-up, so a campaign had no sign-up to learn from. This is the server half: whether the event is due. The browser
 // half (components/dashboard/MetaPixelOnce) sends it once per company, on the first dashboard after the company step,
 // the same way StartTrial goes (lib/metaStartTrial). No Conversions API copy.
 //

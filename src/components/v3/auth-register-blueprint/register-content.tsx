@@ -56,6 +56,7 @@ import { GoogleOneTap } from "@/components/auth/google-one-tap";
 import { OpenInBrowser } from "@/components/auth/open-in-browser";
 import { useInAppBrowser } from "@/components/auth/use-in-app-browser";
 import type { InAppBrowser } from "@/lib/inAppBrowser";
+import { trackMetaLeadOnce } from "@/lib/metaLead";
 import { RegisterSprite } from "./register-sprite";
 import { ReferralBanner, type RegisterAttribution } from "./referral-banner";
 import { PasswordlessStep } from "./passwordless-step";
@@ -93,7 +94,6 @@ import styles from "./auth-register.module.css";
 import { ProductMark } from "@/components/brand/ProductMark";
 import { markQaVisitor } from "@/lib/qaEmail";
 import { homeownerDoorFor } from "@/lib/home/homeownerDoor";
-import { DeckAddonPickBox } from "@/components/v3/deck-addon/deck-addon-pick";
 
 /* A PHONE (≤768px) — the plan step's cards are a two-column grid there
    (auth-register.module.css); a few behaviours follow the width too. A media
@@ -129,13 +129,11 @@ function recalledPlan(): string | null {
    when the page did not open. Nothing is kept in the browser to tell a back-out apart: Stripe's back arrow and the
    browser's Back both land on the plan cards (`checkout=cancelled`). */
 type HandOffReason = "step1" | "google" | "plan_pick";
-function checkoutHref(token: string, reason: HandOffReason, pick?: { slug: string; term: BillingTerm; deck?: boolean }): string {
+function checkoutHref(token: string, reason: HandOffReason, pick?: { slug: string; term: BillingTerm }): string {
   const q = new URLSearchParams({ signup: token, reason });
   if (pick) {
     q.set("plan", pick.slug);
     q.set("interval", pick.term);
-    // "Add Deck Studio" ticked over the cards: the add-on goes on Stripe's order with the plan.
-    if (pick.deck) q.set("deck", "1");
   }
   return `/auth/register/checkout?${q.toString()}`;
 }
@@ -270,8 +268,6 @@ export function RegisterContent({
      (signupTrialMode — the switch, the deployment's default and the day's
      ceiling on card-less trials, lib/trialPolicyServer), or when the plan step's request is told so later. */
   const [requiresCard, setRequiresCard] = React.useState(requiresCardInitial);
-  /* "Add Deck Studio" over the plan cards (owner, 2026-10-26): off until ticked; rides the plan to Stripe. */
-  const [withDeck, setWithDeck] = React.useState(false);
   /* IN-APP BROWSERS (2026-10-01): Google refuses its sign-in inside them
      ("403 disallowed_useragent") and One Tap does not render, so step 1 is
      the email form alone, with a quiet "Open in Safari / Chrome for Google
@@ -994,7 +990,7 @@ export function RegisterContent({
         await planRefused("That signup expired. Start again.");
         return;
       }
-      leaveForCheckout(token, "plan_pick", { slug, term, deck: withDeck });
+      leaveForCheckout(token, "plan_pick", { slug, term });
     } catch {
       trackTraffic(TRAFFIC_EVENTS.error, { step: 3, reason: "checkout_unavailable" }); signupProblem("checkout_unavailable");
       setPlansErr("Couldn't reach checkout — your account has not been created.");
@@ -1008,7 +1004,7 @@ export function RegisterContent({
 
   /** Off to ./checkout, whose 303 is Stripe's card page. The address becomes the plan cards' first, so Back from Stripe
    *  (the browser's, or a page restored later) lands on the cards, as Stripe's own back arrow does. */
-  function leaveForCheckout(t: string, reason: HandOffReason, pick?: { slug: string; term: BillingTerm; deck?: boolean }) {
+  function leaveForCheckout(t: string, reason: HandOffReason, pick?: { slug: string; term: BillingTerm }) {
     signupLeavingTo("checkout");
     leavingRef.current = true;
     // From the plan step without a press (a stale tab): it is not drawn on the way out.
@@ -1354,6 +1350,7 @@ export function RegisterContent({
       setChecking(false);
     }
     step1Outcome("continue");
+    trackMetaLeadOnce(); // Meta Lead: step 1 passed with an address (lib/metaLead)
     if (twoStep) {
       /* The company's part of the one step: the business name and the
          trades are checked and the pending signup starts right here. */
@@ -2205,19 +2202,6 @@ export function RegisterContent({
                 ) : null}
               </div>
             </div>
-            {/* "ADD DECK STUDIO" (owner, 2026-10-26): off until ticked; ticked, the plan's Stripe page has the add-on on
-                the order (app/(auth)/auth/register/checkout `deck=1`). Unticked, Stripe's page still offers it as a row
-                with its own switch. Only where the card goes to Stripe. */}
-            {requiresCard && !confirmSentTo && !gate ? (
-              <DeckAddonPickBox
-                className="pw-deckpick"
-                checked={withDeck}
-                onChange={setWithDeck}
-                pick={{ offer: true, held: null, included: null, trialing: trialDays > 0 }}
-                interval={interval}
-                disabled={payBusy}
-              />
-            ) : null}
 
             {plansErr ? (
               <div className="err" role="alert">

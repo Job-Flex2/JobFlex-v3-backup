@@ -21,7 +21,6 @@ import { customMetadata } from "@/lib/customBilling";
 import { CUSTOM_PLAN_OFF_SALE, customPlanOffered } from "@/lib/customPlanFlag";
 import { trialOfferMetadata } from "@/lib/trialOffer";
 import { CUSTOM_PLAN_SLUG } from "@/lib/customPlan";
-import { deckAddonCheckoutItems } from "@/lib/deckAddonBilling";
 
 export const SIGNUP_CHECKOUT_DEADLINE_MS = 8_000;
 
@@ -33,8 +32,6 @@ export async function createSignupCheckout(input: {
   interval: "MONTH" | "YEAR";
   /** Where Stripe sends the visitor back: this request's own origin. */
   origin: string;
-  /** "Add Deck Studio" ticked beside the plan cards: the add-on is a line of the order, not Stripe's optional row. */
-  deckAddon?: boolean;
 }): Promise<SignupCheckoutResult> {
   if (!isStripeEnabled()) return { ok: false, error: "Stripe is not configured.", status: 503 };
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -51,7 +48,7 @@ export async function createSignupCheckout(input: {
   }
 }
 
-async function open({ token, planSlug, interval, origin, deckAddon = false }: Parameters<typeof createSignupCheckout>[0]): Promise<SignupCheckoutResult> {
+async function open({ token, planSlug, interval, origin }: Parameters<typeof createSignupCheckout>[0]): Promise<SignupCheckoutResult> {
   // Off sale (CUSTOM_PLAN_ENABLED unset): a new shop cannot start on it.
   if (planSlug === CUSTOM_PLAN_SLUG && !customPlanOffered()) return { ok: false, error: CUSTOM_PLAN_OFF_SALE, status: 410 };
 
@@ -73,10 +70,9 @@ async function open({ token, planSlug, interval, origin, deckAddon = false }: Pa
   if (!priced.ok) return { ok: false, error: priced.error, status: priced.status };
   // The saved offer determines the duration; then Stripe charges the selected price.
   const { trialDays, planLabel, isCustom } = priced;
-  /* DECK STUDIO ON STRIPE'S PAGE (owner, 2026-10-26): the $79 add-on rides every sign-up's checkout — ticked on the
-     plan step, a line of the order; otherwise a row Stripe's page lets the person switch on. The trial covers both. */
-  const deck = await deckAddonCheckoutItems({ stripe, mode, interval: priced.interval, chosen: deckAddon });
-  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [...priced.lineItems, ...deck.lineItems];
+  /* NO DECK STUDIO HERE (owner, 2026-10-27): the add-on rode every sign-up's checkout from 2026-10-26 and sign-ups
+     from the ads fell; the sign-up's Stripe page is the plan and its trial alone. Deck Studio is bought in the app. */
+  const lineItems = priced.lineItems;
   const discount = await resolveSignupDiscount({
     stripe,
     mode,
@@ -106,7 +102,6 @@ async function open({ token, planSlug, interval, origin, deckAddon = false }: Pa
       ...(customer ? { customer } : { customer_email: pending.email }),
       client_reference_id: token,
       line_items: lineItems,
-      ...(deck.optionalItems.length ? { optional_items: deck.optionalItems } : {}),
       // The custom plan's pages ride the subscription too (lib/customBilling);
       // the organization is named on it once the account exists.
       subscription_data:
@@ -125,7 +120,6 @@ async function open({ token, planSlug, interval, origin, deckAddon = false }: Pa
         signupToken: token,
         planSlug: planLabel,
         interval: priced.interval,
-        ...(deck.lineItems.length ? { deckAddon: "1" } : {}),
         ...(isCustom ? { customPages: pending.customPages.join(",") } : {}),
       },
       success_url: `${back}&session_id={CHECKOUT_SESSION_ID}`,
