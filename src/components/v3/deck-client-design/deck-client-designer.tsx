@@ -278,7 +278,7 @@ export interface DeckClientDesignerProps {
     askEmail: boolean;
     leadId: string | null;
     price: (design: DeckDesign) => Promise<{ ok: true; words: string; summary: string; show: "range" | "exact"; basis: string } | { ok: false; error: string }>;
-    send: (input: { design: DeckDesign; note: string; name: string; phone: string; email: string; consent: boolean; company: string }) => Promise<{ ok: true; at: string; leadId: string } | { ok: false; error: string }>;
+    send: (input: { design: DeckDesign; note: string; name: string; phone: string; email: string; consent: boolean; company: string }) => Promise<{ ok: true; at: string; leadId: string; next?: string } | { ok: false; error: string }>;
   } | null;
 }
 

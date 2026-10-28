@@ -273,9 +273,25 @@ export function leadDescription(trade: WebTrade, parts: { summary: string; choic
 }
 
 /** What the homeowner's confirmation says. */
-export function homeownerEmail(input: { shop: string; trade: WebTrade; band: { low: number; high: number }; show: "range" | "exact"; summary: string; choice: string; phone?: string | null; note?: string | null }): { subject: string; text: string } {
+export function homeownerEmail(input: { shop: string; trade: WebTrade; band: { low: number; high: number }; show: "range" | "exact"; summary: string; choice: string; phone?: string | null; note?: string | null; house?: { url: string } | null }): { subject: string; text: string } {
   const price = input.show === "exact" ? money(input.band.low) : bandWords(input.band);
   const t = WEB_TRADE[input.trade];
+  if (input.house) {
+    // The house (2026-10-28): JobFlex priced it and sends it on — a local pro calls, not JobFlex; the request page's link.
+    const noun = { roof: "roof", hvac: "new system", fence: "fence", deck: "deck", smart: "project" }[input.trade];
+    return {
+      subject: `${t.title} — ${price} — ${HOUSE_NAME}`,
+      text: [
+        `Thanks for pricing your ${noun} on ${HOUSE_NAME}.`,
+        ``,
+        `${input.summary}${input.choice ? ` ${input.choice}.` : ""}`,
+        `Estimated price: ${price}, before tax. ${input.note ?? t.basis}`,
+        ``,
+        `${HOUSE_NAME} is sending it to a local pro, who will be in touch to confirm the details${input.phone ? ` at ${input.phone}` : ""}.`,
+        `Follow your request: ${input.house.url}`,
+      ].join("\n"),
+    };
+  }
   return {
     subject: `${t.title} — ${price} — ${input.shop}`,
     text: [
