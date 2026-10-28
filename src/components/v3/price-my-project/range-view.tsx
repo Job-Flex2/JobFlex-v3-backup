@@ -199,7 +199,7 @@ export function RangeView({
 
           <div className={s.acts}>
             <button type="button" className={s.btn} onClick={() => { const p = priced(); if (p) onQuotes(p); }} data-price-quotes>
-              Get quotes from local pros
+              Get quotes from local JobFlex pros
             </button>
             <button type="button" className={`${s.btn} ${s.btnGhost}`} onClick={() => { const p = priced(); if (p) onEmail(p); }} data-price-email>
               Email me this range

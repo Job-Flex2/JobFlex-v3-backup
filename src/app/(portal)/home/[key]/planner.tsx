@@ -146,7 +146,7 @@ export function Planner({ homeKey, plans }: { homeKey: string; plans: HomePlanVi
             <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Budget in mind, colours, what you've seen…" maxLength={1000} name="plan-notes" autoComplete="off" />
           </label>
           <p className={`${s.fine} ${s.fieldWide}`}>
-            {remind === "none" ? "No reminder — it stays on your dashboard until you submit it." : "We'll email you then with one tap to send it to a local pro; if nothing happens, one more nudge two weeks later, then we leave it to you."}
+            {remind === "none" ? "No reminder — it stays on your dashboard until you submit it." : "We'll email you then with one tap to send it to a local JobFlex pro; if nothing happens, one more nudge two weeks later, then we leave it to you."}
           </p>
           <div className={s.actions}>
             <button type="submit" className={s.btnPrimary} disabled={busy || title.trim().length < 2}>{busy ? "Saving…" : remind === "none" ? "Add to my plans" : "Add & remind me"}</button>

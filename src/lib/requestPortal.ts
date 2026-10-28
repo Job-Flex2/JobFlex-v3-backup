@@ -386,12 +386,12 @@ export async function buildRequestPortal(pl: RequestLeadRow): Promise<RequestPor
   const estimateView = est
     ? est.trade !== "roof"
       ? // A house estimate (2026-10-28): the website estimator's choice, JobFlex's own words.
-        { range: estimateShort(est).split(" · ")[0], material: estimateMaterialWords(est), basis: "priced on JobFlex", words: "An estimate range from JobFlex’s own estimator, not a quote. A local pro confirms on site." }
+        { range: estimateShort(est).split(" · ")[0], material: estimateMaterialWords(est), basis: "priced on JobFlex", words: "An estimate range from JobFlex’s own estimator, not a quote. A local JobFlex pro confirms on site." }
       : {
           range: estimateShort(est).split(" · ")[0],
           material: estimateMaterialWords(est),
           basis: roofBasis!,
-          words: roofBasis === "from your home's size" ? "An estimate range from your home’s size and local prices, not a quote. A local pro measures and confirms on site." : "An estimate range from aerial data and local prices, not a quote. A local pro confirms on site.",
+          words: roofBasis === "from your home's size" ? "An estimate range from your home’s size and local prices, not a quote. A local JobFlex pro measures and confirms on site." : "An estimate range from aerial data and local prices, not a quote. A local JobFlex pro confirms on site.",
         }
     : null;
   const won = proposals.some((p) => p.current && (p.stage === "ACCEPTED" || p.stage === "PAID"));

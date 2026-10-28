@@ -94,7 +94,7 @@ export function QuotesForm({ mode, site, priced, resume, onBack }: { mode: "quot
       }}
     >
       <div>
-        <p className={s.kicker}>{mode === "quotes" ? "Get quotes from local pros" : "Email me this range"}</p>
+        <p className={s.kicker}>{mode === "quotes" ? "Get quotes from local JobFlex pros" : "Email me this range"}</p>
         <p className={s.muted} data-price-form-range>
           Your range: <b>{moneyRange(priced.range)}</b> · {materialWords(priced.answers.material)} · {site.address}, {site.city}
         </p>
@@ -139,7 +139,7 @@ export function QuotesForm({ mode, site, priced, resume, onBack }: { mode: "quot
             <input type="checkbox" name="consent" checked={consent} onChange={(e) => setConsent(e.target.checked)} data-price-consent />
             <span>{LEAD_CONSENT_TEXT}</span>
           </label>
-          <p className={s.small}>We send this to one local pro at a time. The range is an estimate; the pro confirms on site.</p>
+          <p className={s.small}>We send this to one local JobFlex pro at a time. The range is an estimate; the pro confirms on site.</p>
         </>
       ) : (
         <p className={s.small}>No calls, no contractors — just the range, and a note in two days in case you want quotes then.</p>

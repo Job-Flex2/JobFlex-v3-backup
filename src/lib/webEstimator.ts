@@ -13,6 +13,7 @@
 // nothing is billed; the Stripe line per trade comes when the owner has tested the flow. Not on the pricing page.
 
 import { LEAD_CONSENT_TEXT } from "./leadConsent";
+import { PRO, PRO_IS } from "./home/jobflexPro";
 
 export const WEB_TRADES = ["roof", "hvac", "fence", "deck", "smart"] as const;
 export type WebTrade = (typeof WEB_TRADES)[number];
@@ -155,16 +156,17 @@ export function shopHourly(shop: { slug: string }): { estimates: number; leads: 
 }
 
 /** The page's words where a shop's name stood: a shop's page names the shop (the strings the pages always printed);
- *  the house's names a local pro, since up to three contractors may call, and carries the Lead Center's own consent. */
+ *  the house's names a local JobFlex pro (lib/home/jobflexPro), since up to three contractors may call, and carries
+ *  the Lead Center's own consent. */
 export function pageWords(shop: { name: string; house?: boolean }, noun: string): { who: string; sees: string; quote: string; consent: string; foot: string; call: string } {
   if (shop.house) {
     return {
-      who: "a local pro",
-      sees: "No account, no payment. JobFlex sends your request to a local pro only when you send it.",
-      quote: "The full, line-by-line quote comes from a local pro after they look at it. You pick a time; they confirm the price.",
+      who: PRO,
+      sees: `No account, no payment. JobFlex sends your request to ${PRO} only when you send it.`,
+      quote: `The full, line-by-line quote comes from ${PRO} after they look at it. You pick a time; they confirm the price.`,
       consent: LEAD_CONSENT_TEXT,
-      foot: "Estimates by JobFlex. No prices are shown to anyone else; a local pro confirms on site.",
-      call: "Describe it instead and a local pro prices it.",
+      foot: `Estimates by JobFlex. No prices are shown to anyone else; ${PRO} confirms on site. ${PRO_IS}`,
+      call: `Describe it instead and ${PRO} prices it.`,
     };
   }
   return {
@@ -302,7 +304,7 @@ export function homeownerEmail(input: { shop: string; trade: WebTrade; band: { l
   const price = input.show === "exact" ? money(input.band.low) : bandWords(input.band);
   const t = WEB_TRADE[input.trade];
   if (input.house) {
-    // The house (2026-10-28): JobFlex priced it and sends it on — a local pro calls, not JobFlex; the request page's link.
+    // The house (2026-10-28): JobFlex priced it and sends it on — a local JobFlex pro calls, not JobFlex; the request page's link.
     const noun = { roof: "roof", hvac: "new system", fence: "fence", deck: "deck", smart: "project" }[input.trade];
     return {
       subject: `${t.title} — ${price} — ${HOUSE_NAME}`,
@@ -312,7 +314,7 @@ export function homeownerEmail(input: { shop: string; trade: WebTrade; band: { l
         `${input.summary}${input.choice ? ` ${input.choice}.` : ""}`,
         `Estimated price: ${price}, before tax. ${input.note ?? t.basis}`,
         ``,
-        `${HOUSE_NAME} is sending it to a local pro, who will be in touch to confirm the details${input.phone ? ` at ${input.phone}` : ""}.`,
+        `${HOUSE_NAME} is sending it to ${PRO}, who will be in touch to confirm the details${input.phone ? ` at ${input.phone}` : ""}. ${PRO_IS}`,
         `Follow your request: ${input.house.url}`,
       ].join("\n"),
     };
