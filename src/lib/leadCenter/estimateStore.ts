@@ -1,7 +1,7 @@
 // THE ESTIMATE BESIDE A LEAD — the store (server only). One SyncState row per PlatformLead
 // (`leadestimate:<leadId>`, lib/leadCenter/estimate for what is in it).
 import { db } from "@/lib/db";
-import { LEAD_ESTIMATE_KEY, type LeadEstimate } from "./estimate";
+import { LEAD_ESTIMATE_KEY, parseLeadEstimate, type LeadEstimate } from "./estimate";
 
 export async function writeLeadEstimate(leadId: string, e: LeadEstimate): Promise<void> {
   const key = LEAD_ESTIMATE_KEY(leadId);
@@ -16,12 +16,8 @@ export async function readLeadEstimates(leadIds: string[]): Promise<Map<string, 
   try {
     const rows = await db.syncState.findMany({ where: { key: { in: leadIds.map(LEAD_ESTIMATE_KEY) } } });
     for (const row of rows) {
-      try {
-        const parsed = JSON.parse(row.cursor) as LeadEstimate;
-        if (parsed && parsed.v === 1) out.set(row.key.slice("leadestimate:".length), parsed);
-      } catch {
-        /* a bad row is no estimate */
-      }
+      const parsed = parseLeadEstimate(row.cursor);
+      if (parsed) out.set(row.key.slice("leadestimate:".length), parsed);
     }
   } catch (err) {
     console.warn("[leadCenter] estimates not read:", err);
