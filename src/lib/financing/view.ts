@@ -1,8 +1,8 @@
 // WISETACK FINANCING — what each surface shows, from the rules (./state) and the words (./words): the editor's
 // switch, the client's page, the proposals row, the admin board. Pure; one place so the surfaces cannot disagree.
 
-import { coverMinor, fundedMinor, offerFor, type Loan, type Offer, type OrgFinancing } from "./state";
-import { FIN, loanLine } from "./words";
+import { coverMinor, coveredStageIds, fundedMinor, offerFor, restMinor, type Loan, type LoanState, type Offer, type OrgFinancing } from "./state";
+import { FIN, clientLoanWords, loanLine } from "./words";
 
 type Money = (minor: number) => string;
 
@@ -49,4 +49,55 @@ export function editorFinancing(i: {
     notice,
     limits: { minMinor: i.org.minMinor, maxMinor: i.org.maxMinor },
   };
+}
+
+/** The client's page: Pay over time, what they qualify for before signing, or where their loan stands. */
+export type PortalFinancing = {
+  mode: "prequal" | "apply" | "status";
+  prequalUrl: string | null;
+  loan: { state: LoanState; title: string; sub: string; url: string | null } | null;
+  /** Stages the accepted loan pays — their card/bank buttons give way to the loan line. */
+  coveredIds: string[];
+  covered: string | null;
+  /** What the loan does not pay, paid the usual way. */
+  rest: string | null;
+  /** Wisetack's own monthly wording, or null. */
+  monthly: string | null;
+  disclosure: string;
+};
+
+const DEAD: readonly LoanState[] = ["declined", "expired", "canceled"];
+const ON_WISETACK: readonly LoanState[] = ["sent", "started", "needs_action", "approved"];
+const COMMITTED: readonly LoanState[] = ["accepted", "done_asked"];
+
+export function portalFinancingFrom(i: {
+  offered: boolean;
+  signed: boolean;
+  org: OrgFinancing;
+  loan: Loan | null;
+  stages: { id: string; amountMinor: number; status: string }[];
+  owedMinor: number;
+  monthly: string | null;
+  money: Money;
+}): PortalFinancing | null {
+  const words = i.loan ? clientLoanWords(i.loan, i.money) : null;
+  const loanView = i.loan && words ? { state: i.loan.state, ...words, url: ON_WISETACK.includes(i.loan.state) && i.loan.url ? i.loan.url : null } : null;
+  const base = { prequalUrl: i.org.prequalUrl, monthly: i.monthly, disclosure: FIN.disclosure, coveredIds: [] as string[], covered: null, rest: null };
+
+  if (i.loan && !DEAD.includes(i.loan.state)) {
+    const committed = COMMITTED.includes(i.loan.state);
+    const left = committed ? coverMinor(i.loan) - fundedMinor(i.loan) : 0;
+    const rest = committed ? restMinor(i.owedMinor, i.loan) : 0;
+    return {
+      ...base,
+      mode: "status",
+      loan: loanView,
+      coveredIds: committed ? coveredStageIds(i.stages, left) : [],
+      covered: committed && left > 0 ? FIN.coveredLine(i.money(left)) : null,
+      rest: committed && rest > 0 ? i.money(rest) : null,
+    };
+  }
+  if (!i.offered) return null;
+  if (!i.signed) return i.org.prequalUrl ? { ...base, mode: "prequal", loan: null } : null;
+  return { ...base, mode: "apply", loan: loanView };
 }

@@ -13,9 +13,9 @@ import { merchantPrefill, readinessFacts, type PrefillOrg, type PrefillOwner } f
 import { contractSchedule, APPROVED_CO_SELECT } from "@/lib/contractTotal";
 import { resolveSchedule } from "@/lib/paymentSchedule";
 import { planEnded } from "@/lib/paidCaps";
-import { orgLetIn, readiness, type OrgFinancing } from "./state";
-import { readLoan, readOffer, readOrgFinancing, readSwitch, writeOffer, writeOrgFinancing } from "./store";
-import { editorFinancing, type EditorFinancing } from "./view";
+import { nextLoanState, offerFor, orgLetIn, readiness, reuseLoan, type Loan, type LoanSnapshot, type OrgFinancing } from "./state";
+import { readLoan, readOffer, readOrgFinancing, readSwitch, writeLoan, writeOffer, writeOrgFinancing } from "./store";
+import { editorFinancing, portalFinancingFrom, type EditorFinancing, type PortalFinancing } from "./view";
 
 export const SETTINGS_HREF = "/dashboard/settings?pane=payments&sub=financing";
 
@@ -174,4 +174,73 @@ export async function setProposalOffer(orgId: string, proposalId: string, on: bo
   if (!exists) return null;
   await writeOffer(proposalId, on);
   return loadEditorFinancing(orgId, proposalId, scope);
+}
+
+const SIGNED = new Set(["ACCEPTED", "COMPLETED", "PAID"]);
+const DEAD = new Set(["declined", "expired", "canceled", "paid", "refunded"]);
+export const NOT_AVAILABLE = "Monthly payments are not available for this proposal.";
+
+/** The client's page part (lib/payments/portalModel). Null when Wisetack is not connected on this deployment. */
+export async function portalFinancing(i: { orgId: string; proposalId: string; status: string; stages: { id: string; amountMinor: number; status: string }[]; owedMinor: number }): Promise<PortalFinancing | null> {
+  if (!getProvider()) return null;
+  const [view, proposalOn, loan, ended] = await Promise.all([orgFinancingView(i.orgId), readOffer(i.proposalId), readLoan(i.proposalId), planEnded(i.orgId)]);
+  const offer = offerFor({ letIn: view.letIn, org: view.rec, proposalOn, owedMinor: i.owedMinor, status: i.status, planEnded: ended });
+  // Wisetack's own monthly wording waits for its docs: asking on every page view would slow every client's page.
+  return portalFinancingFrom({ offered: offer.offered, signed: SIGNED.has(i.status), org: view.rec, loan, stages: i.stages, owedMinor: i.owedMinor, monthly: null, money: usd });
+}
+
+/** The client pressed Pay over time: the live loan, or a new one for what is owed right now. */
+export async function openLoanForClient(publicId: string): Promise<{ ok: true; url: string } | { ok: false; status: number; error: string }> {
+  const provider = getProvider();
+  if (!provider) return { ok: false, status: 404, error: NOT_AVAILABLE };
+  const row = await db.proposal.findUnique({ where: { publicId }, select: { id: true, organizationId: true, organization: { select: { deletedAt: true } } } });
+  if (!row || row.organization.deletedAt) return { ok: false, status: 404, error: NOT_AVAILABLE };
+  const money = await proposalMoney(row.organizationId, row.id);
+  if (!money) return { ok: false, status: 404, error: NOT_AVAILABLE };
+  const p = money.proposal;
+  if (!SIGNED.has(p.status)) return { ok: false, status: 409, error: "Accept the proposal first — then choose Pay over time." };
+  const [view, proposalOn, loan, ended] = await Promise.all([orgFinancingView(p.organizationId), readOffer(p.id), readLoan(p.id), planEnded(p.organizationId)]);
+  const now = new Date();
+  if (loan && reuseLoan(loan, money.owedMinor, now) && loan.url) return { ok: true, url: loan.url };
+  const offer = offerFor({ letIn: view.letIn, org: view.rec, proposalOn, owedMinor: money.owedMinor, status: p.status, planEnded: ended });
+  if (!offer.offered || !view.rec.merchantRef) return { ok: false, status: 404, error: NOT_AVAILABLE };
+  // A loan for an older amount the client never accepted goes; the new one asks for today's.
+  if (loan && !DEAD.has(loan.state)) await provider.cancelLoan(loan.ref).catch(() => {});
+  try {
+    const created = await provider.createLoan({
+      merchantRef: view.rec.merchantRef,
+      amountMinor: money.owedMinor,
+      purpose: p.title,
+      reference: p.id,
+      client: { name: p.client?.name ?? "Client", phone: p.client?.phone ?? null, email: p.client?.email ?? null },
+      returnUrl: `${await appBaseUrl()}/portal/q/${encodeURIComponent(publicId)}?financing=back#pay-over-time`,
+    });
+    const at = now.toISOString();
+    const fresh: Loan = { ref: created.loanRef, state: "sent", amountMinor: money.owedMinor, approvedMinor: null, fundings: [], url: created.url, createdAt: at, expiresAt: created.expiresAt, history: [{ state: "sent", at }], nudgedAt: null };
+    await writeLoan(p.id, fresh);
+    await logActivity({ organizationId: p.organizationId, actorId: null, kind: TRAIL_KINDS.PAY, summary: `${p.client?.name ?? "The client"} opened monthly payments (Wisetack) on "${p.title}" — ${usd(money.owedMinor)}`, proposalId: p.id, clientId: p.clientId });
+    return { ok: true, url: created.url };
+  } catch {
+    return { ok: false, status: 502, error: "Wisetack didn't answer — try again in a minute." };
+  }
+}
+
+/** Back from Wisetack: read the loan once so the page shows where it stands (the webhook may still be on its way). */
+export async function syncLoanForPublicId(publicId: string): Promise<void> {
+  const provider = getProvider();
+  if (!provider) return;
+  const row = await db.proposal.findUnique({ where: { publicId }, select: { id: true } });
+  const loan = row ? await readLoan(row.id) : null;
+  if (!row || !loan) return;
+  const snapshot = await provider.loan(loan.ref).catch(() => null);
+  if (snapshot) await applyLoanSnapshot(row.id, snapshot);
+}
+
+/** Wisetack's word on a loan, from a webhook, a read or the reconcile: the new state written. */
+export async function applyLoanSnapshot(proposalId: string, snapshot: LoanSnapshot): Promise<Loan | null> {
+  const before = await readLoan(proposalId);
+  if (!before) return null;
+  const after = nextLoanState(before, snapshot, new Date().toISOString());
+  if (JSON.stringify(after) !== JSON.stringify(before)) await writeLoan(proposalId, after);
+  return after;
 }

@@ -21,7 +21,7 @@ import {
   type LoanSnapshot,
   type OrgFinancing,
 } from "../../../src/lib/financing/state";
-import { editorFinancing } from "../../../src/lib/financing/view";
+import { editorFinancing, portalFinancingFrom } from "../../../src/lib/financing/view";
 
 let bad = 0;
 const check = (name: string, ok: boolean, extra = "") => {
@@ -148,6 +148,24 @@ const e4 = ed({ owedMinor: 2_000_000, loan: loan({ state: "accepted", approvedMi
 check("an accepted $14,000 loan and $20,000 owed → a notice naming both, the loan line", !!e4 && !!e4.notice && e4.notice.includes("$14,000") && e4.notice.includes("$20,000") && e4.loanLine === "Loan accepted · $14,000", JSON.stringify(e4));
 check("the same loan with $14,000 owed → no notice", ed({ owedMinor: 1_400_000, loan: loan({ state: "accepted", approvedMinor: 1_400_000 }) })?.notice === null);
 check("a loan still shows when the switch has since gone off", ed({ letIn: false, loan: loan({ state: "accepted", approvedMinor: 1_400_000 }), owedMinor: 1_400_000 })?.loanLine === "Loan accepted · $14,000");
+
+// ---- the client's page (Task 6) ----
+const withPrequal: OrgFinancing = { ...approvedOrg, prequalUrl: "https://wisetack.example/prequal/m1" };
+const pf = (o: Partial<Parameters<typeof portalFinancingFrom>[0]> = {}) =>
+  portalFinancingFrom({ offered: true, signed: true, org: withPrequal, loan: null, stages, owedMinor: 2_000_000, monthly: null, money: usd, ...o });
+const p1 = pf({ signed: false });
+check("not signed yet → see what you qualify for, through the contractor's own link", p1?.mode === "prequal" && p1.prequalUrl === withPrequal.prequalUrl && p1.disclosure.startsWith("All financing"), JSON.stringify(p1));
+check("not signed and no prequal link → nothing yet", pf({ signed: false, org: approvedOrg }) === null);
+check("signed, no loan → Pay over time", pf()?.mode === "apply");
+const p4 = pf({ loan: loan({ state: "accepted", approvedMinor: 1_400_000 }) });
+check("an accepted $14,000 loan → status, the last stage covered, the rest $6,000", p4?.mode === "status" && p4.coveredIds.join(",") === "b" && p4.rest === "$6,000" && p4.loan?.title === "Monthly payments are set", JSON.stringify(p4));
+const p5 = pf({ loan: loan({ state: "declined" }) });
+check("a declined loan → Pay over time again, with the 'not approved' words", p5?.mode === "apply" && p5.loan?.title === "Not approved this time" && p5.coveredIds.length === 0);
+check("the switch since turned off, a live accepted loan → its status stays", pf({ offered: false, loan: loan({ state: "accepted", approvedMinor: 1_400_000 }) })?.mode === "status");
+check("not offered and no loan → nothing", pf({ offered: false }) === null);
+const p8 = pf({ loan: loan({ state: "approved", approvedMinor: 1_400_000 }) });
+check("approved, not accepted yet → status with a way back to Wisetack, nothing covered yet", p8?.mode === "status" && p8.loan?.url === "https://wisetack.example/apply/t1" && p8.coveredIds.length === 0 && p8.rest === null);
+check("Wisetack's own monthly words pass through untouched", pf({ monthly: "Monthly payment options available" })?.monthly === "Monthly payment options available");
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);

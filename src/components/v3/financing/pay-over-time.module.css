@@ -1,0 +1,69 @@
+/* Pay over time — one card in both portal trees. Light, quiet, the contractor's page around it. */
+.card {
+  margin: 16px 0 4px;
+  padding: 16px;
+  border: 1px solid #e3e5e8;
+  border-radius: 12px;
+  background: #fafbfc;
+  color: #1c1f23;
+}
+.title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #5b6168;
+}
+.line {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.primary,
+.ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 12px;
+  padding: 0 18px;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.primary {
+  border: 0;
+  background: #1c1f23;
+  color: #fff;
+}
+.primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.ghost {
+  border: 1px solid #c9cdd2;
+  background: #fff;
+  color: #1c1f23;
+}
+.error {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #a1281f;
+}
+.fine {
+  margin: 12px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #7a8087;
+}
+@media (max-width: 600px) {
+  .primary,
+  .ghost {
+    width: 100%;
+  }
+}
