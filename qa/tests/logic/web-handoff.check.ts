@@ -2,7 +2,7 @@
 // each estimator applies at open — the fence as drawn, the house with its tier, the smart lines. Pure parts only; the
 // estimators themselves are walked on the stand.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/web-handoff.check.ts
-import { fenceSeedFromWebLead, hvacSeedFromWebLead } from "../../../src/lib/webHandoff";
+import { fenceSeedFromWebLead, hvacSeedFromWebLead, smartSeedFromWebLead } from "../../../src/lib/webHandoff";
 import type { WebLeadRecord } from "../../../src/lib/webEstimator";
 
 let bad = 0;
@@ -37,6 +37,12 @@ const older = hvacSeedFromWebLead(withFacts({ sqft: 1800, storeys: 1, yearBuilt:
 check("an older record (no site): rebuilt from the address, the pin and the square feet; no unit id", !!older && older.site.address === "418 Linden Ave, Buffalo, NY 14216" && older.site.state === "NY" && older.site.lat === 42.948 && older.site.lng === -78.853 && older.site.livingSqft === 1800 && older.site.storeys === 1 && older.site.yearBuilt === 1995 && Object.keys(older.site.sources).length === 0 && older.itemId === null && older.tier === "premium" && older.outdoorKind === "heat-pump" && older.gas === "no", JSON.stringify(older));
 check("the defaults when the words are odd", (() => { const s = hvacSeedFromWebLead(withFacts({ site, tier: "mid", existing: 7, gas: null, outdoorKind: "x" }, "hvac")); return !!s && s.existing === "split-ac-furnace" && s.gas === "yes" && s.outdoorKind === "air-conditioner"; })());
 check("not hvac, or no tier: nothing", hvacSeedFromWebLead(withFacts({ site, tier: "mid" }, "fence")) === null && hvacSeedFromWebLead(withFacts({ site }, "hvac")) === null && hvacSeedFromWebLead(withFacts({ site, tier: "gold" }, "hvac")) === null);
+
+// ── Smart Proposal ──
+const good = { title: "Hall bath remodel", scope: "Remove the tub surround, tile the walls and floor, set a new vanity and faucet.", assumptions: ["Plumbing stays where it is."], materials: [{ name: "Porcelain tile", quantity: 60, unit: "sq ft", unitPrice: 6.5 }], labor: [{ name: "Tile setter", quantity: 16, unit: "hr", unitPrice: 85 }], estimatedTimelineDays: 6, discount: { amount: 10, isPercent: true, label: "Fall special" } };
+const s = smartSeedFromWebLead(withFacts({ estimate: good, brief: "Redo the hall bath, keep the tub", qualityTier: "standard", sqft: null, photos: 1 }, "smart"));
+check("a smart record: the generated estimate re-validated, its discount, the brief", !!s && s.estimate.title === "Hall bath remodel" && s.estimate.materials.length === 1 && s.estimate.labor[0].unitPrice === 85 && s.estimate.discount?.amount === 10 && s.brief === "Redo the hall bath, keep the tub", JSON.stringify(s));
+check("a record whose estimate does not parse, or no brief: nothing", smartSeedFromWebLead(withFacts({ estimate: { title: 1 }, brief: "x" }, "smart")) === null && smartSeedFromWebLead(withFacts({ estimate: good }, "smart")) === null && smartSeedFromWebLead(withFacts({ estimate: good, brief: "x" }, "deck")) === null);
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);

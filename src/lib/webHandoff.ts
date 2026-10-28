@@ -8,6 +8,7 @@
 // readWebLeadFor. Design: docs/superpowers/specs/2026-10-28-home-portal-house-estimators-design.md.
 import type { WebLeadRecord } from "./webEstimator";
 import type { SiteFacts } from "./hvac/intake";
+import { estimateSchema, type GeneratedEstimate } from "./estimatorSchema";
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const pinOf = (v: unknown): { lat: number; lng: number } | null => {
@@ -100,4 +101,22 @@ export function hvacSeedFromWebLead(rec: WebLeadRecord): WebHvacSeed | null {
     tier,
     itemId: typeof f.itemId === "string" && f.itemId ? f.itemId : null,
   };
+}
+
+// ── Smart Proposal: the generated estimate the price came from (actions/advancedEstimator webSmartGenerate) ──
+
+export type WebSmartSeed = {
+  /** The estimate as generated, re-validated against the schema — the same lines and discount the homeowner saw. */
+  estimate: GeneratedEstimate;
+  /** The homeowner's brief (with their answers to the intake's questions), as the estimate was run from it. */
+  brief: string;
+};
+
+export function smartSeedFromWebLead(rec: WebLeadRecord): WebSmartSeed | null {
+  if (rec.trade !== "smart" || rec.estimate.trade !== "smart") return null;
+  const f = rec.estimate.facts;
+  const brief = typeof f.brief === "string" ? f.brief.trim() : "";
+  if (!brief) return null;
+  const parsed = estimateSchema.safeParse(f.estimate);
+  return parsed.success ? { estimate: parsed.data, brief } : null;
 }

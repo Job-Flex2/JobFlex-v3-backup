@@ -34,16 +34,21 @@ import type { Metadata } from "next";
 import { requireOrg, NoOrgError, UnauthorizedError } from "@/lib/orgContext";
 import { AdvancedAiContent } from "@/components/v3/advanced-ai-blueprint/advanced-ai-content";
 import { readEstimateSeed } from "@/lib/estimateSeed";
+import { readWebLeadFor } from "@/lib/webEstimatorServer";
+import { smartSeedFromWebLead } from "@/lib/webHandoff";
 import { EstimateSeedStrip } from "@/components/v3/estimate-seed-strip";
 import { customPageGate } from "@/components/v3/upgrade-gate/custom-page-gate";
 
-/** The hand-off seed for this company's Smart Proposal, or null — never an error. */
+/** The hand-off seed for this company's Smart Proposal, or null — never an error. With it, the estimate a website
+ *  or house lead was priced on (lib/webHandoff, 2026-10-28), when the lead carries one. */
 async function readSmartSeed() {
   try {
     const { organizationId } = await requireOrg();
-    return await readEstimateSeed(organizationId, "smart");
+    const seed = await readEstimateSeed(organizationId, "smart");
+    const rec = seed ? await readWebLeadFor(seed.leadId, organizationId, "smart") : null;
+    return { seed, web: rec ? smartSeedFromWebLead(rec) : null };
   } catch {
-    return null;
+    return { seed: null, web: null };
   }
 }
 
@@ -73,11 +78,11 @@ export default async function AdvancedAiPage() {
 
   // A lead handed over from its page (lib/estimateSeed): the scope is the
   // brief, the address is the location, before the contractor types a word.
-  const seed = await readSmartSeed();
+  const { seed, web } = await readSmartSeed();
   return (
     <>
       <EstimateSeedStrip seed={seed} />
-      <AdvancedAiContent seed={seed ? { brief: seed.brief, address: seed.address ?? "", state: seed.state ?? "" } : undefined} />
+      <AdvancedAiContent seed={seed ? { brief: seed.brief, address: seed.address ?? "", state: seed.state ?? "" } : undefined} web={web} />
     </>
   );
 }
