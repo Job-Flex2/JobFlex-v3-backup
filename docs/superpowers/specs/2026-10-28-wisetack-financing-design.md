@@ -150,10 +150,12 @@ financing and in the proposal you should have a switch in the contractor side to
   or reuses the live loan for **the amount owed right now** (contract total with approved change orders, minus what is
   paid), with the client's name/phone/email, and sends the browser to Wisetack. Coming back shows the state: approved
   for $X · monthly payments are set · not approved this time (other ways to pay stay).
-- **The loan covers its own amount; anything beyond it is paid the usual way.** While a loan is `accepted` or later,
-  the stages it covers read "Paying with monthly payments through Wisetack"; whatever the loan does not cover (Wisetack
-  approved less, a change order approved later, a price raised) keeps its card/bank buttons as "The rest: $X". A
-  declined/expired/canceled loan brings every button back.
+- **An accepted loan holds every open stage until Wisetack pays** (changed after the whole-branch review: whole
+  stages rarely line up with what Wisetack approves, and a card payment the loan also pays means a refund). Those
+  stages read "Monthly payments" with no card/bank buttons; the card says what the loan pays and, when Wisetack
+  approved less, "The rest: $X — you pay it here once Wisetack has paid the contractor". The payout is settled with
+  no stages named, so settle places it in order and splits the stage it only partly pays — what is left owed is
+  exactly the rest, payable as usual. A declined/expired/canceled loan brings every button back.
 - Editing the price or approving a change order on a proposal with an accepted loan is allowed, with a notice to the
   office: "The client's loan is for $X; the new total is $Y — the difference is paid another way, or send a new
   financing link." A payout larger than what is owed goes through settle's existing unapplied/refund path.
@@ -233,8 +235,8 @@ test layout, how the pretend server looks.
 - The financing reconcile rides the existing 30-minute payments reconcile cron instead of a new cron.
 - Sign first: "Pay over time" appears after the client signs (like card payments); before signing they can see what
   they qualify for through the contractor's general link.
-- The loan covers its own amount; anything beyond it (less approved, change orders, price raised) is paid by
-  card/bank as "The rest"; price edits on a financed proposal are allowed with a notice, not blocked.
+- An accepted loan holds every open stage until Wisetack pays; the shortfall (less approved, change orders, price
+  raised) is paid after the payout as "The rest"; price edits on a financed proposal are allowed with a notice.
 - A loan may fund more than once (progress payments); each funding is its own payment.
 - Contractors already on Wisetack get "link my account"; how it really links waits on Wisetack's answer.
 - People pre-approved through a contractor's general link become that contractor's leads (if Wisetack sends them).
