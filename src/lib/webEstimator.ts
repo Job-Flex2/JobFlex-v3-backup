@@ -75,6 +75,83 @@ export function defaultWebEstimatorSettings(): WebEstimatorSettings {
   return { domains: [], monthlyCap: DEFAULT_MONTHLY_CAP, trades: Object.fromEntries(WEB_TRADES.map((t) => [t, defaultTradeSettings()])) as Record<WebTrade, WebTradeSettings> };
 }
 
+// ── the shop, the estimate and the lead — the shapes (the server half keeps and reads them)
+
+export interface WebShop {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  primaryColor: string | null;
+  phone: string | null;
+  website: string | null;
+  /** The shop's state (from its address), the trade engines' default when the homeowner's address has none. */
+  state: string | null;
+  settings: WebEstimatorSettings;
+}
+
+/** What every trade's engine gives the public page — the words, the number, and what the lead will carry. */
+export interface WebEstimateRecord {
+  token: string;
+  organizationId: string;
+  trade: WebTrade;
+  at: string;
+  /** The homeowner's address as typed, and its parts when known. */
+  address: string;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  /** One line about what was measured or asked: "26 squares at a 6:12 pitch, 3 facets." */
+  summary: string;
+  /** What they picked: "GAF Timberline HDZ, Charcoal". */
+  choice: string;
+  /** The price before the band, in cents, and the band shown. */
+  cents: number;
+  band: { low: number; high: number };
+  show: "range" | "exact";
+  /** The trade's own facts for the estimator hand-off (a RoofMeasurement id, the HVAC inputs, the deck design…). */
+  facts: Record<string, unknown>;
+}
+
+export interface WebLeadContact { name: string; phone: string; email: string | null; note: string | null }
+
+/** What the lead carries beyond the Lead row — read by My leads and the estimator hand-off. */
+export interface WebLeadRecord { leadId: string; trade: WebTrade; estimate: WebEstimateRecord; contact: WebLeadContact; at: string }
+
+// ── THE HOUSE (owner, 2026-10-28: "let people get preliminary estimates for HVAC, fence, roof, Deck Studio and the smart
+// estimator using our models; when they like it they submit, we give it to the contractor"). The same estimators run for
+// the homeowner on JobFlex's own home portal (/price → /estimate/jobflex/<trade>) with JobFlex as the shop: the internal
+// organization the admin picks on the Lead Center (lib/publicEstimate/store houseOrgId) is the shop's id — its price
+// books, its spend, its counters — and the send becomes a Lead Center lead, never a lead of that org. Every trade but
+// the roof (one roof flow: /price/roof), always a range, its own ceilings. Design:
+// docs/superpowers/specs/2026-10-28-home-portal-house-estimators-design.md.
+
+export const HOUSE_SLUG = "jobflex";
+export const HOUSE_NAME = "JobFlex";
+/** The house's own ceilings — a shop's are DEFAULT_MONTHLY_CAP and SHOP_HOURLY. */
+export const HOUSE_MONTHLY_CAP = 2000;
+export const HOUSE_HOURLY = { estimates: 600, leads: 120 } as const;
+export const SHOP_HOURLY = { estimates: 120, leads: 60 } as const;
+
+export function houseSettings(): WebEstimatorSettings {
+  const s = defaultWebEstimatorSettings();
+  for (const t of WEB_TRADES) s.trades[t].on = t !== "roof";
+  s.monthlyCap = HOUSE_MONTHLY_CAP;
+  return s;
+}
+
+/** The house as a shop: JobFlex on the house org — no logo (the product mark), no phone, no website, no state. */
+export function houseShop(orgId: string): WebShop {
+  return { id: orgId, name: HOUSE_NAME, slug: HOUSE_SLUG, logoUrl: null, primaryColor: null, phone: null, website: null, state: null, settings: houseSettings() };
+}
+
+export const isHouse = (shop: { slug: string }): boolean => shop.slug === HOUSE_SLUG;
+
+/** The per-shop hourly brakes: the house's own, else today's. */
+export function shopHourly(shop: { slug: string }): { estimates: number; leads: number } {
+  return isHouse(shop) ? HOUSE_HOURLY : SHOP_HOURLY;
+}
+
 /** Whatever was stored, as settings: unknown fields dropped, numbers clamped, hosts cleaned. */
 export function normalizeWebEstimatorSettings(raw: unknown): WebEstimatorSettings {
   const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;

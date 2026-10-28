@@ -31,7 +31,14 @@ import {
   type WebEstimatorSettings,
   type WebMonthCounts,
   type WebTrade,
+  type WebShop,
+  type WebEstimateRecord,
+  type WebLeadContact,
+  type WebLeadRecord,
+  HOUSE_SLUG,
+  houseShop,
 } from "./webEstimator";
+import { houseOrgId } from "@/lib/publicEstimate/store";
 
 // ── SyncState, as every feature keeps it
 
@@ -69,24 +76,23 @@ export async function writeWebSettings(organizationId: string, settings: WebEsti
 
 // ── the shop behind a public address
 
-export interface WebShop {
-  id: string;
-  name: string;
-  slug: string;
-  logoUrl: string | null;
-  primaryColor: string | null;
-  phone: string | null;
-  website: string | null;
-  /** The shop's state (from its address), the trade engines' default when the homeowner's address has none. */
-  state: string | null;
-  settings: WebEstimatorSettings;
-}
+// The shop, the estimate and the lead records are pure shapes (lib/webEstimator, since 2026-10-28 — the Lead Center's
+// estimate carries them to the browser); kept exported from here for every importer.
+export type { WebShop, WebEstimateRecord, WebLeadContact, WebLeadRecord } from "./webEstimator";
 
 const ORG_SELECT = { id: true, name: true, slug: true, logoUrl: true, primaryColor: true, phone: true, website: true, address: true, deletedAt: true } as const;
 
 /** The live shop at /estimate/<slug>, with its settings; null when there is no such shop. */
 export async function webShopBySlug(slug: string): Promise<WebShop | null> {
   if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(slug)) return null;
+  if (slug === HOUSE_SLUG) {
+    // The house (docs/superpowers/specs/2026-10-28-home-portal-house-estimators-design.md): the internal org the admin
+    // picked on the Lead Center; none picked, no page — never an organization that happens to carry the slug.
+    const id = await houseOrgId();
+    if (!id) return null;
+    const house = await db.organization.findUnique({ where: { id }, select: { id: true, deletedAt: true } });
+    return house && !house.deletedAt ? houseShop(house.id) : null;
+  }
   const org = await db.organization.findUnique({ where: { slug }, select: ORG_SELECT });
   if (!org || org.deletedAt) return null;
   const settings = await readWebSettings(org.id);
@@ -120,29 +126,6 @@ export async function webCapReached(shop: WebShop): Promise<boolean> {
 // ── a public estimate, kept an hour
 
 export const ESTIMATE_TTL_MS = 60 * 60 * 1000;
-
-/** What every trade's engine gives the public page — the words, the number, and what the lead will carry. */
-export interface WebEstimateRecord {
-  token: string;
-  organizationId: string;
-  trade: WebTrade;
-  at: string;
-  /** The homeowner's address as typed, and its parts when known. */
-  address: string;
-  city: string | null;
-  state: string | null;
-  zip: string | null;
-  /** One line about what was measured or asked: "26 squares at a 6:12 pitch, 3 facets." */
-  summary: string;
-  /** What they picked: "GAF Timberline HDZ, Charcoal". */
-  choice: string;
-  /** The price before the band, in cents, and the band shown. */
-  cents: number;
-  band: { low: number; high: number };
-  show: "range" | "exact";
-  /** The trade's own facts for the estimator hand-off (a RoofMeasurement id, the HVAC inputs, the deck design…). */
-  facts: Record<string, unknown>;
-}
 
 export async function storeWebEstimate(rec: Omit<WebEstimateRecord, "token" | "at">): Promise<WebEstimateRecord> {
   const full: WebEstimateRecord = { ...rec, token: randomBytes(18).toString("base64url"), at: new Date().toISOString() };
@@ -195,11 +178,6 @@ export async function readWebHvac(token: string, organizationId: string): Promis
 }
 
 // ── the lead
-
-export interface WebLeadContact { name: string; phone: string; email: string | null; note: string | null }
-
-/** What the lead carries beyond the Lead row — read by My leads and the estimator hand-off. */
-export interface WebLeadRecord { leadId: string; trade: WebTrade; estimate: WebEstimateRecord; contact: WebLeadContact; at: string }
 
 export async function readWebLead(leadId: string): Promise<WebLeadRecord | null> {
   return readJson<WebLeadRecord>(await readKey(webLeadKey(leadId)));
