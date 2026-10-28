@@ -15,6 +15,8 @@ import { db } from "@/lib/db";
 import { isOpenAIEnabled } from "@/lib/sdk/openai";
 import { HvacEstimatorContent } from "@/components/v3/hvac-estimator-blueprint/hvac-estimator-content";
 import { readEstimateSeed } from "@/lib/estimateSeed";
+import { readWebLeadFor } from "@/lib/webEstimatorServer";
+import { hvacSeedFromWebLead } from "@/lib/webHandoff";
 import { EstimateSeedStrip } from "@/components/v3/estimate-seed-strip";
 import { leadsWaitingFor } from "@/lib/leadQueue";
 import { customPageGate } from "@/components/v3/upgrade-gate/custom-page-gate";
@@ -23,9 +25,12 @@ import { customPageGate } from "@/components/v3/upgrade-gate/custom-page-gate";
 async function readHvacSeed(userId: string) {
   try {
     const orgId = (await db.user.findUnique({ where: { id: userId }, select: { activeOrgId: true } }))?.activeOrgId;
-    return orgId ? await readEstimateSeed(orgId, "hvac") : null;
+    const seed = orgId ? await readEstimateSeed(orgId, "hvac") : null;
+    // A website or house lead's house and the tier they picked (lib/webHandoff, 2026-10-28), when the lead carries them.
+    const rec = seed && orgId ? await readWebLeadFor(seed.leadId, orgId, "hvac") : null;
+    return { seed, webHvac: rec ? hvacSeedFromWebLead(rec) : null };
   } catch {
-    return null;
+    return { seed: null, webHvac: null };
   }
 }
 
@@ -64,7 +69,7 @@ export default async function HvacEstimatorPage({
     if (client?.address) initialAddress = [client.address, client.city, [client.state, client.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
   }
   // A lead handed over from its page (lib/estimateSeed) fills the address too.
-  const seed = initialAddress ? null : await readHvacSeed(session.user.id);
+  const { seed, webHvac } = initialAddress ? { seed: null, webHvac: null } : await readHvacSeed(session.user.id);
   if (seed?.address) initialAddress = seed.address;
   // The shop's leads still waiting for an HVAC estimate (lib/leadQueue) —
   // the work this page is for, listed under the stepper. Never an error.
@@ -73,7 +78,7 @@ export default async function HvacEstimatorPage({
   return (
     <>
       <EstimateSeedStrip seed={seed} />
-      <HvacEstimatorContent aiEnabled={isOpenAIEnabled()} initialAddress={initialAddress} leads={leads} />
+      <HvacEstimatorContent aiEnabled={isOpenAIEnabled()} initialAddress={initialAddress} leads={leads} webHvac={webHvac} />
     </>
   );
 }

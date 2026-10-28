@@ -2,7 +2,7 @@
 // each estimator applies at open — the fence as drawn, the house with its tier, the smart lines. Pure parts only; the
 // estimators themselves are walked on the stand.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/web-handoff.check.ts
-import { fenceSeedFromWebLead } from "../../../src/lib/webHandoff";
+import { fenceSeedFromWebLead, hvacSeedFromWebLead } from "../../../src/lib/webHandoff";
 import type { WebLeadRecord } from "../../../src/lib/webEstimator";
 
 let bad = 0;
@@ -28,6 +28,15 @@ const typed = fenceSeedFromWebLead(withFacts({ runsFt: [150], type: "vinyl-priva
 check("typed feet: no points, no pin, the runs", !!typed && typed.points.length === 0 && typed.pin === null && typed.runsFt.join() === "150" && typed.gates === 2 && typed.doubles === 1 && typed.type === "vinyl-privacy", JSON.stringify(typed));
 check("the height and the gates default when missing; odd points are dropped", (() => { const s = fenceSeedFromWebLead(withFacts({ runsFt: [40], type: "x", points: [{ x: 1 }, "bad", { x: 2, y: 3 }] })); return !!s && s.heightFt === 6 && s.gates === 0 && s.doubles === 0 && s.points.length === 1 && s.points[0].y === 3; })());
 check("not a fence, or no runs: nothing", fenceSeedFromWebLead(withFacts(base.estimate.facts, "hvac")) === null && fenceSeedFromWebLead(withFacts({})) === null && fenceSeedFromWebLead(withFacts({ runsFt: [] })) === null);
+
+// ── HVAC ──
+const site = { address: "418 Linden Ave, Buffalo, NY 14216", state: "NY", lat: 42.948, lng: -78.853, livingSqft: 2100, storeys: 2, yearBuilt: 1962, county: "Erie", sources: { living: "assessor" } };
+const withSite = hvacSeedFromWebLead(withFacts({ site, sqft: 2100, storeys: 2, yearBuilt: 1962, existing: "split-ac-furnace", gas: "yes", outdoorKind: "air-conditioner", tier: "mid", itemId: "carrier-24abc636", pin: { lat: 42.948, lng: -78.853 } }, "hvac"));
+check("a record with the site: the site as stored, what is there, the gas, the kind, the tier, the unit", !!withSite && withSite.site.livingSqft === 2100 && withSite.site.sources.living === "assessor" && withSite.site.county === "Erie" && withSite.existing === "split-ac-furnace" && withSite.gas === "yes" && withSite.outdoorKind === "air-conditioner" && withSite.tier === "mid" && withSite.itemId === "carrier-24abc636", JSON.stringify(withSite));
+const older = hvacSeedFromWebLead(withFacts({ sqft: 1800, storeys: 1, yearBuilt: 1995, existing: "heat-pump", gas: "no", outdoorKind: "heat-pump", tier: "premium", pin: { lat: 42.948, lng: -78.853 } }, "hvac"));
+check("an older record (no site): rebuilt from the address, the pin and the square feet; no unit id", !!older && older.site.address === "418 Linden Ave, Buffalo, NY 14216" && older.site.state === "NY" && older.site.lat === 42.948 && older.site.lng === -78.853 && older.site.livingSqft === 1800 && older.site.storeys === 1 && older.site.yearBuilt === 1995 && Object.keys(older.site.sources).length === 0 && older.itemId === null && older.tier === "premium" && older.outdoorKind === "heat-pump" && older.gas === "no", JSON.stringify(older));
+check("the defaults when the words are odd", (() => { const s = hvacSeedFromWebLead(withFacts({ site, tier: "mid", existing: 7, gas: null, outdoorKind: "x" }, "hvac")); return !!s && s.existing === "split-ac-furnace" && s.gas === "yes" && s.outdoorKind === "air-conditioner"; })());
+check("not hvac, or no tier: nothing", hvacSeedFromWebLead(withFacts({ site, tier: "mid" }, "fence")) === null && hvacSeedFromWebLead(withFacts({ site }, "hvac")) === null && hvacSeedFromWebLead(withFacts({ site, tier: "gold" }, "hvac")) === null);
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);

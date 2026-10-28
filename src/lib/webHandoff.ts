@@ -7,6 +7,7 @@
 // seed's lead id (the seed cookie is ~4 KB and carries none of this). Pure; the server read is lib/webEstimatorServer
 // readWebLeadFor. Design: docs/superpowers/specs/2026-10-28-home-portal-house-estimators-design.md.
 import type { WebLeadRecord } from "./webEstimator";
+import type { SiteFacts } from "./hvac/intake";
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const pinOf = (v: unknown): { lat: number; lng: number } | null => {
@@ -50,5 +51,53 @@ export function fenceSeedFromWebLead(rec: WebLeadRecord): WebFenceSeed | null {
     heightFt: num(f.heightFt) ?? 6,
     gates: Math.max(0, Math.round(num(f.gates) ?? 0)),
     doubles: Math.max(0, Math.round(num(f.doubles) ?? 0)),
+  };
+}
+
+// ── HVAC: the tier's facts (lib/webEstimatorTrades sizeWebHvac) ──
+
+export type WebHvacSeed = {
+  /** The house as the homeowner confirmed it (lib/hvac/intake SiteFacts) — stored since 2026-10-28; rebuilt from the
+   *  address, the pin and the square feet for a lead from before. */
+  site: SiteFacts;
+  /** "split-ac-furnace" | "split-heat-pump" | "furnace-only" | "none" — the form's existing.kind. */
+  existing: string;
+  /** "yes" | "no" — gas at the house. */
+  gas: string;
+  outdoorKind: "heat-pump" | "air-conditioner";
+  tier: "value" | "mid" | "premium";
+  /** The catalog id of the unit they were priced on; null on a lead from before. */
+  itemId: string | null;
+};
+
+const EXISTING = ["split-ac-furnace", "split-heat-pump", "furnace-only", "none"];
+
+export function hvacSeedFromWebLead(rec: WebLeadRecord): WebHvacSeed | null {
+  if (rec.trade !== "hvac" || rec.estimate.trade !== "hvac") return null;
+  const f = rec.estimate.facts;
+  const tier = f.tier === "value" || f.tier === "mid" || f.tier === "premium" ? f.tier : null;
+  if (!tier) return null;
+  const e = rec.estimate;
+  const stored = f.site && typeof f.site === "object" && typeof (f.site as { address?: unknown }).address === "string" ? (f.site as SiteFacts) : null;
+  const pin = pinOf(f.pin);
+  const site: SiteFacts = stored
+    ? { ...stored, sources: stored.sources && typeof stored.sources === "object" ? stored.sources : {} }
+    : {
+        address: [e.address, e.city, [e.state, e.zip].filter(Boolean).join(" ")].filter(Boolean).join(", "),
+        state: e.state ?? "",
+        ...(pin ? { lat: pin.lat, lng: pin.lng } : {}),
+        ...(num(f.sqft) ? { livingSqft: num(f.sqft)! } : {}),
+        ...(num(f.storeys) ? { storeys: num(f.storeys)! } : {}),
+        ...(num(f.yearBuilt) ? { yearBuilt: num(f.yearBuilt)! } : {}),
+        ...(typeof f.county === "string" && f.county ? { county: f.county } : {}),
+        sources: {},
+      };
+  return {
+    site,
+    existing: typeof f.existing === "string" && EXISTING.includes(f.existing) ? f.existing : "split-ac-furnace",
+    gas: f.gas === "no" ? "no" : "yes",
+    outdoorKind: f.outdoorKind === "heat-pump" ? "heat-pump" : "air-conditioner",
+    tier,
+    itemId: typeof f.itemId === "string" && f.itemId ? f.itemId : null,
   };
 }
