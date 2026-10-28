@@ -25,7 +25,7 @@ import { trackActivation } from "@/lib/activation-events";
 type Tx = Prisma.TransactionClient;
 
 export interface SettleInput {
-  provider: "STRIPE" | "SQUARE" | "STAX" | "MANUAL";
+  provider: "STRIPE" | "SQUARE" | "STAX" | "MANUAL" | "WISETACK";
   /** Dedupe key: Stripe checkout session id / Square order id / Stax invoice id. Null for manual. */
   externalId: string | null;
   /** Refund key: Stripe payment_intent / Square payment id. */

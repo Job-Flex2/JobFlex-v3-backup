@@ -318,3 +318,18 @@ export function reminderDue(l: Loan, now: Date): "accept_nudge" | "expiring" | n
   }
   return null;
 }
+
+export type LoanEffect = { kind: "approved" | "accepted" | "declined" | "expired" | "paid_part" | "paid"; fundings: Funding[] };
+
+/** What follows a change in a client's loan: the office's notices, and each new payout to settle — once. */
+export function loanSideEffects(before: Loan, after: Loan): LoanEffect[] {
+  const out: LoanEffect[] = [];
+  const fresh = after.fundings.filter((f) => !before.fundings.some((g) => g.id === f.id));
+  const changed = after.state !== before.state;
+  if (after.state === "paid" && (changed || fresh.length)) out.push({ kind: "paid", fundings: fresh });
+  else if (fresh.length) out.push({ kind: "paid_part", fundings: fresh });
+  if (changed && (after.state === "approved" || after.state === "accepted" || after.state === "declined" || after.state === "expired")) {
+    out.push({ kind: after.state, fundings: [] });
+  }
+  return out;
+}

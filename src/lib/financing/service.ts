@@ -8,13 +8,14 @@ import { afterResponse } from "@/lib/server-events";
 import { textOffice } from "@/lib/sms/send";
 import { appBaseUrl } from "@/lib/appUrl";
 import { OWNER_ROLE } from "@/lib/orgContext";
-import { getProvider, type MerchantSnapshot } from "./provider";
+import { settleInstallmentPayment } from "@/lib/payments/settle";
+import { getProvider, type MerchantSnapshot, type ProviderEvent } from "./provider";
 import { merchantPrefill, readinessFacts, type PrefillOrg, type PrefillOwner } from "./prefill";
 import { contractSchedule, APPROVED_CO_SELECT } from "@/lib/contractTotal";
 import { resolveSchedule } from "@/lib/paymentSchedule";
 import { planEnded } from "@/lib/paidCaps";
-import { nextLoanState, offerFor, orgLetIn, readiness, reuseLoan, type Loan, type LoanSnapshot, type OrgFinancing } from "./state";
-import { readLoan, readOffer, readOrgFinancing, readSwitch, writeLoan, writeOffer, writeOrgFinancing } from "./store";
+import { coverMinor, coveredStageIds, loanSideEffects, nextLoanState, offerFor, orgLetIn, readiness, reuseLoan, type Funding, type Loan, type LoanSnapshot, type OrgFinancing } from "./state";
+import { orgIdForMerchantRef, proposalForLoanRef, readLoan, readOffer, readOrgFinancing, readSwitch, writeLoan, writeOffer, writeOrgFinancing } from "./store";
 import { editorFinancing, portalFinancingFrom, type EditorFinancing, type PortalFinancing } from "./view";
 
 export const SETTINGS_HREF = "/dashboard/settings?pane=payments&sub=financing";
@@ -236,11 +237,88 @@ export async function syncLoanForPublicId(publicId: string): Promise<void> {
   if (snapshot) await applyLoanSnapshot(row.id, snapshot);
 }
 
-/** Wisetack's word on a loan, from a webhook, a read or the reconcile: the new state written. */
+/** Wisetack's word on a loan — a webhook, a read on the way back, or the reconcile: the new state written, the office
+ *  told, each new payout recorded as a payment once. JobFlex's admin switch is not asked: an open loan always lands. */
 export async function applyLoanSnapshot(proposalId: string, snapshot: LoanSnapshot): Promise<Loan | null> {
   const before = await readLoan(proposalId);
   if (!before) return null;
   const after = nextLoanState(before, snapshot, new Date().toISOString());
-  if (JSON.stringify(after) !== JSON.stringify(before)) await writeLoan(proposalId, after);
+  if (JSON.stringify(after) === JSON.stringify(before)) return after;
+  await writeLoan(proposalId, after);
+  const effects = loanSideEffects(before, after);
+  if (!effects.length) return after;
+  const p = await db.proposal.findUnique({ where: { id: proposalId }, select: { id: true, organizationId: true, title: true, clientId: true, client: { select: { name: true } } } });
+  if (!p) return after;
+  const who = p.client?.name ?? "The client";
+  const cover = usd(coverMinor(after));
+  const href = `/dashboard/proposals/${p.id}`;
+  for (const fx of effects) {
+    if (fx.kind === "paid" || fx.kind === "paid_part") {
+      // The payment's own notice (lib/payments/settle → notifyPaymentReceived) tells the office.
+      for (const f of fx.fundings) await settleFunding(p.organizationId, p.id, after, f, p.clientId);
+      continue;
+    }
+    const line =
+      fx.kind === "approved"
+        ? `${who} was approved for ${cover} through Wisetack on "${p.title}" — the loan terms are next.`
+        : fx.kind === "accepted"
+          ? `${who} accepted a ${cover} Wisetack loan on "${p.title}". Wisetack pays you when they confirm the job is done.`
+          : fx.kind === "declined"
+            ? `${who} wasn't approved by Wisetack on "${p.title}" — the other ways to pay stay open.`
+            : `${who}'s Wisetack approval on "${p.title}" expired.`;
+    await notifyFinancing(p.organizationId, line, { kind: "FINANCING_LOAN", href, proposalId: p.id, clientId: p.clientId });
+  }
   return after;
+}
+
+/** One Wisetack payout → one Payment (provider WISETACK, method financing, no JobFlex fee) on the stages the loan pays. */
+async function settleFunding(orgId: string, proposalId: string, loan: Loan, f: Funding, clientId: string | null): Promise<void> {
+  const money = await proposalMoney(orgId, proposalId);
+  if (!money) return;
+  const open = money.schedule.stages.filter((s) => !s.synthetic && (s.status === "UNPAID" || s.status === "PENDING"));
+  const installmentIds = coveredStageIds(open, f.amountMinor);
+  await settleInstallmentPayment({
+    provider: "WISETACK",
+    externalId: `${loan.ref}:${f.id}`,
+    externalPaymentId: null,
+    organizationId: orgId,
+    proposalId,
+    installmentIds,
+    amountMinor: f.amountMinor,
+    feeMinor: 0,
+    feeBilling: "in_payment",
+    currency: money.proposal.currency,
+    livemode: true,
+    method: "financing",
+    scheduleVersion: null,
+    clientId,
+    paidAt: new Date(f.at || Date.now()),
+    note: "Paid through Wisetack financing (Wisetack keeps its merchant fee)",
+  });
+}
+
+/** Someone pre-qualified through a contractor's general link → that contractor's lead. */
+async function prequalLead(orgId: string, person: { name: string; phone: string | null; email: string | null }, amountMinor: number): Promise<void> {
+  const line = `${person.name} is pre-approved for ${usd(amountMinor)} through Wisetack — they checked their rate from your link.`;
+  const lead = await db.lead.create({
+    data: { organizationId: orgId, name: person.name, phone: person.phone, email: person.email, description: line, source: "wisetack", status: "NEW" },
+    select: { id: true },
+  });
+  await notifyFinancing(orgId, `New lead: ${line}`, { kind: "FINANCING_LEAD", href: `/dashboard/leads/${lead.id}` });
+}
+
+/** One verified Wisetack event (the webhook route runs each inside the dedupe envelope). */
+export async function applyEvent(ev: ProviderEvent): Promise<void> {
+  if (ev.kind === "merchant") {
+    const orgId = await orgIdForMerchantRef(ev.merchantRef);
+    if (orgId) await applyMerchantSnapshot(orgId, ev.snapshot);
+    return;
+  }
+  if (ev.kind === "loan") {
+    const proposalId = await proposalForLoanRef(ev.loanRef);
+    if (proposalId) await applyLoanSnapshot(proposalId, ev.snapshot);
+    return;
+  }
+  const orgId = await orgIdForMerchantRef(ev.merchantRef);
+  if (orgId) await prequalLead(orgId, ev.person, ev.amountMinor);
 }
