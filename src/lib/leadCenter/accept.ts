@@ -11,6 +11,8 @@
 // Plain server module (NOT "use server") — callers do the auth.
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { webLeadKey } from "@/lib/webEstimator";
+import { LEAD_ESTIMATE_KEY, buyerWebLeadRecord, parseLeadEstimate } from "./estimate";
 
 type Tx = Prisma.TransactionClient;
 
@@ -76,6 +78,17 @@ export async function acceptOfferTx(
       aiConfidence: pl.aiConfidence,
     },
   });
+
+  // A lead the homeowner priced in a house estimator (2026-10-28): the website-estimate record goes onto the buyer's
+  // lead as `webLead:<leadId>` — the record the website estimators write — so the lead page's "Open in the estimator"
+  // opens it priced. The deck's draft stays in the house org; the buyer's copy carries the design only.
+  const estRow = await tx.syncState.findUnique({ where: { key: LEAD_ESTIMATE_KEY(pl.id) } });
+  const est = parseLeadEstimate(estRow?.cursor);
+  if (est && est.trade !== "roof") {
+    const rec = buyerWebLeadRecord(est, { leadId: lead.id, organizationId, contact: { name: pl.name, phone: pl.phone ?? "", email: pl.email ?? null, note: est.note } }, now);
+    const cursor = JSON.stringify(rec);
+    await tx.syncState.upsert({ where: { key: webLeadKey(lead.id) }, update: { cursor }, create: { key: webLeadKey(lead.id), cursor } });
+  }
 
   await tx.platformLead.update({
     where: { id: pl.id },

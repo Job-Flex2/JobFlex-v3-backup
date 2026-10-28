@@ -239,10 +239,10 @@ export function splitTypedAddress(a: { address: string; city: string; state: str
 /** What one click on the lead page does for each trade — said plainly, no more than the estimator will do. */
 export const HANDOFF_WORDS: Record<WebTrade, string> = {
   roof: "Their aerial measurement is on file — it is the top row under Recent measurements; pick it, choose the package, send the proposal.",
-  hvac: "Opens with their address and what they told you; look up the house, size it, and price the install.",
-  fence: "Opens on their lot with your price book; draw the lines they described and the proposal prices itself.",
+  hvac: "Opens with their house looked up and sized, the tier they picked selected and priced in your book — adjust, then send the proposal.",
+  fence: "Opens on their lot with the fence as they drew it — the style, the height, the gates — priced in your book.",
   deck: "Opens as a draft with their deck designed and priced the way they saw it — adjust, then send the proposal.",
-  smart: "Opens Smart Proposal with their words as the brief — run it in your own method and send the proposal.",
+  smart: "Opens Smart Proposal at the result with the lines they were priced on — re-price in your own method and send the proposal.",
 };
 
 /** May the button run on `host`? Empty list = anywhere; a listed domain covers its subdomains; the app itself always. */
