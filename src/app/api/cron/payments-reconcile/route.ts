@@ -6,6 +6,7 @@ import { InstallmentStatus, ProposalStatus } from "@/lib/prismaEnums";
 import { resolveSchedule } from "@/lib/paymentSchedule";
 import { verifyCheckoutRef } from "@/lib/payments/verify";
 import { releaseStaleClaims } from "@/lib/payments/checkouts";
+import { reconcileFinancing } from "@/lib/financing/service";
 
 export const runtime = "nodejs";
 
@@ -72,5 +73,9 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ ...tally, released, flipped });
+  // Wisetack financing (lib/financing): applications in review, open loans, the office's reminders — the backstop for
+  // a webhook that never came. Its own failure never fails the card reconcile above.
+  const financing = await reconcileFinancing(new Date()).catch(() => null);
+
+  return NextResponse.json({ ...tally, released, flipped, financing });
 }

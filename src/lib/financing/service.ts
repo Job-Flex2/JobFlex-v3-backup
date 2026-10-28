@@ -14,8 +14,8 @@ import { merchantPrefill, readinessFacts, type PrefillOrg, type PrefillOwner } f
 import { contractSchedule, APPROVED_CO_SELECT } from "@/lib/contractTotal";
 import { resolveSchedule } from "@/lib/paymentSchedule";
 import { planEnded } from "@/lib/paidCaps";
-import { coverMinor, coveredStageIds, loanSideEffects, nextLoanState, offerFor, orgLetIn, readiness, reuseLoan, type Funding, type Loan, type LoanSnapshot, type OrgFinancing } from "./state";
-import { orgIdForMerchantRef, proposalForLoanRef, readLoan, readOffer, readOrgFinancing, readSwitch, writeLoan, writeOffer, writeOrgFinancing } from "./store";
+import { coverMinor, coveredStageIds, loanSideEffects, nextLoanState, offerFor, orgLetIn, readiness, reminderDue, reuseLoan, type Funding, type Loan, type LoanSnapshot, type OrgFinancing } from "./state";
+import { listLoans, listOrgFinancing, orgIdForMerchantRef, proposalForLoanRef, readLoan, readOffer, readOrgFinancing, readSwitch, writeLoan, writeOffer, writeOrgFinancing } from "./store";
 import { editorFinancing, portalFinancingFrom, type EditorFinancing, type PortalFinancing } from "./view";
 
 export const SETTINGS_HREF = "/dashboard/settings?pane=payments&sub=financing";
@@ -321,4 +321,63 @@ export async function applyEvent(ev: ProviderEvent): Promise<void> {
   }
   const orgId = await orgIdForMerchantRef(ev.merchantRef);
   if (orgId) await prequalLead(orgId, ev.person, ev.amountMinor);
+}
+
+/** The job is done (the crew's Complete, or the office marking it): a client with an accepted loan is asked to confirm. */
+export async function askClientDone(orgId: string, proposalId: string): Promise<void> {
+  const provider = getProvider();
+  const loan = await readLoan(proposalId);
+  if (!provider || !loan || loan.state !== "accepted") return;
+  const p = await db.proposal.findFirst({ where: { id: proposalId, organizationId: orgId }, select: { title: true, clientId: true, client: { select: { name: true } } } });
+  if (!p) return;
+  const answer = await provider.askDone(loan.ref).catch(() => "unsupported" as const);
+  const href = `/dashboard/proposals/${proposalId}`;
+  if (answer === "asked") {
+    const at = new Date().toISOString();
+    const fresh = (await readLoan(proposalId)) ?? loan;
+    if (fresh.state === "accepted") await writeLoan(proposalId, { ...fresh, state: "done_asked", history: [...fresh.history, { state: "done_asked", at }] });
+    await notifyFinancing(orgId, `Asked ${p.client?.name ?? "the client"} to confirm with Wisetack that "${p.title}" is done — your payout follows.`, { kind: "FINANCING_LOAN", href, proposalId, clientId: p.clientId });
+  } else {
+    await notifyFinancing(orgId, `"${p.title}" is done — mark it complete in Wisetack so Wisetack pays you.`, { kind: "FINANCING_LOAN", href, proposalId, clientId: p.clientId });
+  }
+}
+
+const FINAL = new Set(["paid", "declined", "expired", "canceled", "refunded"]);
+const MERCHANT_OPEN = new Set(["started", "review", "needs_info"]);
+const RECHECK_MS = 30 * 60 * 1000;
+
+/** The 30-minute payments reconcile: applications in review, open loans, and the office's two reminders. */
+export async function reconcileFinancing(now: Date): Promise<{ merchants: number; loans: number; nudges: number }> {
+  const provider = getProvider();
+  const tally = { merchants: 0, loans: 0, nudges: 0 };
+  if (!provider) return tally;
+  for (const { orgId, rec } of await listOrgFinancing()) {
+    if (!rec.merchantRef || !MERCHANT_OPEN.has(rec.state)) continue;
+    if (rec.checkedAt && now.getTime() - Date.parse(rec.checkedAt) < RECHECK_MS) continue;
+    const snap = await provider.merchant(rec.merchantRef).catch(() => null);
+    if (snap) {
+      await applyMerchantSnapshot(orgId, snap);
+      tally.merchants += 1;
+    }
+  }
+  for (const { proposalId, loan } of await listLoans()) {
+    if (FINAL.has(loan.state)) continue;
+    const snap = await provider.loan(loan.ref).catch(() => null);
+    const after = snap ? await applyLoanSnapshot(proposalId, snap) : loan;
+    if (snap) tally.loans += 1;
+    if (!after) continue;
+    const due = reminderDue(after, now);
+    if (!due) continue;
+    const p = await db.proposal.findUnique({ where: { id: proposalId }, select: { organizationId: true, title: true, clientId: true, client: { select: { name: true } } } });
+    if (!p) continue;
+    const who = p.client?.name ?? "The client";
+    const line =
+      due === "accept_nudge"
+        ? `${who} was approved through Wisetack on "${p.title}" but hasn't accepted the loan yet — a quick call or Remind helps.`
+        : `${who}'s Wisetack approval on "${p.title}" ends ${after.expiresAt ? new Date(after.expiresAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "soon"} — finish the job and have them confirm before then.`;
+    await writeLoan(proposalId, { ...after, nudgedAt: now.toISOString() });
+    await notifyFinancing(p.organizationId, line, { kind: "FINANCING_LOAN", href: `/dashboard/proposals/${proposalId}`, proposalId, clientId: p.clientId });
+    tally.nudges += 1;
+  }
+  return tally;
 }
