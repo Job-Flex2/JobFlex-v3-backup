@@ -57,6 +57,7 @@ import {
 import { KeyboardBridge, OtpCodeField, useKeepInView } from "@/components/auth/otp-code-field";
 import css from "./passwordless.module.css";
 import { markQaVisitor } from "@/lib/qaEmail";
+import { trackMetaLeadOnce } from "@/lib/metaLead";
 import { autoPlanAmount, type AutoPlanOffer } from "@/lib/signupAutoPlan";
 
 type Screen = "form" | "code" | "google" | "done";
@@ -402,6 +403,7 @@ export function PasswordlessStep({
         });
         if (q.ok) {
           track("continue", "quick");
+          trackMetaLeadOnce(); // Meta Lead: the email step passed (lib/metaLead)
           proceed(q.signupToken);
           return;
         }
@@ -430,6 +432,7 @@ export function PasswordlessStep({
         return;
       }
       track("continue");
+      trackMetaLeadOnce(); // Meta Lead: the email step passed (lib/metaLead)
       rememberOtpDraft(res.draft);
       setDraft(res.draft);
       setSentTo(res.email);

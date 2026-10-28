@@ -8,8 +8,7 @@
 //
 //   GET  ?signup=<token>&reason=step1|google|relogin            the plan the sign-up rule picks (lib/signupAutoPlan:
 //                                                                Professional, monthly), with the 7-day trial
-//   GET  ?signup=<token>&plan=<slug>&interval=MONTH|YEAR&reason=plan_pick   a plan card pressed (&deck=1: "Add Deck
-//                                                                Studio" ticked — the add-on is a line of the order)
+//   GET  ?signup=<token>&plan=<slug>&interval=MONTH|YEAR&reason=plan_pick   a plan card pressed
 //   POST name, email (+ the landing's trade, tool, utm_*)        step 1 sent without JavaScript: the short sign-up
 //                                                                (actions/signupOtp startQuickSignup), then as step1
 //
@@ -62,7 +61,7 @@ async function handOff(
   req: Request,
   token: string,
   reason: Reason,
-  ask: { plan: string | null; interval: string | null; edition: string | null; deck?: boolean },
+  ask: { plan: string | null; interval: string | null; edition: string | null },
 ): Promise<NextResponse> {
   const pending = await pendingOf(token);
   // Nothing left to sell (the day ran out, or the account was made in another tab): step 1 again.
@@ -83,8 +82,7 @@ async function handOff(
     planSlug = offer.slug;
   }
 
-  // Every checkout offers Deck Studio on Stripe's page; ticked on a plan card, it is on the order already.
-  const res = await createSignupCheckout({ token, planSlug, interval, origin: new URL(req.url).origin, deckAddon: reason === "plan_pick" && ask.deck === true });
+  const res = await createSignupCheckout({ token, planSlug, interval, origin: new URL(req.url).origin });
   const identity = pending.analytics ?? identityFromCookie((await cookies()).get(`ph_${process.env.NEXT_PUBLIC_POSTHOG_KEY}_posthog`)?.value, new URL(req.url).hostname);
   const tracked = !isQaEmail(pending.email);
   if (!res.ok) {
@@ -113,7 +111,7 @@ export async function GET(req: Request) {
   if (!token || token.length > 80) return go("/auth/register");
   const asked = sp.get("reason") ?? "";
   const reason: Reason = REASONS.has(asked) ? (asked as Reason) : "relogin";
-  return handOff(req, token, reason, { plan: sp.get("plan"), interval: sp.get("interval"), edition: sp.get("edition"), deck: sp.get("deck") === "1" });
+  return handOff(req, token, reason, { plan: sp.get("plan"), interval: sp.get("interval"), edition: sp.get("edition") });
 }
 
 /** Step 1 without JavaScript: the form posts here and the answer is Stripe's card page (or step 1 with the reason). */
