@@ -17,7 +17,7 @@ import { unitCents } from "@/lib/paidApiCosts";
 import { roofGuideRange } from "@/lib/publicEstimate/guide";
 import { cacheFresh, cacheable, houseOrgId, inUs, pubRoofKey, readPubRoof, writePubRoof, type PubRoofCache } from "@/lib/publicEstimate/store";
 import { disclaimerFor, roofFactsFromSize, roofFactsFromSolar, roofRange, type MaterialId, type RoofAnswers } from "@/lib/publicEstimate/roof";
-import { estimateShort, estimateWords, leadEstimateFrom, planNotesFor, type LeadEstimate } from "@/lib/leadCenter/estimate";
+import { estimateShort, estimateWords, leadEstimateFrom, planNotesFor, type RoofLeadEstimate } from "@/lib/leadCenter/estimate";
 import { buildPriceRangeEmail } from "@/lib/email/build/platform";
 import { renderEmail } from "@/lib/email/renderEmail";
 import { sendEmail } from "@/lib/sdk/resend";
@@ -164,7 +164,7 @@ export type PublicRoofEmailInput = z.infer<typeof emailSchema>;
 const CONSENT_MISSING = "Please tick the box to agree to be contacted about your request, then send again.";
 
 /** The record, priced by the server from what it trusts: the cached roof read, or the size the homeowner typed. */
-async function serverEstimate(input: z.infer<typeof siteSchema> & z.infer<typeof pricedSchema>): Promise<LeadEstimate | null> {
+async function serverEstimate(input: z.infer<typeof siteSchema> & z.infer<typeof pricedSchema>): Promise<RoofLeadEstimate | null> {
   const answers: RoofAnswers = input.answers;
   const idx = locationIndex(`${input.city}, ${input.state}`);
   const city = idx.level === "national" ? null : { factor: idx.factor, words: idx.place };
@@ -191,7 +191,7 @@ async function serverEstimate(input: z.infer<typeof siteSchema> & z.infer<typeof
 export type PublicRoofLeadResult = { ok: true; statusPath: string; requestToken: string; homePath: string | null } | { ok: false; error: string };
 
 /** The range, by email: the number, what's in it, the one next step. Best-effort — the request or the plan stands. */
-async function sendRangeEmail(to: string, name: string | null, site: { address: string; city: string }, e: LeadEstimate, quotes: { url: string; label: string }, home: string | null | undefined): Promise<void> {
+async function sendRangeEmail(to: string, name: string | null, site: { address: string; city: string }, e: RoofLeadEstimate, quotes: { url: string; label: string }, home: string | null | undefined): Promise<void> {
   try {
     const basis = `about ${Math.round(e.squares * 100).toLocaleString("en-US")} sq ft of roof${e.basis === "solar" ? ` · ${e.pitchLabel} pitch · read from aerial data` : " · from your home's size"}`;
     const { subject, html } = renderEmail(

@@ -6,7 +6,7 @@ import { startCascade } from "@/lib/leadCenter/cascade";
 import { offerPlatformLeadToOrg } from "@/lib/leadCenter/route";
 import { buildRanking } from "@/lib/leadCenter/matching";
 import { getRoutingMode, setRoutingMode, type RoutingMode } from "@/lib/leadCenter/routingMode";
-import { setAutoPrice, setExclusive, type PricedTrade } from "@/lib/leadCenter/autoPrice";
+import { isPricedTrade, setAutoPrice, setExclusive, type PricedTrade } from "@/lib/leadCenter/autoPrice";
 import { adminRefund, dollars, MAX_LEAD_PRICE_CENTS, MIN_LEAD_PRICE_CENTS } from "@/lib/leadCenter/purchase";
 import { rotateTestKey } from "@/lib/leadCenter/testLeads";
 import { createHomeownerLead } from "@/lib/leadCenter/intake";
@@ -75,7 +75,7 @@ export async function readLeadRoutingMode(): Promise<RoutingMode> {
 /** "Charge the suggested price on automatic routing", per trade (lib/leadCenter/autoPrice). */
 export async function setLeadAutoPrice(trade: PricedTrade, on: boolean): Promise<{ ok: true }> {
   await requirePlatformAdmin();
-  if (trade !== "roof") throw new Error("Unknown trade");
+  if (!isPricedTrade(trade)) throw new Error("Unknown trade");
   await setAutoPrice(trade, on === true);
   revalidatePath("/admin/lead-center");
   return { ok: true };

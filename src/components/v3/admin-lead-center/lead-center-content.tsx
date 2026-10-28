@@ -50,7 +50,7 @@ import {
   setOrganizationInternal,
   setPlatformLeadPrice,
 } from "@/actions/adminLeadCenter";
-import { suggestedLeadPriceCents, type LeadEstimate } from "@/lib/leadCenter/estimate";
+import { TRADE_NOUN, estimatorNameFor, suggestedLeadPriceCents, type LeadEstimate } from "@/lib/leadCenter/estimate";
 import type { RoutingMode } from "@/lib/leadCenter/routingMode";
 import { LeadMap, type MapFilter } from "./lead-map";
 import {
@@ -1564,9 +1564,25 @@ function DetailSheet({
 /** THE RANGE THE HOMEOWNER PRICED (2026-10-27): what they saw and chose, the roof's size and where the number came
  *  from, their budget. The whole estimate under it opens in the buyer's roof estimator, never here. */
 function PricedBlock({ estimate: e }: { estimate: LeadEstimate }) {
-  const basis = e.measurementId ? "measured" : e.basis === "solar" ? "aerial read" : "from home size";
   // A range in whole dollars, grouped — not a payment amount.
   const money = (dollars: number) => "$" + Math.round(dollars).toLocaleString("en-US");
+  if (e.trade !== "roof") {
+    // A house estimate (2026-10-28): the website estimator's own record — the choice, the summary, the band.
+    return (
+      <>
+        <div className={styles.dSec}>Priced by the homeowner</div>
+        <div className={styles.dDesc} data-lead-priced>
+          <b>{money(e.range.low)}–{money(e.range.high)}</b> · {e.web.choice} · {TRADE_NOUN[e.trade]}
+          <br />
+          {e.web.summary}
+          {e.note ? <> · their note: &ldquo;{e.note}&rdquo;</> : null}
+          <br />
+          <span className={styles.dim}>Opens priced in the buyer&rsquo;s {estimatorNameFor(e.trade)}.</span>
+        </div>
+      </>
+    );
+  }
+  const basis = e.measurementId ? "measured" : e.basis === "solar" ? "aerial read" : "from home size";
   return (
     <>
       <div className={styles.dSec}>Priced by the homeowner</div>

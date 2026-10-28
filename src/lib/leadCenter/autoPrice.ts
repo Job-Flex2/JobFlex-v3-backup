@@ -7,7 +7,10 @@
 import { db } from "@/lib/db";
 import { suggestedLeadPriceCents, type LeadEstimate } from "./estimate";
 
-export type PricedTrade = "roof";
+/** One switch per trade: the roof, and (2026-10-28) the four house estimators. */
+export const PRICED_TRADES = ["roof", "deck", "fence", "hvac", "smart"] as const;
+export type PricedTrade = (typeof PRICED_TRADES)[number];
+export const isPricedTrade = (v: unknown): v is PricedTrade => typeof v === "string" && (PRICED_TRADES as readonly string[]).includes(v);
 export const AUTO_PRICE_KEY = (trade: PricedTrade) => `leadCenter:autoPrice:${trade}`;
 export const EXCLUSIVE_KEY = (leadId: string) => `leadexclusive:${leadId}`;
 
