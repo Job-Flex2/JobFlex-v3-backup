@@ -5,6 +5,7 @@
 import { fieldName, isOutsideScriptError, reasonOfMessage, reasonSide, reasonWords, scrubWords, sideOf } from "../../../src/lib/signup-watch-shared";
 import { signupAlertsOf } from "../../../src/lib/signup-dropoff";
 import { formSentence, formWatchOf, type LiveEvent } from "../../../src/lib/traffic-live";
+import { setSignupPosition, signupLeaveKind, signupLeavingTo } from "../../../src/lib/signup-watch";
 import { TRAFFIC_EVENTS as E } from "../../../src/lib/traffic-contract";
 
 let bad = 0;
@@ -96,6 +97,34 @@ check("a visitor who left after only an outside failure: their choice, not ours 
 const both = [...typing, ev(E.signupProblem, 18, { reason: "server_error", side: "ours", message: "Something went wrong on our side.", screen: "account" }), ev(E.signupProblem, 20, { reason: "outside_script", side: "outside", message: "Script error.", screen: "account" }), ev(E.signupLeave, 31, { kind: "closed", screen: "account", field: "Email", ms: "30000" })];
 check("…a real failure of ours beside it still makes it ours", formWatchOf(both, t0 + 60_000)!.verdict === "ours");
 check("an outside failure never raises the alarm, however many visitors met it", signupAlertsOf([{ reason: "outside_script", side: "outside", visits: 9, times: 12, message: "Script error.", screen: "account" }]).length === 0 && signupAlertsOf([{ reason: "server_error", side: "ours", visits: 3, times: 3, message: "", screen: "account" }]).length === 1);
+
+// ── off to Stripe's card page is not a finish (owner, 2026-10-28: PostHog showed the visitor go to Stripe while the
+// card said "Finished" — "how do I understand if they signed up or not?"). The form is finished only when the server's
+// own completed event is in; a "done" leave without it, after the checkout opened, is the hand-off to the card page.
+const toCardOld = [...typing, ev(E.step, 12, { step: "3", screen: "checkout" }), ev(E.attempt, 12.1), ev(E.signupLeave, 14, { kind: "done", screen: "done", ms: "2000" }), ev(E.opened, 14.5)];
+f = formWatchOf(toCardOld, t0 + 60_000)!;
+check("a 'done' leave with no account made, the checkout opened: the hand-off to Stripe's card page (events before 2026-10-28)", f.left?.kind === "checkout" && f.screen === "Stripe card page" && f.left.screen === "Stripe card page" && f.verdict === null, JSON.stringify({ left: f.left, screen: f.screen }));
+check("…the server's own checkout event landing after the leave does not undo the leave", f.left !== null);
+check("…and the sentence says they are not signed up yet", /Stripe's card page/.test(formSentence(f, true)) && /not signed up/.test(formSentence(f, true)), formSentence(f, true));
+const toCardNew = [...typing, ev(E.step, 12, { step: "3", screen: "checkout" }), ev(E.attempt, 12.1), ev(E.opened, 13), ev(E.signupLeave, 14, { kind: "checkout", screen: "checkout", ms: "2000" })];
+f = formWatchOf(toCardNew, t0 + 60_000)!;
+check("the watcher's own 'checkout' leave reads the same", f.left?.kind === "checkout" && f.screen === "Stripe card page" && f.verdict === null, JSON.stringify(f.left));
+const madeAccount = [...typing, ev(E.step, 12, { step: "3" }), ev(E.attempt, 20), ev(E.completed, 23.5, { verified: "true" }), ev(E.signupLeave, 24, { kind: "done", screen: "done", ms: "3000" })];
+f = formWatchOf(madeAccount, t0 + 60_000)!;
+check("a 'done' leave beside the server's completed event is the account made", f.left?.kind === "done" && f.screen === "Account made" && f.verdict === null && /account was made/i.test(formSentence(f, false)), `${JSON.stringify(f.left)} · ${formSentence(f, false)}`);
+const latched = [...typing, ev(E.step, 12, { step: "3" }), ev(E.signupLeave, 40, { kind: "done", screen: "plan", field: "", ms: "28000" })];
+f = formWatchOf(latched, t0 + 60_000)!;
+check("a 'done' leave from the plan screen (the done screen that flashed by before the plan step) is a close on the plan screen", f.left?.kind === "closed" && f.left.screen === "Plan" && f.verdict === "choice", JSON.stringify(f.left));
+
+// ── the browser's half: the leave's kind is read at the leave, from where they are, never latched from a screen ──
+setSignupPosition({ screen: "done" });
+setSignupPosition({ step: "3", screen: "plan" });
+check("the watcher: a done screen that flashed by before the plan step leaves no mark — a close on the plan screen is a close", signupLeaveKind() === "closed");
+setSignupPosition({ step: "4", screen: "done" });
+check("…on the done screen itself, the leave is done", signupLeaveKind() === "done");
+signupLeavingTo("checkout");
+setSignupPosition({ screen: "done" });
+check("…a done screen set after the hand-off to the checkout keeps the leave a checkout", signupLeaveKind() === "checkout");
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);

@@ -130,6 +130,12 @@ export function dropoffVisitFromRow(row: unknown[]): DropoffVisit | null {
   }).filter((p): p is DropoffProblem => !!p);
   const leaveRaw = text(row[17]);
   const [kind, lScreen, lField, lProblem] = leaveRaw.split("|");
+  const finishedAt = secMs(row[13]);
+  const checkoutOpened = num(row[14]) > 0;
+  // "done" is the account made only with the server's completed event (2026-10-28): after the checkout opened it was
+  // the hand-off to Stripe's card page (events before the fix); from any other screen, a close on that screen.
+  const leaveKind = kind !== "done" ? kind : lScreen && lScreen !== "done" ? "closed" : finishedAt != null ? "done" : checkoutOpened ? "checkout" : "done";
+  const leaveScreen = leaveKind === "checkout" && lScreen === "done" ? "checkout" : lScreen || "";
   const awayRaw = text(row[18]);
   const [aScreen, aField] = awayRaw.split("|");
   return {
@@ -143,11 +149,11 @@ export function dropoffVisitFromRow(row: unknown[]): DropoffVisit | null {
     inApp: num(row[7]) > 0 || text(row[7]) === "true",
     flow: text(row[8]),
     reached: { account: secMs(row[9]), code: secMs(row[10]), company: secMs(row[11]), plan: secMs(row[12]) },
-    finishedAt: secMs(row[13]),
-    checkoutOpened: num(row[14]) > 0,
+    finishedAt,
+    checkoutOpened,
     boxes,
     problems,
-    leave: leaveRaw && kind ? { kind, screen: lScreen || "", field: lField || "", lastProblem: lProblem || "" } : null,
+    leave: leaveRaw && kind ? { kind: leaveKind, screen: leaveScreen, field: lField || "", lastProblem: lProblem || "" } : null,
     away: awayRaw && (aScreen || aField) ? { screen: aScreen || "", field: aField || "" } : null,
     watched: num(row[19]) > 0,
     awayCount: num(row[20]),
@@ -348,7 +354,7 @@ export function buildDropoffReport(visits: DropoffVisit[], days: number, now: nu
   const placeMap = new Map<string, DropoffStopPlace>();
   for (const v of stopped) {
     const at = stopAt.get(v.id)!;
-    const gone = v.leave?.kind === "google" ? " — went to Google" : v.leave?.kind === "checkout" ? " — opened the checkout" : "";
+    const gone = v.leave?.kind === "google" ? " — went to Google" : v.leave?.kind === "checkout" ? " — went to Stripe's card page" : "";
     const place = `${screenName(at.screen)}${at.field ? ` · ${at.field}` : ""}${gone}`;
     const row = placeMap.get(place) ?? { place, screen: at.screen, field: at.field, visits: 0 };
     row.visits += 1;

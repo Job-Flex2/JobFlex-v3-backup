@@ -194,9 +194,11 @@ export function PasswordlessStep({
     if (outcome === "error" || outcome === "code_error") signupProblem(reason === "start_rejected" ? reasonOfMessage(message) : reason, { message });
   };
   // Which screen of the code flow the visitor is on, for the watcher.
+  // Straight to Professional with a card, the "done" screen is the hand-off to Stripe's card page — not a finish:
+  // the account is made only when the card goes through (2026-10-28).
   React.useEffect(() => {
-    setSignupPosition({ screen: screen === "form" ? "account" : screen });
-  }, [screen]);
+    setSignupPosition({ screen: screen === "form" ? "account" : screen === "done" && auto && requiresCard ? "checkout" : screen });
+  }, [screen, auto, requiresCard]);
 
   /* This browser's copy of the fields and the screen (never the code). */
   React.useEffect(() => {

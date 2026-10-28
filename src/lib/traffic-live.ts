@@ -595,6 +595,12 @@ export function formWatchOf(visit: readonly LiveEvent[], now = Date.now()): Live
       screenAt = e.at;
     }
   }
+  // "done" is the account made only beside the server's own completed event (2026-10-28). Without it, after the
+  // checkout opened, the "done" the browser said was the hand-off to Stripe's card page (events before the fix); from
+  // any other screen it was a close on that screen (the done screen that flashed by before the plan step).
+  const madeAccount = visit.some((e) => eventStage(e) === "signed-up");
+  const toCard = visit.some((e) => e.event === E.opened);
+  const trueScreen = (s: string) => (s === "done" && !madeAccount && toCard ? "checkout" : s);
   const boxes = new Map<string, { field: string; secs: number; filled: boolean; valid: boolean; edits: number; visits: number }>();
   let inBox: LiveFormWatch["inBox"] = null;
   const problems: LiveFormWatch["problems"] = [];
@@ -627,7 +633,10 @@ export function formWatchOf(visit: readonly LiveEvent[], now = Date.now()): Live
     } else if (e.event === E.signupLeave) {
       // Closing a tab hides it first: an away a moment before the leave IS the close; a longer one is part of the story.
       const awaySecs = away ? Math.round((e.at - Date.parse(away.since)) / 1000) : 0;
-      left = { at: iso, kind: e.kind || "closed", screen: screenName(e.screen || screen), field: e.field || "", screenSecs: Math.round((Number(e.ms) || 0) / 1000), pageSecs: Math.round((Number(e.pageMs) || 0) / 1000), lastProblem: e.lastProblem || "", ...(awaySecs >= 3 ? { awaySecs } : {}) };
+      const from = e.screen || screen;
+      let kind = e.kind || "closed";
+      if (kind === "done") kind = from !== "done" ? "closed" : madeAccount ? "done" : toCard ? "checkout" : "done";
+      left = { at: iso, kind, screen: screenName(trueScreen(from)), field: e.field || "", screenSecs: Math.round((Number(e.ms) || 0) / 1000), pageSecs: Math.round((Number(e.pageMs) || 0) / 1000), lastProblem: e.lastProblem || "", ...(awaySecs >= 3 ? { awaySecs } : {}) };
       away = null;
       inBox = null;
     }
@@ -636,16 +645,18 @@ export function formWatchOf(visit: readonly LiveEvent[], now = Date.now()): Live
   const leftAt = left ? Date.parse(left.at) : 0;
   const closing = (e: LiveEvent) => e.event === E.signupAway && e.at - leftAt <= 1000;
   if (left && away && Date.parse(away.since) - leftAt <= 1000) away = null;
-  // A later move after a leave (a back button, a reload) means they did not leave after all.
+  // A later move after a leave (a back button, a reload) means they did not leave after all. The server's own events
+  // (the checkout opened, the account made) are not the visitor moving: they may land seconds after the leave.
   const last = visit[visit.length - 1];
-  if (left && last && last.at > leftAt && last.event !== E.signupLeave && !closing(last)) left = null;
+  const lastMove = [...visit].reverse().find((e) => e.event !== E.opened && e.event !== E.completed) ?? last;
+  if (left && lastMove && lastMove.at > leftAt && lastMove.event !== E.signupLeave && !closing(lastMove)) left = null;
   // Gone for good, and why: a failure of ours outranks the rest; then the form's last refusal; else their choice.
   const stopped = !!left && left.kind === "closed";
   // An outside script's failure is shown, never the verdict.
   const counted = problems.filter((p) => p.side !== "outside");
   const verdict: LiveFormWatch["verdict"] = !stopped && !away ? null : counted.some((p) => p.side === "ours") ? "ours" : counted.length ? "theirs" : stopped ? "choice" : null;
   return {
-    screen: screenName(screen || "account"),
+    screen: screenName(trueScreen(screen || "account")),
     screenSecs: Math.max(0, Math.round(((last?.at ?? now) - screenAt) / 1000)),
     inBox,
     boxes: [...boxes.values()].map((b) => ({ ...b, secs: Math.round(b.secs) })),
@@ -667,7 +678,8 @@ export function formSentence(f: LiveFormWatch, active: boolean, now = Date.now()
     return `Left at ${where} after ${durationWords(f.left.screenSecs * 1000)}${f.left.field ? `, in the ${f.left.field} box` : ""}${why}.`;
   }
   if (f.left && f.left.kind === "google") return "Went to Google to sign up with it.";
-  if (f.left && f.left.kind === "checkout") return "Went to the checkout to start the plan.";
+  if (f.left && f.left.kind === "checkout") return "Went to Stripe's card page — not signed up until the card goes through (this line says Signed up when it does).";
+  if (f.left && f.left.kind === "done") return "Finished the form — the account was made.";
   if (f.away) {
     const mins = durationWords(now - Date.parse(f.away.since));
     return f.screen === "Email code"
@@ -724,7 +736,7 @@ export function visitSummary(v: {
     if (v.lockedOut) return join("Locked out — asked for a password reset.", v.active ? "Still on it." : "Gave up for now.", "Worth a look if it repeats.");
     return join("An existing customer signing back in.", v.active ? "" : "Left before reaching the app.");
   }
-  if (v.stage === "checkout") return join("At checkout, choosing a plan.", pressed);
+  if (v.stage === "checkout") return join("At checkout — not signed up yet; the account is made only once the plan starts.", pressed);
   if (v.stage === "registering") {
     const where = v.step > 0 ? (v.twoStep ? (v.step >= 3 ? "reached the plan step (2 of 2)" : "on the account step (1 of 2)") : `reached step ${v.step}`) : "opened the form";
     return join(`Filling in the sign-up form — ${where}.`, v.active ? "" : "Stopped there.", pressed);

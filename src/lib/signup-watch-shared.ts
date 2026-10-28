@@ -51,14 +51,17 @@ export function fieldName(id: string): string | null {
   return null;
 }
 
-/** The screens of the sign-up, by the watcher's own names. */
+/** The screens of the sign-up, by the watcher's own names. "checkout" is the hand-off to Stripe's card page — not a
+ *  finish; "done" is the account made, and reads so (owner, 2026-10-28: "Finished" beside a visitor who had only gone
+ *  to Stripe read as a sign-up). */
 export const SIGNUP_SCREENS: Readonly<Record<string, string>> = {
   account: "Account",
   code: "Email code",
   company: "Company",
   plan: "Plan",
   google: "Google sign-in",
-  done: "Finished",
+  checkout: "Stripe card page",
+  done: "Account made",
 };
 export const screenName = (s: string) => SIGNUP_SCREENS[s] ?? (s ? s.replace(/^\w/, (c) => c.toUpperCase()) : "Sign-up form");
 
