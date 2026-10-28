@@ -1,5 +1,5 @@
 "use server";
-import { enforceRateLimit, HOUR } from "@/lib/rateLimit";
+import { MINUTE, RateLimitError, clientIp, enforceRateLimit, HOUR } from "@/lib/rateLimit";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
@@ -47,7 +47,11 @@ import {
 } from "@/lib/estimatorSchema";
 import { trackActivation, trackProposalCreated } from "@/lib/activation-events";
 import { applyMemberDiscount } from "@/lib/servicePlanBook";
-import { takeTrialCap } from "@/lib/trialMeter";
+import { noteRequestOrg, takeTrialCap } from "@/lib/trialMeter";
+import { bumpWebCount, storeWebEstimate, webCapReached, webShopBySlug, type WebShop } from "@/lib/webEstimatorServer";
+import { webTradeLive } from "@/lib/webAddonBilling";
+import { WEB_TRADE, priceBand, splitTypedAddress } from "@/lib/webEstimator";
+import type { WebEstimateView } from "@/actions/webEstimator";
 import { briefFingerprint, keepEstimate, photoPrint, SAME_NOTE, sameEstimate } from "@/lib/estimate/sameBrief";
 import { requirePage } from "@/lib/customPageAccess";
 import { readPlanPass } from "@/lib/plans/planToken";
@@ -220,16 +224,20 @@ export async function analyzeEstimatePrompt(input: {
   const blocked = await estimatorRunBlocked(organizationId);
   if (blocked) return blocked;
 
-  const passthrough: PromptAnalysis = {
-    correctedLocation: input.location?.trim() || null,
-    enoughDetail: true,
-    questions: [],
-  };
-  if (!isOpenAIEnabled()) return { ok: true, data: passthrough };
+  if (!isOpenAIEnabled()) return { ok: true, data: analyzePassthrough(input) };
   // The card-less trial's AI ceiling (lib/trialMeter): one run, one use.
   const trial = await takeTrialCap(organizationId, "aiCalls");
   if (!trial.ok) return trial.failure;
+  return analyzeBrief(input, trial.refund);
+}
 
+type AnalyzeInput = Parameters<typeof analyzeEstimatePrompt>[0];
+const analyzePassthrough = (input: AnalyzeInput): PromptAnalysis => ({ correctedLocation: input.location?.trim() || null, enoughDetail: true, questions: [] });
+
+/** THE INTAKE GATE ITSELF, gate-free (2026-10-28): the dashboard action above and the shop's website (webSmartAnalyze)
+ *  both run it, each behind its own gate, brakes and caps. `refund` gives the trial's run back when the provider refused. */
+async function analyzeBrief(input: AnalyzeInput, refund: () => Promise<void>): Promise<{ ok: true; data: PromptAnalysis }> {
+  const passthrough = analyzePassthrough(input);
   const analyzePhotos = safePhotos(input.photos);
   const facts = readBrief(input.description, { sqft: input.sqft });
   // What to ask is decided here, not by the model: the job's own measure
@@ -325,7 +333,7 @@ Description: ${input.description}${stated.length ? `\n\nThe brief already states
   } catch (err: any) {
     console.warn(`[analyzeEstimatePrompt] failed, proceeding without clarify: ${err?.message ?? err}`);
     // The provider refused (no completion billed): the run is given back.
-    if (typeof err?.status === "number") await trial.refund();
+    if (typeof err?.status === "number") await refund();
     return { ok: true, data: passthrough };
   }
 }
@@ -1292,4 +1300,81 @@ export async function convertEstimateToProposal(raw: unknown) {
   if (projectId) revalidatePath(`/dashboard/projects/${projectId}`);
   revalidatePath("/dashboard/proposals");
   return { id: proposal.id };
+}
+
+// ── SMART PROPOSAL ON THE SHOP'S WEBSITE (owner, 2026-10-28; lib/webEstimator "smart"): a homeowner describes the
+// project and shows photos; the intake gate asks only the cost-critical questions; the estimate runs in the shop's own
+// method and price book (runSmartEstimate, as the dashboard's); the page shows the price the shop's way; "Get my full
+// quote" (actions/webEstimator webLead) makes the lead and the shop opens Smart Proposal with the brief. Each door: the
+// shop by its handle, the trade on and paid, the website's brakes, the shop's monthly cap and its trial cap.
+
+async function webSmartGate(slug: unknown): Promise<{ ok: true; shop: WebShop } | { ok: false; error: string; code?: string }> {
+  if (typeof slug !== "string") return { ok: false, error: "This estimator isn't here." };
+  const shop = await webShopBySlug(slug);
+  if (!shop || !(await webTradeLive(shop.id, "smart", shop.settings.trades.smart.on))) return { ok: false, error: "This estimator isn't turned on." };
+  try {
+    await enforceRateLimit(`web-smart-ip:${await clientIp()}`, 4, 10 * MINUTE, "estimates");
+    await enforceRateLimit(`web-est-shop:${shop.id}`, 120, HOUR, "estimates");
+  } catch (err) {
+    if (err instanceof RateLimitError) return { ok: false, error: "That's a lot of estimates at once — give it a few minutes and try again.", code: "braked" };
+    throw err;
+  }
+  if (await webCapReached(shop)) return { ok: false, error: "This estimator has had a busy month and is resting. Leave your details and the shop will price it by hand.", code: "capped" };
+  if (!isOpenAIEnabled()) return { ok: false, error: "The estimator is resting right now. Leave your details and the shop will price it by hand.", code: "unavailable" };
+  return { ok: true, shop };
+}
+
+function cleanWebBrief(raw: unknown) {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const s = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  const sqft = Number(r.sqft);
+  const photos = Array.isArray(r.photos) ? r.photos.filter((x): x is string => typeof x === "string").slice(0, 3) : [];
+  const qualityTier: "budget" | "standard" | "luxury" = r.qualityTier === "budget" ? "budget" : r.qualityTier === "luxury" ? "luxury" : "standard";
+  return { description: s(r.description, 4000), location: s(r.location, 200), sqft: Number.isFinite(sqft) && sqft > 0 ? Math.round(sqft) : undefined, qualityTier, photos, answers: s(r.answers, 2000) };
+}
+
+const RESTING = "This estimator is resting for now. Leave your details and the shop will price it by hand.";
+
+/** The intake gate for a website brief: the cost-critical questions, or none. */
+export async function webSmartAnalyze(slug: unknown, raw: unknown): Promise<{ ok: true; questions: PromptAnalysis["questions"]; location: string | null } | { ok: false; error: string; code?: string }> {
+  const g = await webSmartGate(slug);
+  if (!g.ok) return g;
+  const b = cleanWebBrief(raw);
+  if (b.description.length < 20) return { ok: false, error: "Tell us a little more about the project — a sentence or two.", code: "input" };
+  const trial = await takeTrialCap(g.shop.id, "aiCalls").catch(() => null);
+  if (trial && !trial.ok) return { ok: false, error: RESTING, code: "capped" };
+  await noteRequestOrg(g.shop.id).catch(() => {});
+  const r = await analyzeBrief({ projectType: "", description: b.description, location: b.location || undefined, sqft: b.sqft, photos: b.photos }, trial ? trial.refund : async () => {});
+  return { ok: true, questions: r.data.questions, location: r.data.correctedLocation };
+}
+
+/** The estimate for a website brief, in the shop's own method and book; the price the shop's way. */
+export async function webSmartGenerate(slug: unknown, raw: unknown): Promise<{ ok: true; estimate: WebEstimateView; scope: string; included: string[] } | { ok: false; error: string; code?: string }> {
+  const g = await webSmartGate(slug);
+  if (!g.ok) return g;
+  const b = cleanWebBrief(raw);
+  if (b.description.length < 20) return { ok: false, error: "Tell us a little more about the project — a sentence or two.", code: "input" };
+  const trial = await takeTrialCap(g.shop.id, "aiCalls").catch(() => null);
+  if (trial && !trial.ok) return { ok: false, error: RESTING, code: "capped" };
+  const description = b.answers ? `${b.description}\n\nAnswers to the estimator's questions: ${b.answers}` : b.description;
+  const run = await runSmartEstimate(g.shop.id, { projectType: "", description, location: b.location || undefined, sqft: b.sqft, qualityTier: b.qualityTier, photos: b.photos }, null, trial ? trial.refund : async () => {});
+  if (!run.ok) return { ok: false, error: "The estimate couldn't be made just now. Leave your details and the shop will price it by hand.", code: "unavailable" };
+  const d = run.data;
+  const lines = [...d.materials, ...d.labor];
+  const subtotal = lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0);
+  const discount = d.discount ? (d.discount.isPercent ? (subtotal * d.discount.amount) / 100 : d.discount.amount) : 0;
+  const cents = Math.max(0, Math.round((subtotal - discount) * 100));
+  if (!cents) return { ok: false, error: "The estimate came back empty. Leave your details and the shop will price it by hand.", code: "unavailable" };
+  const ts = g.shop.settings.trades.smart;
+  const band = priceBand(cents, ts.show, ts.spread);
+  const typed = splitTypedAddress({ address: b.location, city: "", state: "", zip: "" });
+  const scope = (d.scope || d.title).slice(0, 300);
+  const est = await storeWebEstimate({
+    organizationId: g.shop.id, trade: "smart", address: typed.address, city: typed.city || null, state: typed.state || g.shop.state, zip: typed.zip || null,
+    summary: scope, choice: d.title.slice(0, 120), cents, band, show: ts.show,
+    facts: { estimate: d, brief: description, qualityTier: b.qualityTier, sqft: b.sqft ?? null, photos: b.photos.length, timelineDays: d.estimatedTimelineDays ?? null },
+  });
+  await bumpWebCount(g.shop.id, "estimates").catch(() => {});
+  const included = lines.map((l) => l.name).filter(Boolean).slice(0, 8);
+  return { ok: true, estimate: { token: est.token, summary: scope, choice: d.title, band, show: ts.show, basis: ts.note || WEB_TRADE.smart.basis, askEmail: ts.askEmail }, scope: d.scope, included };
 }

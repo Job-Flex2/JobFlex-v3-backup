@@ -66,6 +66,7 @@ export function webTradeChoices(shop: WebShop, trade: WebTrade): WebChoice[] {
   const picked = new Set(shop.settings.trades[trade].materials);
   const keep = (c: WebChoice) => !picked.size || picked.has(c.id);
   switch (trade) {
+    case "smart": return [];
     case "roof":
       return ROOF_FAMILIES.filter((f) => f.id !== "low-slope" || picked.has("low-slope")).map((f) => ({ id: f.id, label: f.label, note: ROOF_CHOICE_NOTE[f.id] })).filter(keep);
     case "hvac":
@@ -83,6 +84,7 @@ export function webTradeChoices(shop: WebShop, trade: WebTrade): WebChoice[] {
 /** Everything a shop could offer for a trade (the settings pane's picker). */
 export function webTradeAllChoices(trade: WebTrade): WebChoice[] {
   switch (trade) {
+    case "smart": return [];
     case "roof": return ROOF_FAMILIES.map((f) => ({ id: f.id, label: f.label, note: ROOF_CHOICE_NOTE[f.id] }));
     case "hvac": return [{ id: "ac-furnace", label: "Air conditioner + gas furnace" }, { id: "heat-pump", label: "Heat pump" }];
     case "fence": return FENCE_TYPES.map((t) => ({ id: t.id, label: t.label }));
@@ -102,6 +104,7 @@ const DECK_HEIGHTS: WebChoice[] = [{ id: "14", label: "Near the ground (about a 
 
 export function webTradeQuestions(trade: WebTrade): WebQuestion[] {
   switch (trade) {
+    case "smart": return [];
     case "roof":
       return [];
     case "hvac":
@@ -140,6 +143,7 @@ export async function runWebTrade(shop: WebShop, trade: WebTrade, input: WebTrad
     case "hvac": return hvacEstimate(shop, input);
     case "fence": return fenceEstimate(shop, input);
     case "deck": return deckEstimate(shop, input);
+    case "smart": return { ok: false, error: "Describe the project on the page.", code: "input" };
   }
 }
 
@@ -353,6 +357,35 @@ async function fenceEstimate(shop: WebShop, input: WebTradeInput): Promise<WebTr
   const gateWords = [gates ? `${gates} walk gate${gates > 1 ? "s" : ""}` : "", doubles ? `${doubles} double gate${doubles > 1 ? "s" : ""}` : ""].filter(Boolean).join(" and ");
   const summary = `${feet.toLocaleString("en-US")} ft of fence, ${heightFt} ft high${gateWords ? `, ${gateWords}` : ""} — about ${dollars(pkg.pricePerLf)} a foot installed.`;
   return { ok: true, summary, choice: def?.label ?? type, cents: Math.round(pkg.subtotal * 100), ...p, facts: { feet, type, heightFt, gates, doubles, pricePerLf: pkg.pricePerLf, netFenceLf: pkg.netFenceLf } };
+}
+
+// FENCE STUDIO ON THE WEBSITE (2026-10-28): the homeowner draws the fence on their lot (components/estimator/fence
+// FenceDrawMap); this prices the runs they drew, in the style and height they picked, with their gates, in the shop's
+// book — the same engine the dashboard's studio uses.
+export interface WebFenceDrawn { address: WebAddress; runsFt: number[]; type: string; heightFt: number; gates: number; doubles: number; /** Drawn on the map (false: the feet were typed). */ drawn?: boolean }
+
+export async function priceWebFenceDrawn(shop: WebShop, d: WebFenceDrawn): Promise<WebTradeOutcome> {
+  const a = d.address, p = parts(a);
+  const feet = Math.round(d.runsFt.filter((n) => Number.isFinite(n) && n > 0).reduce((s, n) => s + n, 0));
+  if (feet < 10) return { ok: false, error: "Draw the fence line first — at least a short run.", code: "input" };
+  const book = await fenceBook(shop.id, fullAddress(a));
+  const { wastePct, ...opts } = book;
+  const allowed = webTradeChoices(shop, "fence");
+  const type = allowed.find((c) => c.id === d.type)?.id ?? allowed[0]?.id ?? "cedar-privacy";
+  const def = FENCE_TYPES.find((t) => t.id === type);
+  const heightFt = [4, 5, 6, 8].includes(d.heightFt) ? d.heightFt : 6;
+  const gates = clampN(Math.round(d.gates), 0, 12), doubles = clampN(Math.round(d.doubles), 0, 6);
+  const layout = {
+    type, heightFt, runs: typedRuns(d.runsFt.filter((n) => Number.isFinite(n) && n > 0)),
+    openings: [...Array.from({ length: gates }, () => ({ widthFt: 4, kind: "gate" as const, variant: "single" })), ...Array.from({ length: doubles }, () => ({ widthFt: 10, kind: "gate" as const, variant: "double" }))],
+    terrain: "flat" as const, wastePct,
+  };
+  const pkg = priceFencePackage(layout, opts);
+  const gateWords = [gates ? `${gates} walk gate${gates > 1 ? "s" : ""}` : "", doubles ? `${doubles} double gate${doubles > 1 ? "s" : ""}` : ""].filter(Boolean).join(" and ");
+  const runs = d.runsFt.filter((n) => n > 0).length;
+  const where = d.drawn === false ? "" : ` drawn on the lot in ${runs} run${runs === 1 ? "" : "s"}`;
+  const summary = `${feet.toLocaleString("en-US")} ft of fence${where}, ${heightFt} ft high${gateWords ? `, ${gateWords}` : ""} — about ${dollars(pkg.pricePerLf)} a foot installed.`;
+  return { ok: true, summary, choice: def?.label ?? type, cents: Math.round(pkg.subtotal * 100), ...p, facts: { feet, runsFt: d.runsFt, type, heightFt, gates, doubles, pricePerLf: pkg.pricePerLf, netFenceLf: pkg.netFenceLf, drawn: d.drawn !== false } };
 }
 
 // DECK STUDIO ON THE WEBSITE (2026-10-28): the homeowner designs in the client designer (components/v3/deck-client-design);

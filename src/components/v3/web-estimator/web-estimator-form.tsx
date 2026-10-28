@@ -139,6 +139,10 @@ export function WebEstimatorForm() {
                     <div className={styles.field}>
                       <span>What they design <small>the whole Deck Studio in 3D — kinds, size and shape, height, stairs, railing, boards, roofs, a lower level, a photo of their house wall. The price at the end is your rate book on what they drew.</small></span>
                     </div>
+                  ) : t === "smart" ? (
+                    <div className={styles.field}>
+                      <span>What they describe <small>the project in their own words and photos; the intake asks the cost-critical questions; the estimate runs in your own method and price book. Any trade — kitchens, baths, basements, additions.</small></span>
+                    </div>
                   ) : (
                   <div className={styles.field}>
                     <span>What they may pick <small>none ticked = all of these</small></span>

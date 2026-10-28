@@ -83,3 +83,29 @@
 .we-tiers { grid-template-columns: repeat(3, 1fr); }
 .we-tiers .we-choice em { display: block; margin-top: 8px; font-style: normal; font-size: 16px; font-weight: 800; color: var(--we-ink); font-variant-numeric: tabular-nums; }
 @media (max-width: 640px) { .we-tiers { grid-template-columns: 1fr; } }
+/* Smart Proposal on the website (2026-10-28): the finish level, the photos, what the work includes */
+.we-q-lbl { display: block; margin: 4px 0 6px; font-size: 13px; font-weight: 700; letter-spacing: 0.02em; color: var(--we-soft); }
+.we-photos > span { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 700; color: var(--we-soft); }
+.we-photos > span small { font-weight: 500; color: var(--we-muted); }
+.we-photos input[type="file"] { font: inherit; font-size: 14px; }
+.we-thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: center; }
+.we-thumbs img { width: 84px; height: 84px; object-fit: cover; border-radius: 8px; box-shadow: 0 0 0 1px var(--we-hair); }
+.we-included { margin: 0 auto 16px; max-width: 520px; padding: 0 0 0 18px; text-align: left; font-size: 14px; line-height: 1.5; color: var(--we-soft); columns: 2; column-gap: 24px; }
+@media (max-width: 520px) { .we-included { columns: 1; } }
+/* Fence Studio on the website (2026-10-28): the drawing map and the 3D fill the card; a wider card for the lot */
+.we-fence { max-width: 980px; }
+.we-fence-card { padding: 22px 20px; }
+.we-fence-bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin: 0 0 10px; }
+.we-fence-tools, .we-fence-view { display: flex; flex-wrap: wrap; gap: 6px; }
+.we-btn.we-sm { margin-top: 0; padding: 9px 12px; font-size: 14px; }
+.we-btn.we-ghost.on { background: var(--we-accent); color: #fff; box-shadow: none; }
+.we-fence-stage { position: relative; height: 58vh; min-height: 380px; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 1px var(--we-hair); background: #e9e7e1; }
+.we-fence-pane { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+.we-fence-pane.show { opacity: 1; pointer-events: auto; }
+.we-fence-map, .we-fence-3d { position: absolute; inset: 0; width: 100%; height: 100%; }
+.we-fence-wait { display: grid; place-items: center; height: 100%; color: var(--we-muted); font-size: 14px; }
+.we-fence-sum { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; margin: 12px 0 4px; font-size: 15px; color: var(--we-soft); }
+.we-fence-sum b { color: var(--we-ink); font-size: 18px; }
+.we-fence-heights { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 14px; }
+.we-fence-heights .we-q-lbl { margin: 0 6px 0 0; }
+@media (max-width: 640px) { .we-fence-stage { height: 52vh; } }

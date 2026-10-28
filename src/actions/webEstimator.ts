@@ -14,7 +14,9 @@ import { NoOrgError, UnauthorizedError, isOwnerRole, requireEstimatorOrManager, 
 import { dollars, webAddonPriceWords, webModeBills, webTradeServes, type AddonInterval, type WebAddonLine, type WebBillingMode } from "@/lib/webAddon";
 import { addWebAddon, quoteWebAddon as quoteWebLine, removeWebAddon, webAddonLines, webBilling, webTradeLive } from "@/lib/webAddonBilling";
 import { HOUR, MINUTE, RateLimitError, clientIp, enforceRateLimit } from "@/lib/rateLimit";
-import { noteRequestOrg, takeTrialCap } from "@/lib/trialMeter";
+import { noteRequestOrg, takeTrialCap, trialPointKey } from "@/lib/trialMeter";
+import { geocodePlace } from "@/lib/maps";
+import { lookupPropertyBoundary } from "@/lib/fence/boundaryLookup";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { startEstimateFromLead } from "@/actions/leadEstimate";
 import {
@@ -53,7 +55,7 @@ import {
   storeWebHvac,
   updateWebHvac,
 } from "@/lib/webEstimatorServer";
-import { imageryWords, measureWebRoof, priceWebDeckDesign, priceWebRoof, runWebTrade, sizeWebHvac, webDeckBase, webTradeAllChoices, webTradeChoices, webTradeQuestions, type WebAddress, type WebChoice, type WebQuestion } from "@/lib/webEstimatorTrades";
+import { imageryWords, measureWebRoof, priceWebDeckDesign, priceWebFenceDrawn, priceWebRoof, runWebTrade, sizeWebHvac, webDeckBase, webTradeAllChoices, webTradeChoices, webTradeQuestions, type WebAddress, type WebChoice, type WebQuestion } from "@/lib/webEstimatorTrades";
 import { randomBytes } from "node:crypto";
 import { CLIENT_TOKEN_RE, mergeClientDesign, type ClientDesignLink } from "@/lib/deck/clientDesign";
 import { normalizeDeckDesign, type DeckDesign } from "@/lib/deck/design";
@@ -425,6 +427,65 @@ export async function webHvacPrice(slug: unknown, token: unknown, tier: unknown)
   const est = await storeWebEstimate({ organizationId: shop.id, trade: "hvac", address: rec.address.address.trim(), city: rec.sized.city, state: rec.sized.state, zip: rec.sized.zip, summary: t.summary, choice: t.choice, cents: t.cents, band, show: ts.show, facts: t.facts });
   await bumpWebCount(shop.id, "estimates").catch(() => {});
   return { ok: true, estimate: { token: est.token, summary: t.summary, choice: t.choice, band, show: ts.show, basis: ts.note || WEB_TRADE.hvac.basis, askEmail: ts.askEmail } };
+}
+
+// ── FENCE STUDIO ON THE WEBSITE (2026-10-28): the pin for a typed address, the lot lines and the buildings around it
+// (lib/fence/boundaryLookup, behind the website's brakes and the shop's caps), and the price of what they drew.
+
+export async function webGeocode(slug: unknown, address: unknown): Promise<{ ok: true; lat: number; lng: number; formatted: string | null } | Fail> {
+  const r = await liveShop(slug, "fence");
+  if ("ok" in r) return r;
+  if (typeof address !== "string" || address.trim().length < 5) return { ok: false, error: "Type the street address." };
+  const braked = await brake(`web-geo-ip:${await clientIp()}`, 20, 10 * MINUTE, "lookups");
+  if (braked) return { ok: false, error: braked };
+  const g = await geocodePlace(address.trim().slice(0, 200)).catch(() => null);
+  if (!g) return { ok: false, error: "We couldn't find that address. Check the street and the city." };
+  return { ok: true, lat: g.lat, lng: g.lng, formatted: g.formatted ?? null };
+}
+
+export interface WebLot { ring: Array<{ lat: number; lng: number }> | null; buildings: Array<{ ring: Array<{ lat: number; lng: number }>; heightFt: number }>; note: string | null }
+
+export async function webFenceLot(slug: unknown, lat: unknown, lng: unknown): Promise<{ ok: true; lot: WebLot } | (Fail & { code?: string })> {
+  const r = await liveShop(slug, "fence");
+  if ("ok" in r) return r;
+  const { shop } = r;
+  if (typeof lat !== "number" || typeof lng !== "number" || !Number.isFinite(lat) || !Number.isFinite(lng)) return { ok: false, error: "Find the address first." };
+  const braked = (await brake(`web-lot-ip:${await clientIp()}`, 6, 10 * MINUTE, "lot lookups")) ?? (await brake(`web-est-shop:${shop.id}`, 120, HOUR, "estimates"));
+  if (braked) return { ok: false, error: braked, code: "braked" };
+  if (await webCapReached(shop)) return { ok: false, error: "This estimator has had a busy month and is resting.", code: "capped" };
+  const trial = await takeTrialCap(shop.id, "fenceLookups", { dedupe: trialPointKey(lat, lng), coveredBy: ["hvacLookups", "roofMeasurements"] }).catch(() => ({ ok: true as const }));
+  if (!trial.ok) return { ok: false, error: "This estimator is resting for now — draw the fence by hand, or type the feet.", code: "capped" };
+  await noteRequestOrg(shop.id).catch(() => {});
+  const res = await lookupPropertyBoundary(lat, lng).catch(() => null);
+  if (!res) return { ok: true, lot: { ring: null, buildings: [], note: "The lot lines didn't come back — draw the fence by hand." } };
+  const buildings = res.buildings.map((b) => ({ ring: b.ring, heightFt: b.heightFt }));
+  if (!res.ok) return { ok: true, lot: { ring: null, buildings, note: /REPORTALL_CLIENT_KEY/.test(res.error) ? "Lot lines aren't on for this area — draw the fence by hand." : res.error } };
+  return { ok: true, lot: { ring: res.ring, buildings, note: null } };
+}
+
+export async function webFencePrice(slug: unknown, raw: unknown): Promise<{ ok: true; estimate: WebEstimateView } | (Fail & { code?: string })> {
+  const r = await liveShop(slug, "fence");
+  if ("ok" in r) return r;
+  const { shop } = r;
+  const ip = await clientIp();
+  const braked = (await brake(`web-est-ip:${ip}`, 12, 10 * MINUTE, "estimates")) ?? (await brake(`web-est-shop:${shop.id}`, 120, HOUR, "estimates"));
+  if (braked) return { ok: false, error: braked, code: "braked" };
+  if (await webCapReached(shop)) return { ok: false, error: "This estimator has had a busy month and is resting. Leave your details and the shop will price it by hand.", code: "capped" };
+  const input = cleanInput(raw);
+  if (!input) return { ok: false, error: "Type the address of the house.", code: "address" };
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const runsFt = Array.isArray(o.runsFt) ? o.runsFt.map(Number).filter((n) => Number.isFinite(n) && n > 0 && n < 5000).slice(0, 60) : [];
+  const n = (v: unknown, fb: number) => { const x = Number(v); return Number.isFinite(x) ? x : fb; };
+  const drawn = { address: input.address, runsFt, type: typeof o.type === "string" ? o.type.slice(0, 60) : "", heightFt: n(o.heightFt, 6), gates: n(o.gates, 0), doubles: n(o.doubles, 0), drawn: Array.isArray(o.points) && o.points.length >= 2 };
+  await noteRequestOrg(shop.id).catch(() => {});
+  const out = await priceWebFenceDrawn(shop, drawn);
+  if (!out.ok) return { ok: false, error: out.error, code: out.code };
+  const ts = shop.settings.trades.fence;
+  const band = priceBand(out.cents, ts.show, ts.spread);
+  const points = Array.isArray(o.points) ? o.points.slice(0, 200) : null;
+  const est = await storeWebEstimate({ organizationId: shop.id, trade: "fence", address: input.address.address.trim(), city: out.city, state: out.state, zip: out.zip, summary: out.summary, choice: out.choice, cents: out.cents, band, show: ts.show, facts: { ...out.facts, points, pin: input.address.lat != null && input.address.lng != null ? { lat: input.address.lat, lng: input.address.lng } : null } });
+  await bumpWebCount(shop.id, "estimates").catch(() => {});
+  return { ok: true, estimate: { token: est.token, summary: out.summary, choice: out.choice, band, show: ts.show, basis: ts.note || WEB_TRADE.fence.basis, askEmail: ts.askEmail } };
 }
 
 function cleanInput(raw: unknown): { address: WebAddress; choice: string | null; answers: Record<string, string | number> } | null {
