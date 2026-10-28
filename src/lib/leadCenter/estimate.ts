@@ -4,9 +4,8 @@
 // package (facts, spec, every line, the assumptions, the scope) underneath for the contractor who buys the lead.
 // The same record, kept as a planned project's notes, is a range someone only asked to have emailed.
 //
-// Pure parts first (the words, the short line, the suggested price, the plan notes) — the server, the Lead Center,
-// the offer card and the QA read them; the two database helpers at the end.
-import { db } from "@/lib/db";
+// PURE, and it ships to the browser (the Lead Center's own screen reads it): the words, the short line, the suggested
+// price, the plan notes. The two database helpers live in ./estimateStore (server only).
 import { MATERIALS, type MaterialId, type RoofAnswers, type RoofRange } from "@/lib/publicEstimate/roof";
 
 export type LeadEstimate = {
@@ -114,30 +113,4 @@ export function parsePlanSite(notes: string | null | undefined): PlanSite | null
 /** What a saved range reads as on a plan row or in a reminder: "Roof range $14,200–$19,800 · architectural shingle — priced on JobFlex". */
 export function planRangeWords(e: LeadEstimate): string {
   return `Roof range ${usd(e.range.low)}–${usd(e.range.high)} · ${e.materialLabel.toLowerCase()} — priced on JobFlex, not a quote`;
-}
-
-export async function writeLeadEstimate(leadId: string, e: LeadEstimate): Promise<void> {
-  const key = LEAD_ESTIMATE_KEY(leadId);
-  const cursor = JSON.stringify(e);
-  await db.syncState.upsert({ where: { key }, update: { cursor }, create: { key, cursor } });
-}
-
-/** The estimates for these leads, by lead id — one query. */
-export async function readLeadEstimates(leadIds: string[]): Promise<Map<string, LeadEstimate>> {
-  const out = new Map<string, LeadEstimate>();
-  if (!leadIds.length) return out;
-  try {
-    const rows = await db.syncState.findMany({ where: { key: { in: leadIds.map(LEAD_ESTIMATE_KEY) } } });
-    for (const row of rows) {
-      try {
-        const parsed = JSON.parse(row.cursor) as LeadEstimate;
-        if (parsed && parsed.v === 1) out.set(row.key.slice("leadestimate:".length), parsed);
-      } catch {
-        /* a bad row is no estimate */
-      }
-    }
-  } catch (err) {
-    console.warn("[leadCenter] estimates not read:", err);
-  }
-  return out;
 }
