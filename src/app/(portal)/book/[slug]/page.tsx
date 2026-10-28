@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { orgBySlug, settingsOf } from "@/lib/bookingBook";
 import { listedEmail } from "./sms-company";
 import { BookWizard } from "./book-wizard";
-import { requireOrg } from "@/lib/orgContext";
 import "../book-public.css";
 
 // BOOK A VISIT (2026-09-23) — public, /book/<company slug>. The company's
@@ -19,26 +18,8 @@ export default async function BookPage({ params }: { params: Promise<{ slug: str
   const name = org?.name ?? "This company";
   // The contact email the company listed with its texting registration — with no website of its own, this page is its website.
   const email = org ? await listedEmail(org.id) : null;
-  // The company's own people previewing their page get a way back to the desk; a customer never sees it.
-  let member = false;
-  if (org) {
-    try {
-      member = (await requireOrg()).organizationId === org.id;
-    } catch {
-      member = false;
-    }
-  }
   return (
     <main className="jf-book">
-      {member && (
-        <nav className="jfb-desk" aria-label="Your dashboard">
-          <a className="jfb-btn jfb-btn--sm" href="/dashboard/booking">
-            <svg className="jfb-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
-            Back to dashboard
-          </a>
-          <span>Your page, as your customers see it</span>
-        </nav>
-      )}
       <div className="jfb-sheet">
         <header className="jfb-head">
           <div className="jfb-kicker">{name}</div>

@@ -44,7 +44,6 @@ export function DayPicker({ days, day, onDay }: { days: PublicDay[]; day: string
     <div className="jfb-cal" data-book-days>
       <div className="jfb-cal-h">
         <span className="jfb-cal-m">{span}</span>
-        <span className="jfb-cal-n">{days.length} days open</span>
       </div>
       <div className="jfb-cal-g" role="grid" aria-label="Pick a day">
         {WEEK.map((w) => (

@@ -41,7 +41,6 @@
 .jf-book .jfb-ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ── the company's own preview: the way back to the desk ── */
-.jf-book .jfb-desk { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; width: 100%; max-width: 640px; margin: 0 auto 14px; font-size: 13px; color: var(--jfb-muted); }
 
 /* ── the sheet ── */
 .jf-book .jfb-sheet {
@@ -126,7 +125,6 @@
 .jf-book .jfb-cal { border: 2px solid var(--jfb-ink); }
 .jf-book .jfb-cal-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 10px 14px; border-bottom: 2px solid var(--jfb-ink); background: var(--jfb-ink); color: #fff; }
 .jf-book .jfb-cal-m { font-size: 15px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; }
-.jf-book .jfb-cal-n { font: 700 12px/1 var(--font-mono, ui-monospace, monospace); color: rgba(255, 255, 255, 0.8); }
 .jf-book .jfb-cal-g { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .jf-book .jfb-cal-w { padding: 7px 0; border-bottom: 2px solid var(--jfb-ink); background: var(--jfb-paper); font: 800 11px/1 var(--font-mono, ui-monospace, monospace); letter-spacing: 0.1em; text-transform: uppercase; text-align: center; color: var(--jfb-soft); }
 .jf-book .jfb-cal-d {
