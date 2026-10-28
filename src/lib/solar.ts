@@ -256,12 +256,15 @@ export function parseBuildingInsights(raw: unknown): BuildingInsights {
 export async function getBuildingInsights(
   lat: number,
   lng: number,
+  /** The lowest imagery quality to accept. HIGH everywhere a contractor measures; the homeowner's rough range asks
+   *  MEDIUM when HIGH has none (2026-10-28). */
+  requiredQuality: "HIGH" | "MEDIUM" = "HIGH",
 ): Promise<BuildingInsights> {
   if (!isSolarEnabled()) throw new Error("Google Maps key is not configured");
   const url =
     `${SOLAR_BASE}/buildingInsights:findClosest` +
     `?location.latitude=${lat}&location.longitude=${lng}` +
-    `&requiredQuality=HIGH&key=${process.env.GOOGLE_MAPS_API_KEY}`;
+    `&requiredQuality=${requiredQuality}&key=${process.env.GOOGLE_MAPS_API_KEY}`;
   const res = await solarFetch(url, "buildingInsights");
   return parseBuildingInsights(await res.json());
 }

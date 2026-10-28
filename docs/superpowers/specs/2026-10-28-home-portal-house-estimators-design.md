@@ -112,3 +112,9 @@ Deck → `/estimate/jobflex/deck`, Fence → `/estimate/jobflex/fence`, Heating 
 - `known` without a pin (deck) — widened, not dropped; smart goes to the detector.
 - House ceilings: leads 120/h; the deck's per-IP start brake unchanged.
 - Fence/HVAC/smart open priced through the seed — the owner's words ("it will open already priced out, in the same estimator"); it is the largest part of the build and is planned as three separate tasks so any one can be cut.
+
+## Changed after launch (owner, 2026-10-28)
+
+- **On by default.** The owner found the cards still describing and asked for the estimators to simply be there. The house org now defaults to JobFlex's own oldest internal organization (`resolveHouseOrg`); the Lead Center's box picks another or turns them **off** (stored as `off`). A pick that is deleted or stops being internal falls back to the default.
+- **The roof reads MEDIUM imagery for homeowners.** Production showed "We couldn't read your roof from the sky": the public read asked Google for HIGH imagery only, which many US homes lack. It now asks HIGH, then MEDIUM on no coverage (`estimateSolarRoof(..., { minQuality: "MEDIUM" })`); the contractor's measurement stays HIGH-only. Cached reads are versioned (v 2) so earlier empty reads are read again; an empty read logs its reason.
+- **The homeowner is never asked for square feet they don't know.** When the sky has no roof, the read runs the HVAC estimator's house lookup (`lookupSiteFacts`, with the fence estimator's outline lookup): the building's outline × the floors they tapped, else the county's living area (`homeSqftFromSize`), priced by the same roof package engine. Only when nothing is known does the page ask "How big is the home?" — four taps (small · medium · large · very large) or a number.
