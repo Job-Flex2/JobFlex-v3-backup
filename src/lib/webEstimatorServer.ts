@@ -6,6 +6,8 @@ import "server-only";
 // schema is not pushed by the build.
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
+import type { WebAddress, WebHvacSized, WebRoofMeasure } from "@/lib/webEstimatorTrades";
+import type { SiteFacts as HvacSiteFacts } from "@/lib/hvac/intake";
 import { logActivity } from "@/lib/activityLog";
 import { notifyLeadCreated } from "@/lib/notify";
 import { afterResponse } from "@/lib/server-events";
@@ -151,6 +153,43 @@ export async function readWebEstimate(token: string, organizationId: string): Pr
   if (!WEB_ESTIMATE_TOKEN_RE.test(token)) return null;
   const rec = readJson<WebEstimateRecord>(await readKey(webEstimateKey(token)));
   if (!rec || rec.organizationId !== organizationId || rec.token !== token) return null;
+  if (Date.now() - Date.parse(rec.at) > ESTIMATE_TTL_MS) return null;
+  return rec;
+}
+
+// ── the roof's measurement, kept an hour: each material the homeowner tries prices from one aerial measurement (2026-10-28)
+
+export const webRoofKey = (token: string) => `webRoof:${token}`;
+export interface WebRoofRecord { token: string; organizationId: string; at: string; measure: WebRoofMeasure }
+export async function storeWebRoof(organizationId: string, measure: WebRoofMeasure): Promise<WebRoofRecord> {
+  const rec: WebRoofRecord = { token: randomBytes(18).toString("base64url"), organizationId, at: new Date().toISOString(), measure };
+  await writeKey(webRoofKey(rec.token), JSON.stringify(rec));
+  return rec;
+}
+export async function readWebRoof(token: string, organizationId: string): Promise<WebRoofRecord | null> {
+  if (!WEB_ESTIMATE_TOKEN_RE.test(token)) return null;
+  const rec = readJson<WebRoofRecord>(await readKey(webRoofKey(token)));
+  if (!rec || rec.organizationId !== organizationId || rec.token !== token || !rec.measure) return null;
+  if (Date.now() - Date.parse(rec.at) > ESTIMATE_TTL_MS) return null;
+  return rec;
+}
+
+// ── the HVAC house, looked up and sized, kept an hour (2026-10-28): the homeowner confirms the facts, then picks a tier
+
+export const webHvacKey = (token: string) => `webHvac:${token}`;
+export interface WebHvacRecord { token: string; organizationId: string; at: string; address: WebAddress; site: HvacSiteFacts; sized: WebHvacSized | null }
+export async function storeWebHvac(organizationId: string, address: WebAddress, site: HvacSiteFacts): Promise<WebHvacRecord> {
+  const rec: WebHvacRecord = { token: randomBytes(18).toString("base64url"), organizationId, at: new Date().toISOString(), address, site, sized: null };
+  await writeKey(webHvacKey(rec.token), JSON.stringify(rec));
+  return rec;
+}
+export async function updateWebHvac(rec: WebHvacRecord): Promise<void> {
+  await writeKey(webHvacKey(rec.token), JSON.stringify(rec));
+}
+export async function readWebHvac(token: string, organizationId: string): Promise<WebHvacRecord | null> {
+  if (!WEB_ESTIMATE_TOKEN_RE.test(token)) return null;
+  const rec = readJson<WebHvacRecord>(await readKey(webHvacKey(token)));
+  if (!rec || rec.organizationId !== organizationId || rec.token !== token || !rec.site) return null;
   if (Date.now() - Date.parse(rec.at) > ESTIMATE_TTL_MS) return null;
   return rec;
 }
