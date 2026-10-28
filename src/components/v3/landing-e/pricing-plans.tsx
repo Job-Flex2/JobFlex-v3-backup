@@ -3,7 +3,6 @@
 import { useTrialOffer } from "@/components/providers/trial-offer";
 import { useEffect, useRef, useState } from "react";
 import { expandPlanFeatures, type PlanDTO } from "@/lib/planCatalog";
-import { rowUsage } from "@/lib/planRowUsage";
 import { annualDeal, offersYearly, sharedDealWords, withBillingTerm, type BillingTerm } from "@/lib/planDeal";
 import { PlanCardHead, PlanDealSlot, PlanPrice, PlanTermSwitch } from "@/components/billing/PlanTermSwitch";
 import { SPOTLIGHT, SPOTLIGHT_MISSING, SPOTLIGHT_TAG, spotlightInPlan, spotlightLine, spotlightRow, withSpotlightFirst, type SpotlightTool } from "@/lib/planSpotlight";
@@ -226,8 +225,8 @@ export function PricingPlans({
                           under the name when the line cannot hold both, and the name
                           never breaks inside a word. */}
                       <span className="lp-pw-ft">
-                        {/* The uses before the thing (lib/planRowUsage, owner 2026-10-21): the plan's own cap, in blue. */}
-                        {on && rowUsage(f, p.limits) ? <b className="lp-pw-use">{rowUsage(f, p.limits)!.words}</b> : null}
+                        {/* No cap before the name here (owner, 2026-10-28): the landing and /pricing print the
+                            tool alone; the uses (lib/planRowUsage) stay on signup, upgrade and billing. */}
                         <span className="lp-pw-fn">{f}</span>
                         {lit ? <span className="lp-pw-spot-tag">{on ? SPOTLIGHT_TAG : SPOTLIGHT_MISSING}</span> : null}
                       </span>
