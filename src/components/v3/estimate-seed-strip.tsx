@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { consumeEstimateSeed } from "@/actions/estimateSeed";
+import "./estimate-seed-strip.css";
 
 export type SeedStripData = {
   leadId: string;
@@ -44,27 +45,46 @@ export function EstimateSeedStrip({ seed }: { seed: SeedStripData | null }) {
   // Proposal has it in its brief already, the manual proposal on its sheet.
   const brief = kept.brief?.trim() && SHOWS_SCOPE.has(kept.estimator ?? "") ? kept.brief.trim() : null;
   return (
-    <div
-      className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[var(--r-md)] border border-[color:var(--line)] bg-black/[0.03] px-3 py-2 text-[12.5px] dark:bg-white/[0.04]"
-      // Inline, because the blueprint shell's element reset (`.content *`)
-      // outranks the utility classes and left the strip a hairline (2026-09-22).
-      style={{ padding: "9px 14px", margin: "0 0 14px", border: "1.5px solid var(--ink, #0a0a0a)", background: "#fff", fontSize: 13 }}
-      data-estimate-seed
-    >
-      <span className="quiet-caps">From the lead</span>
-      <span className="font-medium">{name || "Homeowner"}</span>
-      {phone ? <span className="text-[color:var(--ink-muted)]">{phone}</span> : null}
-      {email ? <span className="text-[color:var(--ink-muted)]">{email}</span> : null}
-      {address ? <span className="text-[color:var(--ink-muted)]">{address}</span> : null}
-      <Link href={`/dashboard/leads/${leadId}` as Route} className="ml-auto underline underline-offset-4">
-        Back to the lead
-      </Link>
+    // A plain stylesheet (estimate-seed-strip.css, root `.jf-seed`); `data-nest` keeps the blueprint shell's element
+    // reset off it (docs/design/mobile.md), which is what once left the old utility-class strip a hairline.
+    <div className="jf-seed" data-nest data-estimate-seed>
+      <div className="jfs-row">
+        <span className="jfs-tag">
+          <svg className="jfs-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>
+          From the lead
+        </span>
+        <div className="jfs-who">
+          <strong className="jfs-name">{name || "Homeowner"}</strong>
+          <div className="jfs-facts">
+            {phone ? (
+              <a className="jfs-fact" href={`tel:${phone.replace(/[^\d+]/g, "")}`}>
+                <svg className="jfs-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></svg>
+                {phone}
+              </a>
+            ) : null}
+            {email ? (
+              <a className="jfs-fact" href={`mailto:${email}`}>
+                <svg className="jfs-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="1" /><path d="m22 6-10 7L2 6" /></svg>
+                {email}
+              </a>
+            ) : null}
+            {address ? (
+              <span className="jfs-fact">
+                <svg className="jfs-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z" /><circle cx="12" cy="10" r="3" /></svg>
+                {address}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        <Link href={`/dashboard/leads/${leadId}` as Route} className="jfs-back">
+          <svg className="jfs-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+          Back to the lead
+        </Link>
+      </div>
       {brief ? (
-        <details style={{ flexBasis: "100%", marginTop: 4 }} data-estimate-seed-scope>
-          <summary style={{ cursor: "pointer", fontWeight: 600, minHeight: 28, display: "list-item" }}>
-            The lead&rsquo;s scope of work — it goes on the proposal
-          </summary>
-          <p style={{ margin: "4px 0 2px", whiteSpace: "pre-wrap", lineHeight: 1.55, color: "var(--ink-soft, #2a2a2a)" }}>{brief}</p>
+        <details className="jfs-scope" data-estimate-seed-scope>
+          <summary>The lead&rsquo;s scope of work — it goes on the proposal</summary>
+          <p>{brief}</p>
         </details>
       ) : null}
     </div>

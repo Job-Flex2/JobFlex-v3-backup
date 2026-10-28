@@ -257,3 +257,23 @@
   .jf-booking .bk-edit { grid-column: 2; grid-row: 1 / span 2; height: 40px; }
   .jf-booking .bk-reset .bk-btn { width: 100%; min-height: 44px; white-space: normal; }
 }
+
+/* ── The booking rules (2026-10-28, second pass): one even grid, each number with its unit fastened on ── */
+.jf-booking .bk-rules { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 14px; border: 2px solid var(--bk-ink); background: var(--paper, #f2f0eb); }
+.jf-booking .bk-ig { display: flex; align-items: stretch; min-width: 0; border: 2px solid var(--bk-ink); background: #fff; }
+.jf-booking .bk-ig:focus-within { outline: 3px solid var(--bk-blue); outline-offset: 1px; }
+.jf-booking .bk-ig .bk-in { flex: 1 1 auto; min-width: 0; border: 0; font-variant-numeric: tabular-nums; font-weight: 700; }
+.jf-booking .bk-ig .bk-in:focus { outline: none; }
+.jf-booking .bk-ig em { display: grid; place-items: center; flex: none; min-width: 52px; padding: 0 10px; border-left: 2px solid var(--bk-ink); background: var(--paper, #f2f0eb); font: 700 11.5px/1 var(--font-mono, ui-monospace, monospace); font-style: normal; letter-spacing: 0.04em; text-transform: uppercase; color: var(--bk-soft); }
+.jf-booking .bk-hint { font-size: 12px; color: var(--bk-muted); }
+.jf-booking .bk-form > .bk-h3 { margin: 4px 0 -6px; }
+@media (max-width: 1180px) {
+  .jf-booking .bk-rules { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 768px) {
+  .jf-booking .bk-rules { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 12px; }
+  .jf-booking .bk-ig .bk-in { min-height: 44px; }
+  .jf-booking .bk-ig em { min-width: 46px; padding: 0 8px; font-size: 10.5px; }
+}
+/* A field with a hint under it must not stretch its neighbours' boxes. */
+.jf-booking .bk-rules { align-items: start; }

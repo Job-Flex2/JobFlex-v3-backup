@@ -5,7 +5,7 @@
 
 import { useState, useTransition } from "react";
 import { availabilityForToken, cancelBookingPublic, rescheduleBookingPublic, type PublicDay } from "@/actions/booking";
-import { DayPicker } from "../../[slug]/book-wizard";
+import { DayPicker, SlotGroups } from "../../[slug]/book-wizard";
 
 export function ManageVisit({ token, status, when }: { token: string; status: string; when: string }) {
   const [days, setDays] = useState<PublicDay[] | null>(null);
@@ -55,11 +55,7 @@ export function ManageVisit({ token, status, when }: { token: string; status: st
       {days && (
         <div className="jfb-move">
           <DayPicker days={days} day={day} onDay={setDay} />
-          <div className="jfb-slots" data-manage-slots>
-            {(days.find((d) => d.day === day)?.slots ?? []).map((s) => (
-              <button key={s.iso} type="button" onClick={() => move(s.iso)} disabled={pending} className="jfb-slot">{s.label}</button>
-            ))}
-          </div>
+          <SlotGroups slots={days.find((d) => d.day === day)?.slots ?? []} onSlot={(s) => move(s.iso)} disabled={pending} attr="manage" />
         </div>
       )}
     </div>

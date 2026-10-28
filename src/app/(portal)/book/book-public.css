@@ -3,6 +3,9 @@
    its texting and privacy pages). Redrawn 2026-10-28 as a Blueprint
    sheet: paper with a faint drafting grid, one white sheet in a 2 px ink
    frame, square corners, ink type, blue for the one next action.
+   Second pass the same day (owner): bold 2 px ink lines on every control,
+   the days as a calendar, the times grouped, "Your visit" as one summary
+   panel, the receipt joined to the sheet's walls.
    Plain stylesheet, every rule under `.jf-book`. Built for a phone in
    one hand first: 48 px targets, 16 px inputs (no iOS zoom), big times.
    ============================================================ */
@@ -15,8 +18,10 @@
   --jfb-paper: var(--paper, #f2f0eb);
   --jfb-blue: var(--accent, #1854a0);
   --jfb-blue-ink: var(--accent-ink, #0e3d7a);
+  --jfb-blue-soft: rgba(24, 84, 160, 0.08);
   --jfb-ok: #2c6335;
   --jfb-bad: var(--rose, #a83232);
+  --jfb-pad: 28px;
   min-height: 100vh;
   min-height: 100dvh;
   padding: 40px 16px 56px;
@@ -33,14 +38,18 @@
 .jf-book *, .jf-book *::before, .jf-book *::after { box-sizing: border-box; }
 .jf-book ::selection { background: var(--jfb-blue); color: #fff; }
 .jf-book a { color: inherit; }
+.jf-book .jfb-ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ── the company's own preview: the way back to the desk ── */
+.jf-book .jfb-desk { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; width: 100%; max-width: 640px; margin: 0 auto 14px; font-size: 13px; color: var(--jfb-muted); }
 
 /* ── the sheet ── */
 .jf-book .jfb-sheet {
   width: 100%; max-width: 640px; margin: 0 auto;
   border: 2px solid var(--jfb-ink); border-radius: var(--radius, 2px); background: #fff;
-  box-shadow: 6px 6px 0 rgba(10, 10, 10, 0.08);
+  box-shadow: 6px 6px 0 var(--jfb-ink);
 }
-.jf-book .jfb-head { padding: 28px 28px 24px; border-bottom: 2px solid var(--jfb-ink); }
+.jf-book .jfb-head { padding: 28px var(--jfb-pad) 24px; border-bottom: 2px solid var(--jfb-ink); }
 .jf-book .jfb-kicker { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 12px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; color: var(--jfb-soft); }
 .jf-book .jfb-kicker::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--jfb-blue); flex: none; }
 .jf-book .jfb-title { margin: 0; font-size: 40px; font-weight: 900; line-height: 0.98; letter-spacing: -0.025em; text-transform: uppercase; }
@@ -49,24 +58,41 @@
 .jf-book .jfb-contact { display: flex; flex-wrap: wrap; gap: 8px 10px; margin-top: 18px; }
 .jf-book .jfb-contact-a {
   display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px;
-  border: 1.5px solid var(--jfb-line); font-size: 15px; font-weight: 600; text-decoration: none; overflow-wrap: anywhere;
+  border: 2px solid var(--jfb-ink); background: #fff; font-size: 15px; font-weight: 700; text-decoration: none; overflow-wrap: anywhere;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
-.jf-book .jfb-contact-a:hover { border-color: var(--jfb-ink); }
-.jf-book .jfb-ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.jf-book .jfb-body { padding: 24px 28px 28px; }
-.jf-book .jfb-state { margin: 0; padding: 20px; border: 2px dashed var(--jfb-line); font-size: 16px; text-align: center; }
+.jf-book .jfb-contact-a:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--jfb-ink); }
+.jf-book .jfb-body { padding: 24px var(--jfb-pad) var(--jfb-pad); }
+.jf-book .jfb-state { margin: 0; padding: 20px; border: 2px dashed var(--jfb-ink); font-size: 16px; text-align: center; }
 
 /* ── the four steps ── */
-.jf-book .jfb-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; list-style: none; margin: 0 0 24px; padding: 0; }
-.jf-book .jfb-step { display: flex; align-items: center; gap: 8px; padding-top: 10px; border-top: 4px solid var(--jfb-line); font-size: 13px; font-weight: 700; color: var(--jfb-muted); min-width: 0; }
+.jf-book .jfb-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; list-style: none; margin: 0 0 22px; padding: 0; }
+.jf-book .jfb-step { display: flex; align-items: center; gap: 8px; padding-top: 10px; border-top: 4px solid var(--jfb-line); font-size: 13px; font-weight: 800; color: var(--jfb-muted); min-width: 0; }
 .jf-book .jfb-step-n { display: inline-grid; place-items: center; width: 24px; height: 24px; flex: none; border: 2px solid currentColor; font: 800 12px/1 var(--font-mono, ui-monospace, monospace); }
 .jf-book .jfb-step-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jf-book .jfb-step.is-done { border-top-color: var(--jfb-ink); color: var(--jfb-ink); }
 .jf-book .jfb-step.is-on { border-top-color: var(--jfb-blue); color: var(--jfb-blue); }
 .jf-book .jfb-step.is-on .jfb-step-n { background: var(--jfb-blue); border-color: var(--jfb-blue); color: #fff; }
 
-.jf-book .jfb-intro { margin: 0 0 20px; padding: 14px 16px; border-left: 4px solid var(--jfb-blue); background: var(--jfb-paper); font-size: 16px; color: var(--jfb-soft); white-space: pre-line; }
-.jf-book .jfb-h2 { margin: 0 0 14px; font-size: 20px; font-weight: 900; letter-spacing: 0.01em; text-transform: uppercase; }
+.jf-book .jfb-intro { margin: 0 0 20px; padding: 14px 16px; border: 2px solid var(--jfb-ink); border-left-width: 6px; border-left-color: var(--jfb-blue); background: var(--jfb-paper); font-size: 16px; color: var(--jfb-soft); white-space: pre-line; }
+.jf-book .jfb-h2 { margin: 0 0 12px; font-size: 18px; font-weight: 900; letter-spacing: 0.02em; text-transform: uppercase; }
+.jf-book .jfb-h2 small { font-size: 14px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--jfb-muted); }
+.jf-book .jfb-h2--gap { margin-top: 24px; }
+
+/* ── your visit so far: one panel, one line per choice, each with its own Change ── */
+.jf-book .jfb-sum { margin: 0 0 22px; border: 2px solid var(--jfb-ink); background: var(--jfb-paper); }
+.jf-book .jfb-sum-r { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 6px 10px 14px; }
+.jf-book .jfb-sum-r + .jfb-sum-r { border-top: 2px solid var(--jfb-ink); }
+.jf-book .jfb-sum dt { font: 800 11px/1.2 var(--font-mono, ui-monospace, monospace); letter-spacing: 0.12em; text-transform: uppercase; color: var(--jfb-soft); }
+.jf-book .jfb-sum dd { display: grid; gap: 1px; margin: 0; font-size: 17px; font-weight: 800; line-height: 1.25; min-width: 0; overflow-wrap: anywhere; }
+.jf-book .jfb-sum dd small { font-size: 13.5px; font-weight: 600; color: var(--jfb-muted); }
+.jf-book .jfb-sum-x {
+  min-height: 44px; padding: 0 12px; margin: 0; border: 0; background: transparent;
+  color: var(--jfb-blue); font: 800 14px/1 var(--font-sans, Inter, system-ui, sans-serif);
+  text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; cursor: pointer;
+}
+.jf-book .jfb-sum-x:hover { color: var(--jfb-blue-ink); }
+.jf-book .jfb-sum-x:focus-visible { outline: 3px solid var(--jfb-blue); outline-offset: -2px; }
 
 /* ── step 1: services ── */
 .jf-book .jfb-services { display: grid; gap: 12px; }
@@ -76,64 +102,68 @@
   color: var(--jfb-ink); font: inherit; text-align: left; cursor: pointer;
   transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
-.jf-book .jfb-service:hover { transform: translate(-2px, -2px); box-shadow: 4px 4px 0 var(--jfb-blue); }
+.jf-book .jfb-service:hover { transform: translate(-2px, -2px); box-shadow: 4px 4px 0 var(--jfb-ink); }
 .jf-book .jfb-service:active { transform: none; box-shadow: none; }
 .jf-book .jfb-service:focus-visible { outline: 3px solid var(--jfb-blue); outline-offset: 3px; }
 .jf-book .jfb-service-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .jf-book .jfb-service-n { font-size: 19px; font-weight: 800; line-height: 1.25; }
-.jf-book .jfb-service-h { flex: none; font: 700 14px/1 var(--font-mono, ui-monospace, monospace); color: var(--jfb-muted); }
-.jf-book .jfb-urgent { justify-self: start; display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border: 1.5px solid var(--jfb-bad); color: var(--jfb-bad); font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.jf-book .jfb-service-h { flex: none; padding: 3px 7px; border: 2px solid var(--jfb-ink); font: 800 12px/1 var(--font-mono, ui-monospace, monospace); }
+.jf-book .jfb-urgent { justify-self: start; display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border: 2px solid var(--jfb-bad); color: var(--jfb-bad); font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
 .jf-book .jfb-service-p { font-size: 17px; font-weight: 700; }
 .jf-book .jfb-service-p em { font-style: normal; font-weight: 600; font-size: 15px; color: var(--jfb-ok); }
 .jf-book .jfb-service-d { font-size: 15px; color: var(--jfb-soft); }
-.jf-book .jfb-service-go { justify-self: end; margin-top: 4px; font-size: 14px; font-weight: 800; color: var(--jfb-blue); }
-
-/* ── step 2: the time ── */
-.jf-book .jfb-pick { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; padding: 12px 16px; border: 2px solid var(--jfb-ink); background: var(--jfb-paper); }
-.jf-book .jfb-pick-v { display: grid; gap: 2px; min-width: 0; }
-.jf-book .jfb-pick-k { font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--jfb-muted); }
-.jf-book .jfb-pick-v strong { font-size: 18px; font-weight: 800; overflow-wrap: anywhere; }
-.jf-book .jfb-change {
-  flex: none; min-height: 44px; padding: 0 14px; margin: 0;
-  border: 2px solid var(--jfb-ink); border-radius: var(--radius, 2px); background: #fff;
-  color: var(--jfb-ink); font: 800 14px/1 var(--font-sans, Inter, system-ui, sans-serif); cursor: pointer;
+/* "Choose" is drawn as the card's button (the whole card is the press target, so it cannot be a nested button). */
+.jf-book .jfb-service-go {
+  justify-self: end; display: inline-flex; align-items: center; gap: 8px; margin-top: 6px;
+  min-height: 42px; padding: 0 18px; border: 2px solid var(--jfb-blue); background: var(--jfb-blue); color: #fff;
+  font-size: 15px; font-weight: 800;
 }
-.jf-book .jfb-change:hover { background: var(--jfb-ink); color: #fff; }
-.jf-book .jfb-wait { margin: 0; padding: 18px; border: 2px dashed var(--jfb-line); font-size: 16px; color: var(--jfb-soft); text-align: center; animation: jfb-pulse 1.4s ease-in-out infinite; }
+.jf-book .jfb-service:hover .jfb-service-go { background: var(--jfb-blue-ink); border-color: var(--jfb-blue-ink); }
+
+/* ── step 2: the day, as a calendar ── */
+.jf-book .jfb-wait { margin: 0; padding: 18px; border: 2px dashed var(--jfb-ink); font-size: 16px; color: var(--jfb-soft); text-align: center; animation: jfb-pulse 1.4s ease-in-out infinite; }
 @keyframes jfb-pulse { 50% { opacity: 0.5; } }
-
-.jf-book .jfb-days { display: flex; gap: 8px; overflow-x: auto; margin: 0 -4px 16px; padding: 4px 4px 8px; scroll-snap-type: x proximity; scrollbar-width: thin; }
-.jf-book .jfb-day {
-  flex: 0 0 84px; display: grid; justify-items: center; gap: 2px; padding: 10px 6px; margin: 0;
-  border: 2px solid var(--jfb-line); border-radius: var(--radius, 2px); background: #fff;
-  color: var(--jfb-ink); font: inherit; cursor: pointer; scroll-snap-align: start;
+.jf-book .jfb-cal { border: 2px solid var(--jfb-ink); }
+.jf-book .jfb-cal-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 10px 14px; border-bottom: 2px solid var(--jfb-ink); background: var(--jfb-ink); color: #fff; }
+.jf-book .jfb-cal-m { font-size: 15px; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; }
+.jf-book .jfb-cal-n { font: 700 12px/1 var(--font-mono, ui-monospace, monospace); color: rgba(255, 255, 255, 0.8); }
+.jf-book .jfb-cal-g { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.jf-book .jfb-cal-w { padding: 7px 0; border-bottom: 2px solid var(--jfb-ink); background: var(--jfb-paper); font: 800 11px/1 var(--font-mono, ui-monospace, monospace); letter-spacing: 0.1em; text-transform: uppercase; text-align: center; color: var(--jfb-soft); }
+.jf-book .jfb-cal-d {
+  display: grid; align-content: start; justify-items: start; gap: 2px; min-height: 64px; padding: 7px 8px; margin: 0;
+  border: 0; border-right: 1.5px solid var(--jfb-line); border-bottom: 1.5px solid var(--jfb-line); border-radius: 0;
+  background: #fff; color: var(--jfb-ink); font: inherit; text-align: left; cursor: pointer; min-width: 0;
 }
-.jf-book .jfb-day:hover { border-color: var(--jfb-ink); }
-.jf-book .jfb-day:focus-visible { outline: 3px solid var(--jfb-blue); outline-offset: 2px; }
-.jf-book .jfb-day-w { font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; }
-.jf-book .jfb-day-d { font-size: 20px; font-weight: 900; font-variant-numeric: tabular-nums; }
-.jf-book .jfb-day-n { font-size: 12px; color: var(--jfb-muted); }
-.jf-book .jfb-day.is-on { border-color: var(--jfb-ink); background: var(--jfb-ink); color: #fff; }
-.jf-book .jfb-day.is-on .jfb-day-n { color: rgba(255, 255, 255, 0.75); }
+.jf-book .jfb-cal-g > :nth-child(7n) { border-right: 0; }
+.jf-book .jfb-cal-num { font-size: 16px; font-weight: 900; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.jf-book .jfb-cal-open { font: 700 10.5px/1.2 var(--font-mono, ui-monospace, monospace); color: var(--jfb-blue); white-space: nowrap; }
+.jf-book button.jfb-cal-d:hover { background: var(--jfb-blue-soft); box-shadow: inset 0 0 0 2px var(--jfb-blue); }
+.jf-book button.jfb-cal-d:focus-visible { outline: 3px solid var(--jfb-blue); outline-offset: -3px; }
+.jf-book .jfb-cal-d.is-on { background: var(--jfb-ink); color: #fff; box-shadow: none; }
+.jf-book .jfb-cal-d.is-on .jfb-cal-open { color: #fff; }
+.jf-book .jfb-cal-d.is-off { cursor: default; background: repeating-linear-gradient(45deg, rgba(10, 10, 10, 0.04) 0 5px, transparent 5px 10px), #fbfaf7; }
+.jf-book .jfb-cal-d.is-off .jfb-cal-num { font-weight: 600; color: #9a9a9a; }
 
+/* ── step 2: the time, grouped by part of the day ── */
+.jf-book .jfb-times { display: grid; gap: 14px; }
+.jf-book .jfb-times-k { margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid var(--jfb-ink); font: 800 11.5px/1 var(--font-mono, ui-monospace, monospace); letter-spacing: 0.14em; text-transform: uppercase; }
 .jf-book .jfb-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .jf-book .jfb-slot {
   min-height: 52px; padding: 0 8px; margin: 0;
   border: 2px solid var(--jfb-ink); border-radius: var(--radius, 2px); background: #fff;
-  color: var(--jfb-ink); font: 800 16px/1.2 var(--font-sans, Inter, system-ui, sans-serif); font-variant-numeric: tabular-nums; cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
+  color: var(--jfb-ink); font: 800 15.5px/1.2 var(--font-sans, Inter, system-ui, sans-serif); font-variant-numeric: tabular-nums; cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
 }
-.jf-book .jfb-slot:hover { background: var(--jfb-blue); border-color: var(--jfb-blue); color: #fff; }
+.jf-book .jfb-slot:hover { background: var(--jfb-blue); border-color: var(--jfb-blue); color: #fff; transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--jfb-ink); }
 .jf-book .jfb-slot:focus-visible { outline: 3px solid var(--jfb-blue); outline-offset: 2px; }
-.jf-book .jfb-slot:disabled { opacity: 0.5; cursor: progress; }
+.jf-book .jfb-slot:disabled { opacity: 0.5; cursor: progress; transform: none; box-shadow: none; }
 .jf-book .jfb-hint { margin: 14px 0 0; font-size: 14.5px; color: var(--jfb-muted); }
 .jf-book .jfb-err { margin: 14px 0 0; padding: 12px 14px; border: 2px solid var(--jfb-bad); background: color-mix(in srgb, var(--jfb-bad) 6%, #fff); color: var(--jfb-bad); font-size: 15px; font-weight: 600; }
 
 /* ── step 3: details ── */
-.jf-book .jfb-form { display: grid; gap: 16px; margin: 0; }
-.jf-book .jfb-form .jfb-pick { margin-bottom: 4px; }
+.jf-book .jfb-form { display: grid; gap: 18px; margin: 0; }
 .jf-book .jfb-form .jfb-hint, .jf-book .jfb-form .jfb-err { margin: 0; }
-.jf-book .jfb-fld { display: grid; gap: 6px; min-width: 0; }
+.jf-book .jfb-fld { display: grid; gap: 8px; min-width: 0; }
 .jf-book .jfb-lbl { font-size: 15px; font-weight: 800; }
 .jf-book .jfb-in {
   width: 100%; min-height: 48px; padding: 0 14px; margin: 0;
@@ -147,17 +177,25 @@
 .jf-book .jfb-opts { display: flex; flex-wrap: wrap; gap: 8px; }
 .jf-book .jfb-opt {
   min-height: 44px; padding: 0 16px; margin: 0;
-  border: 2px solid var(--jfb-line); border-radius: var(--radius, 2px); background: #fff;
+  border: 2px solid var(--jfb-ink); border-radius: var(--radius, 2px); background: #fff;
   color: var(--jfb-ink); font: 700 15px/1 var(--font-sans, Inter, system-ui, sans-serif); cursor: pointer;
 }
-.jf-book .jfb-opt:hover { border-color: var(--jfb-ink); }
-.jf-book .jfb-opt.is-on { border-color: var(--jfb-ink); background: var(--jfb-ink); color: #fff; }
-.jf-book .jfb-consent { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; padding: 14px 16px; border: 1.5px solid var(--jfb-line); background: var(--jfb-paper); font-size: 14px; line-height: 1.5; color: var(--jfb-soft); cursor: pointer; }
+.jf-book .jfb-opt:hover { background: var(--jfb-blue-soft); }
+.jf-book .jfb-opt:focus-visible { outline: 3px solid var(--jfb-blue); outline-offset: 2px; }
+.jf-book .jfb-opt.is-on { background: var(--jfb-ink); color: #fff; }
+/* A custom amount: the dollar sign fastened to its field. */
+.jf-book .jfb-money { display: flex; align-items: stretch; max-width: 280px; border: 2px solid var(--jfb-ink); }
+.jf-book .jfb-money:focus-within { outline: 3px solid var(--jfb-blue); outline-offset: 1px; }
+.jf-book .jfb-money em { display: grid; place-items: center; width: 44px; flex: none; border-right: 2px solid var(--jfb-ink); background: var(--jfb-paper); font-style: normal; font-size: 17px; font-weight: 900; }
+.jf-book .jfb-money .jfb-in { border: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.jf-book .jfb-money .jfb-in:focus { outline: none; }
+.jf-book .jfb-consent { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; padding: 14px 16px; border: 2px solid var(--jfb-ink); background: var(--jfb-paper); font-size: 14px; line-height: 1.5; color: var(--jfb-soft); cursor: pointer; }
 .jf-book .jfb-consent input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--jfb-blue); cursor: pointer; }
 .jf-book .jfb-consent b { font-weight: 700; color: var(--jfb-ink); }
 .jf-book .jfb-consent a { color: var(--jfb-blue); text-decoration: underline; text-underline-offset: 2px; }
 
 .jf-book .jfb-acts { display: flex; flex-wrap: wrap; gap: 10px; }
+.jf-book .jfb-acts--back { margin-top: 22px; padding-top: 18px; border-top: 2px solid var(--jfb-ink); }
 .jf-book .jfb-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   min-height: 52px; padding: 0 22px; margin: 0;
@@ -169,27 +207,35 @@
 .jf-book .jfb-btn:active { transform: none; box-shadow: none; }
 .jf-book .jfb-btn:focus-visible { outline: 3px solid var(--jfb-blue); outline-offset: 2px; }
 .jf-book .jfb-btn:disabled { opacity: 0.55; cursor: progress; transform: none; box-shadow: none; }
+.jf-book .jfb-btn--sm { min-height: 40px; padding: 0 14px; font-size: 14px; }
 .jf-book .jfb-btn--primary { flex: 1 1 220px; border-color: var(--jfb-blue); background: var(--jfb-blue); color: #fff; }
 .jf-book .jfb-btn--primary:hover { background: var(--jfb-blue-ink); box-shadow: 3px 3px 0 var(--jfb-ink); }
 .jf-book .jfb-btn--danger { border-color: var(--jfb-bad); color: var(--jfb-bad); }
 .jf-book .jfb-btn--danger:hover { background: color-mix(in srgb, var(--jfb-bad) 7%, #fff); box-shadow: 3px 3px 0 var(--jfb-bad); }
 
-/* ── step 4: the receipt ── */
-.jf-book .jfb-receipt { display: grid; justify-items: start; gap: 8px; padding: 24px; border: 2px solid var(--jfb-ink); border-top: 6px solid var(--jfb-ok); }
-.jf-book .jfb-receipt-mark { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 6px; background: var(--jfb-ok); color: #fff; font-size: 26px; font-weight: 900; }
+/* ── step 4: the receipt, joined to the sheet's walls (no card inside the card) ── */
+.jf-book .jfb-receipt {
+  display: grid; justify-items: start; gap: 8px;
+  margin: 0 calc(var(--jfb-pad) * -1) calc(var(--jfb-pad) * -1); padding: 24px var(--jfb-pad) var(--jfb-pad);
+  border-top: 2px solid var(--jfb-ink); background: color-mix(in srgb, var(--jfb-ok) 6%, #fff);
+  box-shadow: inset 0 6px 0 var(--jfb-ok);
+}
+.jf-book .jfb-receipt-mark { display: grid; place-items: center; width: 48px; height: 48px; margin: 6px 0 6px; border: 2px solid var(--jfb-ink); background: var(--jfb-ok); color: #fff; font-size: 26px; font-weight: 900; }
 .jf-book .jfb-receipt .jfb-kicker { margin-bottom: 0; }
 .jf-book .jfb-receipt-when { font-size: 28px; font-weight: 900; line-height: 1.15; letter-spacing: -0.01em; }
 .jf-book .jfb-receipt-p { margin: 4px 0 12px; font-size: 16px; color: var(--jfb-soft); }
+.jf-book .jfb-receipt .jfb-acts { width: 100%; }
 
 /* ── the manage link ── */
 .jf-book .jfb-manage { display: grid; gap: 16px; }
 .jf-book .jfb-when { display: grid; gap: 4px; padding: 18px 20px; border: 2px solid var(--jfb-ink); border-left: 6px solid var(--jfb-blue); background: var(--jfb-paper); }
+.jf-book .jfb-pick-k { font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--jfb-muted); }
 .jf-book .jfb-when strong { font-size: 26px; font-weight: 900; line-height: 1.15; }
 .jf-book .jfb-when.is-canceled { border-left-color: var(--jfb-bad); }
 .jf-book .jfb-when.is-canceled strong { color: var(--jfb-bad); }
-.jf-book .jfb-msg { margin: 0; padding: 12px 14px; border: 1.5px solid var(--jfb-line); font-size: 15px; font-weight: 600; }
-.jf-book .jfb-move { padding-top: 6px; border-top: 1.5px solid var(--jfb-line); }
-.jf-book .jfb-foot { margin: 24px 0 0; padding-top: 16px; border-top: 1.5px solid var(--jfb-line); font-size: 15px; color: var(--jfb-muted); }
+.jf-book .jfb-msg { margin: 0; padding: 12px 14px; border: 2px solid var(--jfb-ink); font-size: 15px; font-weight: 600; }
+.jf-book .jfb-move { display: grid; gap: 16px; padding-top: 16px; border-top: 2px solid var(--jfb-ink); }
+.jf-book .jfb-foot { margin: 24px 0 0; padding-top: 16px; border-top: 2px solid var(--jfb-ink); font-size: 15px; color: var(--jfb-muted); }
 .jf-book .jfb-foot a { color: var(--jfb-blue); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
 
 /* ── texting terms and privacy policy ── */
@@ -202,15 +248,25 @@
 
 /* ── phones ── */
 @media (max-width: 560px) {
-  .jf-book { padding: 16px 12px 40px; }
-  .jf-book .jfb-sheet { box-shadow: none; }
-  .jf-book .jfb-head { padding: 22px 18px 20px; }
-  .jf-book .jfb-body { padding: 20px 18px 24px; }
+  .jf-book { --jfb-pad: 16px; padding: 14px 10px 40px; }
+  .jf-book .jfb-sheet { box-shadow: 4px 4px 0 var(--jfb-ink); }
+  .jf-book .jfb-head { padding: 22px var(--jfb-pad) 20px; }
+  .jf-book .jfb-body { padding: 18px var(--jfb-pad) var(--jfb-pad); }
   .jf-book .jfb-title { font-size: 32px; }
   .jf-book .jfb-title--sm { font-size: 26px; }
   .jf-book .jfb-contact-a { flex: 1 1 100%; }
   .jf-book .jfb-steps { gap: 4px; }
   .jf-book .jfb-step { flex-direction: column; align-items: flex-start; gap: 4px; font-size: 12px; }
+  .jf-book .jfb-sum-r { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; padding: 10px 4px 10px 12px; }
+  .jf-book .jfb-sum dt { grid-column: 1; }
+  .jf-book .jfb-sum dd { grid-column: 1; font-size: 16px; }
+  .jf-book .jfb-sum-x { grid-column: 2; grid-row: 1 / span 2; }
+  .jf-book .jfb-service { padding: 16px; }
+  .jf-book .jfb-service-go { justify-self: stretch; justify-content: center; }
+  .jf-book .jfb-cal-d { min-height: 56px; padding: 6px 4px; justify-items: center; text-align: center; }
+  .jf-book .jfb-cal-num { font-size: 15px; }
+  .jf-book .jfb-cal-open { font-size: 9.5px; }
+  .jf-book .jfb-cal-w { font-size: 10px; letter-spacing: 0.04em; }
   .jf-book .jfb-two { grid-template-columns: minmax(0, 1fr); }
   .jf-book .jfb-slots { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .jf-book .jfb-acts .jfb-btn { flex: 1 1 100%; }
@@ -220,4 +276,15 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .jf-book *, .jf-book *::before, .jf-book *::after { transition: none !important; animation: none !important; }
+}
+@media (max-width: 560px) {
+  /* On a phone the next step comes first and Back under it. */
+  .jf-book .jfb-form .jfb-acts .jfb-btn--primary { order: -1; }
+}
+/* The picked day stays ink under the pointer; a month name rides on its first day. */
+.jf-book button.jfb-cal-d.is-on, .jf-book button.jfb-cal-d.is-on:hover { background: var(--jfb-ink); color: #fff; box-shadow: none; }
+.jf-book .jfb-cal-mo { font-style: normal; font-size: 0.82em; font-weight: 800; text-transform: uppercase; }
+@media (max-width: 560px) {
+  .jf-book .jfb-cal-mo { display: none; }
+  .jf-book .jfb-slot { padding: 0 4px; font-size: 13.5px; letter-spacing: -0.01em; }
 }

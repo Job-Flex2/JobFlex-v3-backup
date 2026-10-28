@@ -207,26 +207,29 @@ export function BookingContent({ data }: { data: BookingDashboard }) {
                 </div>
               ))}
             </fieldset>
-            <div className="bk-grid">
+            {/* The five rules as one even grid: every number the same width, its unit fastened to it. */}
+            <div className="bk-h3">Booking rules</div>
+            <div className="bk-rules">
               <label className="bk-fld">
                 <span className="bk-lbl">Slot every</span>
-                <span className="bk-unit"><input className="bk-in" name="slotMinutes" type="number" min="15" max="240" defaultValue={settings.slotMinutes} /><em>min</em></span>
+                <span className="bk-ig"><input className="bk-in" name="slotMinutes" type="number" min="15" max="240" defaultValue={settings.slotMinutes} /><em>min</em></span>
               </label>
               <label className="bk-fld">
                 <span className="bk-lbl">Notice needed</span>
-                <span className="bk-unit"><input className="bk-in" name="leadHours" type="number" min="0" max="168" defaultValue={settings.leadHours} /><em>hours</em></span>
+                <span className="bk-ig"><input className="bk-in" name="leadHours" type="number" min="0" max="168" defaultValue={settings.leadHours} /><em>hours</em></span>
               </label>
               <label className="bk-fld">
                 <span className="bk-lbl">Crews out at once</span>
-                <input className="bk-in" name="crews" type="number" min="1" max="20" defaultValue={settings.crews} />
+                <span className="bk-ig"><input className="bk-in" name="crews" type="number" min="1" max="20" defaultValue={settings.crews} /><em>crews</em></span>
               </label>
               <label className="bk-fld">
                 <span className="bk-lbl">Arrival window</span>
-                <span className="bk-unit"><input className="bk-in" name="arrivalWindow" type="number" min="0" max="480" defaultValue={settings.arrivalWindow} /><em>min · 0 = exact time</em></span>
+                <span className="bk-ig"><input className="bk-in" name="arrivalWindow" type="number" min="0" max="480" defaultValue={settings.arrivalWindow} /><em>min</em></span>
+                <span className="bk-hint">0 = an exact time</span>
               </label>
               <label className="bk-fld">
                 <span className="bk-lbl">Days ahead to offer</span>
-                <input className="bk-in" name="horizonDays" type="number" min="3" max="60" defaultValue={settings.horizonDays} />
+                <span className="bk-ig"><input className="bk-in" name="horizonDays" type="number" min="3" max="60" defaultValue={settings.horizonDays} /><em>days</em></span>
               </label>
             </div>
             <label className="bk-fld">
@@ -306,7 +309,7 @@ function ServiceForm({ s }: { s?: BookingDashboard["settings"]["services"][numbe
         </label>
         <label className="bk-fld">
           <span className="bk-lbl">Length</span>
-          <span className="bk-unit"><input name="minutes" className="bk-in" type="number" min="15" max="480" defaultValue={s?.minutes ?? 60} /><em>min</em></span>
+          <span className="bk-ig"><input name="minutes" className="bk-in" type="number" min="15" max="480" defaultValue={s?.minutes ?? 60} /><em>min</em></span>
         </label>
         <label className="bk-fld">
           <span className="bk-lbl">Price the customer reads</span>
