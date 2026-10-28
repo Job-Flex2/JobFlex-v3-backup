@@ -1,23 +1,13 @@
-// THE ROW (owner, 2026-10-27: "roof first; the other estimators visible in a row and very attractive"). Four
-// picture cards: the roof prices itself at /price/roof; a fence, heating & cooling and any other project open the
-// describe-and-match intake, started in the homeowner's words (lib/home/homeownerDoor). No "coming soon".
+// THE ROW (owner, 2026-10-27: "roof first; the other estimators visible in a row and very attractive"). Five picture
+// cards (./cards): the roof prices itself at /price/roof; the other four run JobFlex's own estimators once the Lead
+// Center names the house org (2026-10-28), and open the describe-and-match intake until then. No "coming soon".
 // Server-safe: plain anchors, no state.
 import Link from "next/link";
 import { ProductMark } from "@/components/brand/ProductMark";
-import { homeownerDoorFor } from "@/lib/home/homeownerDoor";
+import { priceCards, type PriceCardKey } from "./cards";
 import s from "./price.module.css";
 
-export type PriceCardKey = "roof" | "deck" | "fence" | "hvac" | "any";
-
-const CARDS: ReadonlyArray<{ key: PriceCardKey; title: string; blurb: string; go: string; href: string; live: boolean }> = [
-  { key: "roof", title: "Roof", blurb: "Measured from the sky · a range in a minute", go: "Price my roof", href: "/price/roof", live: true },
-  // Deck Studio (owner, 2026-10-28: "I don't see the deck studio estimator"): visible in the row; the design itself is the
-  // contractor's — the homeowner describes the deck and a local pro designs and prices it in Deck Studio.
-  { key: "deck", title: "Deck", blurb: "Designed in 3D, priced before it's built. Describe it — a local pro designs and prices it.", go: "Describe my deck", href: homeownerDoorFor("decking")?.href ?? "/homeowner", live: false },
-  { key: "fence", title: "Fence", blurb: "Pick the sides, pick a style. Describe it — a local pro prices it.", go: "Describe my fence", href: homeownerDoorFor("fencing")?.href ?? "/homeowner", live: false },
-  { key: "hvac", title: "Heating & cooling", blurb: "Replace or add a system. Describe it — a local pro prices it.", go: "Describe the job", href: homeownerDoorFor("hvac")?.href ?? "/homeowner", live: false },
-  { key: "any", title: "Any project", blurb: "Send a photo, get a range. Describe it — a local pro prices it.", go: "Describe my project", href: "/homeowner", live: false },
-];
+export type { PriceCardKey } from "./cards";
 
 function Pic({ k }: { k: PriceCardKey }) {
   const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
@@ -84,10 +74,10 @@ export function PriceChrome({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function PriceRow({ trade }: { trade?: string | null }) {
+export function PriceRow({ trade, house = false }: { trade?: string | null; house?: boolean }) {
   return (
-    <div className={s.row} data-price-row>
-      {CARDS.map((c) => (
+    <div className={s.row} data-price-row data-price-house={house ? "1" : "0"}>
+      {priceCards(house).map((c) => (
         <a key={c.key} className={`${s.card}${c.live ? ` ${s.cardLive}` : ""}`} href={c.href} data-price-card={c.key} data-price-live={c.live ? "1" : "0"} aria-current={trade && c.key === trade ? "true" : undefined}>
           {c.live ? <span className={s.tag}>Priced here</span> : null}
           <span className={s.pic}>
