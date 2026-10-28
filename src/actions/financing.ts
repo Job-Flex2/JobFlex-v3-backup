@@ -2,8 +2,9 @@
 // Wisetack financing — the contractor's own actions (Settings → Payments → Financing). Managers only: applying binds
 // the company to Wisetack's merchant terms. lib/financing/service does the work.
 import { revalidatePath } from "next/cache";
-import { requireManager } from "@/lib/orgContext";
-import { linkExisting, orgFinancingView, refreshMerchant, setDefault, setYearStarted, startApplication } from "@/lib/financing/service";
+import { requireManager, requireProposalStaff } from "@/lib/orgContext";
+import { linkExisting, loadEditorFinancing, orgFinancingView, refreshMerchant, setDefault, setProposalOffer, setYearStarted, startApplication } from "@/lib/financing/service";
+import type { EditorFinancing } from "@/lib/financing/view";
 import type { OrgFinancing } from "@/lib/financing/state";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
@@ -48,4 +49,20 @@ export async function setFinancingYearStarted(year: number | null): Promise<Resu
   const view = await orgFinancingView(organizationId);
   if (!view.letIn) return { ok: false, error: NOT_OPEN };
   return { ok: true, rec: await setYearStarted(organizationId, typeof year === "number" ? year : null) };
+}
+
+/** The editor's "Offer monthly payments" row for a saved proposal (null = no row). */
+export async function getProposalFinancing(proposalId: string): Promise<EditorFinancing | null> {
+  const { organizationId, proposalScope } = await requireProposalStaff();
+  if (typeof proposalId !== "string" || !proposalId) return null;
+  return loadEditorFinancing(organizationId, proposalId, proposalScope);
+}
+
+/** Per proposal: offer monthly payments or not (null = follow the company's default). */
+export async function setProposalFinancing(proposalId: string, on: boolean | null): Promise<Result<{ row: EditorFinancing }>> {
+  const { organizationId, proposalScope } = await requireProposalStaff();
+  const row = await setProposalOffer(organizationId, String(proposalId ?? ""), on === null ? null : on === true, proposalScope);
+  if (!row) return { ok: false, error: "That proposal wasn't found." };
+  revalidatePath("/dashboard/proposals");
+  return { ok: true, row };
 }

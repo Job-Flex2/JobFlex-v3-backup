@@ -10,8 +10,12 @@ import { appBaseUrl } from "@/lib/appUrl";
 import { OWNER_ROLE } from "@/lib/orgContext";
 import { getProvider, type MerchantSnapshot } from "./provider";
 import { merchantPrefill, readinessFacts, type PrefillOrg, type PrefillOwner } from "./prefill";
+import { contractSchedule, APPROVED_CO_SELECT } from "@/lib/contractTotal";
+import { resolveSchedule } from "@/lib/paymentSchedule";
+import { planEnded } from "@/lib/paidCaps";
 import { orgLetIn, readiness, type OrgFinancing } from "./state";
-import { readOrgFinancing, readSwitch, writeOrgFinancing } from "./store";
+import { readLoan, readOffer, readOrgFinancing, readSwitch, writeOffer, writeOrgFinancing } from "./store";
+import { editorFinancing, type EditorFinancing } from "./view";
 
 export const SETTINGS_HREF = "/dashboard/settings?pane=payments&sub=financing";
 
@@ -136,4 +140,38 @@ export async function setYearStarted(orgId: string, year: number | null): Promis
   const rec = { ...(await readOrgFinancing(orgId)), yearStarted: ok ? year : null };
   await writeOrgFinancing(orgId, rec);
   return rec;
+}
+
+export const usd = (minor: number) => `$${Math.round(minor / 100).toLocaleString("en-US")}`;
+
+/** A proposal with what is owed on it right now (contract total with approved change orders, minus what is paid). */
+export async function proposalMoney(orgId: string, proposalId: string, scope: { ownerId?: string } = {}) {
+  const proposal = await db.proposal.findFirst({
+    where: { id: proposalId, organizationId: orgId, ...scope },
+    include: {
+      installments: { orderBy: { position: "asc" } },
+      changeOrders: APPROVED_CO_SELECT,
+      client: { select: { id: true, name: true, email: true, phone: true } },
+    },
+  });
+  if (!proposal) return null;
+  const schedule = resolveSchedule({ ...contractSchedule(proposal.total, proposal.changeOrders), currency: proposal.currency, installments: proposal.installments });
+  return { proposal, schedule, owedMinor: schedule.remainingMinor };
+}
+
+/** The editor's "Offer monthly payments" row, or null when it does not exist for this proposal. */
+export async function loadEditorFinancing(orgId: string, proposalId: string, scope: { ownerId?: string } = {}): Promise<EditorFinancing | null> {
+  const money = await proposalMoney(orgId, proposalId, scope);
+  if (!money) return null;
+  const [view, proposalOn, loan, ended] = await Promise.all([orgFinancingView(orgId), readOffer(proposalId), readLoan(proposalId), planEnded(orgId)]);
+  if (!view.available) return null;
+  return editorFinancing({ proposalId, letIn: view.letIn, org: view.rec, proposalOn, owedMinor: money.owedMinor, status: money.proposal.status, planEnded: ended, loan, money: usd });
+}
+
+/** The proposal's switch: true / false, or null to follow the company's default. */
+export async function setProposalOffer(orgId: string, proposalId: string, on: boolean | null, scope: { ownerId?: string } = {}): Promise<EditorFinancing | null> {
+  const exists = await db.proposal.findFirst({ where: { id: proposalId, organizationId: orgId, ...scope }, select: { id: true } });
+  if (!exists) return null;
+  await writeOffer(proposalId, on);
+  return loadEditorFinancing(orgId, proposalId, scope);
 }

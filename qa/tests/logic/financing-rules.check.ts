@@ -21,6 +21,7 @@ import {
   type LoanSnapshot,
   type OrgFinancing,
 } from "../../../src/lib/financing/state";
+import { editorFinancing } from "../../../src/lib/financing/view";
 
 let bad = 0;
 const check = (name: string, ok: boolean, extra = "") => {
@@ -131,6 +132,22 @@ check("accepted, approval ends in 6 days → expiring", reminderDue(loan({ state
 check("expiring and told yesterday → nothing", reminderDue(loan({ state: "accepted", expiresAt: days(6), nudgedAt: days(-1) }), now) === null);
 check("an old accept nudge does not stop the expiring one", reminderDue(loan({ state: "accepted", expiresAt: days(6), nudgedAt: days(-20) }), now) === "expiring");
 check("paid → nothing", reminderDue(loan({ state: "paid", expiresAt: days(2) }), now) === null);
+
+// ---- the editor's switch (Task 5) ----
+const usd = (minor: number) => `$${Math.round(minor / 100).toLocaleString("en-US")}`;
+const ed = (o: Partial<Parameters<typeof editorFinancing>[0]> = {}) =>
+  editorFinancing({ proposalId: "p1", letIn: true, org: approvedOrg, proposalOn: null, owedMinor: 1_200_000, status: "SENT", planEnded: false, loan: null, money: usd, ...o });
+check("outside JobFlex's switch with no loan → no row at all", ed({ letIn: false }) === null);
+const e1 = ed();
+check("approved, following the default → on, follows the default, offered", !!e1 && e1.on && e1.followsDefault && e1.offer.offered && e1.notice === null && e1.loanLine === null, JSON.stringify(e1));
+const e2 = ed({ proposalOn: false });
+check("the proposal's switch off → off, its own choice, locked as off", !!e2 && !e2.on && !e2.followsDefault && !e2.offer.offered && e2.offer.why === "off");
+const e3 = ed({ owedMinor: 10_000 });
+check("under the minimum → still on, but locked under_min", !!e3 && e3.on && !e3.offer.offered && e3.offer.why === "under_min");
+const e4 = ed({ owedMinor: 2_000_000, loan: loan({ state: "accepted", approvedMinor: 1_400_000 }) });
+check("an accepted $14,000 loan and $20,000 owed → a notice naming both, the loan line", !!e4 && !!e4.notice && e4.notice.includes("$14,000") && e4.notice.includes("$20,000") && e4.loanLine === "Loan accepted · $14,000", JSON.stringify(e4));
+check("the same loan with $14,000 owed → no notice", ed({ owedMinor: 1_400_000, loan: loan({ state: "accepted", approvedMinor: 1_400_000 }) })?.notice === null);
+check("a loan still shows when the switch has since gone off", ed({ letIn: false, loan: loan({ state: "accepted", approvedMinor: 1_400_000 }), owedMinor: 1_400_000 })?.loanLine === "Loan accepted · $14,000");
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);

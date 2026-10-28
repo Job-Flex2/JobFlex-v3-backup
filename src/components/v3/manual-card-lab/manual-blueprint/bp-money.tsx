@@ -31,6 +31,7 @@ import {
 import styles from "./manual-blueprint.module.css";
 import m from "./bp-money.module.css";
 import { Btn, Ic, NumField, cx } from "./bp-ui";
+import { FinancingRow } from "./bp-financing";
 import { scheduleCoverage, unitTogglePatches } from "@/lib/paymentSchedule";
 
 /* ============================================================
@@ -244,6 +245,8 @@ export function PaymentBlock({
           {note}
         </div>
       </div>
+      {/* Wisetack financing (2026-10-28): offer monthly payments on this proposal, or not. */}
+      <FinancingRow total={total} />
     </div>
   );
 }
