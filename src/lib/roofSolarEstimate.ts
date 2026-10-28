@@ -90,9 +90,13 @@ export function estimateSolarRoof(
   insights: BuildingInsights,
   pin: Location,
   now: Date = new Date(),
+  /** The homeowner's rough range (actions/publicEstimate, 2026-10-28) takes MEDIUM imagery too — many US homes have
+   *  nothing better; a contractor's measurement keeps the default, HIGH only. */
+  opts: { minQuality?: "HIGH" | "MEDIUM" } = {},
 ): SolarRoofEstimateResult {
   const fail = (error: string): SolarRoofEstimateResult => ({ ok: false, error });
-  if (insights.imageryQuality !== "HIGH") {
+  const qualityOk = insights.imageryQuality === "HIGH" || (opts.minQuality === "MEDIUM" && insights.imageryQuality === "MEDIUM");
+  if (!qualityOk) {
     return fail("High-quality Google Solar imagery is required for this estimate.");
   }
   if (!validLocation(pin) || !validLocation(insights.center)) {

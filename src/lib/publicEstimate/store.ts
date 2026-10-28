@@ -11,7 +11,9 @@ import type { SolarRoofEstimate } from "@/lib/roofSolarEstimate";
 export const PUBROOF_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const HOUSE_ORG_KEY = "leadCenter:houseOrgId";
 
-export type PubRoofCache = { v: 1; at: string; solar: SolarRoofEstimate | null; error: string | null };
+/** v 2 (2026-10-28): reads that may fall back to MEDIUM imagery. A v 1 row (HIGH-only) is read again, so a home that
+ *  had only MEDIUM imagery is not left on "couldn't read" for the rest of its 30 days. */
+export type PubRoofCache = { v: 2; at: string; solar: SolarRoofEstimate | null; error: string | null };
 
 /** The address AND the pin, to about 11 m: a pin dragged onto the house next door is another read, and a scripted
  *  read at a warehouse's pin never answers the real visitor's pick (the review of 2026-10-27). */
@@ -29,7 +31,7 @@ export function inUs(lat: number, lng: number): boolean {
 }
 
 export function cacheFresh(row: PubRoofCache | null, now: Date): boolean {
-  if (!row || row.v !== 1) return false;
+  if (!row || row.v !== 2) return false;
   const at = Date.parse(row.at);
   return Number.isFinite(at) && now.getTime() - at < PUBROOF_TTL_MS;
 }
@@ -44,7 +46,7 @@ export async function readPubRoof(key: string): Promise<PubRoofCache | null> {
     const row = await db.syncState.findUnique({ where: { key } });
     if (!row?.cursor) return null;
     const parsed = JSON.parse(row.cursor) as PubRoofCache;
-    return parsed && parsed.v === 1 ? parsed : null;
+    return parsed && parsed.v === 2 ? parsed : null;
   } catch {
     return null;
   }
@@ -57,20 +59,33 @@ export async function writePubRoof(key: string, row: PubRoofCache): Promise<void
   });
 }
 
+/** What the Lead Center's box keeps when the admin turns the house estimators off. */
+export const HOUSE_OFF = "off";
+
+/** THE HOUSE ORG (owner, 2026-10-28: the estimators must just be there — no switch to find first). On by default with
+ *  JobFlex's own oldest internal organization; the Lead Center's pick wins while it is still one of JobFlex's own; a
+ *  pick that was deleted or stopped being internal falls back to the default; "off" turns them off. Pure. */
+export function resolveHouseOrg(stored: string | null | undefined, internalIds: readonly string[]): string | null {
+  const pick = stored?.trim() || "";
+  if (pick === HOUSE_OFF) return null;
+  if (pick && internalIds.includes(pick)) return pick;
+  return internalIds[0] ?? null;
+}
+
 export async function houseOrgId(): Promise<string | null> {
   try {
-    const row = await db.syncState.findUnique({ where: { key: HOUSE_ORG_KEY } });
-    return row?.cursor?.trim() || null;
+    const [row, internal] = await Promise.all([
+      db.syncState.findUnique({ where: { key: HOUSE_ORG_KEY } }),
+      db.organization.findMany({ where: { isInternal: true, deletedAt: null }, orderBy: { createdAt: "asc" }, select: { id: true }, take: 50 }),
+    ]);
+    return resolveHouseOrg(row?.cursor, internal.map((o) => o.id));
   } catch {
     return null;
   }
 }
 
-/** The admin names the house org on the Lead Center (2026-10-28); null closes the house pages. */
+/** The admin picks the house org on the Lead Center (2026-10-28); null turns the house estimators off. */
 export async function setHouseOrgId(id: string | null): Promise<void> {
-  if (!id) {
-    await db.syncState.deleteMany({ where: { key: HOUSE_ORG_KEY } });
-    return;
-  }
-  await db.syncState.upsert({ where: { key: HOUSE_ORG_KEY }, update: { cursor: id }, create: { key: HOUSE_ORG_KEY, cursor: id } });
+  const cursor = id || HOUSE_OFF;
+  await db.syncState.upsert({ where: { key: HOUSE_ORG_KEY }, update: { cursor }, create: { key: HOUSE_ORG_KEY, cursor } });
 }

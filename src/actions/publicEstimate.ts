@@ -102,22 +102,36 @@ async function readInner(raw: unknown, caller: PublicCaller): Promise<PublicRoof
   }
   if (!isSolarEnabled()) return { ok: true, solar: null, noRoofReason: NO_ROOF, cityFactor, cityWords, guide, cached: false };
 
+  // HIGH imagery first; where Google has none (or none the roof math takes), MEDIUM — many US homes have nothing
+  // better, and a homeowner's rough range does not need the contractor's precision (2026-10-28).
   let row: PubRoofCache | null = null;
   let outcome: "ok" | "timeout" | "no-coverage" | "config" | "error" = "ok";
-  try {
-    const insights = await getBuildingInsights(input.lat, input.lng);
-    const est = estimateSolarRoof(insights, { lat: input.lat, lng: input.lng }, now);
-    row = { v: 1, at: now.toISOString(), solar: est.ok ? est.estimate : null, error: est.ok ? null : est.error };
-  } catch (err) {
-    outcome = err instanceof SolarUnavailableError ? err.kind : "error";
-    row = { v: 1, at: now.toISOString(), solar: null, error: (err as Error)?.message?.slice(0, 300) ?? "solar failed" };
+  let calls = 0;
+  for (const quality of ["HIGH", "MEDIUM"] as const) {
+    outcome = "ok";
+    calls += 1;
+    try {
+      const insights = await getBuildingInsights(input.lat, input.lng, quality);
+      const est = estimateSolarRoof(insights, { lat: input.lat, lng: input.lng }, now, { minQuality: "MEDIUM" });
+      row = { v: 2, at: now.toISOString(), solar: est.ok ? est.estimate : null, error: est.ok ? null : est.error };
+      // Google answered: the roof math has what it will get — a second, lower-quality call would not change it.
+      break;
+    } catch (err) {
+      outcome = err instanceof SolarUnavailableError ? err.kind : "error";
+      row = { v: 2, at: now.toISOString(), solar: null, error: (err as Error)?.message?.slice(0, 300) ?? "solar failed" };
+      // Only "no high-quality data here" is worth asking again at MEDIUM; a bad key or a timeout is not.
+      if (outcome !== "no-coverage") break;
+    }
   }
-  // The call was made whatever it answered: filed under the house org when one is named.
+  // Every call was made whatever it answered: filed under the house org when there is one.
   const house = await houseOrgId();
-  if (house) await recordApiSpend(house, [{ service: "google-solar", op: "buildingInsights", calls: 1, cents: unitCents("google-solar", "buildingInsights") }], now);
-  if (cacheable(outcome)) await writePubRoof(key, row);
+  if (house) await recordApiSpend(house, [{ service: "google-solar", op: "buildingInsights", calls, cents: calls * unitCents("google-solar", "buildingInsights") }], now);
+  // Why a read came back empty, in the server log: the key, coverage, or the roof math.
+  if (!row?.solar) console.warn("[price] roof read empty:", outcome, row?.error ?? "", key);
+  if (row && cacheable(outcome)) await writePubRoof(key, row);
   if (caller.kind === "site") console.info("[price] site read", caller.orgSlug, key);
-  return { ok: true, solar: row.solar, noRoofReason: row.solar ? null : NO_ROOF, cityFactor, cityWords, guide, cached: false };
+  const solar = row?.solar ?? null;
+  return { ok: true, solar, noRoofReason: solar ? null : NO_ROOF, cityFactor, cityWords, guide, cached: false };
 }
 
 // ── The submits ──────────────────────────────────────────────────────────────
