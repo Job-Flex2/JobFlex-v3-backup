@@ -10,6 +10,7 @@ import { webPageModel, webPageOffReason } from "@/actions/webEstimator";
 import { WebEstimate } from "@/components/v3/web-estimate/web-estimate";
 import { WebDeck } from "@/components/v3/web-estimate/web-deck";
 import { WebRoof } from "@/components/v3/web-estimate/web-roof";
+import { WebHvac } from "@/components/v3/web-estimate/web-hvac";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,14 @@ export default async function WebEstimatePage({ params, searchParams }: { params
     return (
       <main style={{ minHeight: "100vh", background: embed ? "#fff" : "#f5f3ee" }}>
         <WebRoof shop={m.shop} title={m.title} basis={m.basis} askEmail={m.askEmail} choices={m.choices} embed={embed} />
+      </main>
+    );
+  }
+  if (m.trade === "hvac") {
+    // The HVAC estimator itself (2026-10-28): the house looked up, the load, the shop's tiers, the price.
+    return (
+      <main style={{ minHeight: "100vh", background: embed ? "#fff" : "#f5f3ee" }}>
+        <WebHvac shop={m.shop} title={m.title} basis={m.basis} askEmail={m.askEmail} embed={embed} />
       </main>
     );
   }
