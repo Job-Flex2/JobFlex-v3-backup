@@ -158,7 +158,7 @@ check("not signed yet → see what you qualify for, through the contractor's own
 check("not signed and no prequal link → nothing yet", pf({ signed: false, org: approvedOrg }) === null);
 check("signed, no loan → Pay over time", pf()?.mode === "apply");
 const p4 = pf({ loan: loan({ state: "accepted", approvedMinor: 1_400_000 }) });
-check("an accepted $14,000 loan → status, the last stage covered, the rest $6,000", p4?.mode === "status" && p4.coveredIds.join(",") === "b" && p4.rest === "$6,000" && p4.loan?.title === "Monthly payments are set", JSON.stringify(p4));
+check("an accepted $14,000 loan → status, every open stage waits for the loan, the rest $6,000", p4?.mode === "status" && p4.coveredIds.join(",") === "a,b" && p4.rest === "$6,000" && p4.loan?.title === "Monthly payments are set", JSON.stringify(p4));
 const p5 = pf({ loan: loan({ state: "declined" }) });
 check("a declined loan → Pay over time again, with the 'not approved' words", p5?.mode === "apply" && p5.loan?.title === "Not approved this time" && p5.coveredIds.length === 0);
 check("the switch since turned off, a live accepted loan → its status stays", pf({ offered: false, loan: loan({ state: "accepted", approvedMinor: 1_400_000 }) })?.mode === "status");
@@ -168,8 +168,8 @@ check("approved, not accepted yet → status with a way back to Wisetack, nothin
 check("Wisetack's own monthly words pass through untouched", pf({ monthly: "Monthly payment options available" })?.monthly === "Monthly payment options available");
 
 // ---- the proposals row (Task 9) ----
-const rf = (o: Partial<Parameters<typeof rowFinancing>[0]> = {}) => rowFinancing({ offered: true, loan: null, canBill: true, money: usd, ...o });
-check("not offered and no loan → nothing on the row", rowFinancing({ offered: false, loan: null, canBill: true, money: usd }) === null);
+const rf = (o: Partial<Parameters<typeof rowFinancing>[0]> = {}) => rowFinancing({ offered: true, loan: null, canBill: true, status: "ACCEPTED", hasPrequal: true, money: usd, ...o });
+check("not offered and no loan → nothing on the row", rowFinancing({ offered: false, loan: null, canBill: true, status: "ACCEPTED", hasPrequal: true, money: usd }) === null);
 check("offered, no loan, the office → Send financing link, no line", JSON.stringify(rf()) === JSON.stringify({ line: null, canSend: true }));
 check("an accepted loan → its line, nothing to send", JSON.stringify(rf({ loan: loan({ state: "accepted", approvedMinor: 1_400_000 }) })) === JSON.stringify({ line: "Loan accepted · $14,000", canSend: false }));
 check("a declined loan → its line, and the link can go again", JSON.stringify(rf({ loan: loan({ state: "declined" }) })) === JSON.stringify({ line: "Client wasn't approved", canSend: true }));

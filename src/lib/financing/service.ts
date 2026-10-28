@@ -18,9 +18,9 @@ import { merchantPrefill, readinessFacts, type PrefillOrg, type PrefillOwner } f
 import { contractSchedule, APPROVED_CO_SELECT } from "@/lib/contractTotal";
 import { resolveSchedule } from "@/lib/paymentSchedule";
 import { planEnded } from "@/lib/paidCaps";
-import { coverMinor, coveredStageIds, loanSideEffects, nextLoanState, offerFor, orgLetIn, readiness, reminderDue, reuseLoan, type Funding, type Loan, type LoanSnapshot, type OrgFinancing } from "./state";
+import { coverMinor, loanEventFor, loanSideEffects, nextLoanState, offerFor, orgLetIn, readiness, reminderDue, reuseLoan, type Funding, type Loan, type LoanSnapshot, type OrgFinancing } from "./state";
 import { listLoans, listOrgFinancing, orgIdForMerchantRef, proposalForLoanRef, readLoan, readLoans, readOffer, readOffers, readOrgFinancing, readSwitch, writeLoan, writeOffer, writeOrgFinancing } from "./store";
-import { editorFinancing, portalFinancingFrom, rowFinancing, type EditorFinancing, type PortalFinancing } from "./view";
+import { editorFinancing, linkLands, portalFinancingFrom, rowFinancing, type EditorFinancing, type PortalFinancing } from "./view";
 import { FIN } from "./words";
 
 export const SETTINGS_HREF = "/dashboard/settings?pane=payments&sub=financing";
@@ -205,6 +205,37 @@ export async function openLoanForClient(publicId: string): Promise<{ ok: true; u
   if (!money) return { ok: false, status: 404, error: NOT_AVAILABLE };
   const p = money.proposal;
   if (!SIGNED.has(p.status)) return { ok: false, status: 409, error: "Accept the proposal first — then choose Pay over time." };
+  // One application at a time per proposal: a second tab waits for the first instead of opening a second loan.
+  if (!(await takeLoanLock(p.id))) return { ok: false, status: 409, error: "Opening Wisetack — one moment, then press again." };
+  try {
+    return await openLoanLocked(publicId, p, money.owedMinor);
+  } finally {
+    await db.syncState.deleteMany({ where: { key: `financingLock:${p.id}` } }).catch(() => {});
+  }
+}
+
+async function takeLoanLock(proposalId: string): Promise<boolean> {
+  const key = `financingLock:${proposalId}`;
+  try {
+    await db.syncState.create({ data: { key, cursor: String(Date.now()) } });
+    return true;
+  } catch {
+    // A lock older than 30 s is a crashed request's: take it over.
+    const row = await db.syncState.findUnique({ where: { key } }).catch(() => null);
+    if (row && Date.now() - Number(row.cursor) < 30_000) return false;
+    await db.syncState.upsert({ where: { key }, update: { cursor: String(Date.now()) }, create: { key, cursor: String(Date.now()) } });
+    return true;
+  }
+}
+
+async function openLoanLocked(
+  publicId: string,
+  p: NonNullable<Awaited<ReturnType<typeof proposalMoney>>>["proposal"],
+  owedMinor: number,
+): Promise<{ ok: true; url: string } | { ok: false; status: number; error: string }> {
+  const provider = getProvider();
+  if (!provider) return { ok: false, status: 404, error: NOT_AVAILABLE };
+  const money = { owedMinor };
   const [view, proposalOn, loan, ended] = await Promise.all([orgFinancingView(p.organizationId), readOffer(p.id), readLoan(p.id), planEnded(p.organizationId)]);
   const now = new Date();
   if (loan && reuseLoan(loan, money.owedMinor, now) && loan.url) return { ok: true, url: loan.url };
@@ -260,7 +291,7 @@ export async function applyLoanSnapshot(proposalId: string, snapshot: LoanSnapsh
   for (const fx of effects) {
     if (fx.kind === "paid" || fx.kind === "paid_part") {
       // The payment's own notice (lib/payments/settle → notifyPaymentReceived) tells the office.
-      for (const f of fx.fundings) await settleFunding(p.organizationId, p.id, after, f, p.clientId);
+      for (const f of fx.fundings) await settleFunding(p.organizationId, p.id, after.ref, f, p.clientId);
       continue;
     }
     const line =
@@ -276,19 +307,19 @@ export async function applyLoanSnapshot(proposalId: string, snapshot: LoanSnapsh
   return after;
 }
 
-/** One Wisetack payout → one Payment (provider WISETACK, method financing, no JobFlex fee) on the stages the loan pays. */
-async function settleFunding(orgId: string, proposalId: string, loan: Loan, f: Funding, clientId: string | null): Promise<void> {
+/** One Wisetack payout → one Payment (provider WISETACK, method financing, no JobFlex fee). No stages named: settle
+ *  pays what is open in order — all of it when the payout is what is owed, else stage by stage, splitting the stage
+ *  it only partly pays, so what is left owed is exactly the rest. */
+async function settleFunding(orgId: string, proposalId: string, ref: string, f: Funding, clientId: string | null): Promise<void> {
   const money = await proposalMoney(orgId, proposalId);
   if (!money) return;
-  const open = money.schedule.stages.filter((s) => !s.synthetic && (s.status === "UNPAID" || s.status === "PENDING"));
-  const installmentIds = coveredStageIds(open, f.amountMinor);
   await settleInstallmentPayment({
     provider: "WISETACK",
-    externalId: `${loan.ref}:${f.id}`,
+    externalId: `${ref}:${f.id}`,
     externalPaymentId: null,
     organizationId: orgId,
     proposalId,
-    installmentIds,
+    installmentIds: [],
     amountMinor: f.amountMinor,
     feeMinor: 0,
     feeBilling: "in_payment",
@@ -300,6 +331,19 @@ async function settleFunding(orgId: string, proposalId: string, loan: Loan, f: F
     paidAt: new Date(f.at || Date.now()),
     note: "Paid through Wisetack financing (Wisetack keeps its merchant fee)",
   });
+}
+
+/** A payout on a loan the proposal no longer tracks (the client applied again, or two tabs raced): real money, so it
+ *  lands — once per funding (Payment provider + externalId) — and the office is told; the current loan is untouched. */
+async function settleStaleFundings(proposalId: string, ref: string, fundings: Funding[]): Promise<void> {
+  const p = await db.proposal.findUnique({ where: { id: proposalId }, select: { organizationId: true, title: true, clientId: true } });
+  if (!p) return;
+  for (const f of fundings) {
+    const seen = await db.payment.findFirst({ where: { provider: "WISETACK", externalId: `${ref}:${f.id}` }, select: { id: true } });
+    if (seen) continue;
+    await settleFunding(p.organizationId, proposalId, ref, f, p.clientId);
+    await notifyFinancing(p.organizationId, `Wisetack paid you ${usd(f.amountMinor)} on an earlier financing application for "${p.title}" — check the proposal's payments.`, { kind: "FINANCING_LOAN", href: `/dashboard/proposals/${proposalId}`, proposalId, clientId: p.clientId });
+  }
 }
 
 /** Someone pre-qualified through a contractor's general link → that contractor's lead. */
@@ -321,7 +365,10 @@ export async function applyEvent(ev: ProviderEvent): Promise<void> {
   }
   if (ev.kind === "loan") {
     const proposalId = await proposalForLoanRef(ev.loanRef);
-    if (proposalId) await applyLoanSnapshot(proposalId, ev.snapshot);
+    if (!proposalId) return;
+    const what = loanEventFor(await readLoan(proposalId), ev.loanRef, ev.snapshot);
+    if (what === "apply") await applyLoanSnapshot(proposalId, ev.snapshot);
+    else if (what === "stale_settle") await settleStaleFundings(proposalId, ev.loanRef, ev.snapshot.fundings);
     return;
   }
   const orgId = await orgIdForMerchantRef(ev.merchantRef);
@@ -396,7 +443,7 @@ export async function rowsFinancing(orgId: string, rows: { id: string; status: s
   for (const r of rows) {
     const owedMinor = Math.round(r.owed * 100);
     const offer = offerFor({ letIn: view.letIn, org: view.rec, proposalOn: offers.get(r.id) ?? null, owedMinor, status: r.status, planEnded: ended });
-    const fin = rowFinancing({ offered: offer.offered, loan: loans.get(r.id) ?? null, canBill: r.canBill, money: usd });
+    const fin = rowFinancing({ offered: offer.offered, loan: loans.get(r.id) ?? null, canBill: r.canBill, status: r.status, hasPrequal: !!view.rec.prequalUrl, money: usd });
     if (fin) out.set(r.id, fin);
   }
   return out;
@@ -413,6 +460,7 @@ export async function sendFinancingLinkFor(orgId: string, proposalId: string, vi
   const [view, proposalOn, ended] = await Promise.all([orgFinancingView(orgId), readOffer(proposalId), planEnded(orgId)]);
   const offer = offerFor({ letIn: view.letIn, org: view.rec, proposalOn, owedMinor: money.owedMinor, status: p.status, planEnded: ended });
   if (!getProvider() || !offer.offered) return { ok: false, error: NOT_AVAILABLE };
+  if (!linkLands(p.status, !!view.rec.prequalUrl)) return { ok: false, error: "Send the proposal first — the financing link opens it." };
   const org = await db.organization.findUnique({ where: { id: orgId }, select: { id: true, name: true, smsClientsOn: true, gmailSettingsJson: true, gmailTokensJson: true, billingEmail: true } });
   if (!org) return { ok: false, error: NOT_AVAILABLE };
   const link = `${await appBaseUrl()}/portal/q/${encodeURIComponent(p.publicId)}#pay-over-time`;

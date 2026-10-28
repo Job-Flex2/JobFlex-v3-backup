@@ -21,6 +21,7 @@ import { notifyPaymentIssue, notifyPaymentReceived } from "@/lib/notify";
 import { billPlatformFee } from "./feeBilling";
 import { reopenInvoicesForPayment, repriceOpenInvoices, settleInvoicesForPayment } from "./invoiceRecord";
 import { trackActivation } from "@/lib/activation-events";
+import { providerName, providerWord } from "./providerWords";
 
 type Tx = Prisma.TransactionClient;
 
@@ -591,17 +592,4 @@ function amountLabel(n: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 }
 
-/** The dashboard a refund happens in. */
-export function providerName(provider: string): string {
-  return provider === "SQUARE" ? "Square" : provider === "STAX" ? "Stax" : "Stripe";
-}
-
-export function providerWord(provider: string, method: string | null): string {
-  if (provider === "STRIPE") return method === "us_bank_account" ? "Stripe (bank debit)" : "Stripe";
-  if (provider === "SQUARE") return "Square";
-  if (provider === "STAX") return method === "us_bank_account" ? "Stax (bank)" : "Stax";
-  if (method === "BANK_TRANSFER") return "bank transfer";
-  if (method === "CASH") return "cash";
-  if (method === "CHECK") return "check";
-  return "manual entry";
-}
+export { providerName, providerWord };

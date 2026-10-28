@@ -157,9 +157,10 @@ export function fundedMinor(l: Loan): number {
   return l.fundings.reduce((n, f) => n + f.amountMinor, 0);
 }
 
-/** What the loan pays for: nothing until the client is approved, then the approved amount. */
+/** What the loan pays for: nothing until the client is approved, then the approved amount — never more than was
+ *  asked (a client approved for more than the job still owes only the job). */
 export function coverMinor(l: Loan): number {
-  return rank(l.state) >= RANK.approved! ? (l.approvedMinor ?? l.amountMinor) : 0;
+  return rank(l.state) >= RANK.approved! ? Math.min(l.approvedMinor ?? l.amountMinor, l.amountMinor) : 0;
 }
 
 /** Still to come from Wisetack on a loan the client accepted (0 before that). */
@@ -332,4 +333,12 @@ export function loanSideEffects(before: Loan, after: Loan): LoanEffect[] {
     out.push({ kind: after.state, fundings: [] });
   }
   return out;
+}
+
+/** Wisetack's word on a loan the proposal no longer tracks (the client applied again; two tabs raced) never touches the
+ *  current loan — but a payout on it is real money and still lands. */
+export function loanEventFor(current: Loan | null, ref: string, s: LoanSnapshot): "apply" | "stale_settle" | "ignore" {
+  if (!current) return "ignore";
+  if (current.ref === ref) return "apply";
+  return s.fundings.length ? "stale_settle" : "ignore";
 }

@@ -70,7 +70,7 @@ export function PayOverTime({ f, publicId, accepted }: { f: PortalFinancing; pub
           </p>
           <p className={s.sub}>{f.loan.sub}</p>
           {f.covered ? <p className={s.line}>{f.covered}</p> : null}
-          {f.rest ? <p className={s.line}>{`${FIN.restLabel(f.rest)} — pay it below when it's due.`}</p> : null}
+          {f.rest ? <p className={s.line}>{`${FIN.restLabel(f.rest)} — you pay it here once Wisetack has paid the contractor.`}</p> : null}
           {f.loan.url ? (
             <a className={s.ghost} href={f.loan.url} data-fin-continue>
               {FIN.continueButton}

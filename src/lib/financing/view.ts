@@ -1,7 +1,7 @@
 // WISETACK FINANCING — what each surface shows, from the rules (./state) and the words (./words): the editor's
 // switch, the client's page, the proposals row, the admin board. Pure; one place so the surfaces cannot disagree.
 
-import { coverMinor, coveredStageIds, fundedMinor, offerFor, restMinor, type Loan, type LoanState, type MerchantState, type Offer, type OrgFinancing } from "./state";
+import { coverMinor, fundedMinor, offerFor, restMinor, type Loan, type LoanState, type MerchantState, type Offer, type OrgFinancing } from "./state";
 import { FIN, clientLoanWords, loanLine } from "./words";
 
 type Money = (minor: number) => string;
@@ -85,6 +85,9 @@ export function portalFinancingFrom(i: {
   const base = { prequalUrl: i.org.prequalUrl, monthly: i.monthly, disclosure: FIN.disclosure, coveredIds: [] as string[], covered: null, rest: null };
 
   if (i.loan && !DEAD.includes(i.loan.state)) {
+    // An accepted loan holds EVERY open stage until Wisetack pays: no card payment the loan would also pay. Wisetack's
+    // payout lands on the stages in order (settle splits a stage it only partly pays); whatever is still owed then —
+    // the rest, when Wisetack approved less — pays as usual, for exactly that.
     const committed = COMMITTED.includes(i.loan.state);
     const left = committed ? coverMinor(i.loan) - fundedMinor(i.loan) : 0;
     const rest = committed ? restMinor(i.owedMinor, i.loan) : 0;
@@ -92,7 +95,7 @@ export function portalFinancingFrom(i: {
       ...base,
       mode: "status",
       loan: loanView,
-      coveredIds: committed ? coveredStageIds(i.stages, left) : [],
+      coveredIds: committed ? i.stages.filter((s) => s.status === "UNPAID" || s.status === "PENDING").map((s) => s.id) : [],
       covered: committed && left > 0 ? FIN.coveredLine(i.money(left)) : null,
       rest: committed && rest > 0 ? i.money(rest) : null,
     };
@@ -102,11 +105,20 @@ export function portalFinancingFrom(i: {
   return { ...base, mode: "apply", loan: loanView };
 }
 
+const SIGNED_STATUSES = new Set(["ACCEPTED", "COMPLETED"]);
+const OPEN_UNSIGNED = new Set(["SENT", "VIEWED"]);
+
+/** Whether the link has somewhere to land: a signed proposal (Pay over time), or one the client has and can read
+ *  before signing (See what you qualify for — needs the contractor's prequal link). Never a draft or an expired one. */
+export function linkLands(status: string, hasPrequal: boolean): boolean {
+  return SIGNED_STATUSES.has(status) || (OPEN_UNSIGNED.has(status) && hasPrequal);
+}
+
 /** The proposals row: where the client's loan stands, and whether the office may send the financing link. */
-export function rowFinancing(i: { offered: boolean; loan: Loan | null; canBill: boolean; money: Money }): { line: string | null; canSend: boolean } | null {
+export function rowFinancing(i: { offered: boolean; loan: Loan | null; canBill: boolean; status: string; hasPrequal: boolean; money: Money }): { line: string | null; canSend: boolean } | null {
   if (!i.offered && !i.loan) return null;
   const sendable = !i.loan || DEAD.includes(i.loan.state);
-  return { line: i.loan ? loanLine(i.loan, i.money) : null, canSend: i.offered && i.canBill && sendable };
+  return { line: i.loan ? loanLine(i.loan, i.money) : null, canSend: i.offered && i.canBill && sendable && linkLands(i.status, i.hasPrequal) };
 }
 
 const MERCHANT_STATES: readonly MerchantState[] = ["none", "started", "review", "needs_info", "approved", "declined", "paused"];
