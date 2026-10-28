@@ -7,11 +7,12 @@ import type { Site } from "@/components/v3/price-my-project/place-field";
 import { db } from "@/lib/db";
 import { findHomeByKey } from "@/lib/home/portal";
 import { parsePlanEstimate, parsePlanSite } from "@/lib/leadCenter/estimate";
+import { PRO_IS } from "@/lib/home/jobflexPro";
 import s from "@/components/v3/price-my-project/price.module.css";
 
 export const metadata: Metadata = {
   title: "Price my roof — JobFlex",
-  description: "Your roof, read from the sky: type your address, answer three questions, and see a price range for your house. Not a quote — a local pro confirms on site.",
+  description: "Your roof, read from the sky: type your address, answer three questions, and see a price range for your house. Not a quote — a local JobFlex pro confirms on site.",
 };
 
 const str = (v: string | string[] | undefined) => (typeof v === "string" ? v.trim().slice(0, 200) : "");
@@ -59,9 +60,10 @@ export default async function PriceRoofPage({ searchParams }: { searchParams: Pr
       <div style={{ display: "grid", gap: 8 }}>
         <p className={s.kicker}>Price my roof</p>
         <h1 className={s.h1}>Your roof, read from the sky.</h1>
-        <p className={s.lede}>Type your address, answer three questions, see a range for your house. An estimate, not a quote — a local pro confirms on site.</p>
+        <p className={s.lede}>Type your address, answer three questions, see a range for your house. An estimate, not a quote — a local JobFlex pro confirms on site.</p>
       </div>
       <RoofFlow prefill={prefill} resume={resume} />
+      <p className={s.small}>{PRO_IS}</p>
     </PriceChrome>
   );
 }

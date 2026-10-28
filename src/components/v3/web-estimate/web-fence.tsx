@@ -10,6 +10,7 @@ import dynamic from "next/dynamic";
 import { PlacesAutocomplete, type PickedAddress } from "@/components/estimator/roof/PlacesAutocomplete";
 import { webFenceLot, webFencePrice, webGeocode, webLead, webView, type WebEstimateView, type WebLot } from "@/actions/webEstimator";
 import { bandWords, money, pageWords } from "@/lib/webEstimator";
+import { PRO_CAP } from "@/lib/home/jobflexPro";
 import type { WebChoice } from "@/lib/webEstimatorTrades";
 import type { BuildingFootprint, GateSpec, PathPoint } from "@/components/estimator/fence/fenceTypes";
 import { presetWidthFt } from "@/components/estimator/fence/fenceTypes";
@@ -217,7 +218,7 @@ export function WebFence(p: WebFenceProps) {
       {step === "quote" && (
         <section className="we-card" data-web-step="quote">
           <h2>Your full quote</h2>
-          {est ? <p className="we-note">{est.summary} <b>{price}</b> as {est.choice}. {p.shop.house ? "A local pro" : p.shop.name} confirms it line by line.</p> : null}
+          {est ? <p className="we-note">{est.summary} <b>{price}</b> as {est.choice}. {p.shop.house ? PRO_CAP : p.shop.name} confirms it line by line.</p> : null}
           <form className="we-form" onSubmit={(e) => { e.preventDefault(); void sendNow(); }}>
             <label><span>Your name</span><input value={contact.name} autoComplete="name" onChange={(e) => setContact({ ...contact, name: e.target.value })} data-web-name /></label>
             <label><span>Phone</span><input value={contact.phone} inputMode="tel" autoComplete="tel" onChange={(e) => setContact({ ...contact, phone: e.target.value })} data-web-phone /></label>

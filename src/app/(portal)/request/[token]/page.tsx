@@ -99,17 +99,17 @@ export default async function RequestPage({ params }: { params: Promise<{ token:
   } else if (v.status === "OFFERED") {
     stamp = { label: "Matching", tone: "neutral" };
     title = "A contractor is reviewing your request";
-    body = "We've offered your project to a local pro — they have up to 24 hours to take it on.";
+    body = "We've offered your project to a local JobFlex pro — they have up to 24 hours to take it on.";
   } else if (v.status === "MANUAL_QUEUE") {
     // Neutral (owner, 2026-10-03): the same words whether the queue holds the
     // lead by design (manual mode) or because no shop took it.
     stamp = { label: "Finding a pro", tone: "neutral" };
     title = "We're finding the right contractor for you";
-    body = "We're matching your project with a qualified local pro. You'll get an email the moment one takes it on — no action needed.";
+    body = "We're matching your project with a local JobFlex pro. You'll get an email the moment one takes it on — no action needed.";
   } else {
     stamp = { label: "Finding a pro", tone: "neutral" };
     title = "We're finding your contractor";
-    body = "Your request is being matched with a local pro on JobFlex right now. You'll get an email the moment one takes it on.";
+    body = "Your request is being matched with a local JobFlex pro right now. You'll get an email the moment one takes it on.";
   }
 
   const steps = [
@@ -323,7 +323,7 @@ export default async function RequestPage({ params }: { params: Promise<{ token:
             <div className={s.cardBody}>
               <p className={s.text}>
                 You can ask for another contractor at any time. We&apos;ll let {cur.org.name} know and match your project
-                with another local pro on JobFlex — your request and its details carry over.
+                with another local JobFlex pro — your request and its details carry over.
               </p>
               <div className={s.actions}>
                 <RerouteButton token={v.token} orgName={cur.org.name} accepted={!!won} />

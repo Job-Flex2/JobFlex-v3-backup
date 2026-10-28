@@ -13,6 +13,7 @@
 import { BUILTIN_LISTS, ROOF_SYSTEMS, type RoofSystem } from "@/lib/roofPackage/catalog";
 import { buildRoofPackage, defaultSpecWith, type RoofFacts, type RoofPackage, type RoofPackageSpec } from "@/lib/roofPackage/takeoff";
 import type { SolarRoofEstimate } from "@/lib/roofSolarEstimate";
+import { PRO_CAP } from "@/lib/home/jobflexPro";
 
 export type ExistingKey = "asphalt" | "metal" | "tile" | "shake" | "flat" | "unsure";
 export type MaterialId = "architectural" | "standing_seam" | "impact_resistant" | "designer" | "three_tab";
@@ -180,8 +181,8 @@ export function roofRange(facts: RoofFacts, answers: RoofAnswers, city: { factor
 /** The one line under every range, by where the number came from. */
 export function disclaimerFor(basis: "solar" | "size"): string {
   return basis === "solar"
-    ? "An estimate range from aerial data and local prices, not a quote. A local pro confirms on site."
-    : "An estimate range from your home’s size and local prices, not a quote. A local pro measures and confirms on site.";
+    ? `An estimate range from aerial data and local prices, not a quote. ${PRO_CAP} confirms on site.`
+    : `An estimate range from your home’s size and local prices, not a quote. ${PRO_CAP} measures and confirms on site.`;
 }
 
 /** "$14,200–$19,800". */

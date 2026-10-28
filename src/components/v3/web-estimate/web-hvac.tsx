@@ -9,6 +9,7 @@ import * as React from "react";
 import { PlacesAutocomplete, type PickedAddress } from "@/components/estimator/roof/PlacesAutocomplete";
 import { webHvacLookup, webHvacPrice, webHvacSize, webLead, webView, type WebEstimateView, type WebHouse, type WebHvacSizedView } from "@/actions/webEstimator";
 import { bandWords, money, pageWords } from "@/lib/webEstimator";
+import { PRO_CAP } from "@/lib/home/jobflexPro";
 import { WebHead } from "./web-head";
 import "./web-estimate.css";
 
@@ -190,7 +191,7 @@ export function WebHvac(p: WebHvacProps) {
       {step === "quote" && (
         <section className="we-card" data-web-step="quote">
           <h2>{est ? "Your full quote" : "Leave your details"}</h2>
-          {est ? <p className="we-note">{est.summary} <b>{price}</b> as {est.choice}. {p.shop.house ? "A local pro" : p.shop.name} confirms it line by line.</p> : null}
+          {est ? <p className="we-note">{est.summary} <b>{price}</b> as {est.choice}. {p.shop.house ? PRO_CAP : p.shop.name} confirms it line by line.</p> : null}
           <form className="we-form" onSubmit={(e) => { e.preventDefault(); void sendNow(); }}>
             <label><span>Your name</span><input value={contact.name} autoComplete="name" onChange={(e) => setContact({ ...contact, name: e.target.value })} data-web-name /></label>
             <label><span>Phone</span><input value={contact.phone} inputMode="tel" autoComplete="tel" onChange={(e) => setContact({ ...contact, phone: e.target.value })} data-web-phone /></label>

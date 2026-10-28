@@ -256,7 +256,7 @@ async function sendRangeEmail(to: string, name: string | null, site: { address: 
   }
 }
 
-/** "Get quotes from local pros": the range becomes a Lead Center lead that carries the whole estimate. */
+/** "Get quotes from local JobFlex pros": the range becomes a Lead Center lead that carries the whole estimate. */
 export async function publicRoofLead(raw: unknown): Promise<PublicRoofLeadResult> {
   try {
     const input = leadSchema.parse(raw);
@@ -345,7 +345,7 @@ export async function publicRoofEmail(raw: unknown): Promise<PublicRoofEmailResu
       select: { id: true },
     });
     const base = await appBaseUrl();
-    await sendRangeEmail(input.email, input.name?.trim() || null, input, estimate, { url: `${base}/price/roof?home=${encodeURIComponent(home.accessToken)}&plan=${encodeURIComponent(plan.id)}`, label: "Get quotes from local pros" }, await homeUrl(home.accessToken));
+    await sendRangeEmail(input.email, input.name?.trim() || null, input, estimate, { url: `${base}/price/roof?home=${encodeURIComponent(home.accessToken)}&plan=${encodeURIComponent(plan.id)}`, label: "Get quotes from local JobFlex pros" }, await homeUrl(home.accessToken));
     return { ok: true, homePath: isNew ? homePath(home.accessToken) : null, planId: plan.id };
   } catch (err) {
     const e = err as { name?: string; retryAfterMs?: number };

@@ -11,6 +11,7 @@ import dynamic from "next/dynamic";
 import { PlacesAutocomplete, type PickedAddress } from "@/components/estimator/roof/PlacesAutocomplete";
 import { webDeckPrice, webDeckResume, webDeckSend, webDeckStart, webView, type WebDeckProps } from "@/actions/webEstimator";
 import { pageWords } from "@/lib/webEstimator";
+import { PRO } from "@/lib/home/jobflexPro";
 import { WebHead } from "./web-head";
 import "./web-estimate.css";
 
@@ -96,7 +97,7 @@ export function WebDeck(p: WebDeckPageProps) {
         <button type="button" className="we-btn" disabled={!addressOk || state !== "address"} onClick={() => void start()} data-web-next>
           {state === "starting" ? "Opening the studio…" : "Design my deck"}
         </button>
-        <p className="we-fine">No account, no payment. Design it in 3D, see the price at the end, and {p.shop.house ? "a local pro" : p.shop.name} sends the full quote when you ask for it.</p>
+        <p className="we-fine">No account, no payment. Design it in 3D, see the price at the end, and {p.shop.house ? PRO : p.shop.name} sends the full quote when you ask for it.</p>
       </section>
       <p className="we-foot">{p.shop.house ? pageWords(p.shop, "deck").foot : <>Estimates by <b>JobFlex</b> for {p.shop.name}. No prices are shown to anyone else; the final price follows a visit.</>}</p>
     </div>

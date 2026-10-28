@@ -8,12 +8,13 @@ import type { Metadata } from "next";
 import { PriceChrome, PriceRow } from "@/components/v3/price-my-project/price-row";
 import s from "@/components/v3/price-my-project/price.module.css";
 import { houseOrgId } from "@/lib/publicEstimate/store";
+import { PRO_CAP, PRO_IS } from "@/lib/home/jobflexPro";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "See what your project should cost — JobFlex",
-  description: "Type your address, pick what you want, and see a price range for your house in about a minute. Roofs are measured from the sky; a local pro confirms on site.",
+  description: "Type your address, pick what you want, and see a price range for your house in about a minute. Roofs are measured from the sky; a local JobFlex pro confirms on site.",
 };
 
 export default async function PricePage() {
@@ -26,7 +27,7 @@ export default async function PricePage() {
         <p className={s.lede}>Type your address, pick what you want, answer three questions. A range in about a minute — no account, nothing to download.</p>
       </div>
       <PriceRow house={house} />
-      <p className={s.small}>{house ? "Estimate ranges from JobFlex’s own estimators, aerial data and local prices — not quotes. A local pro confirms on site." : "An estimate range from aerial data and local prices, not a quote. A local pro confirms on site."}</p>
+      <p className={s.small}>{house ? "Estimate ranges from JobFlex’s own estimators, aerial data and local prices — not quotes." : "An estimate range from aerial data and local prices, not a quote."} {PRO_CAP} confirms on site. {PRO_IS}</p>
     </PriceChrome>
   );
 }

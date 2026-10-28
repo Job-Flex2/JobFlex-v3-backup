@@ -66,7 +66,7 @@ check("a budget that covers it: says so, and what the next step up would need", 
 check("a budget under the range: says by how much, and what fits", /^That’s under the range for the architectural shingle by about \$[\d,]+; the 3-tab shingle fits\.$/.test(budgetWords((alts[1].range.high) * 100, r, alts)), budgetWords(alts[1].range.high * 100, r, alts));
 check("a budget under everything: says so plainly", /^That’s under the range for the architectural shingle by about \$[\d,]+\.$/.test(budgetWords(100_000, r, alts)), budgetWords(100_000, r, alts));
 
-check("the disclaimer says where the number came from: aerial data, or the home's size", disclaimerFor("solar") === "An estimate range from aerial data and local prices, not a quote. A local pro confirms on site." && disclaimerFor("size") === "An estimate range from your home’s size and local prices, not a quote. A local pro measures and confirms on site.");
+check("the disclaimer says where the number came from: aerial data, or the home's size", disclaimerFor("solar") === "An estimate range from aerial data and local prices, not a quote. A local JobFlex pro confirms on site." && disclaimerFor("size") === "An estimate range from your home’s size and local prices, not a quote. A local JobFlex pro measures and confirms on site.");
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);

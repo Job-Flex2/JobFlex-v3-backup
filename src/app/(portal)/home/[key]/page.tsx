@@ -109,7 +109,7 @@ export default async function HomePage({ params }: { params: Promise<{ key: stri
             <p className={s.house}>{house}</p>
             <div className={s.welcomeActions}>
               <a className={s.btnHero} href={newProjectHref}><b aria-hidden="true">+</b>Start a new project</a>
-              <span className={s.heroNote}>Describe it in a minute — a local pro takes it from there.</span>
+              <span className={s.heroNote}>Describe it in a minute — a local JobFlex pro takes it from there.</span>
             </div>
             {h.needs.length > 0 && (
               <a className={s.next} href="#needs"><span className={s.count}>{h.needs.length}</span><span>{h.needs.length === 1 ? "One thing needs you" : `${h.needs.length} things need you`}: {needsSummary(h.needs)}</span></a>
@@ -170,7 +170,7 @@ export default async function HomePage({ params }: { params: Promise<{ key: stri
                 <span className={s.mono}>{active.length} in progress · {record.length} finished</span>
               </div>
               {active.length === 0 && (
-                <p className={s.empty}>Nothing in progress right now. <a className={s.link} href={newProjectHref}>Start a new project</a> — it takes a minute, and a local pro on JobFlex takes it from there.</p>
+                <p className={s.empty}>Nothing in progress right now. <a className={s.link} href={newProjectHref}>Start a new project</a> — it takes a minute, and a local JobFlex pro takes it from there.</p>
               )}
               {active.map((p) => <ProjectCard key={p.token} p={p} h={h} />)}
             </section>
@@ -198,7 +198,7 @@ export default async function HomePage({ params }: { params: Promise<{ key: stri
                       <a href={`/price/roof?home=${encodeURIComponent(h.key)}&plan=${encodeURIComponent(p.id)}`}>Get quotes</a>
                     </p>
                   ))}
-                  <p className={s.text}>A local pro confirms on site. Ready? Get quotes sends it to one local pro at a time.</p>
+                  <p className={s.text}>A local JobFlex pro confirms on site. Ready? Get quotes sends it to one local JobFlex pro at a time.</p>
                 </div>
               </section>
             )}
@@ -210,7 +210,7 @@ export default async function HomePage({ params }: { params: Promise<{ key: stri
               </div>
               <div className={s.cardBody}>
                 <p className={s.text}>
-                  Thinking about the garage floor in spring, or paint before the holidays? Put it here with a month. When it comes, we remind you — and one tap sends it to a local pro.
+                  Thinking about the garage floor in spring, or paint before the holidays? Put it here with a month. When it comes, we remind you — and one tap sends it to a local JobFlex pro.
                 </p>
                 <Planner homeKey={h.key} plans={h.plans} />
               </div>

@@ -83,8 +83,8 @@ export function RerouteButton({ token, orgName, accepted }: { token: string; org
             </h2>
             <p className={s.sheetLede}>
               {accepted
-                ? `You accepted ${orgName}'s proposal — if you're canceling it, tell them directly too. We'll let them know you asked for another contractor and match your project with another local pro.`
-                : `We'll let ${orgName} know and match your project with another local pro. Tell us what went wrong — optional, it helps us pick a better match.`}
+                ? `You accepted ${orgName}'s proposal — if you're canceling it, tell them directly too. We'll let them know you asked for another contractor and match your project with another local JobFlex pro.`
+                : `We'll let ${orgName} know and match your project with another local JobFlex pro. Tell us what went wrong — optional, it helps us pick a better match.`}
             </p>
             <div className={s.reasons} role="radiogroup" aria-label="What went wrong">
               {REASONS.map((r, i) => (
