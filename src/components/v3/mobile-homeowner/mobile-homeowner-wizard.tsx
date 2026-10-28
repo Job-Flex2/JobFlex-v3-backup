@@ -419,6 +419,10 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
           wrapClassName="dictate" buttonClassName="mic" onClassName="on" noteClassName="dictate-note" />
       </div>
       {chips(true)}
+      {/* A number before the words (2026-10-27): the roof prices itself at /price. */}
+      <p className="price-first">
+        Want a price first? <a href="/price" data-cta="price">Price it in a minute →</a>
+      </p>
       <div className="tools">
         <input
           type="file"
