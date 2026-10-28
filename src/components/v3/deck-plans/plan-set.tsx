@@ -204,7 +204,7 @@ function TitleBlock({ sheet, sheets, index, shop, project }: PlanSetProps & { sh
         <div className={s.tbOf}>Sheet {index + 1} of {sheets.length}</div>
       </div>
       <div className={s.tbFine}>
-        Prescriptive deck design to the <b>IRC R507</b> deck provisions and the AWC <b>DCA 6</b> tables as adopted, drawn from the contractor&apos;s design. The building department&apos;s review governs. Do not scale the drawings; dimensions govern.
+        Prescriptive deck design to the <b>{project.code} R507</b> deck provisions and the AWC <b>DCA 6</b> tables as adopted, drawn from the contractor&apos;s design. The building department&apos;s review governs. Do not scale the drawings; dimensions govern.
       </div>
     </aside>
   );
@@ -581,6 +581,10 @@ function CoverSheet(p: PlanSetProps & { sheets: PlanSheet[]; m: PlanModel | null
   const worstFooting = m ? m.bearing.reduce((a, b) => Math.max(a, b.ratio), 0) : 0;
   const rows: Array<[string, string]> = [];
   rows.push(["Scope", `New ${structureWords(d).toLowerCase()}`]);
+  // What a California cover sheet is checked for (Sacramento County PR-11, 2026-10-28) and most offices read the same way.
+  rows.push(["Occupancy · type", "R-3 dwelling, accessory to it (U) · Type V-B wood frame"]);
+  rows.push(["Fire sprinklers", "None — an open deck needs none"]);
+  if (st.code.state === "CA") rows.push(["Fire hazard zone", "Confirm the lot on CAL FIRE's Fire Hazard Severity Zone map; in a zone, decking and framing per the 2025 CWUIC / CRC R337"]);
   if (f) {
     rows.push(["Deck area", `${Math.round(f.areaSqFt)} sq ft`]);
     rows.push(["Walking surface", `${ftInFrac(f.surfaceIn, 8)} above grade`]);
