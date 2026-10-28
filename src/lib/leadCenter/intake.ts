@@ -5,7 +5,8 @@
 // the action keeps the rate limits and the address check in front of it.
 //
 // Plain server module (NOT "use server").
-import { writeLeadEstimate, type LeadEstimate } from "@/lib/leadCenter/estimate";
+import { type LeadEstimate } from "@/lib/leadCenter/estimate";
+import { writeLeadEstimate } from "@/lib/leadCenter/estimateStore";
 import { randomBytes } from "crypto";
 import { db } from "@/lib/db";
 import { detectTrade, routeDecision } from "@/lib/ai/detectTrade";

@@ -17,6 +17,8 @@ import { parseTradeTypes, orgCoversTrade, isTradeType, type TradeType } from "@/
 import { notifyLeadOfferCreated } from "@/lib/notify";
 import { TEST_QUEUE_REASON } from "./testLeads";
 import { getRoutingMode, MANUAL_MODE_REASON, RETURNED_REASON } from "./routingMode";
+import { readLeadEstimates } from "./estimateStore";
+import { autoPriceOn, exclusiveOf, offerPriceFor } from "./autoPrice";
 
 export const OFFER_TTL_MS = 24 * 60 * 60 * 1000;
 export const MAX_ATTEMPTS = 3;
@@ -176,6 +178,15 @@ async function offerToNext(platformLeadId: string): Promise<void> {
     // The radius as it is NOW: a shop that narrowed it since the snapshot is skipped.
     if (!withinServiceRadius(pl, org)) continue;
 
+    // The lead's price: the admin's own, else — a lead the homeowner priced, with this trade's switch on
+    // (lib/leadCenter/autoPrice, 2026-10-27) — the suggestion, written onto the lead so the next shop pays the same.
+    const estimate = (await readLeadEstimates([platformLeadId])).get(platformLeadId) ?? null;
+    const priceCents = offerPriceFor({
+      priceCents: pl.priceCents && pl.priceCents > 0 ? pl.priceCents : null,
+      estimate,
+      exclusive: estimate ? await exclusiveOf(platformLeadId) : false,
+      autoOn: estimate ? await autoPriceOn(estimate.trade) : false,
+    });
     const offer = await db.$transaction(async (tx) => {
       const created = await tx.leadOffer.create({
         data: {
@@ -185,11 +196,13 @@ async function offerToNext(platformLeadId: string): Promise<void> {
           score: cand.score,
           scoreBreakdownJson: JSON.stringify(cand),
           expiresAt: new Date(Date.now() + OFFER_TTL_MS),
-          // The lead's price, when an admin set one, travels with every offer
-          // of it (lib/leadCenter/purchase) — the next shop pays the same.
-          priceCents: pl.priceCents && pl.priceCents > 0 ? pl.priceCents : null,
+          // The lead's price travels with every offer of it (lib/leadCenter/purchase) — the next shop pays the same.
+          priceCents,
         },
       });
+      if (priceCents && !(pl.priceCents && pl.priceCents > 0)) {
+        await tx.platformLead.update({ where: { id: platformLeadId }, data: { priceCents } });
+      }
       await tx.platformLead.update({
         where: { id: platformLeadId },
         data: { status: "OFFERED", attemptCount: { increment: 1 } },

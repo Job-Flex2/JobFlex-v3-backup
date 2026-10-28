@@ -45,9 +45,12 @@ import {
   rotateLeadTestKey,
   routeAllWaitingLeads,
   setLeadRoutingMode,
+  setLeadAutoPrice,
+  setLeadExclusive,
   setOrganizationInternal,
   setPlatformLeadPrice,
 } from "@/actions/adminLeadCenter";
+import { suggestedLeadPriceCents, type LeadEstimate } from "@/lib/leadCenter/estimate";
 import type { RoutingMode } from "@/lib/leadCenter/routingMode";
 import { LeadMap, type MapFilter } from "./lead-map";
 import {
@@ -149,6 +152,10 @@ export interface PlatformLeadDTO {
   source: { label: string; detail: string | null } | null;
   /** The TCPA consent it was sent with: the words, when, from which IP and page. Null before 2026-10-26. */
   consent: { at: string; ip: string | null; page: string | null; text: string } | null;
+  /** The range the homeowner priced on /price and the whole estimate under it (lib/leadCenter/estimate, 2026-10-27). */
+  estimate: LeadEstimate | null;
+  /** "Exclusive — nobody else gets this lead" (lib/leadCenter/autoPrice). */
+  exclusive: boolean;
   /** What the shop paid to open it (lib/leadCenter/purchase), when it did. */
   paid: {
     offerId: string;
@@ -172,6 +179,15 @@ export interface PlatformLeadDTO {
 }
 
 /** A CONTRACTOR — one of our shops, not a homeowner. */
+/** A range someone only asked to have emailed (a planned project on their dashboard): where and what, never who. */
+export interface SavedRangeDTO {
+  id: string;
+  at: string;
+  place: string | null;
+  /** "$14,200–$19,800 · architectural shingle · 21 sq · aerial read" */
+  words: string;
+}
+
 export interface OrgPickDTO {
   id: string;
   name: string;
@@ -283,9 +299,10 @@ function statusTone(l: PlatformLeadDTO): { tone: Tone; label: string } {
   }
 }
 
-type Tab = "ALL" | "OFFERED" | "MATCHED" | "QUEUE";
+type Tab = "ALL" | "OFFERED" | "MATCHED" | "QUEUE" | "PRICED";
 const TABS: { key: Tab; label: string; match: (l: PlatformLeadDTO) => boolean }[] = [
   { key: "ALL", label: "All", match: () => true },
+  { key: "PRICED", label: "Priced by the homeowner", match: (l) => !!l.estimate },
   { key: "OFFERED", label: "Open", match: (l) => l.status === "OFFERED" || l.status === "MATCHING" },
   { key: "MATCHED", label: "Routed", match: (l) => l.status === "MATCHED" },
   { key: "QUEUE", label: "Queue", match: (l) => l.status === "MANUAL_QUEUE" },
@@ -368,12 +385,18 @@ export function AdminLeadCenterContent({
   orgs,
   stats,
   routingMode,
+  autoPrice,
+  savedRanges,
   testLink,
 }: {
   leads: PlatformLeadDTO[];
   orgs: OrgPickDTO[];
   stats: StatsDTO;
   routingMode: RoutingMode;
+  /** "Charge the suggested price on automatic routing", per trade (lib/leadCenter/autoPrice). */
+  autoPrice: { roof: boolean };
+  /** "Priced, not asking yet": ranges people saved but did not ask quotes for — counts and ranges, nothing to route. */
+  savedRanges: SavedRangeDTO[];
   /** The /homeowner?test=<key> link, whole; null until one is created. */
   testLink: { link: string; createdAt: string } | null;
 }) {
@@ -391,6 +414,23 @@ export function AdminLeadCenterContent({
   const [placingId, setPlacingId] = useState<string | null>(null);
   const [mapFilter, setMapFilter] = useState<MapFilter>("leads");
   const [mode, setMode] = useState<RoutingMode>(routingMode);
+  const [autoRoof, setAutoRoof] = useState<boolean>(autoPrice.roof);
+  const [autoBusy, setAutoBusy] = useState(false);
+  async function switchAutoPrice(next: boolean) {
+    if (autoBusy) return;
+    setAutoBusy(true);
+    setAutoRoof(next);
+    try {
+      await setLeadAutoPrice("roof", next);
+      toast.success(next ? "Roof leads priced on automatic routing" : "Roof leads go out as before", next ? "An unpriced roof lead the homeowner priced goes out at the suggested price." : "Only a price you typed is charged.");
+      router.refresh();
+    } catch (err) {
+      setAutoRoof(!next);
+      toast.error("Couldn't save the switch", actionError(err));
+    } finally {
+      setAutoBusy(false);
+    }
+  }
   const [modeBusy, setModeBusy] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
 
@@ -516,6 +556,11 @@ export function AdminLeadCenterContent({
               </button>
             ))}
           </div>
+          {/* THE SUGGESTED PRICE ON AUTOMATIC ROUTING (owner, 2026-10-27): per trade, off until turned on. */}
+          <label className={styles.autoPrice} data-lead-auto-price="roof">
+            <input type="checkbox" role="switch" aria-checked={autoRoof} checked={autoRoof} disabled={autoBusy} onChange={(e) => void switchAutoPrice(e.target.checked)} />
+            <span>Charge the suggested price on automatic routing · roof</span>
+          </label>
           {/* Who hears that a request came in, and when (2026-10-03). */}
           <Link className="btn btn-ghost" href={"/admin/lead-center/alerts" as Route}>
             <Ic name="bell" />
@@ -600,6 +645,25 @@ export function AdminLeadCenterContent({
           </div>
         )}
       </section>
+
+      {/* PRICED, NOT ASKING YET (owner, 2026-10-27): ranges people only asked to have emailed — a planned project on
+          their dashboard, not a lead. Counted and shown with the city, never with a name or an email; nothing here
+          routes, prices or opens. */}
+      {savedRanges.length ? (
+        <section className={cx("card rv", styles.ledgerCard)} data-lead-saved-ranges>
+          <div className={styles.dSec} style={{ padding: "12px 16px 0" }}>Priced, not asking yet · {savedRanges.length}</div>
+          <ul className={styles.savedList}>
+            {savedRanges.slice(0, 50).map((r) => (
+              <li key={r.id}>
+                <span>{r.place ?? "—"}</span>
+                <span>{r.words}</span>
+                <span className={styles.dim}>{new Date(r.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+              </li>
+            ))}
+          </ul>
+          <p className={cx(styles.dim, styles.savedNote)}>They saved a range and have not asked for quotes. Their dashboard and a nudge in two days offer it; nothing to route or sell here.</p>
+        </section>
+      ) : null}
 
       <TestLeadsCard testLink={testLink} />
 
@@ -1357,6 +1421,8 @@ function DetailSheet({
             </Field>
           </div>
 
+          {lead.estimate ? <PricedBlock estimate={lead.estimate} /> : null}
+
           {lead.description ? (
             <>
               <div className={styles.dSec}>What they asked for</div>
@@ -1495,12 +1561,51 @@ function DetailSheet({
    payment a shop made (lib/leadCenter/purchase)
    ============================================================ */
 
+/** THE RANGE THE HOMEOWNER PRICED (2026-10-27): what they saw and chose, the roof's size and where the number came
+ *  from, their budget. The whole estimate under it opens in the buyer's roof estimator, never here. */
+function PricedBlock({ estimate: e }: { estimate: LeadEstimate }) {
+  const basis = e.measurementId ? "measured" : e.basis === "solar" ? "aerial read" : "from home size";
+  // A range in whole dollars, grouped — not a payment amount.
+  const money = (dollars: number) => "$" + Math.round(dollars).toLocaleString("en-US");
+  return (
+    <>
+      <div className={styles.dSec}>Priced by the homeowner</div>
+      <div className={styles.dDesc} data-lead-priced>
+        <b>{money(e.range.low)}–{money(e.range.high)}</b> · {e.materialLabel.toLowerCase()} · {e.tearOffLayers === 0 ? "no tear-off" : `tear-off ${e.tearOffLayers} layer${e.tearOffLayers === 1 ? "" : "s"}`} · {e.storeys} floor{e.storeys === 1 ? "" : "s"}
+        <br />
+        {Math.round(e.squares)} squares · {e.pitchLabel} · {basis}
+        {e.budgetCents ? <> · budget about {money(e.budgetCents / 100)}</> : null}
+        {e.guideRange ? <> · the city guide says {money(e.guideRange.low)}–{money(e.guideRange.high)}</> : null}
+        <br />
+        <span className={styles.dim}>The whole estimate ({e.hidden.materials.length + e.hidden.labor.length} lines) opens in the buyer&rsquo;s roof estimator.</span>
+      </div>
+    </>
+  );
+}
+
 /** "Lead price, $" — optional; empty is free. Changes until a shop accepts. */
 function PriceBlock({ lead }: { lead: PlatformLeadDTO }) {
   const router = useRouter();
   const [saved, setSaved] = useState<number | null>(lead.priceCents);
   const [draft, setDraft] = useState(lead.priceCents ? String(lead.priceCents / 100) : "");
   const [busy, setBusy] = useState(false);
+  const [exclusive, setExclusiveOn] = useState(lead.exclusive);
+  const [exBusy, setExBusy] = useState(false);
+  const suggested = lead.estimate ? suggestedLeadPriceCents(lead.estimate, exclusive) : null;
+  async function flipExclusive(next: boolean) {
+    if (exBusy) return;
+    setExBusy(true);
+    setExclusiveOn(next);
+    try {
+      await setLeadExclusive(lead.id, next);
+      router.refresh();
+    } catch (err) {
+      setExclusiveOn(!next);
+      toast.error("Couldn't save", actionError(err));
+    } finally {
+      setExBusy(false);
+    }
+  }
   const id = `lcPrice-${lead.id}`;
 
   const trimmed = draft.trim();
@@ -1560,6 +1665,20 @@ function PriceBlock({ lead }: { lead: PlatformLeadDTO }) {
           {busy ? "Saving…" : "Save price"}
         </button>
       </div>
+      {suggested != null ? (
+        <div className={cx(ui.hint, styles.priceHint)} data-lead-suggested>
+          Suggested: {usd(suggested)} — priced by the homeowner{lead.estimate?.measurementId ? ", measured" : ""}{lead.estimate?.budgetCents ? ", with a budget" : ""}{exclusive ? ", exclusive" : ""}.{" "}
+          <button type="button" className={cx("btn btn-ghost", ui.btnSm)} disabled={busy || parsed === suggested} onClick={() => setDraft(String(suggested / 100))} data-lead-use-suggested>
+            Use it
+          </button>
+        </div>
+      ) : null}
+      {lead.estimate ? (
+        <label className={styles.exclusive} data-lead-exclusive>
+          <input type="checkbox" checked={exclusive} disabled={exBusy} onChange={(e) => void flipExclusive(e.target.checked)} />
+          <span>Exclusive — nobody else gets this lead (doubles the suggestion, said on the offer)</span>
+        </label>
+      ) : null}
       <div className={cx(ui.hint, styles.priceHint, invalid && styles.hintBad)}>
         {invalid
           ? "A price is $1 to $1,000 — or leave it empty for a free lead."

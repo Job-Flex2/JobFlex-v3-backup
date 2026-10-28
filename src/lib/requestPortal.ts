@@ -34,7 +34,8 @@ import { fromMinor, resolveSchedule } from "@/lib/paymentSchedule";
 import { orgReplyTo } from "@/lib/email/orgSend";
 import { findClientForLead } from "@/lib/leadClient";
 import { orgRatingsByIds } from "@/lib/reviews/publicSummary";
-import { estimateShort, readLeadEstimates } from "@/lib/leadCenter/estimate";
+import { estimateShort } from "@/lib/leadCenter/estimate";
+import { readLeadEstimates } from "@/lib/leadCenter/estimateStore";
 
 /** What the homeowner reads on a proposal card. */
 export type ProposalStage = "NEW" | "OPENED" | "ACCEPTED" | "DECLINED" | "PAID" | "COMPLETED";

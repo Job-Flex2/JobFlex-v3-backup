@@ -15,8 +15,12 @@ import { orgRatingsByIds } from "@/lib/reviews/publicSummary";
 import { SEO_SOURCE_RE } from "@/lib/seo/links";
 import { seoTrade } from "@/lib/seo/trades";
 import { seoCity } from "@/lib/seo/cities";
+import { PRICE_PLAN_TAG, estimateShort, parsePlanEstimate, parsePlanSite } from "@/lib/leadCenter/estimate";
+import { readLeadEstimates } from "@/lib/leadCenter/estimateStore";
+import { autoPriceOn, exclusivesOf } from "@/lib/leadCenter/autoPrice";
 import {
   AdminLeadCenterContent,
+  type SavedRangeDTO,
   type PlatformLeadDTO,
   type OrgPickDTO,
   type RankEntry,
@@ -26,6 +30,8 @@ import {
 /** The Source column: a cost guide by its work and city, any other start by the page it was sent from. */
 function sourceOf(row: { source: string | null; consentPage: string | null } | undefined): PlatformLeadDTO["source"] {
   if (!row) return null;
+  // Priced on /price (2026-10-27): the homeowner's own estimator.
+  if (row.source === "price:roof") return { label: "Priced by the homeowner", detail: "Price my roof" };
   if (row.source && SEO_SOURCE_RE.test(row.source)) {
     const [, work, city] = row.source.split(":");
     const t = seoTrade(work);
@@ -127,6 +133,25 @@ export default async function AdminLeadCenterPage() {
   const tradesByOrg = new Map(rankingInputs.orgs.map((o) => [o.id, parseTradeTypes(o.tradeTypesJson)]));
   // What shops paid for their leads (lib/leadCenter/purchase) — the Paid column.
   const purchases = await purchasesByPlatformLead(platformLeads.map((p) => p.id));
+  // The estimate a homeowner priced on /price rides beside its lead (lib/leadCenter/estimate, 2026-10-27), with
+  // "exclusive" and the per-trade auto-price switch (lib/leadCenter/autoPrice).
+  const [estimates, exclusives, autoPriceRoof, savedPlans] = await Promise.all([
+    readLeadEstimates(platformLeads.map((p) => p.id)),
+    exclusivesOf(platformLeads.map((p) => p.id)),
+    autoPriceOn("roof"),
+    // "Priced, not asking yet" (owner, 2026-10-27): ranges people only asked to have emailed — counted and shown with
+    // their city, never their name or email, never routed or priced.
+    db.homePlan
+      .findMany({ where: { status: "PLANNED", notes: { startsWith: PRICE_PLAN_TAG } }, orderBy: { createdAt: "desc" }, take: 200, select: { id: true, createdAt: true, notes: true, home: { select: { city: true, state: true } } } })
+      .catch(() => [] as Array<{ id: string; createdAt: Date; notes: string | null; home: { city: string | null; state: string | null } }>),
+  ]);
+  const savedRanges: SavedRangeDTO[] = savedPlans
+    .map((p) => {
+      const e = parsePlanEstimate(p.notes);
+      const site = parsePlanSite(p.notes);
+      return e ? { id: p.id, at: p.createdAt.toISOString(), place: [site?.city ?? p.home.city, site?.state ?? p.home.state].filter(Boolean).join(", ") || null, words: estimateShort(e) } : null;
+    })
+    .filter((r): r is SavedRangeDTO => !!r);
   // Where each request started and the consent it was sent with (LeadSource,
   // 2026-10-26) — the Source column and the sheet's consent line. A database
   // without the table yet reads as no rows.
@@ -226,6 +251,8 @@ export default async function AdminLeadCenterPage() {
       shopOrder,
       priceCents: p.priceCents && p.priceCents > 0 ? p.priceCents : null,
       source: sourceOf(leadSources.get(p.id)),
+      estimate: estimates.get(p.id) ?? null,
+      exclusive: exclusives.has(p.id),
       consent: (() => {
         const r = leadSources.get(p.id);
         return r?.consentAt && r.consentText ? { at: r.consentAt.toISOString(), ip: r.consentIp, page: r.consentPage, text: r.consentText } : null;
@@ -355,6 +382,8 @@ export default async function AdminLeadCenterPage() {
       orgs={orgPicks}
       stats={stats}
       routingMode={routingMode}
+      autoPrice={{ roof: autoPriceRoof }}
+      savedRanges={savedRanges}
       testLink={testLink}
     />
   );
