@@ -76,9 +76,10 @@ export default async function LeadDetailPage({
     }
   }
   // A lead from the shop's website estimator (lib/webEstimator): what the homeowner saw, for the card and the hand-off.
-  const web = lead.source === WEB_LEAD_SOURCE ? await readWebLead(lead.id).catch(() => null) : null;
+  // …or a Lead Center lead the homeowner priced in a house estimator (2026-10-28): Accept copied the same record onto it.
+  const web = lead.source === WEB_LEAD_SOURCE || lead.source === "LEAD_CENTER" ? await readWebLead(lead.id).catch(() => null) : null;
   const website = web
-    ? { trade: web.trade, estimator: WEB_TRADE[web.trade].name.replace(" on your website", ""), summary: web.estimate.summary, choice: web.estimate.choice, price: bandWords(web.estimate.band), show: web.estimate.show, note: web.contact.note, handoff: HANDOFF_WORDS[web.trade] }
+    ? { trade: web.trade, estimator: WEB_TRADE[web.trade].name.replace(" on your website", ""), summary: web.estimate.summary, choice: web.estimate.choice, price: bandWords(web.estimate.band), show: web.estimate.show, note: web.contact.note, handoff: HANDOFF_WORDS[web.trade], house: lead.source !== WEB_LEAD_SOURCE }
     : null;
   return (
     <LeadDetailContent

@@ -2,7 +2,7 @@
 // reserved `jobflex` slug, every trade on but the roof, a range, its own ceilings. Pure parts only; the slug lookup
 // and the gates are walked on the stand.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/web-house.check.ts
-import { HOUSE_HOURLY, HOUSE_MONTHLY_CAP, HOUSE_NAME, HOUSE_SLUG, SHOP_HOURLY, WEB_TRADES, houseSettings, houseShop, isHouse, shopHourly } from "../../../src/lib/webEstimator";
+import { HANDOFF_WORDS, HOUSE_HOURLY, HOUSE_MONTHLY_CAP, HOUSE_NAME, HOUSE_SLUG, SHOP_HOURLY, WEB_TRADES, houseSettings, houseShop, isHouse, shopHourly } from "../../../src/lib/webEstimator";
 
 let bad = 0;
 const check = (name: string, ok: boolean, extra = "") => {
@@ -28,6 +28,9 @@ check(
   "the house's hourly ceilings are its own; a shop keeps today's",
   JSON.stringify(shopHourly(h)) === JSON.stringify(HOUSE_HOURLY) && HOUSE_HOURLY.estimates === 600 && HOUSE_HOURLY.leads === 120 && JSON.stringify(shopHourly({ slug: "x" })) === JSON.stringify(SHOP_HOURLY) && SHOP_HOURLY.estimates === 120 && SHOP_HOURLY.leads === 60,
 );
+
+// ── the buyer's hand-off (Task 4): the lead page's words say the estimator opens priced ──
+check("the hand-off words say the estimator opens priced", /priced in your book/.test(HANDOFF_WORDS.fence) && /tier they picked/.test(HANDOFF_WORDS.hvac) && /lines they were priced on/.test(HANDOFF_WORDS.smart), JSON.stringify([HANDOFF_WORDS.fence, HANDOFF_WORDS.hvac, HANDOFF_WORDS.smart]));
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);
