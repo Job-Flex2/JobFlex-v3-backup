@@ -56,7 +56,8 @@
 
 /* ── The row of estimators ── */
 .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-@media (min-width: 720px) { .row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; } }
+@media (min-width: 720px) { .row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; } }
+@media (min-width: 1040px) { .row { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 .page .card {
   position: relative; display: flex; flex-direction: column; gap: 10px; min-height: 196px; padding: 16px;
   border: 1px solid var(--h-line); border-radius: var(--h-r); background: var(--h-panel); color: var(--h-ink);
