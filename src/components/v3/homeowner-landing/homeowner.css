@@ -462,6 +462,8 @@ body:has(.jf-homeowner-landing)::before { content: none; }
   background: var(--paper); font-size: calc(11px * var(--s)); font-weight: 700;
   transition: background .3s var(--ease), color .3s var(--ease), border-color .3s var(--ease); }
 .jf-homeowner-landing .v-chip.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+/* The price on the roof card (2026-10-28): the range for the house, re-priced as the material changes. */
+.jf-homeowner-landing .v-price { margin-top: calc(6px * var(--s)); font-family: var(--font-mono); font-size: calc(19px * var(--s)); font-weight: 700; letter-spacing: -0.02em; color: var(--blueprint); font-variant-numeric: tabular-nums; }
 /* виньетка 3 — превращение в смету (vignette 3 — turning into an estimate) */
 .jf-homeowner-landing .v-s { padding: calc(14px * var(--s)); }
 .jf-homeowner-landing .v-raw { font-size: calc(10.5px * var(--s)); line-height: 1.45; font-style: italic; color: var(--muted-faint); }
@@ -567,6 +569,8 @@ body:has(.jf-homeowner-landing)::before { content: none; }
       (an arch of photo plates + three reviews)
    ============================================================ */
 .jf-homeowner-landing .revs { padding: clamp(calc(38px * var(--s)), 6.4vh, calc(78px * var(--s))) clamp(calc(18px * var(--s)), 4vw, calc(54px * var(--s))); border-bottom: var(--border); }
+/* The photo arch's outer columns ran ~60px past a 1280 window and the page scrolled sideways (seen 2026-10-28): clipped here. */
+.jf-homeowner-landing .revs { overflow-x: clip; }
 .jf-homeowner-landing .arch { position: relative; display: flex; justify-content: center; gap: calc(14px * var(--s));
   padding-bottom: clamp(calc(96px * var(--s)), 12vh, calc(138px * var(--s))); }
 .jf-homeowner-landing .arch-col { display: flex; flex-direction: column; gap: calc(14px * var(--s)); width: calc(118px * var(--s)); flex-shrink: 0; }

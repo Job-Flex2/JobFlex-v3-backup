@@ -77,6 +77,7 @@ import { MobileStepsGrid } from "./mobile-homeowner-vignettes";
 import { MobileHomeownerWizard } from "./mobile-homeowner-wizard";
 import type { WizardPrefill } from "@/lib/home/prefill";
 import { portalHeroSub } from "@/lib/home/portalPrice";
+import { StoryQuestions, WhyJobflex } from "../homeowner-landing/homeowner-story-sections";
 import {
   useInViewOnce,
   useReducedMotion,
@@ -280,12 +281,15 @@ export function MobileHomeowner({ prefill = null, house = false }: { prefill?: W
             How it works
           </div>
           <h2 className={rv.cls("secH", "sec-h")} ref={rv.ref("secH")}>
-            From idea to quotes <span className="inv">in one sitting.</span>
+            Price it, send it, <span className="inv">meet your pro.</span>
           </h2>
 
-          <MobileStepsGrid className={rv.cls("grid4", "grid4")} gridRef={rv.ref("grid4")} />
+          <MobileStepsGrid className={rv.cls("grid4", "grid4")} gridRef={rv.ref("grid4")} house={house} />
         </div>
       </section>
+
+      {/* WHY JOBFLEX (2026-10-28, ./homeowner-story): the price first, one pro who runs their business on JobFlex. */}
+      <WhyJobflex top="#jfmh-top" />
 
       {/* THE HOME DASHBOARD (2026-10-03): what comes with the first project.
           Every line here is true of the dashboard as shipped (lib/home/portal). */}
@@ -551,6 +555,9 @@ export function MobileHomeowner({ prefill = null, house = false }: { prefill?: W
           </div>
         </div>
       </section>
+
+      {/* GOOD TO KNOW (2026-10-28): the questions a homeowner asks before sending anything. */}
+      <StoryQuestions house={house} top="#jfmh-top" />
 
       <section className="cta">
         <div className="cta-in">

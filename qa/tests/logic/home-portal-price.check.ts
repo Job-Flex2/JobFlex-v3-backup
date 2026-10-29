@@ -2,6 +2,7 @@
 // prices them, only the estimators that are on; the old pricing addresses forward into the portal.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/home-portal-price.check.ts
 import { PRICE_NUDGE, PORTAL_TRADES, isPortalTrade, movedPricePath, portalHeroSub, portalPriceHref, priceTradeFor } from "../../../src/lib/home/portalPrice";
+import { STORY_ROWS, storyQuestions, storySteps } from "../../../src/components/v3/homeowner-landing/homeowner-story";
 
 let bad = 0;
 const check = (name: string, ok: boolean, extra = "") => {
@@ -35,6 +36,14 @@ check("a contractor's own website estimator never moves", movedPricePath("/estim
 check("other pages never move", movedPricePath("/pricing") === null && movedPricePath("/price-book") === null && movedPricePath("/homeowner") === null && movedPricePath("/homeowner/price/roof") === null && movedPricePath("/") === null);
 
 check("the promise names only what is on", /decks, fences, heating & cooling and remodels/.test(portalHeroSub(true)) && !/deck|fence|heating/i.test(portalHeroSub(false)) && /Roofs are priced/.test(portalHeroSub(false)));
+
+// The homeowner page's story (components/v3/homeowner-landing/homeowner-story): only what the portal does.
+const words = (house: boolean) => [...storySteps(house).flatMap((x) => [x.title, x.body]), ...STORY_ROWS.flatMap((r) => [r.topic, r.usual, r.jobflex]), ...storyQuestions(house).flatMap((x) => [x.q, x.a]), portalHeroSub(house)].join(" \n ");
+const BANNED = /licen[sc]ed|insured|verified|vetted|background[- ]check|guarantee|3[–-]5 (quotes|proposals)|three quotes|within \d+ (hours?|minutes?)|\b4\.9\b|\brated\b|no calls/i;
+check("the story makes no claim the portal can't keep (licences, ratings, quote counts, response times)", !BANNED.test(words(true)) && !BANNED.test(words(false)), (words(true).match(BANNED) || words(false).match(BANNED) || [""])[0]);
+check("four steps: tell, price, a JobFlex pro takes it, the proposal", storySteps(true).map((x) => x.n).join() === "01,02,03,04" && /price/i.test(storySteps(true)[1].title) && /JobFlex/.test(storySteps(true)[2].body));
+check("off, the story prices the roof alone", !/deck|fence|heating/i.test(storySteps(false)[1].body) && !/deck|fence|heating/i.test(storyQuestions(false)[0].a) && /decks/.test(storyQuestions(true)[0].a));
+check("the questions say who calls, who sees the number, what it costs", ["Who will contact me?", "Who sees my phone number and email?", "What does it cost me?", "Is the price a quote?"].every((q) => storyQuestions(true).some((x) => x.q === q)));
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);
