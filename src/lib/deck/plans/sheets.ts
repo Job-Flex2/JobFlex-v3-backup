@@ -7,6 +7,7 @@
 //      the sections, the details, the schedules
 // The crew's construction set is its own short run on letter paper, C-1 on.
 import type { DeckStructure } from "../structure";
+import type { PaperKey } from "./paper";
 
 export type PlanSheetKind = "cover" | "notes" | "notes2" | "site" | "foundation" | "framing" | "roof" | "elevations" | "sections" | "details" | "schedules" | "crew-cover" | "crew-layout" | "crew-framing" | "crew-stairs" | "crew-materials" | "crew-sequence";
 
@@ -14,27 +15,28 @@ export interface PlanSheet {
   no: string;
   name: string;
   kind: PlanSheetKind;
-  /** B = 11 × 17 landscape; A = letter portrait. */
-  paper: "B" | "A";
+  /** B = 11 × 17, C = 18 × 24, D = 24 × 36 landscape (lib/deck/plans/paper); A = letter portrait, the crew's. */
+  paper: "A" | PaperKey;
 }
 
 /** `complianceMore`: the code compliance table runs past G-002 and continues on G-003. */
-export function permitSheetList(s: DeckStructure, opts: { complianceMore?: boolean } = {}): PlanSheet[] {
+export function permitSheetList(s: DeckStructure, opts: { complianceMore?: boolean; paper?: PaperKey } = {}): PlanSheet[] {
+  const paper: PaperKey = opts.paper ?? "B";
   const out: PlanSheet[] = [
-    { no: "G-001", name: "Cover sheet", kind: "cover", paper: "B" },
-    { no: "G-002", name: "General notes and code compliance", kind: "notes", paper: "B" },
+    { no: "G-001", name: "Cover sheet", kind: "cover", paper },
+    { no: "G-002", name: "General notes and code compliance", kind: "notes", paper },
   ];
-  if (opts.complianceMore) out.push({ no: "G-003", name: "Code compliance, continued", kind: "notes2", paper: "B" });
-  out.push({ no: "A-101", name: "Site plan", kind: "site", paper: "B" });
+  if (opts.complianceMore) out.push({ no: "G-003", name: "Code compliance, continued", kind: "notes2", paper });
+  out.push({ no: "A-101", name: "Site plan", kind: "site", paper });
   if (s.frame) {
-    out.push({ no: "S-101", name: "Foundation plan", kind: "foundation", paper: "B" });
-    out.push({ no: "S-102", name: "Deck framing plan", kind: "framing", paper: "B" });
+    out.push({ no: "S-101", name: "Foundation plan", kind: "foundation", paper });
+    out.push({ no: "S-102", name: "Deck framing plan", kind: "framing", paper });
   }
-  if (s.roof) out.push({ no: s.frame ? "S-103" : "S-101", name: s.roof.kind === "pergola" ? "Pergola framing plan" : "Roof framing plan", kind: "roof", paper: "B" });
-  out.push({ no: "S-201", name: "Elevations", kind: "elevations", paper: "B" });
-  if (s.frame) out.push({ no: "S-301", name: s.stairs.some((st) => st.kind === "flight") ? "Building section and stair" : "Building section", kind: "sections", paper: "B" });
-  out.push({ no: "S-501", name: "Details", kind: "details", paper: "B" });
-  out.push({ no: "S-601", name: "Schedules and materials", kind: "schedules", paper: "B" });
+  if (s.roof) out.push({ no: s.frame ? "S-103" : "S-101", name: s.roof.kind === "pergola" ? "Pergola framing plan" : "Roof framing plan", kind: "roof", paper });
+  out.push({ no: "S-201", name: "Elevations", kind: "elevations", paper });
+  if (s.frame) out.push({ no: "S-301", name: s.stairs.some((st) => st.kind === "flight") ? "Building section and stair" : "Building section", kind: "sections", paper });
+  out.push({ no: "S-501", name: "Details", kind: "details", paper });
+  out.push({ no: "S-601", name: "Schedules and materials", kind: "schedules", paper });
   return out;
 }
 
