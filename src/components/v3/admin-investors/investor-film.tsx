@@ -7,11 +7,15 @@ import s from "./investor-film.module.css";
    link" — then: "more presentable; show exactly where we make money — how the home portal will bring us money and how
    the contractors bring us money; more details; up to two minutes". The film is advertisement/investor-pitch-v2 (real
    captures of the product, one narrator, the money drawn from the live pricing page, the code and cited sources), 16:9.
+   v3 (2026-10-28, owner: "a source of income additional from financing … 2 to 3% from the financial institution
+   partnership … if it's longer, no problem"): chapter 05 Financing spliced in — built, launching with a lending partner,
+   the share said as the target, not signed (advertisement/investor-pitch-v3).
    It sits above the figures on the shared link and on the admin page, with a poster until it is played; nothing is
    fetched until the reader presses play (preload none), so the figures load as fast as before. */
 
-const FILM = { mp4: "/investors/pitch-16x9.mp4", poster: "/investors/pitch-poster.webp" } as const;
-const LENGTH = "2:00";
+// ?v= — a reader who played the earlier cut does not get it back from the browser's cache.
+const FILM = { mp4: "/investors/pitch-16x9.mp4?v=3", poster: "/investors/pitch-poster.webp?v=3" } as const;
+const LENGTH = "2:36";
 
 /** The slides and the tour the other pages hold (./pitch, ./tour), named under the film when the link is known. */
 export function InvestorFilm({ deckHref, tourHref }: { deckHref?: string | null; tourHref?: string | null }) {
@@ -46,7 +50,7 @@ export function InvestorFilm({ deckHref, tourHref }: { deckHref?: string | null;
       <div className={s.head}>
         <div className={s.label}>The pitch · {LENGTH}</div>
         <p className={s.words}>
-          What JobFlex is and where the money comes from: the product, what contractors pay each month, how the homeowner side turns projects into paid leads, and why now — two minutes.
+          What JobFlex is and where the money comes from: the product, what contractors pay each month, how the homeowner side turns projects into paid leads, financing on the big jobs, and why now.
           {deckHref || tourHref ? (
             <>
               {" "}Prefer to read? {deckHref ? <a href={deckHref} data-investor-film-deck>The pitch deck</a> : null}

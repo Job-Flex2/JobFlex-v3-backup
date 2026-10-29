@@ -9,6 +9,11 @@ const NAHB: PitchSource = { label: "NAHB, from the 2022 Economic Census and None
 const TTAN: PitchSource = { label: "ServiceTitan fiscal 2025 results (SEC 8-K)", url: "https://www.sec.gov/Archives/edgar/data/1638826/000095017025038719/ttan-ex99_1.htm" };
 const FMI: PitchSource = { label: "FMI & PlanGrid, Construction Disconnected (2018), ~600 construction leaders", url: "https://pg.plangrid.com/rs/572-JSV-775/images/Construction_Disconnected.pdf" };
 const HCP: PitchSource = { label: "Housecall Pro, lead-platform comparison (updated Oct 2026)", url: "https://www.housecallpro.com/resources/marketing/software-advice/angi-formerly-angies-list-competitors-sites-like-angi/" };
+// Wisetack, read Oct 28, 2026: what a contractor gets and pays, and that it pays platforms a share.
+const WT_HOME: PitchSource = { label: "Wisetack, home services ($500–$65,000 jobs; 3.9% per transaction; paid 1–3 business days after the job)", url: "https://www.wisetack.com/get-started/home-services" };
+const WT_PARTNERS: PitchSource = { label: "Wisetack for software platforms (shared revenue model; financed jobs 4.5× bigger, Wisetack's figure)", url: "https://www.wisetack.com/partnerships" };
+const WT_JOBBER: PitchSource = { label: "Wisetack in partnership with Jobber", url: "https://www.wisetack.com/getting-started/jobber" };
+const WT_HCP: PitchSource = { label: "Housecall Pro, Wisetack consumer financing", url: "https://help.housecallpro.com/en/articles/3836042-wisetack-consumer-financing-overview" };
 const LGE: PitchSource = { label: "LeadGen Economy, home-improvement lead marketplaces (updated Apr 2026)", url: "https://www.leadgen-economy.com/blog/home-improvement-lead-marketplaces-angi-thumbtack-homeadvisor/" };
 
 /** One-person specialty trade contractors (NAHB) and their share of all trade-contractor businesses. */
@@ -36,4 +41,15 @@ export const LEAD_PRICES: Array<{ name: string; price: string; how: string; sour
   { name: "Google Local Services", price: "$25–$100 a lead", how: "exclusive, by trade and area", source: LGE },
 ];
 
-export const ALL_SOURCES: PitchSource[] = [JCHS, NAHB, TTAN, FMI, HCP, LGE];
+export const ALL_SOURCES: PitchSource[] = [JCHS, NAHB, TTAN, FMI, HCP, LGE, WT_HOME, WT_PARTNERS, WT_JOBBER, WT_HCP];
+
+/** Financing (2026-10-28): built in JobFlex, switched on with the lending partnership. The share is the owner's target
+ *  for the partner agreement — NOT signed yet, and the slide says so. The rest is Wisetack's own published terms. */
+export const FINANCING = {
+  shareLowPct: 2,
+  shareHighPct: 3,
+  jobMinCents: 50_000,
+  jobMaxCents: 6_500_000,
+  merchantFeePct: 3.9,
+  sources: [WT_HOME, WT_PARTNERS, WT_JOBBER, WT_HCP],
+};
