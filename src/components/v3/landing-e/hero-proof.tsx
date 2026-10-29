@@ -4,26 +4,17 @@
    HOW IT WORKS: the trade's tool as a kicker, the variant's `pitch` and its
    `lede`, centred; then three steps across the container. Each step is a
    real frame of that step (`how`, landing-variants.ts) with its figure on a
-   plate in the tool's colour at the frame's lower-left corner, then the
-   step's number and line (`points`) and the figure's words (`proof`) —
-   each figure belongs to its line, its source listed in landing-variants.
+   plate in the blueprint blue (--accent, the app's own; the same on every
+   trade since 2026-10-29 — the tool's colour stays on the sidebar, the
+   estimator icons, the showcase and the films) at the frame's lower-left
+   corner, then the step's number and line (`points`) and the figure's
+   words (`proof`) — each figure belongs to its line, its source listed in
+   landing-variants.
    No arrows, no scales, no motion. Phone: the steps in a column. */
 
-import type { CSSProperties } from "react";
 import type { LandingVariant } from "./landing-variants";
 import { LandingReviews } from "./landing-reviews";
 import { HowImg } from "./how-img";
-
-/* The tool's colour (globals.css --tool-*); a Smart Proposal trade takes the
-   Smart tool's, the default page the blueprint blue. */
-const TOOL: Record<LandingVariant["visual"], string> = {
-  hvac: "var(--tool-hvac)",
-  roof: "var(--tool-roof)",
-  fence: "var(--tool-fence)",
-  deck: "var(--tool-deck)",
-  smart: "var(--tool-smart)",
-  dashboard: "var(--accent)",
-};
 
 export function HeroProof({ variant }: { variant: LandingVariant }) {
   const { points, proof, how } = variant;
@@ -31,7 +22,7 @@ export function HeroProof({ variant }: { variant: LandingVariant }) {
   return (
     <>
       {variant.pitch ? (
-        <section id="how" className="lp-how" style={{ "--lp-tool": TOOL[variant.visual] } as CSSProperties}>
+        <section id="how" className="lp-how">
           <div className="lp-how-wrap">
             <header className="lp-how-head">
               {variant.kicker ? <p className="lp-how-kicker">{variant.kicker}</p> : null}

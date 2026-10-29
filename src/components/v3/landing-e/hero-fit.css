@@ -96,9 +96,10 @@
    foot, the page's container. The kicker, pitch and line centred; then the
    three steps in equal columns (24 px apart) from 768 px, a column on a
    phone (28 px apart). Each step: a real 4:3 frame in a hair border, its
-   figure on a plate in the tool's colour (--lp-tool) at the lower-left
-   corner, then the number and the line, then the figure's words. Square
-   corners, no shadow, no hover, no motion. */
+   figure on a plate in the blueprint blue (--accent; every trade the same,
+   the tool's colour only elsewhere on the page) at the lower-left corner,
+   then the number and the line, then the figure's words. Square corners,
+   no shadow, no hover, no motion. */
 .jf-lp .lp-how {
   padding: 48px 20px 56px;
   background: #fff;
@@ -116,7 +117,7 @@
   line-height: 1.3;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--lp-tool, var(--accent, #1854a0));
+  color: var(--accent, #1854a0);
 }
 /* The pitch may run wider than the kicker and the line, so a sentence-long
    one stays two lines on a desk. */
@@ -158,13 +159,13 @@
   max-width: 72%;
   padding: 10px 12px;
   color: #fff;
-  background: var(--lp-tool, var(--accent, #1854a0));
+  background: var(--accent, #1854a0);
   border-radius: 0;
 }
 .jf-lp .lp-how-val { font-size: 24px; font-weight: 600; line-height: 1.05; letter-spacing: -0.015em; }
 .jf-lp .lp-how-plate-l { font-size: 11px; line-height: 1.3; color: rgba(255, 255, 255, 0.8); }
 .jf-lp .lp-how-title { display: flex; align-items: baseline; gap: 10px; margin: 16px 0 0; font-size: 17px; font-weight: 600; line-height: 1.3; }
-.jf-lp .lp-how-num { flex: none; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--lp-tool, var(--accent, #1854a0)); }
+.jf-lp .lp-how-num { flex: none; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: var(--accent, #1854a0); }
 .jf-lp .lp-how-label { margin: 6px 0 0; font-size: 14px; line-height: 1.45; color: var(--ink-muted, #555); }
 
 /* THE REVIEWS (landing-reviews.tsx): white cards with a hair frame, one
