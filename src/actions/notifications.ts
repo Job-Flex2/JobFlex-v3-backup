@@ -28,7 +28,10 @@ export async function markNavSeen(key: SeenKey): Promise<{ hadNew: boolean }> {
     where: { userId_organizationId_key: { userId: user.id, organizationId, key } },
     select: { seenAt: true },
   });
-  const hadNew = (await countNewForSurface(key, organizationId, prev?.seenAt, user.id)) > 0;
+  const hadNew =
+    (await countNewForSurface(key, organizationId, prev?.seenAt, user.id)) > 0 ||
+    // The calendar's badge carries the online bookings too (badgeCounts → getBadgeCounts).
+    (key === "calendar" && (await countNewForSurface("booking", organizationId, prev?.seenAt)) > 0);
   await db.navSeen.upsert({
     where: { userId_organizationId_key: { userId: user.id, organizationId, key } },
     create: { userId: user.id, organizationId, key },

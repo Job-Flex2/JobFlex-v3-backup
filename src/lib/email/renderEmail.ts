@@ -305,7 +305,7 @@ export function renderEmail(doc: EmailDoc): { subject: string; html: string; tex
 <tr><td align="center" style="padding:28px 12px;">
 
 <!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="${C.ink}" style="padding:0 4px 4px 0;"><![endif]-->
-<table role="presentation" width="${CARD_W}" cellpadding="0" cellspacing="0" border="0" style="width:${CARD_W}px;max-width:${CARD_W}px;background:${C.card};border:2px solid ${C.ink};border-radius:2px;box-shadow:4px 4px 0 rgba(10,10,10,.18);">
+<table role="presentation" width="${CARD_W}" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:${CARD_W}px;background:${C.card};border:2px solid ${C.ink};border-radius:2px;box-shadow:4px 4px 0 rgba(10,10,10,.18);">
 
   <!-- header band: 26px graph-paper grid, flat paper fallback in Outlook -->
   <tr><td class="pad" style="padding:18px ${PAD_M}px;background-color:${C.paper};background-image:linear-gradient(rgba(10,10,10,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(10,10,10,.12) 1px,transparent 1px);background-size:26px 26px;border-bottom:2px solid ${C.ink};">

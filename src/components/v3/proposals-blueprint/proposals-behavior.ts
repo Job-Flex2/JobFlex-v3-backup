@@ -247,7 +247,7 @@ export function initProposalsContent(
     return out;
   }
   /** Compact dollar summary beneath the card's headline amount. */
-  function payBarHtml(p: ProposalRow): string {
+  function payBarHtml(p: ProposalRow, withTotal = false): string {
     const contract = p.contract ?? p.total;
     const paid = p.paidAmt ?? 0;
     const pct = payPct(p);
@@ -268,7 +268,12 @@ export function initProposalsContent(
         .map((t) => '<i class="ppay-tick" style="left:' + t + '%"></i>')
         .join("") +
       "</div>" +
-      (full ? "" : '<span class="ppay-tag"><b>' + fmtMoney(p.owed) + "</b> due</span>") +
+      (full && !withTotal
+        ? ""
+        : '<span class="ppay-tag">' +
+          (full ? "" : "<b>" + fmtMoney(p.owed) + "</b> due") +
+          (withTotal ? (full ? "" : " · ") + "<b>" + fmtMoney(contract) + "</b> total" : "") +
+          "</span>") +
       "</div>"
     );
   }
@@ -617,10 +622,12 @@ export function initProposalsContent(
         '"><svg class="ic"><use href="#i-send"/></svg><span>Send</span></button>'
       );
     }
-    const inner = '<svg class="ic"><use href="#i-check"/></svg><span>Sent</span> <small>' + esc(p.sentAgo ?? "") + "</small>";
-    return s === "resend"
-      ? '<button class="pact pact--sent" type="button" data-act="send" title="' + esc("Sent " + p.sentAgo + " — send it again") + '">' + inner + "</button>"
-      : '<span class="pact pact--sent is-static" title="' + esc("Sent " + p.sentAgo) + '">' + inner + "</span>";
+    // Once sent it can always go again, and says so (owner, 2026-10-28: "make it possible and visible you can
+    // resend it"): the stamp says when, Resend beside it opens the same send dialog.
+    return (
+      '<span class="pact pact--sent is-static" title="' + esc("Sent " + p.sentAgo) + '"><svg class="ic"><use href="#i-check"/></svg><span>Sent</span> <small>' + esc(p.sentAgo ?? "") + "</small></span>" +
+      '<button class="pact pact--resend" type="button" data-act="send" title="' + esc("Send it again" + (p.clientEmail ? " to " + p.clientEmail : "")) + '"><svg class="ic"><use href="#i-send"/></svg><span>Resend</span></button>'
+    );
   }
 
   /**
@@ -672,13 +679,7 @@ export function initProposalsContent(
       // Signed with no schedule: the balance is the one thing to collect.
       (state === "collect" ? '<li class="ppl-st ppl-st--next"><span class="ppl-st-k">Balance</span><span class="ppl-st-v">' + fmtMoney(p.owed) + '</span><i class="ppl-st-s">Next to collect</i></li>' : "");
     const contract = p.contract ?? p.total;
-    const paid = p.paidAmt ?? 0;
-    const sum =
-      state === "plan"
-        ? fmtMoney(contract) + " · " + (insts.length || 1) + (insts.length === 1 ? " payment" : " payments")
-        : state === "paid"
-          ? "Paid in full · " + fmtMoney(p.paidAmt ?? contract)
-          : "Paid " + fmtMoney(paid) + " of " + fmtMoney(contract) + " · <b>" + fmtMoney(p.owed) + "</b> due";
+    const sum = fmtMoney(contract) + " · " + (insts.length || 1) + (insts.length === 1 ? " payment" : " payments");
     let side = "";
     if (state === "plan") {
       side = '<span class="ppl-note">' + esc((p.clientId ? "Billed after " + p.client.split(/\s+/)[0] + " accepts" : "Billed after the client accepts")) + "</span>";
@@ -688,15 +689,14 @@ export function initProposalsContent(
       // Billing is the office's: a sales rep or an estimator reads what is left instead of the buttons.
       side = p.canBill === false ? '<span class="ppl-note"><b>' + fmtMoney(p.owed) + "</b> left to collect</span>" : payActsHtml(p, next);
     }
-    const pctPaid = contract > 0 ? Math.max(0, Math.min(100, Math.round((paid / contract) * 100))) : 0;
     return (
       '<tr class="prow-pay ppl--' + state + chain.replace(/prow--/g, "prow-pay--") + '" data-id="' + esc(p.id) + '"' +
       (chain && p.projectId ? ' data-grp="' + esc(p.projectId) + '"' : "") +
       '><td colspan="6"><div class="ppl">' +
       '<div class="ppl-head"><div class="ppl-title"><span class="ppl-lbl"><svg class="ic"><use href="#i-card"/></svg>Payments</span>' +
-      '<span class="ppl-sum">' + sum + "</span></div>" +
-      (state === "collect" || state === "paid" ? '<span class="ppl-meter" role="progressbar" aria-label="Paid so far" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pctPaid + '"><span style="width:' + pctPaid + '%"></span></span>' : "") +
-      "</div>" +
+      // Signed: paid, the bar, due and the total — the accepted card's line (owner, 2026-10-28).
+      (state === "plan" ? '<span class="ppl-sum">' + sum + "</span>" : payBarHtml(p, true)) +
+      "</div></div>" +
       '<div class="ppl-body">' +
       (stages ? '<ol class="ppl-stages">' + stages + "</ol>" : "") +
       '<div class="ppl-side">' + side + finHtml(p) + "</div>" +
@@ -722,8 +722,6 @@ export function initProposalsContent(
     const busy = next?.status === "PENDING";
     return (
       '<span class="ppl-acts">' +
-      // What the three buttons act on, said once above them.
-      '<span class="ppl-acts-k">Collect · ' + esc(what) + "</span>" +
       (next
         ? '<button class="ppl-act ppl-act--paid" type="button" data-act="markpaid"' + inst + (busy ? " disabled" : "") + ' title="' + esc("Record " + what + " as paid by hand") + '"><svg class="ic"><use href="#i-check"/></svg>Mark paid</button>'
         : '<button class="ppl-act ppl-act--paid" type="button" data-act="paidfull" title="' + esc("Record " + what + " as paid by hand") + '"><svg class="ic"><use href="#i-check"/></svg>Mark paid</button>') +
@@ -744,7 +742,7 @@ export function initProposalsContent(
     const send =
       s === "none"
         ? '<button class="pbar-btn" type="button" data-act="send" title="' + esc(p.clientEmail ? "Send to " + p.clientEmail : "Send to the client") + '"><svg class="ic"><use href="#i-send"/></svg>Send to client</button>'
-        : sendCellHtml(p).replace(/class="pact /, 'class="pbar-btn pact ');
+        : sendCellHtml(p).replace(/class="pact /g, 'class="pbar-btn pact ');
     const zillow = p.zillow
       ? '<a class="pbar-btn" href="' + esc(p.zillow) + '" target="_blank" rel="noopener noreferrer" title="Open the listing"><svg class="ic"><use href="#i-building"/></svg>Zillow</a>'
       : "";
@@ -804,8 +802,6 @@ export function initProposalsContent(
       (p.co && p.co.count
         ? ' · <span class="pt-co' + (p.co.pending ? " pt-co--wait" : "") + '">' + p.co.count + " change order" + (p.co.count === 1 ? "" : "s") + (p.co.pending ? " · " + p.co.pending + " awaiting approval" : "") + "</span>"
         : "") +
-      // Accepted or declined, said on the line itself (owner, 2026-10-13: "if it accepts it or not, put it in the line").
-      (p.decided ? ' · <span class="pt-decided' + (p.status === "DECLINED" ? " pt-decided--no" : "") + '">' + esc(p.decided) + "</span>" : "") +
       "</div>" +
       clientDesignHtml(p) +
       "</td>" +
@@ -816,6 +812,8 @@ export function initProposalsContent(
       (p.fresh && p.fresh.accepted ? ' title="Accepted ' + esc(p.accepted ?? "") + '"' : p.fresh && p.fresh.declined ? ' title="Declined"' : "") +
       ">" +
       esc(st.label) +
+      // The day it was signed rides on the badge (owner, 2026-10-28: "add the date to the badge itself").
+      (p.accepted && (p.status === "ACCEPTED" || p.status === "COMPLETED" || p.status === "PAID") ? '<em class="pstatus-d">' + esc(p.accepted) + "</em>" : "") +
       "</span></td>" +
       '<td class="c pt-total"><span class="pt-lbl">Total</span><span class="pt-money">' +
       fmtMoney(p.contract ?? p.total) +

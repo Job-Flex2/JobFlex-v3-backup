@@ -506,3 +506,43 @@ export function buildPaymentIssue(i: PaymentIssueInput): EmailDoc {
     footer: orgFooter(i.org),
   };
 }
+
+export interface BookedOnlineInput {
+  org: OrgBrand;
+  name: string;
+  service: string;
+  when: string;
+  price?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  answers: Array<{ label: string; value: string }>;
+  notes?: string | null;
+  /** Who they are to the company: a plan member, a new lead, or a customer on file. */
+  who: "member" | "lead" | "client";
+  href: string;
+}
+
+/** A customer booked a visit on the company's booking page — to the office (2026-10-28). */
+export function buildBookedOnline(i: BookedOnlineInput): EmailDoc {
+  const box: BoxRow[] = [
+    { type: "field", label: "Service", value: i.service },
+    ...(i.price ? [{ type: "field" as const, label: "Price", value: i.price }] : []),
+    { type: "field", label: "Phone", value: i.phone || "—" },
+    { type: "field", label: "Email", value: i.email || "—" },
+    ...(i.address ? [{ type: "field" as const, label: "Address", value: i.address }] : []),
+    ...i.answers.filter((a) => a.value).map((a) => ({ type: "field" as const, label: truncate(a.label, 40), value: truncate(a.value, 60) })),
+    { type: "cond", label: "Customer", chip: i.who === "member" ? "Plan member" : i.who === "lead" ? "New lead" : "On file", tone: i.who === "lead" ? "warn" : "ok" },
+  ];
+  return {
+    subject: `Booked online — ${i.name}, ${i.service}`,
+    lockup: orgLockup(i.org),
+    kicker: { text: "Booked online", tone: "ok" },
+    headline: i.when,
+    prose: [`${i.name} booked ${i.service.toLowerCase()} on your booking page. It is on your calendar.`],
+    box,
+    after: i.notes ? [`"${truncate(i.notes, 400)}"`] : undefined,
+    cta: { label: "Open online booking", href: i.href },
+    footer: orgFooter(i.org),
+  };
+}

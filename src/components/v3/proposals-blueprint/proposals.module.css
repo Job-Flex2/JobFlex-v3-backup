@@ -2219,3 +2219,24 @@
 
 /* ── The accepted card: a little more room under Mark paid · Send invoice · Remind ── */
 .bp :global(.content .pjob .pcol > .pinst-acts) { gap: 10px; margin: 12px 0 16px; }
+
+/* ── PAYMENTS, THIRD PASS (owner, 2026-10-28: "keep only three buttons"; the accepted card's paid line under the
+   title instead of the sum and the empty meter). Paid on the left, due and the total on the right, the bar under. ── */
+.bp :global(.content #allCard .ppl-title) { flex: 1 1 auto; max-width: calc(100% - 230px); gap: 8px; }
+@media (max-width: 1280px) { .bp :global(.content #allCard .ppl-title) { max-width: none; } }
+.bp :global(.content #allCard .ppl-title .ppay-line) {
+  display: grid; grid-template-columns: auto auto; justify-content: space-between; align-items: baseline; gap: 7px 18px;
+  padding: 0; font: 600 13px/1.3 var(--font-sans, inherit); letter-spacing: 0; text-transform: none; color: var(--ink-soft);
+}
+.bp :global(.content #allCard .ppl-title .ppay-line b) { font-weight: 800; color: var(--ink); }
+.bp :global(.content #allCard .ppl-title .ppay-paid) { grid-column: 1; grid-row: 1; }
+.bp :global(.content #allCard .ppl-title .ppay-tag) { grid-column: 2; grid-row: 1; justify-self: end; }
+.bp :global(.content #allCard .ppl-title .ppay-tag b:first-child) { color: var(--warning-dark); }
+.bp :global(.content #allCard .ppl--paid .ppl-title .ppay-tag b:first-child) { color: var(--success-dark); }
+.bp :global(.content #allCard .ppl-title .ppay-bar) { grid-column: 1 / -1; grid-row: 2; width: 100%; min-width: 0; height: 10px; border: 1.5px solid var(--ink); border-radius: 0; background: #fff; }
+.bp :global(.content #allCard .ppl-head) { align-items: flex-start; }
+.bp :global(.content #allCard .ppl-acts-k) { display: none; }
+/* The accepted day rides on the status badge. */
+.bp :global(.pstatus-d) { margin-left: 6px; padding-left: 6px; border-left: 1.5px solid currentColor; font-style: normal; font-family: var(--font-mono); letter-spacing: 0.06em; }
+/* Sent stays a stamp; Resend is a real button beside it. */
+.bp :global(.content .pbar .pbar-btn.pact--resend) { color: var(--blueprint); }

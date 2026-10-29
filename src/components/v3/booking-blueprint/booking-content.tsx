@@ -64,6 +64,8 @@ export function BookingContent({ data }: { data: BookingDashboard }) {
         </div>
       </header>
 
+      {/* THE LINK and THE NUMBERS, side by side (owner, 2026-10-28: "two columns in a single row", the numbers 2×2). */}
+      <div className="bk-top">
       {/* THE LINK — the page's first job: where it is, and one tap to copy it. */}
       <section className="bk-card bk-link" data-booking-share>
         <div className="bk-link-main">
@@ -110,6 +112,7 @@ export function BookingContent({ data }: { data: BookingDashboard }) {
           <div className="bk-kpi-val" data-kpi="all">{stats.allTime}</div>
           <div className="bk-kpi-sub">Visits booked online</div>
         </div>
+      </div>
       </div>
 
       {/* WHO BOOKED */}

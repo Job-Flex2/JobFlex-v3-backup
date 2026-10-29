@@ -778,6 +778,7 @@ export const NOTIFICATION_ICONS: Record<PrefKey, IconName> = {
   'review-received': 'i-thumb',
   'trade-reply': 'i-board',
   'appointment-booked': 'i-cal',
+  'booking-online': 'i-cal',
   'appointment-moved': 'i-clock',
   'service-reminder': 'i-check',
   // Text-only crew events (never in the matrix) — listed so the map is total.

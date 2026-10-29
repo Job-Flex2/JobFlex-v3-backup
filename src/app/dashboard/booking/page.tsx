@@ -4,6 +4,7 @@ import { canSeeEarlyAccess } from "@/lib/earlyAccess";
 import { isLimitedRole, NoOrgError, requireOrg, UnauthorizedError } from "@/lib/orgContext";
 import { loadBookingDashboard } from "@/lib/bookingBook";
 import { BookingContent } from "@/components/v3/booking-blueprint/booking-content";
+import { MarkNavSeen } from "@/components/layout/MarkNavSeen";
 
 // ONLINE BOOKING (2026-09-23) — the office side of /book/<slug>.
 export const dynamic = "force-dynamic";
@@ -23,5 +24,11 @@ export default async function BookingPage() {
     throw err;
   }
   const data = await loadBookingDashboard(organizationId);
-  return <BookingContent data={data} />;
+  return (
+    <>
+      {/* Opening the page reads the new bookings: the Online booking badge clears (lib/badgeCounts). */}
+      <MarkNavSeen surface="booking" />
+      <BookingContent data={data} />
+    </>
+  );
 }

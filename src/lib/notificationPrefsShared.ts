@@ -20,6 +20,7 @@ export type PrefKey =
   | "billing-problems"
   | "change-order"
   | "appointment-booked"
+  | "booking-online"
   | "appointment-moved"
   | "service-reminder"
   | "job-scheduled"
@@ -81,6 +82,9 @@ export const PREF_EVENTS: readonly PrefEventMeta[] = [
   { key: "billing-problems", name: "Billing problems", sub: "Your JobFlex plan payment didn't go through — sent to the account owner; the payment emails always go", emailAvailable: true, smsAvailable: true, inAppAvailable: false, seed: [false, true, true], audience: { office: true }, example: "JobFlex: payment of $95 for Professional didn't go through (insufficient funds). Update your card: jobflex.app/dashboard/subscription" },
   { key: "change-order", name: "Change order answered", sub: "The client approved or declined it", emailAvailable: true, smsAvailable: true, seed: [true, true, true], audience: { office: true, sales: false }, example: "Sarah Mitchell approved change order #2 \"Skylight flashing\" ($640) on \"Standing-seam metal · 18412 92nd Ave NE\"." },
   { key: "appointment-booked", name: "Appointment booked", sub: "A visit goes on the calendar — by the team or online", emailAvailable: false, smsAvailable: true, seed: [true, false, true], audience: { office: true, sales: true }, example: "Booked: Roof inspection · Sarah Mitchell · Tue Oct 7, 9 AM–10 AM · 18412 92nd Ave NE · online." },
+  // Online booking (owner, 2026-10-28: "when somebody books online the contractor gets an email"): a customer
+  // booked on the company's booking page — the bell, and the Blueprint email (notify → notifyBookedOnline).
+  { key: "booking-online", name: "Booked online", sub: "A customer booked a visit on your booking page", emailAvailable: true, smsAvailable: false, seed: [true, true, false] },
   { key: "appointment-moved", name: "Appointment moved or cancelled", sub: "A visit changes day or time, or comes off the calendar", emailAvailable: false, smsAvailable: true, seed: [true, false, true], audience: { office: true, sales: true }, example: "Moved: Roof inspection · Sarah Mitchell — was Tue Oct 7, 9 AM, now Thu Oct 9, 1 PM." },
   // HVAC services (2026-10-18): the service desk's own reminders — one digest a day, a heads-up before plan
   // visits, the contractor's own reminders on their day (lib/serviceDeskBook). In the bell for everyone;
@@ -299,7 +303,8 @@ export function prefKeyForEvent(e: EventLike): PrefKey | null {
     case "SCHEDULED":
       return "job-scheduled";
     case "BOOKING_NEW":
-      return "appointment-booked";
+      // A visit the AI desk booked on a call stays an appointment; one booked on the page is an online booking.
+      return meta.includes('"channel":"ai-desk"') ? "appointment-booked" : "booking-online";
     case "BOOKING_MOVED":
     case "BOOKING_CANCELED":
       return "appointment-moved";

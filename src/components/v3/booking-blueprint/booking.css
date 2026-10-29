@@ -277,3 +277,22 @@
 }
 /* A field with a hint under it must not stretch its neighbours' boxes. */
 .jf-booking .bk-rules { align-items: start; }
+
+/* ── THE TOP ROW (owner, 2026-10-28): the link and the numbers in two columns on one row, the numbers 2×2;
+   "Your booking link" and "Booked online" a step larger; more air under the page title. ── */
+.jf-booking .bk-head { margin-bottom: 12px; }
+.jf-booking .bk-top { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.jf-booking .bk-top .bk-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 1fr; }
+.jf-booking .bk-top .bk-kpi { display: flex; flex-direction: column; justify-content: center; padding: 18px 20px; }
+.jf-booking .bk-top .bk-kpi:nth-child(3) { border-left: 0; }
+.jf-booking .bk-top .bk-kpi:nth-child(n + 3) { border-top: 1.5px solid var(--bk-line); }
+.jf-booking .bk-link .bk-h2, .jf-booking [data-booking-upcoming] .bk-h2 { font-size: 22px; letter-spacing: 0; }
+@media (max-width: 1100px) {
+  .jf-booking .bk-top { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 768px) {
+  .jf-booking .bk-head { margin-bottom: 6px; }
+  .jf-booking .bk-top { gap: 12px; }
+  .jf-booking .bk-top .bk-kpi { padding: 12px 14px; }
+  .jf-booking .bk-link .bk-h2, .jf-booking [data-booking-upcoming] .bk-h2 { font-size: 19px; }
+}
