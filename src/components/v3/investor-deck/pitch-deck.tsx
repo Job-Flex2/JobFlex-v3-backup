@@ -13,7 +13,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { TOUR_SHOTS, tourSrc } from "./tour-shots";
-import { ALL_TRADE_SHOPS, HOURS_FACT, LEAD_PRICES, LEADER, MARKET_FACTS, type PitchSource } from "./pitch-facts";
+import { ALL_TRADE_SHOPS, FINANCING, HOURS_FACT, LEAD_PRICES, LEADER, MARKET_FACTS, type PitchSource } from "./pitch-facts";
 import { useSlides } from "./use-slides";
 import { useFullscreen } from "./use-fullscreen";
 import s from "./investor-deck.module.css";
@@ -94,6 +94,8 @@ function Dial({ id, label, value, min, max, step, show, onChange }: { id: string
 // The example shop and the example lead month — where the dials start. Examples, said so on the slide.
 const SHOP_START = { estimates: 5, perEstimate: 1.5, office: 4, hourly: 75 };
 const LEADS_START = { perMonth: 100, priceDollars: 50 };
+// The example financing month: financed jobs, their average size, JobFlex's share (the target, 2–3%).
+const FIN_START = { jobs: 40, avgDollars: 15_000, sharePct: 2.5 };
 
 type Slide = { id: string; kicker: string; tone?: "blue" | "ink"; body: ReactNode };
 
@@ -102,6 +104,7 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
   const u = data.unit;
   const [shop, setShop] = useState(SHOP_START);
   const [leadMonth, setLeadMonth] = useState(LEADS_START);
+  const [finMonth, setFinMonth] = useState(FIN_START);
   // The plan the calculators and the market measure against: the one the catalogue marks, else the middle one.
   const plan = data.plans.find((p) => p.highlight) ?? data.plans[Math.floor(data.plans.length / 2)] ?? null;
 
@@ -279,7 +282,7 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
     {
       const leadCents = leadMonth.perMonth * leadMonth.priceDollars * 100;
       out.push({
-        id: "model", kicker: "Business model · three ways JobFlex earns",
+        id: "model", kicker: "Business model · four ways JobFlex earns",
         body: (
           <div className={s.model}>
             <div className={s.modelCol}>
@@ -292,9 +295,10 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
                 ))}
               </div>
               <div className={s.modelHead}><i>2</i><b>AI desk minutes</b><span>Plans include minutes; more come in packs of {n(data.deskPack.minutes)} for {price(data.deskPack.cents)}.</span></div>
+              <div className={s.modelHead}><i>3</i><b>Financing share</b><span>Clients pay for the whole project over time through a lending partner; JobFlex earns a share of every financed job — {FINANCING.shareLowPct}–{FINANCING.shareHighPct}%, our target for the partnership. Built; next slide.</span></div>
             </div>
             <div className={s.modelCol}>
-              <div className={s.modelHead}><i>3</i><b>Paid homeowner leads</b><span>Built: a lead is charged to the shop&apos;s card on Accept, at the price JobFlex sets for it ({dollars(data.leadPrice.minCents)}–{dollars(data.leadPrice.maxCents)}). Not open to homeowners yet.</span></div>
+              <div className={s.modelHead}><i>4</i><b>Paid homeowner leads</b><span>Built: a lead is charged to the shop&apos;s card on Accept, at the price JobFlex sets for it ({dollars(data.leadPrice.minCents)}–{dollars(data.leadPrice.maxCents)}). Not open to homeowners yet.</span></div>
               <table className={s.leadPrices}>
                 <tbody>
                   {LEAD_PRICES.map((x) => <tr key={x.name}><th scope="row">{x.name}</th><td><b>{x.price}</b><span>{x.how}</span></td></tr>)}
@@ -308,6 +312,47 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
               </div>
               <Sources list={LEAD_PRICES.map((x) => x.source)} />
             </div>
+          </div>
+        ),
+      });
+    }
+
+    {
+      // FINANCING (owner, 2026-10-28: "a source of income additional from financing … from 2 to 3% from the financial
+      // institution partnership"). Built in the product, switched on with the partner agreement — not signed yet, said so.
+      const finCents = finMonth.jobs * finMonth.avgDollars * 100 * (finMonth.sharePct / 100);
+      const roof = 2_000_000;
+      out.push({
+        id: "financing", kicker: "Business model · financing — built, launching with a lending partner",
+        body: (
+          <div className={s.leadSlide}>
+            <div>
+              <h2 className={s.title}>Clients pay over time. Contractors are paid in full. JobFlex earns a share.</h2>
+              <ol className={s.market2}>
+                <li><i>Contractor</i><b>Approved once, inside JobFlex</b><span>Settings → Payments → Financing: the application arrives filled in with what JobFlex knows; the lender approves the business once.</span></li>
+                <li><i>Client</i><b>&ldquo;Pay over time&rdquo; on the proposal</b><span>On their phone, the amount filled in; checking the rate doesn&apos;t touch their credit score. Jobs from {dollars(FINANCING.jobMinCents)} to {dollars(FINANCING.jobMaxCents)}.</span></li>
+                <li><i>JobFlex</i><b>Paid on every financed job</b><span>The contractor is paid in full 1–3 business days after the job; the lender carries the loan — JobFlex never lends. The lender pays its software partners a share: our target is {FINANCING.shareLowPct}–{FINANCING.shareHighPct}% of each financed job.</span></li>
+              </ol>
+            </div>
+            <div className={s.leadCalc}>
+              <Dial id="fin-jobs" label="Financed jobs a month" value={finMonth.jobs} min={5} max={2000} step={5} show={(v) => n(v)} onChange={(v) => setFinMonth((x) => ({ ...x, jobs: v }))} />
+              <Dial id="fin-avg" label="Average financed job" value={finMonth.avgDollars} min={2000} max={65000} step={1000} show={(v) => `$${n(v)}`} onChange={(v) => setFinMonth((x) => ({ ...x, avgDollars: v }))} />
+              <Dial id="fin-share" label="JobFlex share" value={finMonth.sharePct} min={FINANCING.shareLowPct} max={FINANCING.shareHighPct} step={0.25} show={(v) => `${v}%`} onChange={(v) => setFinMonth((x) => ({ ...x, sharePct: v }))} />
+              <p className={s.leadSum} aria-live="polite"><b data-calc="fin-month">{dollars(finCents)}</b> a month · <b>{compact(finCents * 12)}</b> a year <span>— an example to move, not a forecast</span></p>
+              <p className={s.leadSum}>One {dollars(roof)} roof, financed: <b>{dollars(roof * FINANCING.shareLowPct / 100)}–{dollars(roof * FINANCING.shareHighPct / 100)}</b> to JobFlex.</p>
+            </div>
+            <div className={s.leadReady} data-financing="built">
+              <b>Built — switched on with the partner agreement</b>
+              <ul>
+                <li>Apply and get approved in Settings</li>
+                <li>A switch on every proposal</li>
+                <li>Pay over time on the client&apos;s page</li>
+                <li>Payouts land as payments</li>
+                <li>The AI desk says &ldquo;yes, we finance&rdquo;</li>
+                <li>Built for Wisetack, the lender in Jobber and Housecall Pro — agreement not signed yet; the share is our target</li>
+              </ul>
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}><Sources list={FINANCING.sources} /></div>
           </div>
         ),
       });
@@ -490,7 +535,7 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
       ),
     });
     return out;
-  }, [data, offer, t, u, plan, shop, leadMonth]);
+  }, [data, offer, t, u, plan, shop, leadMonth, finMonth]);
 
   const { index, move, playing, togglePlay, swipe } = useSlides(slides.length, 9000);
   const slide = slides[index];
