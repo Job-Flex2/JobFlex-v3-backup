@@ -2240,3 +2240,12 @@
 .bp :global(.pstatus-d) { margin-left: 6px; padding-left: 6px; border-left: 1.5px solid currentColor; font-style: normal; font-family: var(--font-mono); letter-spacing: 0.06em; }
 /* Sent stays a stamp; Resend is a real button beside it. */
 .bp :global(.content .pbar .pbar-btn.pact--resend) { color: var(--blueprint); }
+
+/* ── Payments lined up (owner, 2026-10-28: "the payment cards and the buttons more inlined"): the stage boxes and
+   the three buttons share one top and one bottom; the buttons a step shorter so the column is the boxes' height. ── */
+.bp :global(.content #allCard .ppl-body) { align-items: stretch; }
+.bp :global(.content #allCard .ppl-stages) { align-self: stretch; }
+.bp :global(.content #allCard .ppl-st) { justify-content: center; }
+.bp :global(.content #allCard .ppl-side) { display: flex; flex-direction: column; justify-content: flex-start; }
+.bp :global(.content #allCard .ppl-acts) { gap: 5px; }
+.bp :global(.content #allCard .ppl-act) { height: 30px; }
