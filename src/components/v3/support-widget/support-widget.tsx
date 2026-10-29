@@ -63,7 +63,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { submitSupportTicket } from "@/actions/support";
 import { answerSupportVerdict, liveSupportAnswer } from "@/actions/supportLive";
-import { answerParts, type LiveState } from "@/lib/support/aiState";
+import { answerBlocks, type AnswerPiece, type LiveState } from "@/lib/support/aiState";
 import { lockScroll } from "@/lib/scrollLock";
 import "./support-widget.css";
 
@@ -92,25 +92,45 @@ const LIVE_WAIT_MS = 90_000;
 const LIVE_FIRST_MS = 1_200;
 const LIVE_EVERY_MS = 2_000;
 
-/** The AI's answer, as paragraphs; JobFlex's own links clickable (lib/support/aiState answerParts). */
+/** A paragraph's pieces: words, line breaks, JobFlex's own links. */
+function Pieces({ parts }: { parts: AnswerPiece[] }) {
+  return (
+    <>
+      {parts.map((piece, k) =>
+        "br" in piece ? (
+          <br key={k} />
+        ) : "path" in piece ? (
+          <a key={k} href={piece.path}>
+            {piece.label}
+          </a>
+        ) : (
+          <span key={k}>{piece.text}</span>
+        ),
+      )}
+    </>
+  );
+}
+
+/** The AI's answer, as paragraphs and cards ("[offer]" / "[note]", lib/support/replyCards); JobFlex's own links clickable. */
 function AnswerBody({ body }: { body: string }) {
   return (
     <div className="jfsup-answer" data-support-live-answer>
-      {answerParts(body).map((para, i) => (
-        <p key={i}>
-          {para.map((piece, k) =>
-            "br" in piece ? (
-              <br key={k} />
-            ) : "path" in piece ? (
-              <a key={k} href={piece.path}>
-                {piece.label}
-              </a>
-            ) : (
-              <span key={k}>{piece.text}</span>
-            ),
-          )}
-        </p>
-      ))}
+      {answerBlocks(body).map((b, i) =>
+        b.kind === "text" ? (
+          <p key={i}>
+            <Pieces parts={b.parts} />
+          </p>
+        ) : (
+          <div key={i} className={`jfsup-card jfsup-card--${b.kind}`} data-support-card={b.kind}>
+            <b>{b.title}</b>
+            {b.parts.length ? (
+              <p>
+                <Pieces parts={b.parts} />
+              </p>
+            ) : null}
+          </div>
+        ),
+      )}
     </div>
   );
 }

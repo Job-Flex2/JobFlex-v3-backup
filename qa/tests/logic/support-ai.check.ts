@@ -148,7 +148,16 @@ check("…carries no secrets (keys, tokens, webhook secrets)", !/\b(sk-[A-Za-z0-
 check("…and no personal addresses — only JobFlex's own", (SUPPORT_HANDBOOK.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}/gi) ?? []).every((e) => /@(jobflex\.app|platform\.jobflex\.local|example\.com)$/i.test(e)), (SUPPORT_HANDBOOK.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}/gi) ?? []).filter((e) => !/@(jobflex\.app|platform\.jobflex\.local|example\.com)$/i.test(e)).slice(0, 5).join(", "));
 
 // ── Cancellations and the offer (owner, 2026-10-26) ───────────────────────────
-check("the rules on a cancellation: ask why, give the steps anyway, what they'd leave, the two-week offer only when available, a person sends it", /CANCELLATIONS/.test(SUPPORT_AI_RULES) && /ONE honest question/.test(SUPPORT_AI_RULES) && /nobody should feel trapped/.test(SUPPORT_AI_RULES) && /two more weeks, free/.test(SUPPORT_AI_RULES) && /ONLY when the ACCOUNT FACTS say "TRIAL EXTENSION: AVAILABLE"/.test(SUPPORT_AI_RULES) && /Someone is leaving — a person sends this one/.test(SUPPORT_AI_RULES) && /never pushy/.test(SUPPORT_AI_RULES));
+check(
+  "the rules on a cancellation (2026-10-29): the offer card first, the price-for-life card, then the steps, the question last; a person sends it",
+  /CANCELLATIONS/.test(SUPPORT_AI_RULES) && /starts with \[offer\] or \[note\]/.test(SUPPORT_AI_RULES) && /Two more weeks, free/.test(SUPPORT_AI_RULES) &&
+    /When the ACCOUNT FACTS say "TRIAL EXTENSION: AVAILABLE"/.test(SUPPORT_AI_RULES) && /Today's price — yours for life/.test(SUPPORT_AI_RULES) &&
+    /nobody should feel trapped/.test(SUPPORT_AI_RULES) && /Someone is leaving — a person sends this one/.test(SUPPORT_AI_RULES) && /never pushy/.test(SUPPORT_AI_RULES) &&
+    SUPPORT_AI_RULES.indexOf("The [offer] card, first") < SUPPORT_AI_RULES.indexOf("The [note] card") &&
+    SUPPORT_AI_RULES.indexOf("The [note] card") < SUPPORT_AI_RULES.indexOf("If you'd still like to cancel") &&
+    SUPPORT_AI_RULES.indexOf("If you'd still like to cancel") < SUPPORT_AI_RULES.indexOf("One short honest question"),
+);
+check("the bug report's bullets sit under BUGS again, not under CANCELLATIONS", SUPPORT_AI_RULES.indexOf('Fill "bug" for the team') > SUPPORT_AI_RULES.indexOf("BUGS —") && SUPPORT_AI_RULES.indexOf('Fill "bug" for the team') < SUPPORT_AI_RULES.indexOf("CANCELLATIONS —"));
 check("the rules on a bug: double-check with the team, fix as soon as we can; a doubted figure is a bug and asks for the exact case", /double-check it with our team/.test(SUPPORT_AI_RULES) && /SOMETHING LOOKS WRONG/.test(SUPPORT_AI_RULES) && /exact address, proposal or screen/.test(SUPPORT_AI_RULES) && /Never say it's fixed, never give a date/.test(SUPPORT_AI_RULES));
 const d = (daysFromNow: number) => new Date(Date.now() + daysFromNow * 86_400_000);
 const onTrial = extensionOfferFact({ status: "TRIALING", trialEndsAt: d(5), provider: "STRIPE", plan: "professional" }, null);
