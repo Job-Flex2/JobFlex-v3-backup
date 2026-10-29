@@ -46,6 +46,8 @@ import { NetCount } from "./homeowner-net-count";
 import { StepsGrid } from "./homeowner-vignettes";
 import { HomeownerWizard } from "./wizard/homeowner-wizard";
 import type { WizardPrefill } from "@/lib/home/prefill";
+import { portalHeroSub } from "@/lib/home/portalPrice";
+import { StoryQuestions, WhyJobflex } from "./homeowner-story-sections";
 import { useNetParallax, useReveal } from "./use-homeowner-behavior";
 import { Fragment, useState } from "react";
 import Link from "next/link";
@@ -201,7 +203,7 @@ function Plate({ height, src, label }: { height: string; src: string; label: str
   );
 }
 
-export function HomeownerContent({ prefill = null }: { prefill?: WizardPrefill | null }) {
+export function HomeownerContent({ prefill = null, house = false }: { prefill?: WizardPrefill | null; house?: boolean }) {
   const rv = useReveal();
   useNetParallax();
 
@@ -236,19 +238,18 @@ export function HomeownerContent({ prefill = null }: { prefill?: WizardPrefill |
             <div className="pill anim a1">
               Free — no account required
             </div>
+            {/* ONE PORTAL (2026-10-28, lib/home/portalPrice): the price and the project in one place. */}
             <h1 className="h1 anim a2">
-              Describe your project.
+              See your price.
               <br />
               <span className="h1-nw">
                 Get <span className="inv">real</span> quotes.
               </span>
             </h1>
-            <p className="h1-sub anim a3">
-              Your words become a contractor-ready scope, sent to a local pro on JobFlex. Free — no account needed. Your own home dashboard comes with your first project.
-            </p>
+            <p className="h1-sub anim a3">{portalHeroSub(house)}</p>
           </div>
 
-          <HomeownerWizard uid="w0" prefill={prefill} />
+          <HomeownerWizard uid="w0" prefill={prefill} house={house} />
 
           <div className="trust-row">
             <div className="tr">
@@ -261,7 +262,7 @@ export function HomeownerContent({ prefill = null }: { prefill?: WizardPrefill |
               <svg className="ic">
                 <use href="#i-clock" />
               </svg>
-              <span>A written scope in minutes</span>
+              <span>A price range in about a minute</span>
             </div>
             <div className="tr">
               <svg className="ic">
@@ -279,12 +280,15 @@ export function HomeownerContent({ prefill = null }: { prefill?: WizardPrefill |
             How it works
           </div>
           <h2 className={rv.cls("secH", "sec-h")} ref={rv.ref("secH")}>
-            From idea to quotes <span className="inv">in one sitting.</span>
+            Price it, send it, <span className="inv">meet your pro.</span>
           </h2>
 
-          <StepsGrid className={rv.cls("grid4", "grid4")} gridRef={rv.ref("grid4")} />
+          <StepsGrid className={rv.cls("grid4", "grid4")} gridRef={rv.ref("grid4")} house={house} />
         </div>
       </section>
+
+      {/* WHY JOBFLEX (2026-10-28, ./homeowner-story): the price first, one pro who runs their business on JobFlex. */}
+      <WhyJobflex top="#top" />
 
       {/* THE HOME DASHBOARD (2026-10-03): what comes with the first project.
           Every line here is true of the dashboard as shipped (lib/home/portal). */}
@@ -562,16 +566,19 @@ export function HomeownerContent({ prefill = null }: { prefill?: WizardPrefill |
         </div>
       </section>
 
+      {/* GOOD TO KNOW (2026-10-28): the questions a homeowner asks before sending anything. */}
+      <StoryQuestions house={house} top="#top" />
+
       <section className="cta">
         <div className="cta-in">
           <p className={rv.cls("ctaQ", "cta-q")} ref={rv.ref("ctaQ")}>
             Ready when you are.
           </p>
           <p className={rv.cls("ctaA", "cta-a")} ref={rv.ref("ctaA")}>
-            Describe your project in a minute — a local pro takes it from there, and your home dashboard comes with it.
+            Price it or describe it in a minute — a local pro takes it from there, and your home dashboard comes with it.
           </p>
           <a className={rv.cls("ctaBtn", "cta-btn")} ref={rv.ref("ctaBtn")} href="#top">
-            Describe your project
+            Start your project
             <svg className="ic">
               <use href="#i-arrow" />
             </svg>

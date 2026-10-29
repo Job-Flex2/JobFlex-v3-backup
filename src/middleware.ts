@@ -6,6 +6,7 @@ import { ROLE_ROUTE_GATES, isPathAllowed } from "@/lib/roleRoutes";
 import { isPartnerPublic, principalRedirect } from "@/lib/principalRoutes";
 import { REGION_COOKIE, REGION_MAX_AGE_S, consentModeFor } from "@/lib/consent";
 import { TRIAL_OFFER_COOKIE, TRIAL_OFFER_MAX_AGE, TRIAL_TEST_ENDED } from "@/lib/trialOffer";
+import { movedPricePath } from "@/lib/home/portalPrice";
 
 // The standalone handheld URLs (/mobile-*, /trade-services) are protected too:
 // they render the same org data as their /dashboard twins and the (mobile)
@@ -135,6 +136,15 @@ async function route(req: NextRequest): Promise<NextResponse> {
     // page's, and the trade is its path now (2026-10-10), never a parameter.
     url.searchParams.delete("trade");
     for (const [k, v] of new URLSearchParams(query)) url.searchParams.set(k, v);
+    return NextResponse.redirect(url, 308);
+  }
+  // ONE HOMEOWNER PORTAL (2026-10-28, lib/home/portalPrice): /price, /price/roof and the house estimators'
+  // /estimate/jobflex/<trade> live in the portal now. 308 with the query kept — a saved range's ?home=&plan=, a
+  // cost guide's ?city=&state= — so the emails already sent and the guides' links land on the same estimator.
+  const movedPrice = movedPricePath(pathname);
+  if (movedPrice) {
+    const url = req.nextUrl.clone();
+    url.pathname = movedPrice;
     return NextResponse.redirect(url, 308);
   }
   const movedPage = MOVED_PAGES[pathname];

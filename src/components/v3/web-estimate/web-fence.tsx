@@ -17,6 +17,7 @@ import { presetWidthFt } from "@/components/estimator/fence/fenceTypes";
 import { buildingsToFootprints, latLngToLocalFeet, simplifyPath } from "@/components/estimator/fence/mapProjection";
 import type { ArmedOpening } from "@/stores/useFenceStudioStore";
 import { WebHead } from "./web-head";
+import { clearCarriedWords, useCarriedWords } from "@/lib/home/carry";
 import "./web-estimate.css";
 
 const DrawMap = dynamic(() => import("@/components/estimator/fence/FenceDrawMap").then((m) => m.FenceDrawMap), { ssr: false, loading: () => <div className="we-fence-wait">Loading the map…</div> });
@@ -59,7 +60,12 @@ export function WebFence(p: WebFenceProps) {
   const [typedGates, setTypedGates] = React.useState("1");
   const [byHand, setByHand] = React.useState(false);
   const [est, setEst] = React.useState<WebEstimateView | null>(null);
-  const [contact, setContact] = React.useState({ name: "", phone: "", email: "", note: "", consent: false, company: "" });
+  const [contactIn, setContact] = React.useState({ name: "", phone: "", email: "", note: "", consent: false, company: "" });
+  // The house (2026-10-28, lib/home/carry): what they wrote in the homeowner portal's box is the note to the pro,
+  // until they change it here.
+  const carried = useCarriedWords();
+  const [noted, setNoted] = React.useState(false);
+  const contact = p.shop.house && !noted && !contactIn.note ? { ...contactIn, note: carried.slice(0, 1000) } : contactIn;
   const pw = pageWords(p.shop, "fence");
   const [leadId, setLeadId] = React.useState<string | null>(null);
   const viewed = React.useRef(false);
@@ -121,7 +127,7 @@ export function WebFence(p: WebFenceProps) {
     const r = await webLead(p.shop.slug, "fence", est.token, contact).catch(() => ({ ok: false as const, error: "Something went wrong — try again." }));
     setBusy(false);
     if (!r.ok) { setError(r.error); return; }
-    if (r.next) { window.location.assign(r.next); return; }   // the house: the homeowner's own request page
+    if (r.next) { clearCarriedWords(); window.location.assign(r.next); return; }   // the house: the homeowner's own request page
     setLeadId(r.leadId); setStep("done"); tell("lead");
   }
 
@@ -223,7 +229,7 @@ export function WebFence(p: WebFenceProps) {
             <label><span>Your name</span><input value={contact.name} autoComplete="name" onChange={(e) => setContact({ ...contact, name: e.target.value })} data-web-name /></label>
             <label><span>Phone</span><input value={contact.phone} inputMode="tel" autoComplete="tel" onChange={(e) => setContact({ ...contact, phone: e.target.value })} data-web-phone /></label>
             {p.askEmail ? <label><span>Email {p.shop.house ? null : <small>for your copy of the price</small>}</span><input type="email" required={!!p.shop.house} value={contact.email} autoComplete="email" onChange={(e) => setContact({ ...contact, email: e.target.value })} data-web-email /></label> : null}
-            <label><span>Anything we should know? <small>optional</small></span><textarea rows={3} maxLength={1000} value={contact.note} onChange={(e) => setContact({ ...contact, note: e.target.value })} data-web-note /></label>
+            <label><span>Anything we should know? <small>optional</small></span><textarea rows={3} maxLength={1000} value={contact.note} onChange={(e) => { setNoted(true); setContact({ ...contact, note: e.target.value }); }} data-web-note /></label>
             <label className="we-consent"><input type="checkbox" checked={contact.consent} onChange={(e) => setContact({ ...contact, consent: e.target.checked })} data-web-consent /><span>{pw.consent}</span></label>
             <input className="we-hp" tabIndex={-1} autoComplete="off" value={contact.company} onChange={(e) => setContact({ ...contact, company: e.target.value })} aria-hidden="true" name="company" />
             {error ? <p className="we-err" role="alert">{error}</p> : null}

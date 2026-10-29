@@ -10,6 +10,7 @@ import { webLead, webView, type WebEstimateView } from "@/actions/webEstimator";
 import { webSmartAnalyze, webSmartGenerate } from "@/actions/advancedEstimator";
 import { bandWords, money, pageWords } from "@/lib/webEstimator";
 import { PRO_CAP } from "@/lib/home/jobflexPro";
+import { clearCarriedWords, useCarriedWords } from "@/lib/home/carry";
 import { WebHead } from "./web-head";
 import "./web-estimate.css";
 
@@ -44,7 +45,12 @@ async function shrink(file: File): Promise<string | null> {
 
 export function WebSmart(p: WebSmartProps) {
   const [step, setStep] = React.useState<Step>("describe");
-  const [brief, setBrief] = React.useState({ description: "", location: "", sqft: "", qualityTier: "standard" as "budget" | "standard" | "luxury" });
+  const [briefIn, setBrief] = React.useState({ description: "", location: "", sqft: "", qualityTier: "standard" as "budget" | "standard" | "luxury" });
+  // The house (2026-10-28, lib/home/carry): what they wrote in the homeowner portal's box starts the brief, until
+  // they write here themselves.
+  const carried = useCarriedWords();
+  const [wrote, setWrote] = React.useState(false);
+  const brief = p.shop.house && !wrote && !briefIn.description ? { ...briefIn, description: carried.slice(0, 4000) } : briefIn;
   const [photos, setPhotos] = React.useState<string[]>([]);
   const [questions, setQuestions] = React.useState<Question[]>([]);
   const [answers, setAnswers] = React.useState<Record<string, string>>({});
@@ -101,7 +107,7 @@ export function WebSmart(p: WebSmartProps) {
     const r = await webLead(p.shop.slug, "smart", est.token, contact).catch(() => ({ ok: false as const, error: "Something went wrong — try again." }));
     setBusy(false);
     if (!r.ok) { setError(r.error); return; }
-    if (r.next) { window.location.assign(r.next); return; }   // the house: the homeowner's own request page
+    if (r.next) { clearCarriedWords(); window.location.assign(r.next); return; }   // the house: the homeowner's own request page
     setLeadId(r.leadId); setStep("done"); tell("lead");
   }
 
@@ -121,7 +127,7 @@ export function WebSmart(p: WebSmartProps) {
           <h2>What are we building?</h2>
           <p className="we-sub">Describe the project the way you&apos;d tell a friend — the room, what changes, what stays. Photos help a lot.</p>
           <div className="we-form">
-            <label><span>The project</span><textarea rows={5} maxLength={4000} value={brief.description} placeholder="We want to remodel the main bathroom: new tile floor and shower, a double vanity, move the toilet about two feet, new lights…" onChange={(e) => setBrief({ ...brief, description: e.target.value })} data-web-brief /></label>
+            <label><span>The project</span><textarea rows={5} maxLength={4000} value={brief.description} placeholder="We want to remodel the main bathroom: new tile floor and shower, a double vanity, move the toilet about two feet, new lights…" onChange={(e) => { setWrote(true); setBrief({ ...brief, description: e.target.value }); }} data-web-brief /></label>
             <div className="we-qs">
               <label className="we-q"><span>Where <small>city, ST — prices follow the area</small></span><input value={brief.location} placeholder="Kirkland, WA" onChange={(e) => setBrief({ ...brief, location: e.target.value })} data-web-location /></label>
               <label className="we-q"><span>Rough size <small>optional, sq ft</small></span><input type="number" min={10} max={20000} value={brief.sqft} placeholder="120" onChange={(e) => setBrief({ ...brief, sqft: e.target.value })} data-web-sqft /></label>

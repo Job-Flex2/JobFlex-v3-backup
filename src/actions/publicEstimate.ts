@@ -195,6 +195,8 @@ const leadSchema = siteSchema.merge(pricedSchema).extend({
   /** A saved range picked up from the dashboard or its email: the plan becomes this request (lib/home/portal). */
   homeKey: z.string().max(200).optional(),
   planId: z.string().max(60).optional(),
+  /** The homeowner's own words to the pro (2026-10-28) — what they wrote in the portal's box, or here. */
+  note: z.string().trim().max(1000).optional(),
 });
 const emailSchema = siteSchema.merge(pricedSchema).extend({
   email: z.string().trim().email().max(200),
@@ -279,7 +281,7 @@ export async function publicRoofLead(raw: unknown): Promise<PublicRoofLeadResult
         state: input.state,
         zip: input.zip,
         projectType: "roofing",
-        description: words,
+        description: input.note ? `${words}\n\nIn their words: ${input.note}` : words,
         // Pre-written and over 20 characters: the intake keeps it as the scope and skips the scope writer.
         scope: words,
       },
@@ -287,12 +289,12 @@ export async function publicRoofLead(raw: unknown): Promise<PublicRoofLeadResult
         isTest: false,
         timezone: input.timezone ?? null,
         source: "price:roof",
-        consent: { text: LEAD_CONSENT_TEXT, at: new Date(), ip: ip === "local" || ip === "unknown" ? null : ip, page: input.page?.startsWith("/") ? input.page : "/price/roof" },
+        consent: { text: LEAD_CONSENT_TEXT, at: new Date(), ip: ip === "local" || ip === "unknown" ? null : ip, page: input.page?.startsWith("/") ? input.page : "/homeowner/price/roof" },
         estimate,
         homeKey: input.homeKey ?? null,
         planId: input.planId ?? null,
         // They priced a roof: the trade is theirs, not a model's guess; the pin is the one they confirmed.
-        known: { trade: { trade: "Roofing", confidence: 1, reason: "the homeowner priced a roof on /price" }, lat: input.lat, lng: input.lng },
+        known: { trade: { trade: "Roofing", confidence: 1, reason: "the homeowner priced a roof in the homeowner portal" }, lat: input.lat, lng: input.lng },
       },
     );
     if (input.emailRange !== false) {
@@ -345,7 +347,7 @@ export async function publicRoofEmail(raw: unknown): Promise<PublicRoofEmailResu
       select: { id: true },
     });
     const base = await appBaseUrl();
-    await sendRangeEmail(input.email, input.name?.trim() || null, input, estimate, { url: `${base}/price/roof?home=${encodeURIComponent(home.accessToken)}&plan=${encodeURIComponent(plan.id)}`, label: "Get quotes from local JobFlex pros" }, await homeUrl(home.accessToken));
+    await sendRangeEmail(input.email, input.name?.trim() || null, input, estimate, { url: `${base}/homeowner/price/roof?home=${encodeURIComponent(home.accessToken)}&plan=${encodeURIComponent(plan.id)}`, label: "Get quotes from local JobFlex pros" }, await homeUrl(home.accessToken));
     return { ok: true, homePath: isNew ? homePath(home.accessToken) : null, planId: plan.id };
   } catch (err) {
     const e = err as { name?: string; retryAfterMs?: number };

@@ -39,7 +39,6 @@ import {
   bandWords,
   shopHourly,
   isHouse,
-  HOUSE_SLUG,
 } from "@/lib/webEstimator";
 import { PRO } from "@/lib/home/jobflexPro";
 import { createHouseLead } from "@/lib/publicEstimate/houseLead";
@@ -536,7 +535,7 @@ export async function webLead(slug: unknown, trade: unknown, token: unknown, raw
   if (isHouse(shop)) {
     // THE HOUSE (2026-10-28): a Lead Center lead with the estimate beside it; the request page next.
     if (!email) return { ok: false, error: "Your email, please — your request page and your dashboard are sent there." };
-    const r = await createHouseLead(shop, est, { name, phone, email, note }, { ip, page: `/estimate/${HOUSE_SLUG}/${est.trade}` });
+    const r = await createHouseLead(shop, est, { name, phone, email, note }, { ip, page: `/homeowner/price/${est.trade}` });
     return { ok: true, leadId: r.platformLeadId, next: r.next };
   }
   const { leadId } = await createWebLead(shop, est, { name, phone, email, note });
@@ -689,7 +688,7 @@ export async function webDeckSend(token: unknown, raw: unknown): Promise<{ ok: t
   if (isHouse(shop)) {
     // THE HOUSE: a Lead Center lead with the design and the price beside it; the link files under the house org's
     // client designs with the platform lead's id; the homeowner goes to their request page.
-    const r = await createHouseLead(shop, est, { name, phone, email, note: note || null }, { ip: await clientIp(), page: `/estimate/${HOUSE_SLUG}/deck` });
+    const r = await createHouseLead(shop, est, { name, phone, email, note: note || null }, { ip: await clientIp(), page: "/homeowner/price/deck" });
     await fileWebClientLink(token, { leadId: r.platformLeadId, clientEmail: email }).catch((err) => console.warn("[web-deck] link not filed:", err));
     return { ok: true, at: sent.at, leadId: r.platformLeadId, next: r.next };
   }

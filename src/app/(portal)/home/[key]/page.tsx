@@ -128,9 +128,10 @@ export default async function HomePage({ params }: { params: Promise<{ key: stri
 
         {/* ── what they can do ────────────────────────────────────────── */}
         <nav className={s.quick} aria-label="What you can do">
-          <a className={s.quickItem} href="/price">
+          {/* The portal (2026-10-28, lib/home/portalPrice): priced or described there, the project joins this home. */}
+          <a className={s.quickItem} href={`/homeowner?home=${encodeURIComponent(h.key)}`}>
             <b>Price a project</b>
-            <span>A roof range for your house in a minute — from the sky, no account</span>
+            <span>A range for your house in about a minute — or describe it in your words</span>
           </a>
           <a className={s.quickItem} href="#plans">
             <b>Plan one for later</b>
@@ -195,7 +196,7 @@ export default async function HomePage({ params }: { params: Promise<{ key: stri
                   {h.plans.filter((p) => p.estimate && p.status === "PLANNED").map((p) => (
                     <p key={p.id} className={s.text}>
                       <b>{p.estimate!.range}</b> · {p.estimate!.material} · {p.title}{" "}
-                      <a href={`/price/roof?home=${encodeURIComponent(h.key)}&plan=${encodeURIComponent(p.id)}`}>Get quotes</a>
+                      <a href={`/homeowner/price/roof?home=${encodeURIComponent(h.key)}&plan=${encodeURIComponent(p.id)}`}>Get quotes</a>
                     </p>
                   ))}
                   <p className={s.text}>A local JobFlex pro confirms on site. Ready? Get quotes sends it to one local JobFlex pro at a time.</p>

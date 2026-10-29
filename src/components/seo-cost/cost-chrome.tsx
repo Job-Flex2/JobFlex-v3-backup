@@ -17,7 +17,7 @@ export function CostChrome({ children, footPro }: { children: ReactNode; footPro
             JobFlex
           </Link>
           <span style={{ display: "inline-flex", gap: 16 }}>
-            <Link className={s.topLink} href="/price" prefetch={false}>
+            <Link className={s.topLink} href="/homeowner" prefetch={false}>
               Price my project
             </Link>
             <Link className={s.topLink} href="/cost" prefetch={false}>
@@ -32,8 +32,7 @@ export function CostChrome({ children, footPro }: { children: ReactNode; footPro
           {footPro ? <p className={s.footPro}>{footPro}</p> : null}
           <nav className={s.footLinks} aria-label="Footer">
             <Link href="/cost" prefetch={false}>All cost guides</Link>
-            <Link href="/price" prefetch={false}>Price my project</Link>
-            <a href="/homeowner">Get quotes</a>
+            <Link href="/homeowner" prefetch={false}>Price my project · get quotes</Link>
             <a href="/privacy">Privacy</a>
             <a href="/terms">Terms</a>
             <CookieSettingsLink />

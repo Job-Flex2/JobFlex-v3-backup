@@ -1,4 +1,4 @@
-/* "PRICE MY PROJECT" (/price, 2026-10-27) — the homeowner's own room, the home
+/* "PRICE MY PROJECT" (2026-10-27; in the portal at /homeowner/price/<trade> since 2026-10-28) — the homeowner's own room, the home
    dashboard's look (warm paper, white panels with a hairline, a serif for the
    big words, JobFlex blue only where something is to be done), never the
    contractor app's. One stylesheet for the row, the roof flow, the range
@@ -54,24 +54,19 @@
 .small { color: var(--h-faint); font-size: 12.5px; }
 @media (min-width: 720px) { .h1 { font-size: 44px; } .h2 { font-size: 30px; } }
 
-/* ── The row of estimators ── */
-.row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-@media (min-width: 720px) { .row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; } }
-@media (min-width: 1040px) { .row { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
-.page .card {
-  position: relative; display: flex; flex-direction: column; gap: 10px; min-height: 196px; padding: 16px;
-  border: 1px solid var(--h-line); border-radius: var(--h-r); background: var(--h-panel); color: var(--h-ink);
-  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
-}
-.page .card:hover { transform: translateY(-2px); border-color: var(--h-line-strong); box-shadow: 0 10px 28px rgba(29, 27, 23, 0.08); }
-.page .cardLive { border-color: var(--h-blue); box-shadow: inset 0 0 0 1px var(--h-blue); }
-.pic { display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 14px; background: var(--h-paper); color: var(--h-blue); }
-.cardLive .pic { background: var(--h-blue-soft); }
-.pic svg { width: 32px; height: 32px; }
-.cardT { font: 700 17px/1.2 var(--font-sans); }
-.cardB { color: var(--h-soft); font-size: 13.5px; line-height: 1.4; }
-.cardGo { margin-top: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--h-blue); font-weight: 700; font-size: 13.5px; }
-.tag { position: absolute; top: 12px; right: 12px; padding: 3px 8px; border-radius: 999px; background: var(--h-blue); color: #fff; font: 800 10px/1.2 var(--font-sans); letter-spacing: 0.08em; text-transform: uppercase; }
+/* ── The portal's bar over an estimator (2026-10-28, one home portal): the five estimators, the one on screen
+   marked, "describe it" for everything else. One line that scrolls inside itself on a phone — never the page. ── */
+.portalTag { margin-left: 4px; padding: 3px 8px; border-radius: 999px; background: var(--h-blue-soft); color: var(--h-blue-ink); font: 800 10.5px/1.2 var(--font-sans); letter-spacing: 0.08em; text-transform: uppercase; }
+@media (max-width: 420px) { .portalTag { display: none; } }
+.switch { border-top: 1px solid var(--h-line); }
+.switchIn { display: flex; gap: 8px; max-width: 1040px; margin: 0 auto; padding: 10px 16px; overflow-x: auto; scrollbar-width: none; }
+.switchIn::-webkit-scrollbar { display: none; }
+.page .sw { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 12px 6px 8px; border: 1.5px solid var(--h-line); border-radius: 999px; background: var(--h-panel); color: var(--h-ink); font: 700 13.5px/1.2 var(--font-sans); white-space: nowrap; }
+.page .sw:hover { border-color: var(--h-line-strong); }
+.page .swOn { border-color: var(--h-blue); background: var(--h-blue-soft); color: var(--h-blue-ink); }
+.swPic { display: inline-flex; width: 24px; height: 24px; color: var(--h-blue); }
+.swPic svg { width: 24px; height: 24px; }
+.page .swQuiet { padding-left: 12px; border-style: dashed; color: var(--h-muted); font-weight: 600; }
 
 /* ── Panels, fields, buttons (the roof flow) ── */
 .panel { display: grid; gap: 16px; padding: 20px 16px; border: 1px solid var(--h-line); border-radius: var(--h-r); background: var(--h-panel); }
