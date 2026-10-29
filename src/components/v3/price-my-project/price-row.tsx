@@ -1,15 +1,16 @@
-// THE ROW (owner, 2026-10-27: "roof first; the other estimators visible in a row and very attractive"). Five picture
-// cards (./cards): the roof prices itself at /price/roof; the other four run JobFlex's own estimators once the Lead
-// Center names the house org (2026-10-28), and open the describe-and-match intake until then. No "coming soon".
-// Server-safe: plain anchors, no state.
+// THE PORTAL'S ESTIMATOR PAGES (2026-10-28, lib/home/portalPrice: "one home portal"). Every estimator a homeowner
+// runs — /homeowner/price/<trade> — sits under one bar: JobFlex · Homeowner Portal, the way back to the portal, and
+// the switch between the five estimators (./cards) with "Describe it instead" for everything else. The picture
+// marks (Pic) are the cards' and the portal box's. Server-safe: plain anchors, no state.
 import Link from "next/link";
 import { ProductMark } from "@/components/brand/ProductMark";
+import { PORTAL_PATH, type PortalTrade } from "@/lib/home/portalPrice";
 import { priceCards, type PriceCardKey } from "./cards";
 import s from "./price.module.css";
 
 export type { PriceCardKey } from "./cards";
 
-function Pic({ k }: { k: PriceCardKey }) {
+export function Pic({ k }: { k: PriceCardKey }) {
   const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
   switch (k) {
     case "roof":
@@ -55,39 +56,40 @@ function Pic({ k }: { k: PriceCardKey }) {
   }
 }
 
-export function PriceChrome({ children }: { children: React.ReactNode }) {
+/** The portal's bar over an estimator: `at` marks the estimator on screen; `bare` leaves the layout to the page
+ *  (the house estimators draw their own column). */
+export function PriceChrome({ at, house, bare = false, children }: { at: PortalTrade; house: boolean; bare?: boolean; children: React.ReactNode }) {
+  const cards = priceCards(house).filter((c) => c.live);
   return (
-    <div className={s.page}>
+    <div className={s.page} data-portal-price={at}>
       <header className={s.top}>
         <div className={s.topIn}>
-          <Link className={s.brand} href="/" prefetch={false} aria-label="JobFlex home">
+          <Link className={s.brand} href={PORTAL_PATH} prefetch={false} aria-label="JobFlex Homeowner Portal">
             <ProductMark />
             JobFlex
+            <span className={s.portalTag}>Homeowner Portal</span>
           </Link>
-          <Link className={s.topLink} href="/homeowner" prefetch={false}>
-            Homeowners
+          <Link className={s.topLink} href={PORTAL_PATH} prefetch={false} data-portal-back>
+            ← Back to the portal
           </Link>
         </div>
+        <nav className={s.switch} aria-label="Price another project">
+          <div className={s.switchIn}>
+            {cards.map((c) => (
+              <a key={c.key} className={`${s.sw}${c.trade === at ? ` ${s.swOn}` : ""}`} href={c.href} aria-current={c.trade === at ? "page" : undefined} data-portal-switch={c.trade}>
+                <span className={s.swPic}>
+                  <Pic k={c.key} />
+                </span>
+                {c.title}
+              </a>
+            ))}
+            <a className={`${s.sw} ${s.swQuiet}`} href={PORTAL_PATH} data-portal-switch="describe">
+              Something else? Describe it
+            </a>
+          </div>
+        </nav>
       </header>
-      <main className={s.main}>{children}</main>
-    </div>
-  );
-}
-
-export function PriceRow({ trade, house = false }: { trade?: string | null; house?: boolean }) {
-  return (
-    <div className={s.row} data-price-row data-price-house={house ? "1" : "0"}>
-      {priceCards(house).map((c) => (
-        <a key={c.key} className={`${s.card}${c.live ? ` ${s.cardLive}` : ""}`} href={c.href} data-price-card={c.key} data-price-live={c.live ? "1" : "0"} aria-current={trade && c.key === trade ? "true" : undefined}>
-          {c.live ? <span className={s.tag}>Priced here</span> : null}
-          <span className={s.pic}>
-            <Pic k={c.key} />
-          </span>
-          <span className={s.cardT}>{c.title}</span>
-          <span className={s.cardB}>{c.blurb}</span>
-          <span className={s.cardGo}>{c.go} →</span>
-        </a>
-      ))}
+      {bare ? children : <main className={s.main}>{children}</main>}
     </div>
   );
 }

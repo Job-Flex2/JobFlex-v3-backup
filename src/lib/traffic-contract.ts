@@ -234,15 +234,18 @@ export const TRAFFIC_EVENTS = {
   // contractor landing). Fired by components/seo-cost/cost-track.tsx.
   seoCostView: "seo_cost_view",
   seoCostCta: "seo_cost_cta",
-  // "PRICE MY PROJECT" (2026-10-27, /price and /price/roof): the homeowner's own estimators. `price_start` once per
-  // flow load (`trade`), `price_address` when the house is confirmed (`state`), `price_range` when a range is shown
-  // (`basis` solar | size, `cached`), `price_lead` on "Get quotes", `price_email_only` on "Email me this range".
-  // Fired by components/v3/price-my-project/*.
+  // "PRICE MY PROJECT" (2026-10-27; in the homeowner portal, /homeowner/price/<trade>, since 2026-10-28): the
+  // homeowner's own estimators. `price_start` once per flow load (`trade`), `price_address` when the house is
+  // confirmed (`state`), `price_range` when a range is shown (`basis` solar | size, `cached`), `price_lead` on "Get
+  // quotes", `price_email_only` on "Email me this range"; `price_pick` when the portal's box sends them into an
+  // estimator (`trade`, `via` nudge | tile — the nudge is the one their words lit). Fired by
+  // components/v3/price-my-project/*.
   priceStart: "price_start",
   priceAddress: "price_address",
   priceRange: "price_range",
   priceLead: "price_lead",
   priceEmailOnly: "price_email_only",
+  pricePick: "price_pick",
 } as const;
 
 /** Events that come several per visit: the report's `raw` CTE leaves them out (lib/traffic-query). */

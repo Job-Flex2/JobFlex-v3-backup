@@ -2,9 +2,12 @@
 // ad landing (lib/home/homeownerDoor). Its own tracked spot ("homeowner"), so a homeowner's click is told apart from
 // the sign-up buttons on the live map and in the analyst.
 import { homeownerDoorFor } from "@/lib/home/homeownerDoor";
+import { portalPriceHref, type PortalTrade } from "@/lib/home/portalPrice";
 
-/** "Price my project" (2026-10-27): the roof prices itself at /price/roof; every other trade starts at the row. */
-const priceHref = (key: string) => (key === "roofing" ? "/price/roof" : "/price");
+/** "See your price first" (2026-10-27; in the homeowner portal since 2026-10-28): the trade's own estimator where the
+ *  portal runs one (the page sends them to the describe box while the house estimators are off), else the portal. */
+const PRICED: Record<string, PortalTrade> = { roofing: "roof", decking: "deck", fencing: "fence", hvac: "hvac", "kitchen-bath": "smart" };
+const priceHref = (key: string) => (PRICED[key] ? portalPriceHref(PRICED[key]) : "/homeowner");
 
 export function HomeownerDoor({ trade }: { trade?: string | null }) {
   const door = homeownerDoorFor(trade);

@@ -123,10 +123,10 @@ export interface WebLeadRecord { leadId: string; trade: WebTrade; estimate: WebE
 
 // ── THE HOUSE (owner, 2026-10-28: "let people get preliminary estimates for HVAC, fence, roof, Deck Studio and the smart
 // estimator using our models; when they like it they submit, we give it to the contractor"). The same estimators run for
-// the homeowner on JobFlex's own home portal (/price → /estimate/jobflex/<trade>) with JobFlex as the shop: the internal
+// the homeowner in JobFlex's own homeowner portal (/homeowner/price/<trade>, lib/home/portalPrice) with JobFlex as the shop: the internal
 // organization the admin picks on the Lead Center (lib/publicEstimate/store houseOrgId) is the shop's id — its price
 // books, its spend, its counters — and the send becomes a Lead Center lead, never a lead of that org. Every trade but
-// the roof (one roof flow: /price/roof), always a range, its own ceilings. Design:
+// the roof (one roof flow: /homeowner/price/roof), always a range, its own ceilings. Design:
 // docs/superpowers/specs/2026-10-28-home-portal-house-estimators-design.md.
 
 export const HOUSE_SLUG = "jobflex";

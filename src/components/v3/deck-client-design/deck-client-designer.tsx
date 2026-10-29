@@ -289,7 +289,7 @@ export interface DeckClientDesignerProps {
 export function DeckClientDesigner(props: DeckClientDesignerProps) {
   const { token, shop, base, start, expired } = props;
   const shopName = shop.name || "your contractor";
-  // The house (jobflex.app/price, owner 2026-10-28): JobFlex passes the design on — a local JobFlex pro measures, quotes, builds.
+  // The house (the homeowner portal, /homeowner/price/deck, owner 2026-10-28): JobFlex passes the design on — a local JobFlex pro measures, quotes, builds.
   const pro = props.website?.house ? PRO : shopName;
   const first = props.clientName.trim().split(/\s+/)[0] || "";
   const [design, setDesign] = React.useState<DeckDesign>(() => props.work ?? base);
@@ -619,19 +619,24 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
   return (
     <main className={cx(s.page, "jf-blueprint")} data-deck-client>
       <div className={cx("content", s.content)}>
-        <header className={`${s.top} ${props.website ? s.topWeb : ""}`}>
-          <div className={`${s.brand} ${props.website ? s.brandWeb : ""}`}>
-            {shop.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element -- the shop's own logo, any host.
-              <img src={shop.logoUrl} alt={shopName} className={props.website ? s.logoWeb : s.logo} />
-            ) : (
-              <span className={s.mark} aria-hidden="true">{shopName.slice(0, 1).toUpperCase()}</span>
-            )}
-            <span>{shopName}</span>
-          </div>
+        <header className={`${s.top} ${props.website && !props.website.house ? s.topWeb : ""}`}>
+          {/* The house (2026-10-28): in the homeowner portal, under the portal's own bar — no second brand row. */}
+          {props.website?.house ? (
+            <span className={s.byJf}><b>Deck Studio</b></span>
+          ) : (
+            <div className={`${s.brand} ${props.website ? s.brandWeb : ""}`}>
+              {shop.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- the shop's own logo, any host.
+                <img src={shop.logoUrl} alt={shopName} className={props.website ? s.logoWeb : s.logo} />
+              ) : (
+                <span className={s.mark} aria-hidden="true">{shopName.slice(0, 1).toUpperCase()}</span>
+              )}
+              <span>{shopName}</span>
+            </div>
+          )}
           <div className={s.topRight}>
             {/* The shop's brand leads on its own website; JobFlex is the small mark under it (owner, 2026-10-28). */}
-            {props.website ? <span className={s.byJf} aria-label="Deck Studio by JobFlex"><b>Deck Studio</b> by JobFlex</span> : null}
+            {props.website && !props.website.house ? <span className={s.byJf} aria-label="Deck Studio by JobFlex"><b>Deck Studio</b> by JobFlex</span> : null}
             <span className={s.saveState} data-client-save={saveState} aria-live="polite">
               {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved ✓" : saveState === "failed" ? "Not saved — will retry" : "Saves as you go"}
             </span>

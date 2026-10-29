@@ -829,8 +829,3 @@ body:has(.jf-homeowner-landing)::before { content: none; }
 .jf-homeowner-landing .dictate-note { flex: 1 1 100%; font-size: calc(12.5px * var(--s)); color: var(--danger, #a83232); }
 @keyframes jfho-mic-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.25); opacity: 0.55; } }
 @media (prefers-reduced-motion: reduce) { .jf-homeowner-landing .mic.on .ic { animation: none; } }
-
-/* "Want a price first?" under the description (2026-10-27, /price). */
-.jf-homeowner-landing .price-first { margin: 6px 0 0; font-size: 13.5px; color: #4a5260; }
-.jf-homeowner-landing .price-first a { color: #1854a0; font-weight: 700; text-decoration: none; }
-.jf-homeowner-landing .price-first a:hover { text-decoration: underline; }

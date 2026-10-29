@@ -59,6 +59,7 @@ import { browserTimeZone, type WizardPrefill } from "@/lib/home/prefill";
 import { prefersReducedMotion, referralCodeFromUrl, testKeyFromUrl } from "../homeowner-landing/use-homeowner-behavior";
 import { usePlaceholderCycle } from "../homeowner-landing/wizard/use-placeholder-cycle";
 import { attachmentsLine, useRequestAttachments } from "../homeowner-landing/wizard/use-request-attachments";
+import { PriceHere } from "@/components/v3/price-my-project/price-here";
 
 /** useLayoutEffect warns during SSR; useEffect is inert there, so it stands in. */
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -72,7 +73,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** The description is one free-text body; answers are appended under it. */
 const NEWLINE = "\n";
 
-export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; prefill?: WizardPrefill | null }) {
+/** `house`: the house estimators are on — see HomeownerWizard. */
+export function MobileHomeownerWizard({ uid, prefill = null, house = false }: { uid: string; prefill?: WizardPrefill | null; house?: boolean }) {
   const [step, setStep] = useState(0);
   const [desc, setDesc] = useState(prefill?.description ?? "");
   /* The photos, videos and PDFs picked — sent into the request's folder once it exists. */
@@ -419,10 +421,8 @@ export function MobileHomeownerWizard({ uid, prefill = null }: { uid: string; pr
           wrapClassName="dictate" buttonClassName="mic" onClassName="on" noteClassName="dictate-note" />
       </div>
       {chips(true)}
-      {/* A number before the words (2026-10-27): the roof prices itself at /price. */}
-      <p className="price-first">
-        Want a price first? <a href="/price" data-cta="price">Price it in a minute →</a>
-      </p>
+      {/* ONE PORTAL (2026-10-28): the estimators right here, the one the words point at lit (lib/home/portalPrice). */}
+      <PriceHere desc={desc} house={house} />
       <div className="tools">
         <input
           type="file"

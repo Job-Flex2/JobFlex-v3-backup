@@ -82,9 +82,9 @@ export async function setLeadAutoPrice(trade: PricedTrade, on: boolean): Promise
   return { ok: true };
 }
 
-/** THE HOUSE ORG (2026-10-28): the internal organization the house estimators run as (/estimate/jobflex/<trade>,
- *  lib/webEstimator houseShop) — its price books, its spend, its counters. One of JobFlex's own only; null closes
- *  the house pages and the /price cards go back to describing. */
+/** THE HOUSE ORG (2026-10-28): the internal organization the house estimators run as (the homeowner portal's
+ *  /homeowner/price/<trade>, lib/webEstimator houseShop) — its price books, its spend, its counters. One of JobFlex's
+ *  own only; null closes the house pages and the portal prices the roof alone. */
 export async function setHouseOrg(organizationId: string | null): Promise<{ ok: true }> {
   await requirePlatformAdmin();
   if (organizationId === null || organizationId === "") {
@@ -96,7 +96,7 @@ export async function setHouseOrg(organizationId: string | null): Promise<{ ok: 
     await setHouseOrgId(org.id);
   }
   revalidatePath("/admin/lead-center");
-  revalidatePath("/price");
+  revalidatePath("/homeowner");
   return { ok: true };
 }
 

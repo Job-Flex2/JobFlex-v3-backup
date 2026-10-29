@@ -1,0 +1,48 @@
+/* "Price it here" in the portal's box (2026-10-28). Drawn in the box's own drafting look — ink hairlines, square
+   corners, the blueprint blue for the one thing to press — from the tokens both wizards' roots define
+   (.jf-homeowner-landing on a desk, .jf-mobile-homeowner on a phone). Selectors carry one class more than the roots'
+   own `*`, `a` and `svg` rules so those never win (the phone root zeroes every padding). */
+
+div.box { padding: calc(6px * var(--s, 1)) calc(20px * var(--s, 1)) calc(14px * var(--s, 1)); }
+
+.box .head { margin: 0 0 calc(8px * var(--s, 1)); font-family: var(--font-mono, ui-monospace, monospace); font-size: calc(9.5px * var(--s, 1)); font-weight: 600;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted, #555); }
+
+.box .tiles { display: flex; flex-wrap: wrap; gap: calc(6px * var(--s, 1)); }
+.box a.tile { display: inline-flex; align-items: center; gap: calc(7px * var(--s, 1)); min-height: calc(38px * var(--s, 1)); padding: 0 calc(12px * var(--s, 1)) 0 calc(8px * var(--s, 1));
+  border: calc(1.5px * var(--s, 1)) solid var(--ink, #0a0a0a); border-radius: var(--radius, 2px); background: var(--paper, #f2f0eb); color: var(--ink, #0a0a0a);
+  font-size: calc(10.5px * var(--s, 1)); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; white-space: nowrap;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, color 0.15s ease; }
+.box a.tile:hover { transform: translate(-1px, -1px); box-shadow: 2px 2px 0 var(--ink, #0a0a0a); }
+.box a.tileOn { background: var(--ink, #0a0a0a); color: var(--paper, #f2f0eb); }
+.box .pic { display: inline-flex; width: calc(20px * var(--s, 1)); height: calc(20px * var(--s, 1)); color: var(--blueprint, #1854a0); }
+.box a.tileOn .pic { color: var(--sky, #4a9eff); }
+.box .pic svg, .box .nudgePic svg { display: block; width: 100%; height: 100%; }
+
+/* The estimator the words point at: one line on what it does, the button into it. */
+.box a.nudge { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: calc(10px * var(--s, 1)) calc(12px * var(--s, 1));
+  margin: 0 0 calc(12px * var(--s, 1)); padding: calc(12px * var(--s, 1)) calc(14px * var(--s, 1));
+  border: calc(2px * var(--s, 1)) solid var(--blueprint, #1854a0); border-radius: var(--radius, 2px); background: rgba(24, 84, 160, 0.06);
+  color: var(--ink, #0a0a0a); text-decoration: none; animation: ph_in 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+.box .nudgePic { display: inline-flex; width: calc(30px * var(--s, 1)); height: calc(30px * var(--s, 1)); color: var(--blueprint, #1854a0); }
+.box .nudgeT { font-size: calc(13.5px * var(--s, 1)); font-weight: 600; line-height: 1.45; color: var(--ink-soft, #2a2a2a); }
+.box .nudgeGo { display: inline-flex; align-items: center; height: calc(40px * var(--s, 1)); padding: 0 calc(16px * var(--s, 1));
+  border: calc(2px * var(--s, 1)) solid var(--ink, #0a0a0a); border-radius: var(--radius, 2px); background: var(--blueprint, #1854a0); color: #fff;
+  font-size: calc(11.5px * var(--s, 1)); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;
+  box-shadow: 3px 3px 0 var(--ink, #0a0a0a); transition: transform 0.1s ease, box-shadow 0.1s ease; }
+.box a.nudge:hover .nudgeGo { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink, #0a0a0a); }
+.box a.tile:focus-visible, .box a.nudge:focus-visible { outline: 2px solid var(--blueprint, #1854a0); outline-offset: 2px; }
+
+/* A narrow box (a phone, a small window): the button under the words, as wide as the box. */
+@media (max-width: 640px) {
+  div.box { padding-left: 16px; padding-right: 16px; }
+  .box a.nudge { grid-template-columns: auto minmax(0, 1fr); }
+  .box .nudgeGo { grid-column: 1 / -1; justify-content: center; min-height: 44px; }
+  .box a.tile { min-height: 44px; }
+}
+
+@keyframes ph_in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .box a.nudge { animation: none; }
+  .box a.tile, .box .nudgeGo { transition: none; }
+}

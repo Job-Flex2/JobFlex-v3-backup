@@ -11,9 +11,8 @@
 .we-logo { flex: none; height: 72px; width: auto; max-width: 260px; object-fit: contain; border-radius: 10px; background: #fff; box-shadow: 0 0 0 1px var(--we-hair); padding: 6px; }
 .we-by { flex: none; display: flex; flex-direction: column; align-items: flex-end; font-size: 12px; letter-spacing: 0.04em; color: var(--we-muted); text-align: right; }
 .we-byTool { font-weight: 800; color: var(--we-ink); font-size: 13px; letter-spacing: 0; }
-/* the house (2026-10-28): back to the row of estimators */
-.we-back { flex: none; font-size: 13px; font-weight: 600; color: var(--we-soft); text-decoration: none; white-space: nowrap; }
-.we-back:hover { color: var(--we-ink); text-decoration: underline; }
+/* the house (2026-10-28): inside the homeowner portal, under the portal's bar — the page's title alone */
+.we-head h1.we-shop { margin: 0; font-size: 26px; }
 .we-embedLogo { height: 28px; width: auto; max-width: 120px; object-fit: contain; }
 .we-embedHead .we-by { flex-direction: row; gap: 4px; margin-left: auto; }
 @media (max-width: 520px) { .we-logo { height: 56px; max-width: 180px; } .we-by { display: none; } }

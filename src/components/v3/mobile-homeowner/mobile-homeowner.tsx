@@ -76,6 +76,7 @@ import { MobileHomeownerSprite } from "./mobile-homeowner-sprite";
 import { MobileStepsGrid } from "./mobile-homeowner-vignettes";
 import { MobileHomeownerWizard } from "./mobile-homeowner-wizard";
 import type { WizardPrefill } from "@/lib/home/prefill";
+import { portalHeroSub } from "@/lib/home/portalPrice";
 import {
   useInViewOnce,
   useReducedMotion,
@@ -203,7 +204,7 @@ function NetCount() {
   return <tspan>{label}</tspan>;
 }
 
-export function MobileHomeowner({ prefill = null }: { prefill?: WizardPrefill | null }) {
+export function MobileHomeowner({ prefill = null, house = false }: { prefill?: WizardPrefill | null; house?: boolean }) {
   const rv = useReveal();
   useBandParallax("jfmh-net");
 
@@ -239,17 +240,16 @@ export function MobileHomeowner({ prefill = null }: { prefill?: WizardPrefill | 
             <div className="pill anim a1">
               Free — no account required
             </div>
+            {/* ONE PORTAL (2026-10-28, lib/home/portalPrice): the price and the project in one place. */}
             <h1 className="h1 anim a2">
-              Describe your project.
+              See your price.
               <br />
               Get <span className="inv">real</span> quotes.
             </h1>
-            <p className="h1-sub anim a3">
-              Your words become a contractor-ready scope, sent to a local pro on JobFlex. Free — no account needed. Your own home dashboard comes with your first project.
-            </p>
+            <p className="h1-sub anim a3">{portalHeroSub(house)}</p>
           </div>
 
-          <MobileHomeownerWizard uid="m0" prefill={prefill} />
+          <MobileHomeownerWizard uid="m0" prefill={prefill} house={house} />
 
           <div className="trust-row">
             <div className="tr">
@@ -262,7 +262,7 @@ export function MobileHomeowner({ prefill = null }: { prefill?: WizardPrefill | 
               <svg className="ic">
                 <use href="#jfmh-i-clock" />
               </svg>
-              <span>A written scope in minutes</span>
+              <span>A price range in about a minute</span>
             </div>
             <div className="tr">
               <svg className="ic">
@@ -558,10 +558,10 @@ export function MobileHomeowner({ prefill = null }: { prefill?: WizardPrefill | 
             Ready when you are.
           </p>
           <p className={rv.cls("ctaA", "cta-a")} ref={rv.ref("ctaA")}>
-            Describe your project in a minute — a local pro takes it from there, and your home dashboard comes with it.
+            Price it or describe it in a minute — a local pro takes it from there, and your home dashboard comes with it.
           </p>
           <a className={rv.cls("ctaBtn", "cta-btn")} ref={rv.ref("ctaBtn")} href="#jfmh-top">
-            Describe your project
+            Start your project
             <svg className="ic">
               <use href="#jfmh-i-arrow" />
             </svg>

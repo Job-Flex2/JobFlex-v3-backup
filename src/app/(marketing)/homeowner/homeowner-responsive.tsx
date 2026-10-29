@@ -68,7 +68,7 @@ const getSnapshot = () => window.matchMedia(HANDHELD).matches;
 // visitor on every viewport, which is a worse trade.
 const getServerSnapshot = () => false;
 
-export function HomeownerResponsive({ prefill = null }: { prefill?: WizardPrefill | null }) {
+export function HomeownerResponsive({ prefill = null, house = false }: { prefill?: WizardPrefill | null; house?: boolean }) {
   const isHandheld = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  return isHandheld ? <MobileHomeowner prefill={prefill} /> : <HomeownerContent prefill={prefill} />;
+  return isHandheld ? <MobileHomeowner prefill={prefill} house={house} /> : <HomeownerContent prefill={prefill} house={house} />;
 }

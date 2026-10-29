@@ -111,8 +111,9 @@ export default async function CostCityPage({ params }: { params: Promise<Params>
           <a className={s.jump} href="#calculator">
             Price your own job ↓
           </a>
-          {/* The live price for YOUR address (2026-10-27, /price): the roof reads itself from the sky; the others start at the row. */}
-          <a className={s.jump} href={trade.slug === "roof-replacement" ? `/price/roof?city=${encodeURIComponent(city.city)}&state=${encodeURIComponent(city.state)}` : "/price"} data-seo-cta="price">
+          {/* The live price for YOUR address (2026-10-27; in the homeowner portal since 2026-10-28): the roof reads itself
+              from the sky; the others start at the portal's box. */}
+          <a className={s.jump} href={trade.slug === "roof-replacement" ? `/homeowner/price/roof?city=${encodeURIComponent(city.city)}&state=${encodeURIComponent(city.state)}` : "/homeowner"} data-seo-cta="price">
             See the price for your address →
           </a>
         </section>

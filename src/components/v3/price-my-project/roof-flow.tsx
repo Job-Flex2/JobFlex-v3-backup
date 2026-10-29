@@ -1,5 +1,5 @@
 "use client";
-// THE ROOF FLOW (/price/roof, 2026-10-27): address → the three questions → the range → get quotes (or email me
+// THE ROOF FLOW (/homeowner/price/roof — was /price/roof — 2026-10-27): address → the three questions → the range → get quotes (or email me
 // this range). The flow owns the state; the screens draw it. The range is priced in the browser by the same pure
 // engine the server uses (lib/publicEstimate/roof); the Solar read comes once from the server, cached per address.
 // Design: docs/superpowers/specs/2026-10-27-home-portal-price-my-project-design.md.

@@ -14,7 +14,11 @@
 // its successor").
 //
 // THE ONE HOMEOWNER PAGE (owner, 2026-10-02). /homeowner is the homeowner
-// portal: the intake, the status link and the referral code all live here. The
+// portal: the intake, the status link and the referral code all live here.
+// Since 2026-10-28 the PRICE does too (lib/home/portalPrice: "one home portal —
+// the only place they pre-estimate and submit"): the box points at the
+// estimator the words describe, and the estimators run at
+// /homeowner/price/<trade>; the old /price addresses forward here. The
 // older surfaces — the classic form (plural address), the Blueprint portal
 // wizard (homeowner-blueprint) and the standalone handheld preview — were
 // deleted with their components; their addresses answer 404. What they had and this
@@ -43,18 +47,19 @@ import { loadWizardPrefill } from "@/lib/home/portal";
 import { projectStarter } from "@/lib/home/homeownerDoor";
 import { seoCityByPlace } from "@/lib/seo/cities";
 import { SEO_SOURCE_RE } from "@/lib/seo/links";
+import { houseOrgId } from "@/lib/publicEstimate/store";
 
 export const metadata: Metadata = {
-  title: "JobFlex Homeowner Portal — Describe your project, get real quotes",
+  title: "JobFlex Homeowner Portal — See your price, get real quotes",
   description:
-    "Describe your project in plain English. JobFlex turns it into a contractor-ready scope and sends it to a local pro on JobFlex — free, no account required.",
+    "See a price range for your house in about a minute, or describe any project in plain English. JobFlex sends it to a local pro on JobFlex — free, no account required.",
   alternates: { canonical: "/homeowner" },
   openGraph: {
     type: "website",
     url: "/homeowner",
     siteName: "JobFlex",
-    title: "JobFlex Homeowner Portal — Describe your project, get real quotes",
-    description: "Describe your project in plain English and JobFlex sends it to a local pro on JobFlex — free, no account required.",
+    title: "JobFlex Homeowner Portal — See your price, get real quotes",
+    description: "See a price range for your house in about a minute, or describe any project — JobFlex sends it to a local pro on JobFlex. Free, no account required.",
   },
 };
 
@@ -73,5 +78,8 @@ export default async function HomeownerLandingPage({ searchParams }: { searchPar
   const starter = !fromHome && typeof sp.project === "string" ? projectStarter(sp.project, place) : "";
   const base = fromHome ?? (starter ? { name: "", email: "", phone: "", address: "", zip: "", homeKey: "", planId: null, description: starter } : null);
   const prefill = base && source ? { ...base, source } : base;
-  return <HomeownerResponsive prefill={prefill} />;
+  // The house estimators on (lib/publicEstimate/store): deck, fence, heating & cooling and any project are priced
+  // in the portal too; off, the roof alone.
+  const house = !!(await houseOrgId());
+  return <HomeownerResponsive prefill={prefill} house={house} />;
 }
