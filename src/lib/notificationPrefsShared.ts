@@ -16,9 +16,11 @@ export type PrefKey =
   | "proposal-accepted"
   | "proposal-declined"
   | "payment-received"
+  | "financing"
   | "billing-problems"
   | "change-order"
   | "appointment-booked"
+  | "booking-online"
   | "appointment-moved"
   | "service-reminder"
   | "job-scheduled"
@@ -70,6 +72,9 @@ export const PREF_EVENTS: readonly PrefEventMeta[] = [
   { key: "proposal-accepted", name: "Proposal accepted", sub: "Signed and ready to schedule", emailAvailable: true, smsAvailable: true, seed: [true, true, true], audience: { office: true, sales: true }, example: "Sarah Mitchell accepted \"Standing-seam metal · 18412 92nd Ave NE\" — $27,926. Schedule it: jobflex.app/…" },
   { key: "proposal-declined", name: "Proposal declined", sub: "With the reason the client gave", emailAvailable: true, smsAvailable: true, seed: [true, true, false], audience: { office: false, sales: true }, example: "Sarah Mitchell declined \"Architectural shingles · 18412 92nd Ave NE\": \"Going with a lower bid.\"" },
   { key: "payment-received", name: "Payment received", sub: "A stage was paid — card, Square or recorded by hand", emailAvailable: true, smsAvailable: true, seed: [true, true, true], audience: { office: true, sales: false }, example: "Sarah Mitchell paid $8,378 on \"Standing-seam metal · 18412 92nd Ave NE\" — $19,548 still due." },
+  // Wisetack financing (2026-10-28, lib/financing): the contractor's application decided, a client approved or
+  // accepting a loan, Wisetack's payout. Text + bell; nothing mails it.
+  { key: "financing", name: "Financing", sub: "Wisetack decided your application, a client was approved or accepted a loan, Wisetack paid you", emailAvailable: false, smsAvailable: true, seed: [true, false, true], audience: { office: true }, example: "Sarah Mitchell was approved for $14,000 through Wisetack on \"Standing-seam metal · 18412 92nd Ave NE\" — the loan terms are next." },
   // JobFlex's own bill (owner, 2026-10-21): the company's plan payment did not go through. The Text cell gates the
   // owner's one or two texts per invoice (lib/billingProblemText). The Email cell governs only extra notices: the
   // dunning emails (lib/cardUpdate) always go, whatever it says. The in-app notice is the payment banner on every
@@ -77,6 +82,9 @@ export const PREF_EVENTS: readonly PrefEventMeta[] = [
   { key: "billing-problems", name: "Billing problems", sub: "Your JobFlex plan payment didn't go through — sent to the account owner; the payment emails always go", emailAvailable: true, smsAvailable: true, inAppAvailable: false, seed: [false, true, true], audience: { office: true }, example: "JobFlex: payment of $95 for Professional didn't go through (insufficient funds). Update your card: jobflex.app/dashboard/subscription" },
   { key: "change-order", name: "Change order answered", sub: "The client approved or declined it", emailAvailable: true, smsAvailable: true, seed: [true, true, true], audience: { office: true, sales: false }, example: "Sarah Mitchell approved change order #2 \"Skylight flashing\" ($640) on \"Standing-seam metal · 18412 92nd Ave NE\"." },
   { key: "appointment-booked", name: "Appointment booked", sub: "A visit goes on the calendar — by the team or online", emailAvailable: false, smsAvailable: true, seed: [true, false, true], audience: { office: true, sales: true }, example: "Booked: Roof inspection · Sarah Mitchell · Tue Oct 7, 9 AM–10 AM · 18412 92nd Ave NE · online." },
+  // Online booking (owner, 2026-10-28: "when somebody books online the contractor gets an email"): a customer
+  // booked on the company's booking page — the bell, and the Blueprint email (notify → notifyBookedOnline).
+  { key: "booking-online", name: "Booked online", sub: "A customer booked a visit on your booking page", emailAvailable: true, smsAvailable: false, seed: [true, true, false] },
   { key: "appointment-moved", name: "Appointment moved or cancelled", sub: "A visit changes day or time, or comes off the calendar", emailAvailable: false, smsAvailable: true, seed: [true, false, true], audience: { office: true, sales: true }, example: "Moved: Roof inspection · Sarah Mitchell — was Tue Oct 7, 9 AM, now Thu Oct 9, 1 PM." },
   // HVAC services (2026-10-18): the service desk's own reminders — one digest a day, a heads-up before plan
   // visits, the contractor's own reminders on their day (lib/serviceDeskBook). In the bell for everyone;
@@ -155,7 +163,7 @@ export type SmsGroupKey = "crew" | "sales" | "money";
 export const SMS_GROUPS: readonly { key: SmsGroupKey; label: string; sub: string; keys: readonly PrefKey[] }[] = [
   { key: "crew", label: "Crew on site", sub: "Started, back for another day, completed, photos and videos", keys: ["job-started", "job-completed", "job-photos", "worker-responded"] },
   { key: "sales", label: "Sales & leads", sub: "A new lead, a proposal accepted or declined", keys: ["lead-assigned", "proposal-accepted", "proposal-declined"] },
-  { key: "money", label: "Money", sub: "A payment, a change order answered", keys: ["payment-received", "change-order"] },
+  { key: "money", label: "Money", sub: "A payment, a change order answered, financing", keys: ["payment-received", "change-order", "financing"] },
 ];
 /** Which groups a member's stored matrix has on: a group is on when any of
  *  its texting events is (the seeds leave "proposal declined" off, and a
@@ -295,7 +303,8 @@ export function prefKeyForEvent(e: EventLike): PrefKey | null {
     case "SCHEDULED":
       return "job-scheduled";
     case "BOOKING_NEW":
-      return "appointment-booked";
+      // A visit the AI desk booked on a call stays an appointment; one booked on the page is an online booking.
+      return meta.includes('"channel":"ai-desk"') ? "appointment-booked" : "booking-online";
     case "BOOKING_MOVED":
     case "BOOKING_CANCELED":
       return "appointment-moved";

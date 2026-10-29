@@ -66,6 +66,7 @@ import {
 } from "@/actions/proposals";
 import { getInvoiceOptions, notifyPaymentReminder, sendInstallmentInvoice } from "@/actions/notify";
 import { markInstallmentPaid } from "@/actions/installments";
+import { sendFinancingLink } from "@/actions/financing";
 import { loadProposalBook } from "./proposals-actions";
 import {
   FILTERS,
@@ -229,6 +230,38 @@ function RowPay({ p, writing, onMarkPaid, onInvoice, onRemind }: {
             onClick={() => onRemind(next)}><Icon id="i-bell" />Remind</button>
         </div>
       ) : null}
+      <RowFinancing p={p} />
+    </div>
+  );
+}
+
+/** Wisetack financing (2026-10-28): where the client's loan stands, and Send financing link for the office. */
+function RowFinancing({ p }: { p: ProposalRow }) {
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState("");
+  const f = p.fin;
+  if (!f || (!f.line && !f.canSend)) return null;
+  async function send() {
+    setBusy(true);
+    setSaid("");
+    try {
+      const r = await sendFinancingLink(p.id, "auto");
+      setSaid(r.ok ? (r.via === "text" ? "Texted" : "Emailed") : r.error);
+    } catch {
+      setSaid("Couldn't send — try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className={styles.mPayActs} data-fin-row>
+      {f.line ? <span className={styles.mPayNote}><Icon id="i-bank" />{f.line}</span> : null}
+      {f.canSend ? (
+        <button className={styles.mPayAct} type="button" disabled={busy} onClick={() => void send()} data-fin-send>
+          <Icon id="i-send" />{busy ? "Sending…" : "Send financing link"}
+        </button>
+      ) : null}
+      {said ? <span className={styles.mPayNote} role="status">{said}</span> : null}
     </div>
   );
 }

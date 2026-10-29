@@ -23,6 +23,7 @@ import dynamic from "next/dynamic";
 import { deckingProduct, railType, treatedDecking, type RailTypeId } from "@/lib/deck/catalog";
 import { applyDeckPatch } from "@/lib/deck/checks";
 import { LEAD_CONSENT_TEXT } from "@/lib/leadConsent";
+import { PRO } from "@/lib/home/jobflexPro";
 import {
   DECK_LIMITS,
   LOWER_LIMITS,
@@ -288,6 +289,8 @@ export interface DeckClientDesignerProps {
 export function DeckClientDesigner(props: DeckClientDesignerProps) {
   const { token, shop, base, start, expired } = props;
   const shopName = shop.name || "your contractor";
+  // The house (the homeowner portal, /homeowner/price/deck, owner 2026-10-28): JobFlex passes the design on — a local JobFlex pro measures, quotes, builds.
+  const pro = props.website?.house ? PRO : shopName;
   const first = props.clientName.trim().split(/\s+/)[0] || "";
   const [design, setDesign] = React.useState<DeckDesign>(() => props.work ?? base);
   const dirty = React.useRef(false);
@@ -526,9 +529,9 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
   const send = async () => {
     if (props.website) {
       if (!name.trim()) { setSendError("Your name, please."); document.getElementById("client-name")?.focus(); return; }
-      if (phone.replace(/\D/g, "").length < 10) { setSendError(`A phone number ${shopName} can reach you at, please.`); return; }
+      if (phone.replace(/\D/g, "").length < 10) { setSendError(`A phone number ${pro} can reach you at, please.`); return; }
       if (props.website.house && !email.trim()) { setSendError("Your email, please — your request page and your dashboard are sent there."); return; }
-      if (!consent) { setSendError(props.website.house ? "Tick the box so a local pro may contact you." : `Tick the box so ${shopName} may contact you.`); return; }
+      if (!consent) { setSendError(props.website.house ? `Tick the box so ${PRO} may contact you.` : `Tick the box so ${shopName} may contact you.`); return; }
       setSending(true);
       setSendError(null);
       const res = await props.website.send({ design, note, name, phone, email, consent, company });
@@ -616,19 +619,24 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
   return (
     <main className={cx(s.page, "jf-blueprint")} data-deck-client>
       <div className={cx("content", s.content)}>
-        <header className={`${s.top} ${props.website ? s.topWeb : ""}`}>
-          <div className={`${s.brand} ${props.website ? s.brandWeb : ""}`}>
-            {shop.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element -- the shop's own logo, any host.
-              <img src={shop.logoUrl} alt={shopName} className={props.website ? s.logoWeb : s.logo} />
-            ) : (
-              <span className={s.mark} aria-hidden="true">{shopName.slice(0, 1).toUpperCase()}</span>
-            )}
-            <span>{shopName}</span>
-          </div>
+        <header className={`${s.top} ${props.website && !props.website.house ? s.topWeb : ""}`}>
+          {/* The house (2026-10-28): in the homeowner portal, under the portal's own bar — no second brand row. */}
+          {props.website?.house ? (
+            <span className={s.byJf}><b>Deck Studio</b></span>
+          ) : (
+            <div className={`${s.brand} ${props.website ? s.brandWeb : ""}`}>
+              {shop.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- the shop's own logo, any host.
+                <img src={shop.logoUrl} alt={shopName} className={props.website ? s.logoWeb : s.logo} />
+              ) : (
+                <span className={s.mark} aria-hidden="true">{shopName.slice(0, 1).toUpperCase()}</span>
+              )}
+              <span>{shopName}</span>
+            </div>
+          )}
           <div className={s.topRight}>
             {/* The shop's brand leads on its own website; JobFlex is the small mark under it (owner, 2026-10-28). */}
-            {props.website ? <span className={s.byJf} aria-label="Deck Studio by JobFlex"><b>Deck Studio</b> by JobFlex</span> : null}
+            {props.website && !props.website.house ? <span className={s.byJf} aria-label="Deck Studio by JobFlex"><b>Deck Studio</b> by JobFlex</span> : null}
             <span className={s.saveState} data-client-save={saveState} aria-live="polite">
               {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved ✓" : saveState === "failed" ? "Not saved — will retry" : "Saves as you go"}
             </span>
@@ -638,7 +646,7 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
         <div className={s.intro}>
           <h1 className={s.h1}>{first ? `${first}, design your ${hasRoof(design) && !withDeck ? design.structure : "deck"}` : "Design your deck"}</h1>
           <p className={s.lead}>
-            {props.website ? <>Design it here in 3D — the size, the stairs, the railing, the boards, a roof if you like. See the price at the end, and {shopName} sends the full quote.</> : start === "mine" ? <>This is the design {shopName} drew{props.address ? <> for <b>{props.address}</b></> : null}. Change anything you like — the size, the stairs, the railing, the boards — and press <b>Send</b> when it looks right.</> : <>Pick what you&apos;d like, set its size, stairs, railing and boards{props.address ? <> for <b>{props.address}</b></> : null}, and press <b>Send</b>. {shopName} checks it against the building code and sends you the price.</>}
+            {props.website ? <>Design it here in 3D — the size, the stairs, the railing, the boards, a roof if you like. See the price at the end, and {pro} sends the full quote.</> : start === "mine" ? <>This is the design {shopName} drew{props.address ? <> for <b>{props.address}</b></> : null}. Change anything you like — the size, the stairs, the railing, the boards — and press <b>Send</b> when it looks right.</> : <>Pick what you&apos;d like, set its size, stairs, railing and boards{props.address ? <> for <b>{props.address}</b></> : null}, and press <b>Send</b>. {shopName} checks it against the building code and sends you the price.</>}
           </p>
         </div>
 
@@ -708,7 +716,7 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
             {design.placement !== "detached" ? (
               <Section n={next()} id="step-house" title="Your house's back wall" sub={<>Build it from a photo of the wall, or pick its shape and how your house looks. Measuring it is optional — the deck fits itself around the corners you add.</>}>
                 <ClientHousePhoto token={token} design={design} patch={patch} />
-                <ClientHouse shape={design.shape} house={design.house} shopName={shopName} onChange={(n2) => change(applyDeckPatch(design, { ...(n2.house ? { house: n2.house } : {}), ...(n2.shape ? { shape: n2.shape } : {}) }))} />
+                <ClientHouse shape={design.shape} house={design.house} shopName={pro}onChange={(n2) => change(applyDeckPatch(design, { ...(n2.house ? { house: n2.house } : {}), ...(n2.shape ? { shape: n2.shape } : {}) }))} />
               </Section>
             ) : null}
 
@@ -755,7 +763,7 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
                 </div>
                 <label className={s.check}>
                   <input type="checkbox" checked={unsureHeight} onChange={(e) => setUnsureHeight(e.target.checked)} />
-                  <span>I&apos;m not sure — {shopName} will measure it</span>
+                  <span>I&apos;m not sure — {pro} will measure it</span>
                 </label>
               </Section>
             ) : null}
@@ -893,7 +901,7 @@ export function DeckClientDesigner(props: DeckClientDesignerProps) {
             ) : null}
 
             {props.website ? (
-              <Section n={next()} id="step-send" title="Your price, then the full quote" sub={`See the price for what you designed, then leave your details — ${shopName} sends the full, line-by-line quote.`}>
+              <Section n={next()} id="step-send" title="Your price, then the full quote" sub={`See the price for what you designed, then leave your details — ${pro} sends the full, line-by-line quote.`}>
                 <ul className={s.summary} data-client-summary>
                   {pickedLines(design).map((l) => (
                     <li key={l}>{l}</li>

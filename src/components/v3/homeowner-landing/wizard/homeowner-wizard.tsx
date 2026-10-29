@@ -70,6 +70,7 @@ import { browserTimeZone, type WizardPrefill } from "@/lib/home/prefill";
 import { prefersReducedMotion, referralCodeFromUrl, testKeyFromUrl } from "../use-homeowner-behavior";
 import { usePlaceholderCycle } from "./use-placeholder-cycle";
 import { attachmentsLine, useRequestAttachments } from "./use-request-attachments";
+import { PriceHere } from "@/components/v3/price-my-project/price-here";
 
 /** How long the thinking pane waits for the adaptive questions before going
  *  on with the static set. */
@@ -82,7 +83,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 
-export function HomeownerWizard({ uid, prefill = null }: { uid: string; prefill?: WizardPrefill | null }) {
+/** `house`: the house estimators are on (lib/publicEstimate/store houseOrgId) — deck, fence, heating & cooling and
+ *  any project are priced in the portal too, not only the roof. */
+export function HomeownerWizard({ uid, prefill = null, house = false }: { uid: string; prefill?: WizardPrefill | null; house?: boolean }) {
   /* donor `S` */
   const [step, setStep] = useState(0);
   const [desc, setDesc] = useState(prefill?.description ?? "");
@@ -450,10 +453,8 @@ export function HomeownerWizard({ uid, prefill = null }: { uid: string; prefill?
           wrapClassName="dictate" buttonClassName="mic" onClassName="on" noteClassName="dictate-note" />
       </div>
       {chips(true)}
-      {/* A number before the words (2026-10-27): the roof prices itself at /price. */}
-      <p className="price-first">
-        Want a price first? <a href="/price" data-cta="price">Price it in a minute →</a>
-      </p>
+      {/* ONE PORTAL (2026-10-28): the estimators right here, the one the words point at lit (lib/home/portalPrice). */}
+      <PriceHere desc={desc} house={house} />
       <div className="tools">
         <input
           type="file"

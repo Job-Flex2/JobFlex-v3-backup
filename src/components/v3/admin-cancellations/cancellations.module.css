@@ -11,8 +11,17 @@
 :global(.jf-blueprint .content) .filters { margin: 0 0 14px; }
 :global(.jf-blueprint .content) .pick { display: none; }
 
-/* date · company · plan · reasons · to Free */
-:global(.jf-blueprint .content) .cols { grid-template-columns: 74px minmax(0, 1.2fr) 110px minmax(0, 2.4fr) 120px; align-items: start; }
+/* date · company · plan · reasons · to Free · now */
+:global(.jf-blueprint .content) .cols { grid-template-columns: 74px minmax(0, 1.2fr) 110px minmax(0, 2.2fr) 120px 150px; align-items: start; }
+:global(.jf-blueprint .content) .sub { display: block; margin-top: 3px; font-size: 11.5px; font-weight: 500; color: var(--muted-light); white-space: normal; }
+
+/* Who came back: two tables side by side on a desk — company · a date · a date · now. */
+:global(.jf-blueprint .content) .backGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; margin-top: 18px; }
+:global(.jf-blueprint .content) .backTitle { margin: 0 0 8px; font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink); }
+:global(.jf-blueprint .content) .backCols { grid-template-columns: minmax(0, 1.6fr) 96px minmax(0, 1.2fr) 130px; align-items: start; }
+@media (max-width: 1100px) {
+  :global(.jf-blueprint .content) .backGrid { grid-template-columns: minmax(0, 1fr); }
+}
 :global(.jf-blueprint .content) .date { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink); }
 
 /* A reason is a plain flat label — no dot, no caps (DESIGN.md, filters and tags). */

@@ -31,6 +31,7 @@ import { buildSequence, cutList, stringerLayout, stringerView } from "@/lib/deck
 import { lateralDevices } from "@/lib/deck/permit";
 import { LEDGER_FASTENER_LABEL, RULE } from "@/lib/deck/codeTables";
 import { permitSheetList, crewSheetList, type PlanSheet } from "@/lib/deck/plans/sheets";
+import { PAPERS, fitOn, type Paper, type PaperKey } from "@/lib/deck/plans/paper";
 import { PlanSvg } from "./plan-svg";
 import s from "./plan-set.module.css";
 
@@ -68,6 +69,8 @@ export interface PlanSetProps {
   shop: PlanShop;
   project: PlanProject;
   set: "permit" | "crew";
+  /** The permit set's sheet size (lib/deck/plans/paper): 11 × 17 unless the department asks for more room. */
+  paper?: PaperKey;
   /** Sheets the caller draws itself (the site plan, with its own panel), by kind. */
   slots?: Partial<Record<PlanSheet["kind"], (sheet: PlanSheet, frame: (children: React.ReactNode, className?: string) => React.ReactNode) => React.ReactNode>>;
 }
@@ -76,6 +79,10 @@ export interface PlanSetProps {
    the server, and a server render of a 9-sheet set is weight the page does not need before it can print. */
 const noSubscribe = () => () => {};
 const useInBrowser = () => React.useSyncExternalStore(noSubscribe, () => true, () => false);
+
+/** The sheet the set is drawn on: every permit view fits its frame on it (fitOn). */
+const PaperCtx = React.createContext<Paper>(PAPERS.B);
+const usePaper = () => React.useContext(PaperCtx);
 
 export function PlanSet(props: PlanSetProps) {
   const inBrowser = useInBrowser();
@@ -89,23 +96,26 @@ function PlanSetSheets(props: PlanSetProps) {
   const scene = React.useMemo(() => deckScene(structure), [structure]);
   const list = React.useMemo(() => materialList(priceStructure(structure)), [structure]);
   const split = React.useMemo(() => splitCompliance(props.checks), [props.checks]);
-  const sheets = React.useMemo(() => (set === "crew" ? crewSheetList(structure) : permitSheetList(structure, { complianceMore: split[1].length > 0 })), [structure, set, split]);
+  const paper = PAPERS[props.paper ?? "B"];
+  const sheets = React.useMemo(() => (set === "crew" ? crewSheetList(structure) : permitSheetList(structure, { complianceMore: split[1].length > 0, paper: paper.key })), [structure, set, split, paper]);
   return (
-    <div className={s.set} data-plan-set={set}>
-      {sheets.map((sh, i) => (
-        <SheetOf key={sh.no} sheet={sh} index={i} sheets={sheets} m={m} scene={scene} list={list} split={split} {...props} />
-      ))}
-    </div>
+    <PaperCtx.Provider value={paper}>
+      <div className={s.set} data-plan-set={set} data-plan-paper={set === "crew" ? "A" : paper.key}>
+        {sheets.map((sh, i) => (
+          <SheetOf key={sh.no} sheet={sh} index={i} sheets={sheets} m={m} scene={scene} list={list} split={split} {...props} />
+        ))}
+      </div>
+    </PaperCtx.Provider>
   );
 }
 
 function SheetOf(p: PlanSetProps & { sheet: PlanSheet; index: number; sheets: PlanSheet[]; m: PlanModel | null; scene: DeckScene; list: MaterialList; split: [DeckCheck[], DeckCheck[]] }) {
   const { sheet, m, scene, list, split } = p;
   const frame = (children: React.ReactNode, className?: string) => (
-    <section className={`${s.sheet} ${sheet.paper === "B" ? s.b : s.a}`} data-plan-sheet={sheet.no} data-plan-kind={sheet.kind}>
+    <section className={`${s.sheet} ${sheet.paper === "A" ? s.a : sheet.paper === "C" ? s.c : sheet.paper === "D" ? s.d : s.b}`} data-plan-sheet={sheet.no} data-plan-kind={sheet.kind}>
       <div className={s.frame}>
         <div className={`${s.field} ${className ?? ""}`}>{children}</div>
-        {sheet.paper === "B" ? <TitleBlock {...p} /> : <CrewStrip {...p} />}
+        {sheet.paper !== "A" ? <TitleBlock {...p} /> : <CrewStrip {...p} />}
       </div>
     </section>
   );
@@ -204,7 +214,7 @@ function TitleBlock({ sheet, sheets, index, shop, project }: PlanSetProps & { sh
         <div className={s.tbOf}>Sheet {index + 1} of {sheets.length}</div>
       </div>
       <div className={s.tbFine}>
-        Prescriptive deck design to the <b>IRC R507</b> deck provisions and the AWC <b>DCA 6</b> tables as adopted, drawn from the contractor&apos;s design. The building department&apos;s review governs. Do not scale the drawings; dimensions govern.
+        Prescriptive deck design to the <b>{project.code} R507</b> deck provisions and the AWC <b>DCA 6</b> tables as adopted, drawn from the contractor&apos;s design. The building department&apos;s review governs. Do not scale the drawings; dimensions govern.
       </div>
     </aside>
   );
@@ -249,7 +259,8 @@ function ViewBox({ view, no, sheetNo, style, note }: { view: View; no: number; s
 
 /* ── S-101 · the foundation plan ─────────────────────────────────────── */
 function FoundationSheet({ m }: { m: PlanModel }) {
-  const view = React.useMemo(() => fitView((sc) => foundationPlan(m, sc, {}), 8.9, 9.45), [m]);
+  const paper = usePaper();
+  const view = React.useMemo(() => fitOn(paper, (sc) => foundationPlan(m, sc, {}), 8.9, 9.45), [m, paper]);
   const d = m.s.design;
   const worst = m.bearing.reduce((a, b) => Math.max(a, b.ratio), 0);
   return (
@@ -362,9 +373,10 @@ export const DETAIL_NO = { ledger: 1, lateral: 2, post: 3, guard: 4, pattern: 5,
 const sectionX = (m: PlanModel) => (m.cols.length ? m.cols[Math.floor((m.cols.length - 1) / 2)].at : m.W / 2);
 
 function FramingSheet({ m }: { m: PlanModel }) {
+  const paper = usePaper();
   const view = React.useMemo(
-    () => fitView((sc) => framingPlan(m, sc, { ledger: m.attached ? DETAIL_NO.ledger : undefined, lateral: m.attached ? DETAIL_NO.lateral : undefined, post: DETAIL_NO.post, guard: m.s.rails.on ? DETAIL_NO.guard : undefined, section: 1, stair: 2, sectionX: sectionX(m) }), 8.9, 9.45),
-    [m],
+    () => fitOn(paper, (sc) => framingPlan(m, sc, { ledger: m.attached ? DETAIL_NO.ledger : undefined, lateral: m.attached ? DETAIL_NO.lateral : undefined, post: DETAIL_NO.post, guard: m.s.rails.on ? DETAIL_NO.guard : undefined, section: 1, stair: 2, sectionX: sectionX(m) }), 8.9, 9.45),
+    [m, paper],
   );
   const f = m.f;
   const d = m.s.design;
@@ -446,9 +458,10 @@ function FramingSheet({ m }: { m: PlanModel }) {
 
 /* ── S-201 · elevations ──────────────────────────────────────────────── */
 function ElevationsSheet({ m, scene }: { m: PlanModel; scene: DeckScene }) {
+  const paper = usePaper();
   const side = m.s.stairs.some((st) => st.design.side === "left") ? "right" : "left";
-  const front = React.useMemo(() => fitView((sc) => elevationView(m, scene, "front", sc), 12.9, 4.15), [m, scene]);
-  const other = React.useMemo(() => fitView((sc) => elevationView(m, scene, side, sc), 12.9, 4.15), [m, scene, side]);
+  const front = React.useMemo(() => fitOn(paper, (sc) => elevationView(m, scene, "front", sc), 12.9, 4.15), [m, scene, paper]);
+  const other = React.useMemo(() => fitOn(paper, (sc) => elevationView(m, scene, side, sc), 12.9, 4.15), [m, scene, side, paper]);
   return (
     <>
       <ViewBox view={front} no={1} sheetNo="S-201" note={ELEVATION_NAME.front === front.title ? undefined : undefined} />
@@ -459,9 +472,10 @@ function ElevationsSheet({ m, scene }: { m: PlanModel; scene: DeckScene }) {
 
 /* ── S-301 · the building section and the stairs ─────────────────────── */
 function SectionsSheet({ m, scene }: { m: PlanModel; scene: DeckScene }) {
-  const section = React.useMemo(() => fitView((sc) => sectionView(m, scene, sectionX(m), sc), 8.0, 8.9, 1 / 12), [m, scene]);
+  const paper = usePaper();
+  const section = React.useMemo(() => fitOn(paper, (sc) => sectionView(m, scene, sectionX(m), sc), 8.0, 8.9, 1 / 12), [m, scene, paper]);
   const flights = m.s.stairs.filter((st) => st.level === "upper" && st.kind === "flight" && st.risers > 0);
-  const stairViews = React.useMemo(() => flights.slice(0, 2).map((st, i) => fitView((sc) => stairSection(m, st, i + 1, sc), 5.15, flights.length > 1 ? 3.9 : 6.6, 1 / 12)), [m, flights]);
+  const stairViews = React.useMemo(() => flights.slice(0, 2).map((st, i) => fitOn(paper, (sc) => stairSection(m, st, i + 1, sc), 5.15, flights.length > 1 ? 3.9 : 6.6, 1 / 12)), [m, flights, paper]);
   return (
     <>
       <ViewBox view={section} no={1} sheetNo="S-301" note={`Cut on grid ${m.cols[Math.floor((m.cols.length - 1) / 2)]?.label ?? ""}, looking along the house`} />
@@ -512,7 +526,8 @@ function DetailsSheet({ m }: { m: PlanModel }) {
   );
 }
 function DetailCell({ dt, w }: { dt: PlanDetail; w: number }) {
-  const view = React.useMemo(() => fitView(dt.build, w, 3.3, 1.5 / 12), [dt, w]);
+  const paper = usePaper();
+  const view = React.useMemo(() => fitOn(paper, dt.build, w, 3.3, 1.5 / 12), [dt, w, paper]);
   const no = DETAIL_NO[dt.key as keyof typeof DETAIL_NO] ?? 0;
   return (
     <div className={s.detail} data-plan-detail={dt.key}>
@@ -573,6 +588,7 @@ function IsoPicture({ scene, structure, yawDeg, skip, label, className }: { scen
 }
 
 function CoverSheet(p: PlanSetProps & { sheets: PlanSheet[]; m: PlanModel | null; scene: DeckScene }) {
+  const paper = usePaper();
   const { structure: st, project, shop, checks, sheets, m, scene, criteria } = p;
   const d = st.design;
   const f = st.frame;
@@ -581,6 +597,10 @@ function CoverSheet(p: PlanSetProps & { sheets: PlanSheet[]; m: PlanModel | null
   const worstFooting = m ? m.bearing.reduce((a, b) => Math.max(a, b.ratio), 0) : 0;
   const rows: Array<[string, string]> = [];
   rows.push(["Scope", `New ${structureWords(d).toLowerCase()}`]);
+  // What a California cover sheet is checked for (Sacramento County PR-11, 2026-10-28) and most offices read the same way.
+  rows.push(["Occupancy · type", "R-3 dwelling, accessory to it (U) · Type V-B wood frame"]);
+  rows.push(["Fire sprinklers", "None — an open deck needs none"]);
+  if (st.code.state === "CA") rows.push(["Fire hazard zone", "Confirm the lot on CAL FIRE's Fire Hazard Severity Zone map; in a zone, decking and framing per the 2025 CWUIC / CRC R337"]);
   if (f) {
     rows.push(["Deck area", `${Math.round(f.areaSqFt)} sq ft`]);
     rows.push(["Walking surface", `${ftInFrac(f.surfaceIn, 8)} above grade`]);
@@ -622,7 +642,7 @@ function CoverSheet(p: PlanSetProps & { sheets: PlanSheet[]; m: PlanModel | null
             <div className={s.coverPicNote}>The framing under the boards.</div>
           </div>
           <div style={{ minWidth: 0 }}>
-            <div className={s.h}>Sheet index<span>{sheets.length} sheets · 11 × 17</span></div>
+            <div className={s.h}>Sheet index<span>{sheets.length} sheets · {paper.name}</span></div>
             <table className={s.t}>
               <tbody>
                 {sheets.map((x) => (

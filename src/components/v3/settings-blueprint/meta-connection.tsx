@@ -69,6 +69,9 @@ export function MetaConnection({ data, mobile = false }: { data: MetaData; mobil
   const manualNotice = !data.connected && !message && query.get("meta") === "no_pages";
   const status = data.connected ? "Connected" : data.comingSoon ? "Coming soon" : hasPages ? "Choose a Page" : "Not connected";
   const feedback = message || (!data.connected ? notices[query.get("meta") || ""] : "");
+  // Said where the click happened (owner, 2026-10-28: "when I click on it nothing happens" — a failed connect only
+  // showed a grey line at the bottom of the card): right under the button, red when it failed.
+  const feedbackLine = feedback && !manualNotice ? <p role={error ? "alert" : "status"} aria-live="polite" className={error ? styles.error : styles.notice}>{feedback}</p> : null;
 
   async function choose() {
     if (!pageChoice || busy) return;
@@ -147,18 +150,19 @@ export function MetaConnection({ data, mobile = false }: { data: MetaData; mobil
         </> : <>
           <div className={styles.intro}>
             <h3>{hasPages ? "Choose a Page" : "Connect your leads"}</h3>
-            <p>{hasPages ? "Connect the Page whose leads belong in this workspace." : "Bring Facebook and Instagram form submissions into Leads."}</p>
+            <p>{hasPages ? "Pick the Facebook Page whose lead forms should come into Leads in this workspace." : "Bring Facebook and Instagram form submissions into Leads."}</p>
           </div>
           {hasPages ? <div className={styles.choice}>
             <div className={styles.field}>
               <label htmlFor={mobile ? "meta-page-mobile" : "meta-page-desktop"}>Facebook Page</label>
               <MetaPagePicker id={mobile ? "meta-page-mobile" : "meta-page-desktop"} pages={data.pages} value={pageChoice} disabled={busy || !data.canManage} onChange={setSelected} />
             </div>
-            <button type="button" className={primary} disabled={!pageChoice || busy || !data.canManage || data.comingSoon} onClick={() => void choose()}><Link2 size={18} aria-hidden="true" />{busy ? "Connecting…" : "Connect Page"}</button>
+            <button type="button" className={primary} disabled={!pageChoice || busy || !data.canManage || data.comingSoon} onClick={() => void choose()}><Link2 size={18} aria-hidden="true" />{busy ? "Connecting…" : "Connect leads"}</button>
           </div> : <div className={styles.connectAction}>
             <button type="button" className={primary} disabled={busy || data.comingSoon || !data.canManage} onClick={() => { window.location.assign("/api/integrations/meta/connect"); }}><Link2 size={18} aria-hidden="true" />{data.comingSoon ? "Coming soon" : "Connect Meta Business"}</button>
             <p>Sign in to Facebook, then choose your Page.</p>
           </div>}
+          {feedbackLine}
           {hasPages && <div className={styles.actions}>
             <button type="button" className={styles.textButton} disabled={busy || data.comingSoon || !data.canManage} onClick={() => { window.location.assign("/api/integrations/meta/connect"); }}>Use another Facebook account<ArrowUpRight size={16} aria-hidden="true" /></button>
             <button type="button" className={styles.textButton} disabled={busy || !data.canManage} onClick={() => void disconnect()}>Cancel connection</button>
@@ -177,7 +181,7 @@ export function MetaConnection({ data, mobile = false }: { data: MetaData; mobil
           </details>}
         </>}
         {!data.canManage && <p className={styles.notice}>Only workspace owners and managers can manage this connection.</p>}
-        {feedback && !manualNotice && <p role={error ? "alert" : "status"} aria-live="polite" className={error ? styles.error : styles.notice}>{feedback}</p>}
+        {data.connected && feedbackLine}
       </div>
       <footer className={styles.footer}>
         <details className={styles.details}>

@@ -25,6 +25,7 @@ import type { TrialExtensionOffer } from "@/lib/trialExtension";
 
 /** Every sprite symbol id used by the settings page. */
 import type { PaymentConnectionStatusView } from '@/lib/payments/connections';
+import type { OrgFinancing, ReadinessItem } from '@/lib/financing/state';
 import type { NotificationPrefs, PrefKey } from '@/lib/notificationPrefsShared';
 import type { SmsRegistrationView } from '@/lib/sms/registrationShared';
 import type { CompanyFacts, DeskProfile } from '@/lib/aiDesk/profile';
@@ -567,7 +568,7 @@ export const BILLING_CONTACT_LABELS = { billingEmail: 'Billing email' } as const
 /* Integrations pane — subtabs                                         */
 /* ------------------------------------------------------------------ */
 
-export type SubTabKey = 'gmail' | 'meta' | 'stripe' | 'square' | 'stax';
+export type SubTabKey = 'gmail' | 'meta' | 'stripe' | 'square' | 'stax' | 'financing';
 
 export interface SubTab {
   readonly key: SubTabKey;
@@ -608,8 +609,12 @@ export const DEFAULT_SUBTAB: SubTabKey = 'stripe';
 /* DESKTOP SPLIT (owner, 2026-09-26): the three payment processors moved from
    Integrations into the Payments pane; Integrations keeps Gmail and Meta. The
    handheld build still reads integrationSubTabs() above, unchanged. */
-export const PAYMENT_SUB_KEYS: ReadonlySet<SubTabKey> = new Set<SubTabKey>(['stripe', 'square', 'stax']);
+export const PAYMENT_SUB_KEYS: ReadonlySet<SubTabKey> = new Set<SubTabKey>(['stripe', 'square', 'stax', 'financing']);
 export const PAYMENT_SUBTABS: readonly SubTab[] = INTEGRATION_SUBTABS.filter((t) => PAYMENT_SUB_KEYS.has(t.key));
+/** The Payments strip: the three processors, and Financing (Wisetack, 2026-10-28) once JobFlex lets the account in. */
+export function paymentSubTabs(show: { financing: boolean }): readonly SubTab[] {
+  return show.financing ? [...PAYMENT_SUBTABS, { key: 'financing', label: 'Financing' }] : PAYMENT_SUBTABS;
+}
 export function connectionSubTabs(show: { gmail: boolean }): readonly SubTab[] {
   return integrationSubTabs(show).filter((t) => !PAYMENT_SUB_KEYS.has(t.key));
 }
@@ -761,6 +766,7 @@ export const NOTIFICATION_ICONS: Record<PrefKey, IconName> = {
   'proposal-accepted': 'i-check',
   'proposal-declined': 'i-x',
   'payment-received': 'i-bank',
+  financing: 'i-bank',
   'billing-problems': 'i-card',
   'change-order': 'i-pen',
   'job-scheduled': 'i-cal',
@@ -772,6 +778,7 @@ export const NOTIFICATION_ICONS: Record<PrefKey, IconName> = {
   'review-received': 'i-thumb',
   'trade-reply': 'i-board',
   'appointment-booked': 'i-cal',
+  'booking-online': 'i-cal',
   'appointment-moved': 'i-clock',
   'service-reminder': 'i-check',
   // Text-only crew events (never in the matrix) — listed so the map is total.
@@ -1348,6 +1355,17 @@ export interface PaymentsData {
   receiptsOnPayment: boolean;
   /** PLATFORM_FEE_BPS / 100. */
   platformFeePct: number;
+  /** Wisetack financing (lib/financing) — null while JobFlex's switch keeps this account out or Wisetack is not connected. */
+  financing: FinancingSettingsData | null;
+}
+
+export interface FinancingSettingsData {
+  rec: OrgFinancing;
+  readiness: { items: ReadinessItem[]; ready: number; total: number };
+  /** Owner / manager — the only ones who apply or change the default. */
+  canManage: boolean;
+  /** The AI desk's financing answer: the Wisetack line ("ours"), the contractor's own ("theirs"), none yet. */
+  deskAnswer: 'ours' | 'theirs' | 'none';
 }
 
 export interface BillingData {
@@ -1538,6 +1556,8 @@ export interface OAuthNotice {
   gmail?: string;
   stripe?: string;
   square?: string;
+  /** "back" — returned from Wisetack's application page. */
+  financing?: string;
 }
 
 /** One line per outcome of the Gmail round trip, in the user's words. */

@@ -16,7 +16,9 @@ import { recordApiSpend } from "@/lib/apiSpend";
 import { unitCents } from "@/lib/paidApiCosts";
 import { roofGuideRange } from "@/lib/publicEstimate/guide";
 import { cacheFresh, cacheable, houseOrgId, inUs, pubRoofKey, readPubRoof, writePubRoof, type PubRoofCache } from "@/lib/publicEstimate/store";
-import { disclaimerFor, roofFactsFromSize, roofFactsFromSolar, roofRange, type MaterialId, type RoofAnswers } from "@/lib/publicEstimate/roof";
+import { disclaimerFor, roofFactsFromSize, roofFactsFromSolar, roofRange, type HomeSize, type MaterialId, type RoofAnswers } from "@/lib/publicEstimate/roof";
+import { lookupSiteFacts } from "@/lib/hvac/siteLookup";
+import { lookupPropertyBoundary } from "@/lib/fence/boundaryLookup";
 import { estimateShort, estimateWords, leadEstimateFrom, planNotesFor, type RoofLeadEstimate } from "@/lib/leadCenter/estimate";
 import { buildPriceRangeEmail } from "@/lib/email/build/platform";
 import { renderEmail } from "@/lib/email/renderEmail";
@@ -55,6 +57,8 @@ export type PublicRoofReadResult =
       cityWords: string | null;
       guide: { low: number; high: number; cityWords: string } | null;
       cached: boolean;
+      /** No aerial roof: the home's size from the house lookup — the range is priced from it, nothing asked. */
+      size: HomeSize | null;
     }
   | { ok: false; error: string };
 
@@ -98,26 +102,64 @@ async function readInner(raw: unknown, caller: PublicCaller): Promise<PublicRoof
   const now = new Date();
   const cached = await readPubRoof(key);
   if (cacheFresh(cached, now)) {
-    return { ok: true, solar: cached!.solar, noRoofReason: cached!.solar ? null : NO_ROOF, cityFactor, cityWords, guide, cached: true };
+    return { ok: true, solar: cached!.solar, noRoofReason: cached!.solar || cached!.size ? null : NO_ROOF, cityFactor, cityWords, guide, cached: true, size: cached!.size ?? null };
   }
-  if (!isSolarEnabled()) return { ok: true, solar: null, noRoofReason: NO_ROOF, cityFactor, cityWords, guide, cached: false };
+  if (!isSolarEnabled()) {
+    const size = await homeSizeAt(input);
+    return { ok: true, solar: null, noRoofReason: size ? null : NO_ROOF, cityFactor, cityWords, guide, cached: false, size };
+  }
 
+  // HIGH imagery first; where Google has none (or none the roof math takes), MEDIUM — many US homes have nothing
+  // better, and a homeowner's rough range does not need the contractor's precision (2026-10-28).
   let row: PubRoofCache | null = null;
   let outcome: "ok" | "timeout" | "no-coverage" | "config" | "error" = "ok";
-  try {
-    const insights = await getBuildingInsights(input.lat, input.lng);
-    const est = estimateSolarRoof(insights, { lat: input.lat, lng: input.lng }, now);
-    row = { v: 1, at: now.toISOString(), solar: est.ok ? est.estimate : null, error: est.ok ? null : est.error };
-  } catch (err) {
-    outcome = err instanceof SolarUnavailableError ? err.kind : "error";
-    row = { v: 1, at: now.toISOString(), solar: null, error: (err as Error)?.message?.slice(0, 300) ?? "solar failed" };
+  let calls = 0;
+  for (const quality of ["HIGH", "MEDIUM"] as const) {
+    outcome = "ok";
+    calls += 1;
+    try {
+      const insights = await getBuildingInsights(input.lat, input.lng, quality);
+      const est = estimateSolarRoof(insights, { lat: input.lat, lng: input.lng }, now, { minQuality: "MEDIUM" });
+      row = { v: 2, at: now.toISOString(), solar: est.ok ? est.estimate : null, error: est.ok ? null : est.error };
+      // Google answered: the roof math has what it will get — a second, lower-quality call would not change it.
+      break;
+    } catch (err) {
+      outcome = err instanceof SolarUnavailableError ? err.kind : "error";
+      row = { v: 2, at: now.toISOString(), solar: null, error: (err as Error)?.message?.slice(0, 300) ?? "solar failed" };
+      // Only "no high-quality data here" is worth asking again at MEDIUM; a bad key or a timeout is not.
+      if (outcome !== "no-coverage") break;
+    }
   }
-  // The call was made whatever it answered: filed under the house org when one is named.
+  // Every call was made whatever it answered: filed under the house org when there is one.
   const house = await houseOrgId();
-  if (house) await recordApiSpend(house, [{ service: "google-solar", op: "buildingInsights", calls: 1, cents: unitCents("google-solar", "buildingInsights") }], now);
-  if (cacheable(outcome)) await writePubRoof(key, row);
+  if (house) await recordApiSpend(house, [{ service: "google-solar", op: "buildingInsights", calls, cents: calls * unitCents("google-solar", "buildingInsights") }], now);
+  // Why a read came back empty, in the server log: the key, coverage, or the roof math.
+  if (!row?.solar) console.warn("[price] roof read empty:", outcome, row?.error ?? "", key);
+  // No aerial roof: the home's size worked out from the house lookup — the homeowner is never asked for square feet
+  // they do not know (owner, 2026-10-28). Kept with the read.
+  const size = row?.solar ? null : await homeSizeAt(input);
+  if (row && cacheable(outcome)) await writePubRoof(key, { ...row, size });
   if (caller.kind === "site") console.info("[price] site read", caller.orgSlug, key);
-  return { ok: true, solar: row.solar, noRoofReason: row.solar ? null : NO_ROOF, cityFactor, cityWords, guide, cached: false };
+  const solar = row?.solar ?? null;
+  return { ok: true, solar, noRoofReason: solar || size ? null : NO_ROOF, cityFactor, cityWords, guide, cached: false, size };
+}
+
+/** The home's size when the sky can't read the roof — the HVAC estimator's house lookup (lib/hvac/siteLookup: the
+ *  county record's living area and storeys, the building's outline at the pin via the fence estimator's lot lookup),
+ *  filed under the house org. Nothing found, or no house org: null, and the homeowner is asked as a last resort. */
+async function homeSizeAt(input: PublicRoofReadInput): Promise<HomeSize | null> {
+  const house = await houseOrgId();
+  if (!house) return null;
+  const address = [input.address, input.city, [input.state, input.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  const looked = await lookupSiteFacts({ address, state: input.state, lat: input.lat, lng: input.lng }, house, { boundary: lookupPropertyBoundary }).catch((err: unknown) => {
+    console.warn("[price] house lookup failed:", err instanceof Error ? err.message : err);
+    return null;
+  });
+  if (!looked || !looked.ok) return null;
+  const f = looked.facts;
+  if (!f.footprintSqft && !f.livingSqft) return null;
+  const source = f.footprintSqft ? (f.sources.footprint ?? "the building's outline") : (f.sources.living ?? "the county record");
+  return { footprintSqft: f.footprintSqft ?? null, livingSqft: f.livingSqft ?? null, storeys: f.storeys ?? null, source };
 }
 
 // ── The submits ──────────────────────────────────────────────────────────────
@@ -153,6 +195,8 @@ const leadSchema = siteSchema.merge(pricedSchema).extend({
   /** A saved range picked up from the dashboard or its email: the plan becomes this request (lib/home/portal). */
   homeKey: z.string().max(200).optional(),
   planId: z.string().max(60).optional(),
+  /** The homeowner's own words to the pro (2026-10-28) — what they wrote in the portal's box, or here. */
+  note: z.string().trim().max(1000).optional(),
 });
 const emailSchema = siteSchema.merge(pricedSchema).extend({
   email: z.string().trim().email().max(200),
@@ -214,7 +258,7 @@ async function sendRangeEmail(to: string, name: string | null, site: { address: 
   }
 }
 
-/** "Get quotes from local pros": the range becomes a Lead Center lead that carries the whole estimate. */
+/** "Get quotes from local JobFlex pros": the range becomes a Lead Center lead that carries the whole estimate. */
 export async function publicRoofLead(raw: unknown): Promise<PublicRoofLeadResult> {
   try {
     const input = leadSchema.parse(raw);
@@ -237,7 +281,7 @@ export async function publicRoofLead(raw: unknown): Promise<PublicRoofLeadResult
         state: input.state,
         zip: input.zip,
         projectType: "roofing",
-        description: words,
+        description: input.note ? `${words}\n\nIn their words: ${input.note}` : words,
         // Pre-written and over 20 characters: the intake keeps it as the scope and skips the scope writer.
         scope: words,
       },
@@ -245,12 +289,12 @@ export async function publicRoofLead(raw: unknown): Promise<PublicRoofLeadResult
         isTest: false,
         timezone: input.timezone ?? null,
         source: "price:roof",
-        consent: { text: LEAD_CONSENT_TEXT, at: new Date(), ip: ip === "local" || ip === "unknown" ? null : ip, page: input.page?.startsWith("/") ? input.page : "/price/roof" },
+        consent: { text: LEAD_CONSENT_TEXT, at: new Date(), ip: ip === "local" || ip === "unknown" ? null : ip, page: input.page?.startsWith("/") ? input.page : "/homeowner/price/roof" },
         estimate,
         homeKey: input.homeKey ?? null,
         planId: input.planId ?? null,
         // They priced a roof: the trade is theirs, not a model's guess; the pin is the one they confirmed.
-        known: { trade: { trade: "Roofing", confidence: 1, reason: "the homeowner priced a roof on /price" }, lat: input.lat, lng: input.lng },
+        known: { trade: { trade: "Roofing", confidence: 1, reason: "the homeowner priced a roof in the homeowner portal" }, lat: input.lat, lng: input.lng },
       },
     );
     if (input.emailRange !== false) {
@@ -303,7 +347,7 @@ export async function publicRoofEmail(raw: unknown): Promise<PublicRoofEmailResu
       select: { id: true },
     });
     const base = await appBaseUrl();
-    await sendRangeEmail(input.email, input.name?.trim() || null, input, estimate, { url: `${base}/price/roof?home=${encodeURIComponent(home.accessToken)}&plan=${encodeURIComponent(plan.id)}`, label: "Get quotes from local pros" }, await homeUrl(home.accessToken));
+    await sendRangeEmail(input.email, input.name?.trim() || null, input, estimate, { url: `${base}/homeowner/price/roof?home=${encodeURIComponent(home.accessToken)}&plan=${encodeURIComponent(plan.id)}`, label: "Get quotes from local JobFlex pros" }, await homeUrl(home.accessToken));
     return { ok: true, homePath: isNew ? homePath(home.accessToken) : null, planId: plan.id };
   } catch (err) {
     const e = err as { name?: string; retryAfterMs?: number };

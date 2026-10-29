@@ -7,6 +7,7 @@ import * as React from "react";
 import {
   MATERIALS,
   budgetWords,
+  homeSqftFromSize,
   materialWords,
   disclaimerFor,
   moneyRange,
@@ -23,12 +24,27 @@ import s from "./price.module.css";
 
 export type Priced = { range: RoofRange; answers: RoofAnswers; budgetCents: number | null; homeSqft: number | null };
 
+/** The home's size the range is priced from when the sky has no roof: what the homeowner typed, else what the house
+ *  lookup worked out (the outline × the floors they tapped, or the county's living area — lib/publicEstimate/roof). */
+export function homeSqftFor(read: RoofRead, answers: RoofAnswers, typed: number | null): number | null {
+  return typed ?? homeSqftFromSize(read.size, answers.storeys);
+}
+
 export function priceRange(read: RoofRead, answers: RoofAnswers, site: Site, homeSqft: number | null): RoofRange | null {
   const city = read.cityWords ? { factor: read.cityFactor, words: read.cityWords } : null;
   if (read.solar) return roofRange(roofFactsFromSolar(read.solar, answers, site.state), answers, city, "solar");
-  if (homeSqft && homeSqft >= 200) return roofRange(roofFactsFromSize(homeSqft, answers, site.state), answers, city, "size");
+  const sqft = homeSqftFor(read, answers, homeSqft);
+  if (sqft && sqft >= 200) return roofRange(roofFactsFromSize(sqft, answers, site.state), answers, city, "size");
   return null;
 }
+
+/** "Not sure? Tap the closest" — the last resort, when neither the sky nor the records know the house. */
+const SIZE_PICKS = [
+  { label: "Small", sqft: 1200 },
+  { label: "Medium", sqft: 1800 },
+  { label: "Large", sqft: 2600 },
+  { label: "Very large", sqft: 3600 },
+] as const;
 
 const usd = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
 
@@ -68,16 +84,26 @@ export function RangeView({
   );
   const budgetCents = budgetText.trim() === "" ? null : Math.round(Number(budgetText.replace(/[^0-9.]/g, "")) * 100) || null;
   const set = <K extends keyof RoofAnswers>(k: K, v: RoofAnswers[K]) => onAnswers({ ...answers, [k]: v });
-  const priced = (): Priced | null => (range ? { range, answers, budgetCents, homeSqft } : null);
+  // The size the server prices the lead from again: the one this range used, typed or worked out.
+  const priced = (): Priced | null => (range ? { range, answers, budgetCents, homeSqft: read.solar ? homeSqft : homeSqftFor(read, answers, homeSqft) } : null);
+  const autoSized = !read.solar && homeSqftFromSize(read.size, answers.storeys) !== null;
   const other = compareWith ? alternatives.find((a) => a.material === compareWith) ?? null : null;
   const showTypical = answers.material === "architectural" && read.guide;
 
   return (
     <div className={s.panel} data-price-step="range">
-      {!read.solar ? (
+      {!read.solar && !autoSized ? (
+        // The last resort: neither the sky nor the records know the house. A tap on the closest size, or a number.
         <div className={s.field} data-price-fallback>
-          <p className={s.qT}>{read.noRoofReason ?? "We couldn’t read your roof from the sky."}</p>
-          <label className={s.label} htmlFor="price-sqft">About how big is the home, in square feet?</label>
+          <p className={s.qT}>How big is the home?</p>
+          <div className={s.chipSet} data-price-size-picks>
+            {SIZE_PICKS.map((p) => (
+              <Chip key={p.label} name={`size-${p.sqft}`} on={homeSqft === p.sqft} onClick={() => setHomeSqft(p.sqft)}>
+                {p.label} · about {p.sqft.toLocaleString("en-US")} sq ft
+              </Chip>
+            ))}
+          </div>
+          <label className={s.label} htmlFor="price-sqft">Or type it, if you know it</label>
           <input id="price-sqft" className={s.input} inputMode="numeric" placeholder="2,400" onChange={(e) => setHomeSqft(Number(e.target.value.replace(/[^0-9]/g, "")) || null)} data-price-sqft />
         </div>
       ) : null}
@@ -88,7 +114,7 @@ export function RangeView({
             <p className={s.rangeNum} data-price-number>{moneyRange(range)}</p>
             <p className={s.rangeBasis} data-price-basis>
               {materialWords(answers.material)} · about {Math.round(range.squares * 100).toLocaleString("en-US")} sq ft of roof
-              {range.basis === "solar" ? ` · ${range.pitchLabel} pitch · read from aerial data` : " · from your home’s size"}
+              {range.basis === "solar" ? ` · ${range.pitchLabel} pitch · read from aerial data` : autoSized && homeSqft === null ? " · worked out from your home’s outline and records" : " · from your home’s size"}
             </p>
           </div>
           {showTypical && read.guide ? (
@@ -173,7 +199,7 @@ export function RangeView({
 
           <div className={s.acts}>
             <button type="button" className={s.btn} onClick={() => { const p = priced(); if (p) onQuotes(p); }} data-price-quotes>
-              Get quotes from local pros
+              Get quotes from local JobFlex pros
             </button>
             <button type="button" className={`${s.btn} ${s.btnGhost}`} onClick={() => { const p = priced(); if (p) onEmail(p); }} data-price-email>
               Email me this range

@@ -28,7 +28,10 @@ export async function markNavSeen(key: SeenKey): Promise<{ hadNew: boolean }> {
     where: { userId_organizationId_key: { userId: user.id, organizationId, key } },
     select: { seenAt: true },
   });
-  const hadNew = (await countNewForSurface(key, organizationId, prev?.seenAt, user.id)) > 0;
+  const hadNew =
+    (await countNewForSurface(key, organizationId, prev?.seenAt, user.id)) > 0 ||
+    // The calendar's badge carries the online bookings too (badgeCounts → getBadgeCounts).
+    (key === "calendar" && (await countNewForSurface("booking", organizationId, prev?.seenAt)) > 0);
   await db.navSeen.upsert({
     where: { userId_organizationId_key: { userId: user.id, organizationId, key } },
     create: { userId: user.id, organizationId, key },
@@ -71,7 +74,7 @@ function hrefFor(e: {
   // (2026-09-22), a deck design a client sent back (2026-10-11, the draft
   // it landed in) or a room design a client approved (2026-10-19, the design
   // in the studio) names its own page in meta.
-  if (e.kind && /^(STOCK_|PURCHASE_ORDER_|PLAN_|SMS_|EXPENSE_SUBMITTED|DECK_DESIGN_RETURNED|DESIGN_CLIENT_)/.test(e.kind) && e.meta) {
+  if (e.kind && /^(STOCK_|PURCHASE_ORDER_|PLAN_|SMS_|EXPENSE_SUBMITTED|DECK_DESIGN_RETURNED|DESIGN_CLIENT_|FINANCING_)/.test(e.kind) && e.meta) {
     try {
       const href = (JSON.parse(e.meta) as { href?: string }).href;
       if (href) return href;

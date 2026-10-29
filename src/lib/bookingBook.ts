@@ -9,6 +9,8 @@ import { sendOrgEmail } from "@/lib/email/orgSend";
 import { renderEmail } from "@/lib/email/renderEmail";
 import type { EmailDoc } from "@/lib/email/doc";
 import { appBaseUrl } from "@/lib/appUrl";
+import { sendToMembersByPref } from "@/lib/notificationPrefs";
+import { buildBookedOnline } from "@/lib/email/build/operator";
 import { afterResponse } from "@/lib/server-events";
 import { textAppointmentBooked, textAppointmentCancelled, textAppointmentMoved as textVisitMoved, visitFacts } from "@/lib/sms/schedule";
 import { parseTradeTypes } from "@/lib/tradeTypes";
@@ -257,6 +259,31 @@ export async function createBooking(org: OrgRow, input: NewBooking, now = new Da
   if (bookedAppointmentId) {
     const id = bookedAppointmentId;
     afterResponse(() => textAppointmentBooked(id, null, desk ? "the AI desk" : "online"));
+  }
+  // And by email (owner, 2026-10-28): a booking from the page mails every office member who keeps "Booked online"
+  // on — the Blueprint office mail (email/build/operator → buildBookedOnline), after the response like the text.
+  if (bookedAppointmentId && !desk) {
+    const href = `${await appBaseUrl()}/dashboard/booking`;
+    afterResponse(() =>
+      sendToMembersByPref(
+        org.id,
+        "booking-online",
+        buildBookedOnline({
+          org: { name: org.name ?? "Your company", logoUrl: org.logoUrl, phone: org.phone },
+          name: input.name,
+          service: service.label,
+          when,
+          price: priceText,
+          phone,
+          email,
+          address: input.address?.trim() || null,
+          answers: input.answers,
+          notes: input.notes?.trim() || null,
+          who: member ? "member" : client ? "client" : "lead",
+          href,
+        }),
+      ).then(() => undefined),
+    );
   }
   const manageHref = `${await appBaseUrl()}/book/manage/${manageToken}`;
   // A desk booking was read back on the call. Its email was heard, not typed — a misheard address would send the

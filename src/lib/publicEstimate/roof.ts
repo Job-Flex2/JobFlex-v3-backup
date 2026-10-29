@@ -13,6 +13,7 @@
 import { BUILTIN_LISTS, ROOF_SYSTEMS, type RoofSystem } from "@/lib/roofPackage/catalog";
 import { buildRoofPackage, defaultSpecWith, type RoofFacts, type RoofPackage, type RoofPackageSpec } from "@/lib/roofPackage/takeoff";
 import type { SolarRoofEstimate } from "@/lib/roofSolarEstimate";
+import { PRO_CAP } from "@/lib/home/jobflexPro";
 
 export type ExistingKey = "asphalt" | "metal" | "tile" | "shake" | "flat" | "unsure";
 export type MaterialId = "architectural" | "standing_seam" | "impact_resistant" | "designer" | "three_tab";
@@ -87,6 +88,22 @@ export function roofFactsFromSolar(solar: SolarRoofEstimate, answers: RoofAnswer
 }
 
 /** No roof read: the home's size and floors → a footprint → a roof at a 6/12 slope with its eaves. */
+/** What the house lookup (lib/hvac/siteLookup — the HVAC estimator's) knows about the home when the sky can't read the
+ *  roof: the building's outline on the map, the county's living area and storeys, and where they came from. */
+export type HomeSize = { footprintSqft: number | null; livingSqft: number | null; storeys: number | null; source: string };
+
+const houseSized = (n: number | null | undefined): n is number => typeof n === "number" && Number.isFinite(n) && n >= 300 && n <= 20_000;
+
+/** The home's size for the range, worked out — never asked (owner, 2026-10-28: "homeowners don't know how many square
+ *  feet"): the outline × the floors they tapped (so the roof is the outline's whatever the floors), else the county's
+ *  living area, else null — and only then is the homeowner asked. An outline that is not a house is ignored. */
+export function homeSqftFromSize(size: HomeSize | null | undefined, storeys: 1 | 2 | 3): number | null {
+  if (!size) return null;
+  if (houseSized(size.footprintSqft)) return Math.round(size.footprintSqft * storeys);
+  if (houseSized(size.livingSqft)) return Math.round(size.livingSqft);
+  return null;
+}
+
 export function roofFactsFromSize(homeSqft: number, answers: RoofAnswers, state: string | null): RoofFacts {
   const footprint = Math.max(200, Math.round(homeSqft / answers.storeys));
   return {
@@ -164,8 +181,8 @@ export function roofRange(facts: RoofFacts, answers: RoofAnswers, city: { factor
 /** The one line under every range, by where the number came from. */
 export function disclaimerFor(basis: "solar" | "size"): string {
   return basis === "solar"
-    ? "An estimate range from aerial data and local prices, not a quote. A local pro confirms on site."
-    : "An estimate range from your home’s size and local prices, not a quote. A local pro measures and confirms on site.";
+    ? `An estimate range from aerial data and local prices, not a quote. ${PRO_CAP} confirms on site.`
+    : `An estimate range from your home’s size and local prices, not a quote. ${PRO_CAP} measures and confirms on site.`;
 }
 
 /** "$14,200–$19,800". */

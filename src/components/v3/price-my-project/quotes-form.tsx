@@ -12,6 +12,7 @@ import { TRAFFIC_EVENTS } from "@/lib/traffic-contract";
 import { trackTraffic } from "@/lib/traffic-client";
 import { attachmentsLine, useRequestAttachments } from "@/components/v3/homeowner-landing/wizard/use-request-attachments";
 import { WIZARD_MAX_FILES } from "@/lib/home/freshRequest";
+import { clearCarriedWords, useCarriedWords } from "@/lib/home/carry";
 import type { Priced } from "./range-view";
 import type { Site } from "./place-field";
 import s from "./price.module.css";
@@ -23,6 +24,10 @@ export function QuotesForm({ mode, site, priced, resume, onBack }: { mode: "quot
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [phone, setPhone] = React.useState("");
+  // The note to the pro (2026-10-28): what they wrote in the homeowner portal's box (lib/home/carry), until they change it.
+  const carried = useCarriedWords();
+  const [noteIn, setNote] = React.useState<string | null>(null);
+  const note = noteIn ?? carried.slice(0, 1000);
   const [consent, setConsent] = React.useState(false);
   const [emailRange, setEmailRange] = React.useState(true);
   const [busy, setBusy] = React.useState(false);
@@ -47,13 +52,14 @@ export function QuotesForm({ mode, site, priced, resume, onBack }: { mode: "quot
     };
     try {
       if (mode === "quotes") {
-        const res = await publicRoofLead({ ...common, name, email, phone, consent, emailRange, page: consentPageFromLocation(), homeKey: resume?.homeKey, planId: resume?.planId });
+        const res = await publicRoofLead({ ...common, name, email, phone, consent, emailRange, page: consentPageFromLocation(), homeKey: resume?.homeKey, planId: resume?.planId, note: note.trim() || undefined });
         if (!res.ok) {
           setError(res.error);
           return;
         }
         trackTraffic(TRAFFIC_EVENTS.priceLead, { trade: "roof", photos: att.items.length });
         if (att.items.length && res.requestToken) await att.send(res.requestToken).catch(() => null);
+        clearCarriedWords();
         router.push(res.statusPath as Parameters<typeof router.push>[0]);
       } else {
         const res = await publicRoofEmail({ ...common, email, name: name || undefined });
@@ -94,7 +100,7 @@ export function QuotesForm({ mode, site, priced, resume, onBack }: { mode: "quot
       }}
     >
       <div>
-        <p className={s.kicker}>{mode === "quotes" ? "Get quotes from local pros" : "Email me this range"}</p>
+        <p className={s.kicker}>{mode === "quotes" ? "Get quotes from local JobFlex pros" : "Email me this range"}</p>
         <p className={s.muted} data-price-form-range>
           Your range: <b>{moneyRange(priced.range)}</b> · {materialWords(priced.answers.material)} · {site.address}, {site.city}
         </p>
@@ -125,6 +131,10 @@ export function QuotesForm({ mode, site, priced, resume, onBack }: { mode: "quot
       </div>
       {mode === "quotes" ? (
         <>
+          <div className={s.field}>
+            <label className={s.label} htmlFor="pq-note">Anything the pro should know? <span className={s.small}>(optional)</span></label>
+            <textarea id="pq-note" name="note" className={s.input} rows={3} maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} placeholder="A leak by the chimney, the gutters too, when you'd like it done…" data-price-words />
+          </div>
           <div className={s.photos}>
             <label className={s.label} htmlFor="pq-photos">Photos of the roof <span className={s.small}>(optional, up to {WIZARD_MAX_FILES})</span></label>
             <input id="pq-photos" type="file" accept="image/*,video/*,application/pdf" multiple onChange={(e) => e.target.files && att.add(e.target.files)} data-price-photos />
@@ -139,7 +149,7 @@ export function QuotesForm({ mode, site, priced, resume, onBack }: { mode: "quot
             <input type="checkbox" name="consent" checked={consent} onChange={(e) => setConsent(e.target.checked)} data-price-consent />
             <span>{LEAD_CONSENT_TEXT}</span>
           </label>
-          <p className={s.small}>We send this to one local pro at a time. The range is an estimate; the pro confirms on site.</p>
+          <p className={s.small}>We send this to one local JobFlex pro at a time. The range is an estimate; the pro confirms on site.</p>
         </>
       ) : (
         <p className={s.small}>No calls, no contractors — just the range, and a note in two days in case you want quotes then.</p>

@@ -12,6 +12,8 @@
 .sheet { position: relative; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.10); border: 1px solid var(--hair); box-sizing: border-box; overflow: hidden; }
 .b { width: 17in; height: 11in; }
 .a { width: 8.5in; height: 11in; }
+.c { width: 24in; height: 18in; }
+.d { width: 36in; height: 24in; }
 /* The border: a binding margin on the left of a permit sheet. */
 .frame { position: absolute; inset: 0.25in 0.25in 0.25in 0.5in; border: 1.6pt solid var(--ink); display: grid; grid-template-columns: minmax(0, 1fr) 2.6in; }
 .a .frame { inset: 0.3in 0.3in 0.3in 0.4in; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
@@ -147,6 +149,10 @@
   /* Each sheet prints on its own paper: the permit set on 11 × 17, the crew's set on letter. */
   .b { page: jfPlanB; }
   .a { page: jfPlanA; }
+  .c { page: jfPlanC; }
+  .d { page: jfPlanD; }
 }
 @page jfPlanB { size: 17in 11in; margin: 0; }
 @page jfPlanA { size: 8.5in 11in; margin: 0; }
+@page jfPlanC { size: 24in 18in; margin: 0; }
+@page jfPlanD { size: 36in 24in; margin: 0; }

@@ -20,6 +20,10 @@ export const SEEN_SURFACES = {
   workers: "/dashboard/workers",
   trade: "/dashboard/trade",
   phone: "/dashboard/phone",
+  // Visits booked on the company's booking page (owner, 2026-10-28: "a counter on the calendar and online
+  // booking until they read it"). Online booking clears on its own page; the calendar's count carries the
+  // same bookings and clears with the calendar.
+  booking: "/dashboard/booking",
   // Not a nav item: the calendar's crew-confirmation bell. Seen-stamped when
   // the office opens the inbox sheet; counts crew ANSWERS since then.
   crewInbox: "/dashboard/calendar#crew",
@@ -132,6 +136,8 @@ export async function getBadgeCounts(
     workersNew,
     tradeNew,
     phoneMissed,
+    bookingNew,
+    bookingOnCalendar,
   ] = await Promise.all([
     getUnreadMessageCount(organizationId, userId),
     countNewForSurface("leads", organizationId, seenAt("leads")),
@@ -144,6 +150,8 @@ export async function getBadgeCounts(
     countNewForSurface("workers", organizationId, seenAt("workers")),
     countNewForSurface("trade", organizationId, seenAt("trade"), userId),
     countNewForSurface("phone", organizationId, seenAt("phone")),
+    countNewForSurface("booking", organizationId, seenAt("booking")),
+    countNewForSurface("booking", organizationId, seenAt("calendar")),
   ]);
 
   const low = await lowStockCounts(organizationId).catch(() => ({ fence: 0, roof: 0, hvac: 0 }));
@@ -162,7 +170,8 @@ export async function getBadgeCounts(
     "/dashboard/hire": hireApplied,
     "/dashboard/reviews": reviewsUnread,
     "/dashboard/referrals": referralsPending,
-    "/dashboard/calendar": calendarNew,
+    "/dashboard/calendar": calendarNew + bookingOnCalendar,
+    "/dashboard/booking": bookingNew,
     "/dashboard/jobs": jobsNew,
     "/dashboard/workers": workersNew,
     "/dashboard/trade": tradeNew,
@@ -254,6 +263,13 @@ export async function countNewForSurface(
           meta: { contains: '"assignmentId"' },
           createdAt: after,
         },
+      });
+    }
+    case "booking": {
+      // Booked on the page (not by the AI desk, not canceled since). Never opened: the last week's, not all time.
+      const from = since ?? new Date(Date.now() - 7 * 86_400_000);
+      return db.activityEvent.count({
+        where: { organizationId, kind: "BOOKING_NEW", createdAt: { gt: from }, NOT: { meta: { contains: '"channel":"ai-desk"' } } },
       });
     }
     case "phone": {

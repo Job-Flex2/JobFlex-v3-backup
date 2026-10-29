@@ -49,6 +49,7 @@ import {
   uploadProposalPhoto,
 } from "@/actions/proposals";
 import { notifyPaymentReminder, setProposalReminders, sendInstallmentInvoice, getInvoiceOptions } from "@/actions/notify";
+import { sendFinancingLink } from "@/actions/financing";
 import { markInstallmentPaid, unmarkInstallmentPaid, recordRemainingPayment } from "@/actions/installments";
 // The handheld surface's route-local read of the SAME book this page renders
 // from (same query, same requireProposalStaff guard) — used to pick up a row
@@ -246,7 +247,7 @@ export function initProposalsContent(
     return out;
   }
   /** Compact dollar summary beneath the card's headline amount. */
-  function payBarHtml(p: ProposalRow): string {
+  function payBarHtml(p: ProposalRow, withTotal = false): string {
     const contract = p.contract ?? p.total;
     const paid = p.paidAmt ?? 0;
     const pct = payPct(p);
@@ -267,7 +268,12 @@ export function initProposalsContent(
         .map((t) => '<i class="ppay-tick" style="left:' + t + '%"></i>')
         .join("") +
       "</div>" +
-      (full ? "" : '<span class="ppay-tag"><b>' + fmtMoney(p.owed) + "</b> due</span>") +
+      (full && !withTotal
+        ? ""
+        : '<span class="ppay-tag">' +
+          (full ? "" : "<b>" + fmtMoney(p.owed) + "</b> due") +
+          (withTotal ? (full ? "" : " · ") + "<b>" + fmtMoney(contract) + "</b> total" : "") +
+          "</span>") +
       "</div>"
     );
   }
@@ -582,7 +588,7 @@ export function initProposalsContent(
     return (
       '<tr class="prow-grp" data-grp="' +
       esc(c.id) +
-      '"><td colspan="7"><div class="pgrp">' +
+      '"><td colspan="6"><div class="pgrp">' +
       '<svg class="ic pgrp-ic"><use href="#i-folder"/></svg>' +
       '<a class="pgrp-name" href="/dashboard/projects/' +
       encodeURIComponent(c.id) +
@@ -616,10 +622,12 @@ export function initProposalsContent(
         '"><svg class="ic"><use href="#i-send"/></svg><span>Send</span></button>'
       );
     }
-    const inner = '<svg class="ic"><use href="#i-check"/></svg><span>Sent</span> <small>' + esc(p.sentAgo ?? "") + "</small>";
-    return s === "resend"
-      ? '<button class="pact pact--sent" type="button" data-act="send" title="' + esc("Sent " + p.sentAgo + " — send it again") + '">' + inner + "</button>"
-      : '<span class="pact pact--sent is-static" title="' + esc("Sent " + p.sentAgo) + '">' + inner + "</span>";
+    // Once sent it can always go again, and says so (owner, 2026-10-28: "make it possible and visible you can
+    // resend it"): the stamp says when, Resend beside it opens the same send dialog.
+    return (
+      '<span class="pact pact--sent is-static" title="' + esc("Sent " + p.sentAgo) + '"><svg class="ic"><use href="#i-check"/></svg><span>Sent</span> <small>' + esc(p.sentAgo ?? "") + "</small></span>" +
+      '<button class="pact pact--resend" type="button" data-act="send" title="' + esc("Send it again" + (p.clientEmail ? " to " + p.clientEmail : "")) + '"><svg class="ic"><use href="#i-send"/></svg><span>Resend</span></button>'
+    );
   }
 
   /**
@@ -634,41 +642,49 @@ export function initProposalsContent(
     if (!state) return "";
     const insts = p.inst ?? [];
     const next = state === "collect" ? nextStage(p) : null;
+    // PAYMENTS, REDRAWN (owner, 2026-10-28: "redesign the payments section to something that looks better"): every
+    // stage a column of its own — what it is, its share, the amount large, where it stands — under one heading line
+    // that says the money at a glance; the actions in equal columns at the right.
     const stages = insts
       .map((it) => {
         const amount = fmtMoney(instDollars(p, it));
-        const share = it.pct && state === "plan" ? '<em>' + Math.round(it.amount) + "%</em>" : "";
+        const share = it.pct ? Math.round(it.amount) + "%" : "";
         let tone = "later";
         let tail = "";
         if (it.status === "PAID") {
           tone = "paid";
-          tail = it.paidOn ? "paid " + it.paidOn : "paid";
+          tail = it.paidOn ? "Paid " + it.paidOn : "Paid";
         } else if (it.status === "WAIVED") {
           tone = "closed";
-          tail = "closed";
+          tail = "Closed";
         } else if (state === "plan") {
           tone = "plan";
+          tail = it.due ? "Due " + it.due : "After signing";
         } else if (next && it.id === next.id) {
           // The stage being chased carries its own facts: due or late, invoiced, reminded.
           tone = it.overdue ? "next is-late" : "next";
-          tail = stageFacts(it).join(" · ");
+          tail = stageFacts(it).join(" · ") || "Next to collect";
+        } else {
+          tail = it.due ? "Due " + it.due : "Later";
         }
         return (
           '<li class="ppl-st ppl-st--' + tone + '" data-stage="' + esc(it.id) + '">' +
-          (it.status === "PAID" ? '<svg class="ic"><use href="#i-check"/></svg>' : "") +
-          "<b>" + esc(it.label) + "</b>" + share + "<span>" + amount + "</span>" +
-          (tail ? "<i>" + esc(tail) + "</i>" : "") +
+          '<span class="ppl-st-k">' + esc(it.label) + (share ? "<em>" + share + "</em>" : "") + "</span>" +
+          '<span class="ppl-st-v">' + amount + "</span>" +
+          '<i class="ppl-st-s">' + (it.status === "PAID" ? '<svg class="ic"><use href="#i-check"/></svg>' : "") + esc(tail) + "</i>" +
           "</li>"
         );
       })
       .join("") ||
       // Signed with no schedule: the balance is the one thing to collect.
-      (state === "collect" ? '<li class="ppl-st ppl-st--next"><b>Balance</b><span>' + fmtMoney(p.owed) + "</span></li>" : "");
+      (state === "collect" ? '<li class="ppl-st ppl-st--next"><span class="ppl-st-k">Balance</span><span class="ppl-st-v">' + fmtMoney(p.owed) + '</span><i class="ppl-st-s">Next to collect</i></li>' : "");
+    const contract = p.contract ?? p.total;
+    const sum = fmtMoney(contract) + " · " + (insts.length || 1) + (insts.length === 1 ? " payment" : " payments");
     let side = "";
     if (state === "plan") {
       side = '<span class="ppl-note">' + esc((p.clientId ? "Billed after " + p.client.split(/\s+/)[0] + " accepts" : "Billed after the client accepts")) + "</span>";
     } else if (state === "paid") {
-      side = '<span class="ppl-note ppl-note--ok"><svg class="ic"><use href="#i-check"/></svg>Paid in full · ' + fmtMoney(p.paidAmt ?? p.contract ?? p.total) + "</span>";
+      side = '<span class="ppl-note ppl-note--ok"><svg class="ic"><use href="#i-check"/></svg>Paid in full</span>';
     } else {
       // Billing is the office's: a sales rep or an estimator reads what is left instead of the buttons.
       side = p.canBill === false ? '<span class="ppl-note"><b>' + fmtMoney(p.owed) + "</b> left to collect</span>" : payActsHtml(p, next);
@@ -676,11 +692,27 @@ export function initProposalsContent(
     return (
       '<tr class="prow-pay ppl--' + state + chain.replace(/prow--/g, "prow-pay--") + '" data-id="' + esc(p.id) + '"' +
       (chain && p.projectId ? ' data-grp="' + esc(p.projectId) + '"' : "") +
-      '><td colspan="7"><div class="ppl">' +
-      '<span class="ppl-lbl"><svg class="ic"><use href="#i-card"/></svg>Payments</span>' +
+      '><td colspan="6"><div class="ppl">' +
+      '<div class="ppl-head"><div class="ppl-title"><span class="ppl-lbl"><svg class="ic"><use href="#i-card"/></svg>Payments</span>' +
+      // Signed: paid, the bar, due and the total — the accepted card's line (owner, 2026-10-28).
+      (state === "plan" ? '<span class="ppl-sum">' + sum + "</span>" : payBarHtml(p, true)) +
+      "</div></div>" +
+      '<div class="ppl-body">' +
       (stages ? '<ol class="ppl-stages">' + stages + "</ol>" : "") +
-      side +
+      '<div class="ppl-side">' + side + finHtml(p) + "</div>" +
+      "</div>" +
       "</div></td></tr>"
+    );
+  }
+  /** Wisetack financing (2026-10-28): where the client's loan stands, and Send financing link for the office. */
+  function finHtml(p: ProposalRow): string {
+    const f = p.fin;
+    if (!f || (!f.line && !f.canSend)) return "";
+    return (
+      '<div class="ppl-fin" data-fin-row>' +
+      (f.line ? '<span class="ppl-note"><svg class="ic"><use href="#i-bank"/></svg>' + esc(f.line) + "</span>" : "") +
+      (f.canSend ? '<button class="ppl-act" type="button" data-act="fin-send" title="Text or email the client the proposal, opened at Pay over time"><svg class="ic"><use href="#i-send"/></svg>Send financing link</button>' : "") +
+      "</div>"
     );
   }
   /** The next stage's three actions, or the whole balance's when the job has no schedule. */
@@ -699,6 +731,39 @@ export function initProposalsContent(
     );
   }
 
+  /**
+   * THE PROPOSAL'S ACTION BAR (owner, 2026-10-28: "a lower section divided by a bold line with all the action
+   * buttons from the 3 dots — all buttons in that lower action bar"). The row keeps what the proposal IS; this bar,
+   * the card's last line, keeps everything that can be done to it: send, open, the client's view, the client's link,
+   * a change order, the listing, and — apart, at the far end — delete. Billing lives in the payments above it.
+   */
+  function barRowHtml(p: ProposalRow, chain: string): string {
+    const s = sendState(p);
+    const send =
+      s === "none"
+        ? '<button class="pbar-btn" type="button" data-act="send" title="' + esc(p.clientEmail ? "Send to " + p.clientEmail : "Send to the client") + '"><svg class="ic"><use href="#i-send"/></svg>Send to client</button>'
+        : sendCellHtml(p).replace(/class="pact /g, 'class="pbar-btn pact ');
+    const zillow = p.zillow
+      ? '<a class="pbar-btn" href="' + esc(p.zillow) + '" target="_blank" rel="noopener noreferrer" title="Open the listing"><svg class="ic"><use href="#i-building"/></svg>Zillow</a>'
+      : "";
+    return (
+      '<tr class="prow-bar' + chain.replace(/prow--/g, "prow-bar--") + '" data-id="' + esc(p.id) + '"' +
+      (chain && p.projectId ? ' data-grp="' + esc(p.projectId) + '"' : "") +
+      '><td colspan="6"><div class="pbar">' +
+      '<div class="pbar-l">' +
+      '<a class="pbar-btn pbar-btn--open" href="' + proposalHref(p.id) + '" title="Open the proposal"><svg class="ic"><use href="#i-pen"/></svg>Open</a>' +
+      send +
+      '<a class="pbar-btn pbar-btn--view" href="/portal/q/' + encodeURIComponent(p.publicId) + '" target="_blank" rel="noopener noreferrer" title="Client view — the page the client gets, in a new tab"><svg class="ic"><use href="#i-eye"/></svg>Client view</a>' +
+      '<button class="pbar-btn" type="button" data-act="change-order" title="Price extras, send for signature"><svg class="ic"><use href="#i-plus"/></svg>' + (p.co && p.co.count ? "Change orders · " + p.co.count : "Change order") + "</button>" +
+      zillow +
+      '<button class="pbar-btn" type="button" data-act="copylink" title="Copy the client\'s link to paste into a text"><svg class="ic"><use href="#i-link"/></svg>Copy client link</button>' +
+      "</div>" +
+      '<button class="pbar-btn pbar-btn--del" type="button" data-act="del" title="Delete this proposal — permanent"><svg class="ic"><use href="#i-trash"/></svg>Delete</button>' +
+      "</div></td></tr>" +
+      '<tr class="prow-gap" data-id="' + esc(p.id) + '" aria-hidden="true"><td colspan="6"></td></tr>'
+    );
+  }
+
   /** The rows the ALL table is currently showing, with the page clamped. */
   function allSlice() {
     const rows = chained(filteredAll());
@@ -712,7 +777,7 @@ export function initProposalsContent(
     return (
       '<tr class="prow' +
       chain +
-      (pay ? " has-pay" : "") +
+      (pay ? " has-pay" : " no-pay") +
       '" data-id="' +
       esc(p.id) +
       '"' +
@@ -720,7 +785,8 @@ export function initProposalsContent(
       ">" +
       // The title is a real link to the proposal (⌘-click opens a tab); a
       // click anywhere else on the row follows it too — see openFromRow.
-      "<td>" +
+      // Each card carries its own column labels (owner, 2026-10-28: "attached to every card").
+      '<td><span class="pt-lbl">Proposal</span>' +
       kindHtml(p) +
       '<a class="pt-title pt-link" href="' +
       proposalHref(p.id) +
@@ -736,48 +802,36 @@ export function initProposalsContent(
       (p.co && p.co.count
         ? ' · <span class="pt-co' + (p.co.pending ? " pt-co--wait" : "") + '">' + p.co.count + " change order" + (p.co.count === 1 ? "" : "s") + (p.co.pending ? " · " + p.co.pending + " awaiting approval" : "") + "</span>"
         : "") +
-      // Accepted or declined, said on the line itself (owner, 2026-10-13: "if it accepts it or not, put it in the line").
-      (p.decided ? ' · <span class="pt-decided' + (p.status === "DECLINED" ? " pt-decided--no" : "") + '">' + esc(p.decided) + "</span>" : "") +
       "</div>" +
       clientDesignHtml(p) +
       "</td>" +
-      '<td><span class="pstatus ' +
+      '<td><span class="pt-lbl">Status</span><span class="pstatus ' +
       st.cls +
       (p.fresh && bloomOnce(p.id, p.fresh.accepted ? "accepted" : "declined", p.fresh.accepted ?? p.fresh.declined) ? " pstatus--fresh" : "") +
       '"' +
       (p.fresh && p.fresh.accepted ? ' title="Accepted ' + esc(p.accepted ?? "") + '"' : p.fresh && p.fresh.declined ? ' title="Declined"' : "") +
       ">" +
       esc(st.label) +
+      // The day it was signed rides on the badge (owner, 2026-10-28: "add the date to the badge itself").
+      (p.accepted && (p.status === "ACCEPTED" || p.status === "COMPLETED" || p.status === "PAID") ? '<em class="pstatus-d">' + esc(p.accepted) + "</em>" : "") +
       "</span></td>" +
-      '<td class="c pt-total"><span class="pt-money">' +
+      '<td class="c pt-total"><span class="pt-lbl">Total</span><span class="pt-money">' +
       fmtMoney(p.contract ?? p.total) +
       "</span>" +
       (p.status === "ACCEPTED" || p.status === "COMPLETED" || p.status === "PAID" ? paidCellHtml(p) : "") +
       "</td>" +
-      '<td class="c">' + viewsCellHtml(p) + '</td>' +
-      '<td><span class="pt-mono">' + esc(p.updated) + '</span></td>' +
+      '<td class="c"><span class="pt-lbl">Views</span>' + viewsCellHtml(p) + '</td>' +
+      '<td><span class="pt-lbl">Updated</span><span class="pt-mono">' + esc(p.updated) + '</span></td>' +
       // The member's mark — name, role and their color (lib/team/who); the
       // given-name plate only when the owner is no longer on the org. Nothing
       // on the reader's own proposals (owner, 2026-09-25): the column names
       // someone else, and hides itself when every proposal is the reader's.
-      '<td class="td-owner">' +
+      '<td class="td-owner"><span class="pt-lbl">Owner</span>' +
       (p.mine ? "" : p.ownerWho ? whoHtml(p.ownerWho) : '<span class="pt-mono">' + esc(p.owner) + "</span>") +
       "</td>" +
-      // THE ROW'S OWN ACTIONS (owner, 2026-10-13: "I don't like the three dots at the end with a whole bunch of
-      // options; add Client view on the line"): Open and Client view sit on the row as plain links; the dots keep
-      // only what is rarer — share, bill, the rest.
-      '<td class="num td-acts"><div class="pacts">' +
-      sendCellHtml(p) +
-      '<a class="pact pact--open" href="' + proposalHref(p.id) + '" title="Open the proposal"><svg class="ic"><use href="#i-pen"/></svg><span>Open</span></a>' +
-      '<a class="pact pact--view" href="/portal/q/' + encodeURIComponent(p.publicId) + '" target="_blank" rel="noopener noreferrer" title="Client view — the page the client gets, in a new tab"><svg class="ic"><use href="#i-eye"/></svg><span>Client view</span></a>' +
-      '<button class="pt-open" type="button" data-menu="' +
-      esc(p.id) +
-      '" aria-label="More for ' +
-      esc(p.title) +
-      '" title="Share, bill, more"><svg class="ic"><use href="#i-dots"/></svg></button>' +
-      "</div></td>" +
       "</tr>" +
-      pay
+      pay +
+      barRowHtml(p, chain)
     );
   }
   /** A stamp blooms ONCE in this browser (2026-10-13): the render that shows it records it a moment later, so
@@ -863,7 +917,7 @@ export function initProposalsContent(
     body.innerHTML = html;
     syncAllChrome();
     if (stagger && panelVisible("all")) {
-      staggerIn(Array.from(body.querySelectorAll<HTMLElement>(".prow, .prow-pay")));
+      staggerIn(Array.from(body.querySelectorAll<HTMLElement>(".prow, .prow-pay, .prow-bar")));
     }
   }
   function accSlice() {
@@ -1182,13 +1236,23 @@ export function initProposalsContent(
     const next = tr.nextElementSibling as HTMLElement | null;
     return next && next.classList.contains("prow-pay") ? next : null;
   }
+  /** Every row after a proposal's own that belongs to it: its payments, its action bar, the gap under the card. */
+  function tailRowsOf(tr: HTMLElement): HTMLElement[] {
+    const out: HTMLElement[] = [];
+    let n = tr.nextElementSibling as HTMLElement | null;
+    while (n && n.dataset.id === tr.dataset.id && /\bprow-(pay|bar|gap)\b/.test(n.className)) {
+      out.push(n);
+      n = n.nextElementSibling as HTMLElement | null;
+    }
+    return out;
+  }
   /** Patch a single ALL row in place: the row and its payment line are rebuilt from the record, since a write
    *  can change the plate, the money, the Send cell and every stage (2026-10-23). Unchained rows only — a
    *  chained one redraws the table with its project's header. */
   function patchAllRow(tr: HTMLElement, p: ProposalRow) {
     const t = document.createElement("tbody");
     t.innerHTML = allRowHtml(p);
-    payRowOf(tr)?.remove();
+    tailRowsOf(tr).forEach((r) => r.remove());
     tr.replaceWith(...Array.from(t.children));
   }
 
@@ -1242,7 +1306,7 @@ export function initProposalsContent(
       return;
     }
     if (tr && !onPage) {
-      payRowOf(tr)?.remove();
+      tailRowsOf(tr).forEach((r) => r.remove());
       leaveRow(
         tr,
         () => {
@@ -1795,6 +1859,10 @@ export function initProposalsContent(
         openChangeOrder(p);
         return;
       }
+      if (kind === "del" && p) {
+        if (!pstate.writing) promptDelete(p);
+        return;
+      }
       if (kind === "reminders" && p) {
         void runReminders(p, act);
         return;
@@ -1829,6 +1897,10 @@ export function initProposalsContent(
       // it cannot find the instalment).
       if (kind === "remind" && p) {
         void runReminder(p, act.dataset.inst ?? "", act);
+        return;
+      }
+      if (kind === "fin-send" && p) {
+        void runFinancingLink(p, act);
         return;
       }
       if (kind === "markpaid" && p) {
@@ -2392,6 +2464,22 @@ export function initProposalsContent(
       renderAccepted();
     } catch (err) {
       showAlert("Couldn't change reminders", actionError(err));
+    } finally {
+      pstate.writing = false;
+      (btn as HTMLButtonElement).disabled = false;
+    }
+  }
+
+  async function runFinancingLink(p: ProposalRow, btn: HTMLElement) {
+    if (pstate.writing) return;
+    pstate.writing = true;
+    (btn as HTMLButtonElement).disabled = true;
+    try {
+      const res = await sendFinancingLink(p.id, "auto");
+      if (res.ok) flashBtn(btn, res.via === "text" ? "Texted" : "Emailed");
+      else showAlert("Nothing sent", res.error);
+    } catch (err) {
+      showAlert("Couldn't send", actionError(err));
     } finally {
       pstate.writing = false;
       (btn as HTMLButtonElement).disabled = false;

@@ -3,6 +3,7 @@
 // registers the company's texting number in its name.
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import "../../book-public.css";
 import { bookingConsentText } from "@/lib/sms/registrationShared";
 import { SMS_PAGES_UPDATED, phoneWords, smsCompany } from "../sms-company";
 
@@ -19,9 +20,9 @@ export default async function TextingTermsPage({ params }: { params: Promise<{ s
   const phone = phoneWords(c.phone);
   const consent = bookingConsentText(c.name);
   return (
-    <main className="min-h-screen bg-[color:var(--paper,#f4f2ec)] px-4 py-10" data-sms-terms>
-      <article className="mx-auto w-full max-w-2xl rounded-[14px] border border-[color:var(--ink-line,#ddd)] bg-white p-6 sm:p-8 text-[15px] leading-relaxed">
-        <div className="quiet-caps mb-2">{c.name}</div>
+    <main className="jf-book" data-sms-terms>
+      <article className="jfb-sheet jfb-legal">
+        <div className="jfb-kicker">{c.name}</div>
         <h1 className="text-[26px] font-semibold leading-tight">Text messages from {c.name}</h1>
         <p className="mt-1 text-[13px] text-[color:var(--ink-muted,#666)]">Texting terms · updated {SMS_PAGES_UPDATED}</p>
 

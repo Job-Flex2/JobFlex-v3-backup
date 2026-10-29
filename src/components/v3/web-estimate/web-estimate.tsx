@@ -9,6 +9,7 @@ import { PlacesAutocomplete, type PickedAddress } from "@/components/estimator/r
 import { webEstimate, webLead, webView, type WebEstimateView } from "@/actions/webEstimator";
 import type { WebChoice, WebQuestion } from "@/lib/webEstimatorTrades";
 import { pageWords, type WebTrade } from "@/lib/webEstimator";
+import { PRO_CAP } from "@/lib/home/jobflexPro";
 import { WebHead } from "./web-head";
 import "./web-estimate.css";
 
@@ -168,7 +169,7 @@ export function WebEstimate(p: WebEstimateProps) {
         <section className="we-card" data-web-step="quote">
           <h2>{est ? "Where should the quote go?" : "Leave your details"}</h2>
           {!est && error ? <p className="we-note">{error}</p> : null}
-          {est ? <p className="we-sub">{p.shop.house ? "A local pro" : p.shop.name} will send the full quote for <b>{band}</b> and confirm it with you.</p> : null}
+          {est ? <p className="we-sub">{p.shop.house ? PRO_CAP : p.shop.name} will send the full quote for <b>{band}</b> and confirm it with you.</p> : null}
           <form className="we-form" onSubmit={(e) => { e.preventDefault(); void send(); }}>
             <label><span>Your name</span><input required value={contact.name} onChange={(e) => setContact({ ...contact, name: e.target.value })} autoComplete="name" data-web-name /></label>
             <label><span>Phone</span><input required type="tel" value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} autoComplete="tel" inputMode="tel" data-web-phone /></label>

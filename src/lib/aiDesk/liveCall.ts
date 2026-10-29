@@ -16,7 +16,8 @@ import { logActivity } from "@/lib/activityLog";
 import { emailFromNotes } from "./intakeNotes";
 import { companyFacts } from "./facts";
 import { readDeskSettings } from "./numbers";
-import { deskInstructions, profileFromFacts } from "./profile";
+import { deskInstructions, profileFromFacts, withFinancingAnswer } from "./profile";
+import { deskFinancingAnswer } from "@/lib/financing/desk";
 import { noteDeskUse } from "./usage";
 import { deskBalanceFor, settleDeskUse } from "./minutes";
 
@@ -62,7 +63,8 @@ export async function callBrief(t: { callSid: string; organizationId: string; fr
   if (!facts) return { ok: false, error: "no such company" };
   // Out of minutes: the webhook already routed the call elsewhere; this is the second lock.
   if (balance?.out) return { ok: false, error: "out of minutes" };
-  const profile = settings.profile ?? profileFromFacts(facts);
+  // An approved Wisetack company says yes to financing (lib/financing/desk).
+  const profile = withFinancingAnswer(settings.profile ?? profileFromFacts(facts), await deskFinancingAnswer(t.organizationId).catch(() => null));
   const nowWords = new Date().toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: facts.timezone });
   const extras = [
     `THIS CALL: it is ${nowWords} (${facts.timezone}). The caller's number is ${t.from}${caller ? `, which belongs to ${caller.name}, a client the company knows${caller.lastVisit ? ` (last visit: ${caller.lastVisit})` : ""} — greet them by name once they confirm it is them` : " — not a client the company knows yet"}.`,

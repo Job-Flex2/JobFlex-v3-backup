@@ -20,7 +20,10 @@ import { DeckPlan } from "@/components/v3/deck-estimator-blueprint/deck-plan";
 import { permitNotes, roofDetails, type DetailDrawing } from "@/lib/deck/permit";
 import { crewSheetList } from "@/lib/deck/plans/sheets";
 import { DECK_SIDE_LABEL, DECK_SIDES, defaultSitePlan, normalizeSitePlan, siteLayout, siteScale, turnLot, type SitePlan } from "@/lib/deck/sitePlan";
-import { countyCodeFor, designCriteria, RESEARCHED_ON } from "@/lib/deck/countyCodes";
+import { countyCodeFor, designCriteria, jurisdictionFor, jurisdictionTyped, RESEARCHED_ON, siteScaleWarning, siteScaleWords, type DeckCountyCode, type TypedJurisdiction } from "@/lib/deck/countyCodes";
+import { planModel } from "@/lib/deck/plans/model";
+import { framingPlan } from "@/lib/deck/plans/framing";
+import { PAPERS, PAPER_ORDER, PLAN_SCALE_MINS, SITE_SCALE_MINS, fitOn, pickPaper, siteBoxOn, type PaperChoice, type PaperPick } from "@/lib/deck/plans/paper";
 import { readDeckCounty, readDeckLot, saveDeckSitePlan } from "@/actions/deckSitePlan";
 import { DrawingSvg } from "./deck-sections";
 import { SitePlanSvg } from "./deck-site-plan";
@@ -72,7 +75,6 @@ function PermitSet({ design, address, title, shop, initialPlan, editable, built 
   const [which, setWhich] = React.useState<"permit" | "crew">("permit");
   const dirty = React.useRef(false);
   const screenW = React.useSyncExternalStore(subscribeWidth, widthNow, widthServer);
-  const zoom = Math.min(1, (screenW - 32) / SHEET_W_PX);
 
   // A change from the panel: drawn at once, kept a moment later.
   const update = React.useCallback(
@@ -100,7 +102,7 @@ function PermitSet({ design, address, title, shop, initialPlan, editable, built 
     readDeckCounty(address)
       .then((r) => {
         if (!r.ok || !r.county) return;
-        const county = { name: r.county.name, state: r.county.state, source: "census" as const };
+        const county = { name: r.county.name, state: r.county.state, source: "census" as const, city: r.county.city, sdc: r.county.sdc };
         dirty.current = true;
         setPlan((p) => (p.county ? p : { ...p, county, street: p.street || r.street || p.street }));
       })
@@ -123,19 +125,31 @@ function PermitSet({ design, address, title, shop, initialPlan, editable, built 
     setBusy(false);
   };
 
-  const county = countyCodeFor(plan.county?.state ?? design.site.state, plan.county?.name);
-  const countyName = plan.county ? `${plan.county.name}${plan.county.state ? `, ${plan.county.state}` : ""}` : null;
+  // The jurisdiction: the county or city on file, the contractor's typed figures over it, the USGS seismic category
+  // where nobody named one (lib/deck/countyCodes jurisdictionFor) — so any state and any city reads right.
+  const onFile = countyCodeFor(plan.county?.state ?? design.site.state, plan.county?.name, plan.county?.city);
+  const countyName = plan.county ? `${plan.county.city ? `${plan.county.city} · ` : ""}${plan.county.name}${plan.county.state ? `, ${plan.county.state}` : ""}` : null;
+  const county = jurisdictionFor(onFile, plan.jurisdiction, plan.county?.sdc ?? null, countyName, plan.county?.state ?? design.site.state ?? "");
   const criteria = designCriteria(structure, county, countyName);
   const layout = siteLayout(plan, structure);
   const siteW = layout.bounds.x1 - layout.bounds.x0;
   const siteH = layout.bounds.y1 - layout.bounds.y0;
   // The site plan's frame on A-101 is about 8.6 × 9.4 in.; the street band and the graphic scale take ~1.75 in. below
   // the lot and north ~1.25 in. beside it, whatever the scale (deck-site-plan sizes them in paper inches).
-  const scale = siteScale(siteW, siteH, { w: 8.6 - 1.25, h: 9.2 - 1.75 });
+  // The sheet (lib/deck/plans/paper): the one picked, or the smallest that keeps the department's scales — the framing
+  // plan at its minimum and the lot at the site plan's; the site plan's own scale follows the sheet.
+  const model = React.useMemo(() => planModel(structure), [structure]);
+  const pick = React.useMemo(
+    () => pickPaper(plan.sheets, (p) => ({ planK: model ? fitOn(p, (sc) => framingPlan(model, sc, {}), 8.9, 9.45).scale : 1, siteFtPerIn: siteScale(siteW, siteH, siteBoxOn(p)) })),
+    [plan.sheets, model, siteW, siteH],
+  );
+  const scale = pick.siteFtPerIn;
+  const zoom = Math.min(1, (screenW - 32) / (pick.paper.w * 96));
   const rDetails = roofDetails(structure, county?.windMph ?? null);
   const notes = permitNotes(structure, criteria.countyNotes, county?.edition ?? null);
   const fails = checks.filter((c) => c.level === "fail");
-  const warns = [...criteria.warnings, ...layout.checks.filter((c) => c.level === "warn").map((c) => c.text)];
+  const scaleWarn = siteScaleWarning(county, scale);
+  const warns = [...criteria.warnings, ...(pick.met ? [] : [pick.words]), ...(scaleWarn ? [scaleWarn] : []), ...layout.checks.filter((c) => c.level === "warn").map((c) => c.text)];
   const what = structureWords(design);
   const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   // The title block's project line: the draft's or proposal's own title when it already names the deck, else the deck and the title.
@@ -148,7 +162,7 @@ function PermitSet({ design, address, title, shop, initialPlan, editable, built 
         <div className={s.panel} data-permit-panel>
           <div className={s.panelHead}>
             <div>
-              <div className={s.panelKick}>{which === "permit" ? "Permit set · for the building department · 11 × 17" : `Construction set · for the crew · ${crewSheetList(structure).length} sheets, letter`}</div>
+              <div className={s.panelKick}>{which === "permit" ? `Permit set · for the building department · ${pick.paper.name}` : `Construction set · for the crew · ${crewSheetList(structure).length} sheets, letter`}</div>
               <div className={s.panelTitle}>{what}</div>
               <div className={s.panelSub}>{address ?? "No job address — set it in the studio to keep the site plan and read the county."}</div>
             </div>
@@ -170,10 +184,18 @@ function PermitSet({ design, address, title, shop, initialPlan, editable, built 
               ))}
             </div>
           ) : null}
+          {criteria.hints.length ? (
+            <div className={s.alerts} data-permit-hints>
+              {criteria.hints.map((h, i) => (
+                <div key={i} className={s.alertHint}>{h}</div>
+              ))}
+            </div>
+          ) : null}
+          <JurisdictionPanel plan={plan} update={update} editable={editable} onFile={onFile} countyName={countyName} pick={pick} />
           <SitePlanPanel plan={plan} fallback={fallback} update={update} readLot={readLot} busy={busy} said={said} editable={editable} hasAddress={!!address} detached={design.placement === "detached"} />
           <div className={s.panelFoot}>
             <span>{status}</span>
-            <span>{county ? `${county.county}: the county's own figures on file (${RESEARCHED_ON}) — ${county.jurisdiction}.` : countyName ? `${countyName}: not among the counties on file — the state's figures are used; confirm them with the building department.` : "The county is read from the address."}</span>
+            <span>{county ? `${county.city ? `${county.city} (${county.county})` : county.county}: ${county.city ? "the city's" : "the county's"} own figures on file (${RESEARCHED_ON}) — ${county.jurisdiction}.` : countyName ? `${countyName}: not among the counties on file — the state's figures are used; confirm them with the building department.` : "The county is read from the address."}</span>
           </div>
         </div>
 
@@ -182,6 +204,7 @@ function PermitSet({ design, address, title, shop, initialPlan, editable, built 
             structure={structure}
             checks={checks}
             set={which}
+            paper={pick.paper.key}
             shop={shop}
             criteria={criteria.rows}
             notes={notes}
@@ -345,6 +368,89 @@ function RoofSchedule({ structure }: { structure: DeckStructure }) {
 }
 
 /* ── The site plan's figures, on screen ─────────────────────────────────── */
+/* ── The jurisdiction and the sheets (2026-10-28) ─────────────────────── */
+/**
+ * What the sheets are checked against, and the paper they go on. The county or city on file is named; whatever the
+ * department's own Table R301.2 and submittal sheet say can be typed over it (any state, any city), and the sheet
+ * size and the smallest scales the department reads are picked here — "Auto" takes the smallest sheet that keeps them.
+ */
+function JurisdictionPanel({ plan, update, editable, onFile, countyName, pick }: { plan: SitePlan; update: (p: SitePlan) => void; editable: boolean; onFile: DeckCountyCode | null; countyName: string | null; pick: PaperPick }) {
+  const j = plan.jurisdiction;
+  const setJ = (patch: Partial<TypedJurisdiction>) => update({ ...plan, jurisdiction: { ...j, ...patch } });
+  const setSheets = (patch: Partial<SitePlan["sheets"]>) => update({ ...plan, sheets: { ...plan.sheets, ...patch } });
+  const numIn = (label: string, value: number | null, set: (n: number | null) => void, id: string, placeholder = "") => (
+    <label className={s.field}>
+      <span>{label}</span>
+      <input type="number" inputMode="decimal" step={1} value={value ?? ""} placeholder={placeholder} disabled={!editable} data-juris-field={id} onChange={(e) => { const raw = e.target.value.trim(); if (raw === "") return set(null); const n = Number(raw); if (Number.isFinite(n)) set(n); }} />
+    </label>
+  );
+  const textIn = (label: string, value: string, set: (v: string) => void, id: string, placeholder = "") => (
+    <label className={s.field}>
+      <span>{label}</span>
+      <input type="text" value={value} placeholder={placeholder} disabled={!editable} data-juris-field={id} onChange={(e) => set(e.target.value)} />
+    </label>
+  );
+  const onFileWords = onFile
+    ? `${onFile.city ? `${onFile.city} (${onFile.county})` : onFile.county} is on file (${RESEARCHED_ON}): ${onFile.jurisdiction}. ${[onFile.windMph != null ? `wind ${onFile.windMph} mph` : "", onFile.sdc ? `seismic ${onFile.sdc}` : "", onFile.frostIn != null ? `frost ${onFile.frostIn} in.` : "", onFile.groundSnowPsf != null ? `snow ${onFile.groundSnowPsf} psf` : ""].filter(Boolean).join(" · ")}.`
+    : countyName
+      ? `${countyName} is not among the counties on file: the sheets use the state's figures${plan.county?.sdc ? ` and the USGS seismic category (${plan.county.sdc})` : ""}. Type the department's own below — its Table R301.2 and its submittal sheet say them.`
+      : "No job address yet: set it in the studio to read the county, or type the department's figures below.";
+  const typed = jurisdictionTyped(j);
+  return (
+    <div className={s.sitePanel} data-jurisdiction-panel>
+      <div className={s.siteGroup}>
+        <div className={s.siteGroupTitle}>The jurisdiction</div>
+        <p className={s.siteSaid} data-jurisdiction-onfile>{onFileWords}{typed ? " Typed figures below win over these and are marked as typed on the sheets." : ""}</p>
+        <div className={s.fields}>
+          {textIn("Building department", j.department, (v) => setJ({ department: v }), "department", onFile?.jurisdiction.split(/ \(| — /)[0] ?? "City of … Building Division")}
+          {textIn("Code edition in force", j.edition, (v) => setJ({ edition: v }), "edition", onFile?.edition ?? "2024 IRC with local amendments")}
+          {numIn("Wind speed, mph (ultimate)", j.windMph, (n) => setJ({ windMph: n }), "wind", onFile?.windMph != null ? String(onFile.windMph) : "")}
+          {textIn("Seismic design category", j.sdc, (v) => setJ({ sdc: v.toUpperCase().slice(0, 2) }), "sdc", onFile?.sdc ?? plan.county?.sdc ?? "")}
+          {numIn("Frost line, in.", j.frostIn, (n) => setJ({ frostIn: n }), "frost", onFile?.frostIn != null ? String(onFile.frostIn) : "")}
+          {numIn("Ground snow, psf", j.groundSnowPsf, (n) => setJ({ groundSnowPsf: n }), "snow", onFile?.groundSnowPsf != null ? String(onFile.groundSnowPsf) : "")}
+          {textIn("Termite", j.termite, (v) => setJ({ termite: v }), "termite", onFile?.termite ?? "")}
+          {textIn("Weathering", j.weathering, (v) => setJ({ weathering: v }), "weathering", onFile?.weathering ?? "")}
+        </div>
+        <label className={s.field} style={{ marginTop: 8 }}>
+          <span>The department&apos;s own rules, one a line (they go on G-002 as local notes)</span>
+          <textarea rows={3} value={j.notes.join("\n")} disabled={!editable} data-juris-field="notes" onChange={(e) => setJ({ notes: e.target.value.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 12) })} />
+        </label>
+      </div>
+      <div className={s.siteGroup}>
+        <div className={s.siteGroupTitle}>The sheets</div>
+        <div className={s.fields}>
+          <label className={s.field}>
+            <span>Sheet size</span>
+            <select value={plan.sheets.paper} disabled={!editable} data-sheet-field="paper" onChange={(e) => setSheets({ paper: e.target.value as PaperChoice })}>
+              <option value="auto">Auto — the smallest that keeps the scales</option>
+              {PAPER_ORDER.map((k) => (
+                <option key={k} value={k}>{`${PAPERS[k].name} (${PAPERS[k].standard})`}</option>
+              ))}
+            </select>
+          </label>
+          <label className={s.field}>
+            <span>Plans no smaller than</span>
+            <select value={plan.sheets.minPlanInPerFt} disabled={!editable} data-sheet-field="plan-min" onChange={(e) => setSheets({ minPlanInPerFt: Number(e.target.value) })}>
+              {PLAN_SCALE_MINS.map((x) => (
+                <option key={x.inPerFt} value={x.inPerFt}>{x.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className={s.field}>
+            <span>Site plan no smaller than</span>
+            <select value={plan.sheets.minSiteFtPerIn} disabled={!editable} data-sheet-field="site-min" onChange={(e) => setSheets({ minSiteFtPerIn: Number(e.target.value) })}>
+              {SITE_SCALE_MINS.map((x) => (
+                <option key={x} value={x}>{siteScaleWords(x)}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <p className={s.siteSaid} data-sheet-pick>{pick.met ? `This set: ${pick.words}.` : pick.words}{onFile?.minSiteScaleFtPerIn ? ` ${onFile.city ?? onFile.county} asks the site plan at ${siteScaleWords(onFile.minSiteScaleFtPerIn)} or larger.` : ""}</p>
+      </div>
+    </div>
+  );
+}
+
 function SitePlanPanel({ plan, fallback, update, readLot, busy, said, editable, hasAddress, detached }: { plan: SitePlan; fallback: SitePlan; update: (p: SitePlan) => void; readLot: () => void; busy: boolean; said: string[]; editable: boolean; hasAddress: boolean; detached: boolean }) {
   const numIn = (label: string, value: number | null, set: (n: number | null) => void, opts: { allowEmpty?: boolean; step?: number; id?: string } = {}) => (
     <label className={s.field}>

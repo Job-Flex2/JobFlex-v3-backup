@@ -2583,3 +2583,18 @@
 .bp :global(.content .sf-note) { margin: 0 0 14px; font-size: 12.5px; line-height: 1.45; color: var(--ink-soft); }
 .bp :global(.content .sf-check) { display: flex; align-items: center; gap: 9px; cursor: pointer; }
 .bp :global(.content .sf-check input) { width: 16px; height: 16px; accent-color: #0f766e; }
+
+/* VISIT CARDS, SQUARED (owner, 2026-10-28: "the schedules slightly bump out of the grid … make the online badge or
+   any badges square, and the text inside contrasting"). The 7px corners pulled each card's frame off the grid's
+   square cells, so the column rule showed round its corners and the card read as standing proud of the grid. A
+   visit keeps its channel colour all the way round, now with square corners like every other block; the channel tag
+   is a square stamp; the title is full ink and the time line ink-soft rather than muted. */
+.bp :global(.content .evc--appointment) { border-radius: 0; }
+.bp :global(.content .evc-via) { border-radius: 0; height: 14px; padding: 0 5px; font-weight: 800; }
+.bp :global(.content .evc--appointment .evc-txt) { color: var(--ink); font-weight: 800; }
+.bp :global(.content .wg-ev.evc--appointment .wg-ev-time),
+.bp :global(.content .evc--appointment .evc-time) { color: var(--ink-soft); font-weight: 700; }
+.bp :global(.content .evc--apt-off .evc-txt) { color: var(--ink-soft); }
+/* The visit's sheet: the channel tag sits ABOVE "By the customer, on your booking page", not inline with it. */
+.bp :global(.content .sf-via > span:last-child) { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.bp :global(.content .sf-via .evc-via) { margin: 0; height: 18px; padding: 0 7px; font-size: 9.5px; }

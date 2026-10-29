@@ -74,7 +74,7 @@ export function PaymentCenter({ model, onClose, initialTarget = "next", method =
           <span className={styles.label}>{stageLabel}</span>
           <strong>{amount}</strong>
         </div>
-        {next && next.amountMinor < model.remainingMinor && <div className={styles.targets} role="radiogroup" aria-label="Amount to pay">
+        {next && next.amountMinor < model.remainingMinor && !model.financing?.coveredIds.length && <div className={styles.targets} role="radiogroup" aria-label="Amount to pay">
           <button type="button" role="radio" aria-checked={!remaining} disabled={Boolean(busy)} onClick={() => setTarget("next")}>
             <span className={styles.check} aria-hidden="true">{!remaining && <Check size={14} />}</span>
             <span className={styles.targetText}><span className={styles.label}>{next.label}</span><b>{next.amount}</b></span>

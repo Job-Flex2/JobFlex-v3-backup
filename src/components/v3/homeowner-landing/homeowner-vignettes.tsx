@@ -19,10 +19,14 @@
 
 import { useEffect, useState } from "react";
 import { useInViewOnce, useReducedMotion } from "./use-homeowner-behavior";
+import { storySteps } from "./homeowner-story";
 
-const TYPE_TEXT = "Remodel my 12×14 kitchen with white shaker cabinets and quartz…";
-const V_CHIPS = ["Quartz", "Granite", "Butcher block"];
-const V_ROWS = ["Cabinets: replace, shaker, ~14 ln ft", "Countertops: quartz, ~38 sf"];
+// THE STORY (2026-10-28, ./homeowner-story — "one homeowner portal"): one roof, told the way the portal works now —
+// the words, the price for the house, a JobFlex pro takes it, the proposal. The figures are an illustration.
+const TYPE_TEXT = "My roof is 15 years old and leaking around the chimney…";
+const V_CHIPS = ["Architectural", "Metal", "Impact-resistant"];
+const V_PRICES = ["$13,100–$16,800", "$22,900–$29,400", "$15,600–$20,000"];
+const V_ROWS = ["Proposal · 14 line items · $14,860", "Accepted online · in your dashboard"];
 
 /* виньетка 1 — печать (vignette 1 — typing).
    donor: `n = n >= TYPE_TEXT.length + 26 ? 0 : n + 1` every 55ms — the 26 extra
@@ -44,9 +48,9 @@ function VType({ started }: { started: boolean }) {
   return <span id="vType">{text}</span>;
 }
 
-/* виньетка 2 — чипы (vignette 2 — chips). donor: advance every 1700ms.
-   Chip 0 ships selected and stays selected when motion is reduced. */
-function VChips({ started }: { started: boolean }) {
+/* vignette 2 — the price: the roof's range for the house, re-priced as the material changes. Advances every 1700ms;
+   under reduced motion the first material stays, priced. */
+function VPrice({ started }: { started: boolean }) {
   const reduced = useReducedMotion();
   const [sel, setSel] = useState(0);
 
@@ -57,17 +61,20 @@ function VChips({ started }: { started: boolean }) {
   }, [started, reduced]);
 
   return (
-    <div className="v-chips" id="vChips">
-      {V_CHIPS.map((label, i) => (
-        <span key={label} className={i === sel ? "v-chip on" : "v-chip"}>
-          {label}
-        </span>
-      ))}
-    </div>
+    <>
+      <div className="v-price">{V_PRICES[sel]}</div>
+      <div className="v-chips">
+        {V_CHIPS.map((label, i) => (
+          <span key={label} className={i === sel ? "v-chip on" : "v-chip"}>
+            {label}
+          </span>
+        ))}
+      </div>
+    </>
   );
 }
 
-/* виньетка 3 — превращение в смету (vignette 3 — turning into an estimate).
+/* виньетка 4 — предложение (vignette 4 — the proposal; was "turning into an estimate" before 2026-10-28).
    donor `rowsOn(on)`: staggered 180ms in, instant out; the cycle drops the rows
    every 4200ms and brings them back 350ms later. */
 function VRows({ started }: { started: boolean }) {
@@ -126,7 +133,7 @@ function VRows({ started }: { started: boolean }) {
   );
 }
 
-/* виньетка 4 — уведомление (vignette 4 — notification). donor: shown at once,
+/* виньетка 3 — уведомление (vignette 3 — the match: "You're matched", as the email and text say). donor: shown at once,
    then re-dropped every 4600ms and restored 500ms later. */
 function VNote({ started }: { started: boolean }) {
   const reduced = useReducedMotion();
@@ -156,7 +163,7 @@ function VNote({ started }: { started: boolean }) {
           <span>now</span>
         </div>
         <p className="v-nb">
-          <em>Reyes &amp; Sons</em> <b>4.9</b> accepted your project — quote incoming.
+          You’re matched! <em>Reyes &amp; Sons</em> will contact you about your roof.
         </p>
       </div>
     </div>
@@ -166,14 +173,18 @@ function VNote({ started }: { started: boolean }) {
 export function StepsGrid({
   className,
   gridRef,
+  house = false,
 }: {
   className: string;
   gridRef: (el: Element | null) => void;
+  /** The house estimators on: step 02 names every estimator, not the roof alone (./homeowner-story). */
+  house?: boolean;
 }) {
   /* donor: one IntersectionObserver on `#steps`, threshold 0.15, `start()`
      once — the observer unobserves on the first hit and `run` never goes back
      to false, which is the donor's `running` latch. */
   const run = useInViewOnce("steps", 0.15);
+  const [s1, s2, s3, s4] = storySteps(house);
 
   return (
     <div className={className} id="steps" ref={gridRef}>
@@ -189,41 +200,23 @@ export function StepsGrid({
             </div>
           </div>
         </div>
-        <div className="st-n">01</div>
-        <div className="st-t">Describe it</div>
-        <p className="st-b">Plain English is perfect — type it, or just say it.</p>
+        <div className="st-n">{s1.n}</div>
+        <div className="st-t">{s1.title}</div>
+        <p className="st-b">{s1.body}</p>
       </div>
 
       <div className="st">
         <div className="vig">
           <div className="vig-in">
             <div className="v-q">
-              <div className="v-qt">2. Countertop material?</div>
-              <VChips started={run} />
-              <div className="v-qt dim">3. Is the layout changing?</div>
+              <div className="v-qt">Your roof · priced from the sky</div>
+              <VPrice started={run} />
             </div>
           </div>
         </div>
-        <div className="st-n">02</div>
-        <div className="st-t">Answer 3–5 smart questions</div>
-        <p className="st-b">Only what matters — size, materials, layout.</p>
-      </div>
-
-      <div className="st">
-        <div className="vig">
-          <div className="vig-in">
-            <div className="v-s">
-              <p className="v-raw">“new counters, kitchen kinda small, floor squeaks”</p>
-              <svg className="ic v-arrow">
-                <use href="#i-chev" />
-              </svg>
-              <VRows started={run} />
-            </div>
-          </div>
-        </div>
-        <div className="st-n">03</div>
-        <div className="st-t">Get a contractor-ready scope</div>
-        <p className="st-b">Your words become a professional Scope of Work.</p>
+        <div className="st-n">{s2.n}</div>
+        <div className="st-t">{s2.title}</div>
+        <p className="st-b">{s2.body}</p>
       </div>
 
       <div className="st">
@@ -233,9 +226,26 @@ export function StepsGrid({
             <VNote started={run} />
           </div>
         </div>
-        <div className="st-n">04</div>
-        <div className="st-t">A pro takes your job</div>
-        <p className="st-b">A local pro on JobFlex takes it and follows up with a line-item proposal.</p>
+        <div className="st-n">{s3.n}</div>
+        <div className="st-t">{s3.title}</div>
+        <p className="st-b">{s3.body}</p>
+      </div>
+
+      <div className="st">
+        <div className="vig">
+          <div className="vig-in">
+            <div className="v-s">
+              <p className="v-raw">Site visit · the details confirmed</p>
+              <svg className="ic v-arrow">
+                <use href="#i-chev" />
+              </svg>
+              <VRows started={run} />
+            </div>
+          </div>
+        </div>
+        <div className="st-n">{s4.n}</div>
+        <div className="st-t">{s4.title}</div>
+        <p className="st-b">{s4.body}</p>
       </div>
     </div>
   );

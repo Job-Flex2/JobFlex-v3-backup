@@ -45,10 +45,10 @@ export async function sendPlanReminders(now = new Date()): Promise<{ reminded: n
           when: planWhen(plan.plannedFor, plan.wholeMonth),
           daysAway: daysAway > 0 ? daysAway : 0,
           followUp,
-          // A range saved from /price (2026-10-27): its words, and "Get quotes" picks the flow up at the form.
+          // A range saved in the portal (2026-10-27): its words, and "Get quotes" picks the flow up at the form.
           notes: parsePlanEstimate(plan.notes) ? planRangeWords(parsePlanEstimate(plan.notes)!) : plan.notes,
           submitUrl: parsePlanEstimate(plan.notes)
-            ? `${appUrl}/price/roof?home=${encodeURIComponent(plan.home.accessToken)}&plan=${encodeURIComponent(plan.id)}`
+            ? `${appUrl}/homeowner/price/roof?home=${encodeURIComponent(plan.home.accessToken)}&plan=${encodeURIComponent(plan.id)}`
             : `${appUrl}/homeowner?home=${encodeURIComponent(plan.home.accessToken)}&plan=${encodeURIComponent(plan.id)}`,
           homeUrl: url,
         }),

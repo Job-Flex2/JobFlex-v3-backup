@@ -164,7 +164,7 @@ export function ClientHouse({ shape, house, shopName, onChange }: { shape: DeckS
                 <li>At that corner, measure how far the next part <b>sticks out</b> or <b>sits back</b>, face to face. Then measure its length — <b>wall 2</b>. Keep going to the right corner.</li>
                 <li>Last, measure from the left corner to where you want the deck to <b>start</b>.</li>
               </ol>
-              <p className={s.hint}>Measure the siding, not the trim. Half a foot is close enough — type 12.5 for 12 ft 6 in. {shopName} checks it on site before building.</p>
+              <p className={s.hint}>Measure the siding, not the trim. Half a foot is close enough — type 12.5 for 12 ft 6 in. {shopName.charAt(0).toUpperCase() + shopName.slice(1)} checks it on site before building.</p>
             </div>
           </details>
           <div className={s.lbl}>Your measurements — left corner to right corner</div>

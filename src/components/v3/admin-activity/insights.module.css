@@ -1,0 +1,68 @@
+/* ============================================================
+   WHAT MEMBERS DO — the analyst's card on /admin/activity
+   Blueprint vocabulary: ink lines, mono labels, one accent.
+   Scoped (0,3,0) like activity.module.css.
+   ============================================================ */
+
+:global(.jf-blueprint .content) .headNote { margin-top: 6px; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.5; letter-spacing: 0.04em; color: var(--muted-light); }
+
+/* The findings: a tone word in the margin, the title, the evidence, the one thing to do. */
+:global(.jf-blueprint .content) .findings { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 10px; }
+:global(.jf-blueprint .content) .finding { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 14px; padding: 12px 14px; border: 1.5px solid var(--hair); }
+:global(.jf-blueprint .content) .finding[data-tone="bad"] { border-color: var(--danger); background: var(--danger-soft); }
+:global(.jf-blueprint .content) .finding[data-tone="warn"] { border-color: var(--warning); background: var(--warning-soft); }
+:global(.jf-blueprint .content) .finding[data-tone="good"] { border-color: var(--success); background: var(--success-soft); }
+:global(.jf-blueprint .content) .toneWord { display: inline-flex; align-items: center; gap: 5px; align-self: start; padding-top: 2px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink); }
+:global(.jf-blueprint .content) .finding[data-tone="bad"] .toneWord { color: var(--danger); }
+:global(.jf-blueprint .content) .finding[data-tone="warn"] .toneWord { color: var(--warning-dark, var(--warning)); }
+:global(.jf-blueprint .content) .finding[data-tone="good"] .toneWord { color: var(--success-dark, var(--success)); }
+:global(.jf-blueprint .content) .findingBody { min-width: 0; }
+:global(.jf-blueprint .content) .findingTitle { display: block; font-size: 14px; font-weight: 700; line-height: 1.35; color: var(--ink); }
+:global(.jf-blueprint .content) .evidence { margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; }
+:global(.jf-blueprint .content) .action { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink); }
+:global(.jf-blueprint .content) .action span { display: inline-block; margin-right: 6px; padding: 1px 6px; border: 1.5px solid var(--ink); font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+:global(.jf-blueprint .content) .names { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+:global(.jf-blueprint .content) .names em { font-style: normal; padding: 2px 8px; border: 1px solid var(--ink); background: var(--paper); font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--ink); }
+
+/* The tables the findings were read from: two columns on a desk, one on a phone. */
+:global(.jf-blueprint .content) .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 28px; margin-top: 22px; }
+:global(.jf-blueprint .content) .block { min-width: 0; }
+:global(.jf-blueprint .content) .blockTitle { margin: 0; font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink); }
+:global(.jf-blueprint .content) .blockSub { margin: 4px 0 10px; font-size: 12px; line-height: 1.45; color: var(--muted-light); }
+:global(.jf-blueprint .content) .tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+:global(.jf-blueprint .content) .tbl th { padding: 0 8px 6px 0; border-bottom: 1.5px solid var(--ink); font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); text-align: left; }
+:global(.jf-blueprint .content) .tbl td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--hair); color: var(--ink); vertical-align: middle; }
+:global(.jf-blueprint .content) .tbl td:first-child { width: 40%; }
+:global(.jf-blueprint .content) .tbl small { font-family: var(--font-mono); font-size: 11px; color: var(--muted-light); }
+:global(.jf-blueprint .content) .tbl tr[data-gap="wide"] td:first-child { font-weight: 700; }
+:global(.jf-blueprint .content) .tbl td[data-lookers="many"] { color: var(--danger); font-weight: 700; }
+
+/* A bar with its figure: one ink, paying and lost in the two tones the ledger uses. */
+:global(.jf-blueprint .content) .barWrap { display: inline-flex; align-items: center; gap: 8px; min-width: 120px; max-width: 100%; vertical-align: middle; }
+:global(.jf-blueprint .content) .barWrap i { display: block; flex: 0 0 auto; width: 0; max-width: 90px; height: 8px; background: var(--ink); border-radius: 0; }
+:global(.jf-blueprint .content) .barWrap[data-tone="paying"] i { background: var(--success); }
+:global(.jf-blueprint .content) .barWrap[data-tone="lapsed"] i { background: var(--muted-light); }
+:global(.jf-blueprint .content) .barWrap b { font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+
+/* Chips: the screens a first sitting starts and ends on, the estimators, where sittings end. */
+:global(.jf-blueprint .content) .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 0; font-size: 12px; color: var(--ink); }
+:global(.jf-blueprint .content) .chips span { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+:global(.jf-blueprint .content) .chips em { font-style: normal; padding: 2px 8px; border: 1px solid var(--hair); font-size: 12px; color: var(--ink); }
+:global(.jf-blueprint .content) .chips em b { font-family: var(--font-mono); font-weight: 600; }
+:global(.jf-blueprint .content) .chips em[data-ratio="high"] { border-color: var(--warning); background: var(--warning-soft); }
+
+/* The hours: twenty-four thin columns, the busy ones filled. */
+:global(.jf-blueprint .content) .hours { display: flex; align-items: flex-end; gap: 3px; height: 72px; padding-bottom: 1px; border-bottom: 1.5px solid var(--ink); }
+:global(.jf-blueprint .content) .hours i { display: block; flex: 1 1 0; min-width: 0; background: var(--hair); }
+:global(.jf-blueprint .content) .hours i[data-busy="1"] { background: var(--blueprint); }
+:global(.jf-blueprint .content) .hourLabels { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 4px; font-family: var(--font-mono); font-size: 10px; color: var(--muted-light); }
+:global(.jf-blueprint .content) .note { margin: 8px 0 0; font-size: 12px; line-height: 1.45; color: var(--ink); }
+
+@media (max-width: 900px) {
+  :global(.jf-blueprint .content) .grid { grid-template-columns: minmax(0, 1fr); }
+  /* The paying / lost columns step aside on a phone: the week-one table below carries that comparison. */
+  :global(.jf-blueprint .content) .tbl [data-aside] { display: none; }
+  :global(.jf-blueprint .content) .barWrap { min-width: 96px; }
+  :global(.jf-blueprint .content) .barWrap i { max-width: 64px; }
+  :global(.jf-blueprint .content) .finding { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+}

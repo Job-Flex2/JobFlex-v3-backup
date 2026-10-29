@@ -27,6 +27,8 @@
 import type { DeckStructure } from "./structure";
 import { structureLevels } from "./structure";
 import { HOUSE_BODY_FT } from "./house";
+import { EMPTY_JURISDICTION, normalizeJurisdiction, type TypedJurisdiction } from "./countyCodes";
+import { DEFAULT_SHEET_PREFS, normalizeSheetPrefs, type SheetPrefs } from "./plans/paper";
 
 export type XY = [number, number];
 
@@ -71,11 +73,16 @@ export interface SitePlan {
   /** The zoning setbacks the deck must keep, typed from the zoning office (null = not checked). */
   setbackRearFt: number | null;
   setbackSideFt: number | null;
-  /** The county (or county-equivalent) the lot lies in, and who said so. */
-  county: { name: string; state: string; source: "census" | "parcel" | "typed" } | null;
+  /** The county (or county-equivalent) the lot lies in, who said so — and the city, when the geocoder named one
+   *  (a city with its own permit office reads its own figures: lib/deck/countyCodes). */
+  county: { name: string; state: string; source: "census" | "parcel" | "typed"; city?: string | null; sdc?: string | null } | null;
   /** The title block's typed lines: the owner of the property, the contractor's licence. */
   owner: string;
   licence: string;
+  /** The department's own figures and rules, typed when it is not on file (lib/deck/countyCodes). */
+  jurisdiction: TypedJurisdiction;
+  /** The sheet size and the smallest scales the department reads (lib/deck/plans/paper). */
+  sheets: SheetPrefs;
 }
 
 export type DeckSide = "rear" | "left" | "right" | "front";
@@ -125,6 +132,8 @@ export function defaultSitePlan(s: DeckStructure, address: string | null): SiteP
     county: null,
     owner: "",
     licence: "",
+    jurisdiction: EMPTY_JURISDICTION,
+    sheets: DEFAULT_SHEET_PREFS,
   };
 }
 
@@ -148,6 +157,8 @@ export const BASE_SITE_PLAN: SitePlan = {
   county: null,
   owner: "",
   licence: "",
+  jurisdiction: EMPTY_JURISDICTION,
+  sheets: DEFAULT_SHEET_PREFS,
 };
 
 /** A plan read back (from storage, from a form): every number held to its limits; anything unreadable falls to the default. */
@@ -166,7 +177,7 @@ export function normalizeSitePlan(raw: unknown, fallback: SitePlan = BASE_SITE_P
   const fp = ringOf(h.footprint, 5000);
   const countyR = obj(r.county);
   const county = str(countyR.name, 60) && /^[A-Z]{2}$/.test(str(countyR.state, 2).toUpperCase())
-    ? { name: str(countyR.name, 60), state: str(countyR.state, 2).toUpperCase(), source: (countyR.source === "parcel" || countyR.source === "census" ? countyR.source : "typed") as "census" | "parcel" | "typed" }
+    ? { name: str(countyR.name, 60), state: str(countyR.state, 2).toUpperCase(), source: (countyR.source === "parcel" || countyR.source === "census" ? countyR.source : "typed") as "census" | "parcel" | "typed", city: str(countyR.city, 60) || null, sdc: str(countyR.sdc, 3).toUpperCase() || null }
     : null;
   const setback = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? r1(clamp(v, SITE_LIMITS.setbackFt.min, SITE_LIMITS.setbackFt.max)) : null);
   return {
@@ -188,6 +199,8 @@ export function normalizeSitePlan(raw: unknown, fallback: SitePlan = BASE_SITE_P
     county: county ?? fallback.county,
     owner: str(r.owner, 80),
     licence: str(r.licence, 40),
+    jurisdiction: normalizeJurisdiction(r.jurisdiction),
+    sheets: normalizeSheetPrefs(r.sheets),
   };
 }
 

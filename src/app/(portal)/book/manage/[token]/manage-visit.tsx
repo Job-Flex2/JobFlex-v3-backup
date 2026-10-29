@@ -5,9 +5,7 @@
 
 import { useState, useTransition } from "react";
 import { availabilityForToken, cancelBookingPublic, rescheduleBookingPublic, type PublicDay } from "@/actions/booking";
-
-const BTN = "rounded-[10px] bg-[color:var(--ink,#111)] px-4 py-2.5 text-[13px] font-medium text-[color:var(--paper,#fff)] disabled:opacity-50";
-const GHOST = "rounded-[10px] border border-[color:var(--ink,#111)] px-4 py-2.5 text-[13px] font-medium disabled:opacity-50";
+import { DayPicker, SlotGroups } from "../../[slug]/book-wizard";
 
 export function ManageVisit({ token, status, when }: { token: string; status: string; when: string }) {
   const [days, setDays] = useState<PublicDay[] | null>(null);
@@ -42,27 +40,22 @@ export function ManageVisit({ token, status, when }: { token: string; status: st
     });
 
   return (
-    <div data-manage-status={state.status}>
-      <div className="text-[18px] font-semibold">{done ? "Canceled" : state.when}</div>
-      {msg && <p className="mt-2 text-[13px]">{msg}</p>}
+    <div className="jfb-manage" data-manage-status={state.status}>
+      <div className={`jfb-when${done ? " is-canceled" : ""}`}>
+        <span className="jfb-pick-k">{done ? "Status" : "Booked for"}</span>
+        <strong>{done ? "Canceled" : state.when}</strong>
+      </div>
+      {msg && <p className="jfb-msg" role="status">{msg}</p>}
       {!done && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" className={BTN} onClick={openTimes} disabled={pending} data-manage-move>Pick another time</button>
-          <button type="button" className={GHOST} onClick={cancel} disabled={pending} data-manage-cancel>Cancel the visit</button>
+        <div className="jfb-acts">
+          <button type="button" className="jfb-btn jfb-btn--primary" onClick={openTimes} disabled={pending} data-manage-move>Pick another time</button>
+          <button type="button" className="jfb-btn jfb-btn--danger" onClick={cancel} disabled={pending} data-manage-cancel>Cancel the visit</button>
         </div>
       )}
       {days && (
-        <div className="mt-4">
-          <div className="flex flex-wrap gap-2 mb-3">
-            {days.map((d) => (
-              <button key={d.day} type="button" onClick={() => setDay(d.day)} className={`rounded-[10px] border px-3 py-2 text-[13px] ${day === d.day ? "border-[color:var(--ink,#111)] bg-[color:var(--ink,#111)] text-white" : "border-[color:var(--ink-line,#ddd)]"}`}>{d.weekday.slice(0, 3)} {d.day.slice(5).replace("-", "/")}</button>
-            ))}
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2" data-manage-slots>
-            {(days.find((d) => d.day === day)?.slots ?? []).map((s) => (
-              <button key={s.iso} type="button" onClick={() => move(s.iso)} disabled={pending} className="rounded-[10px] border border-[color:var(--ink-line,#ddd)] px-3 py-2 text-[13px] hover:border-[color:var(--ink,#111)]">{s.label}</button>
-            ))}
-          </div>
+        <div className="jfb-move">
+          <DayPicker days={days} day={day} onDay={setDay} />
+          <SlotGroups slots={days.find((d) => d.day === day)?.slots ?? []} onSlot={(s) => move(s.iso)} disabled={pending} attr="manage" />
         </div>
       )}
     </div>

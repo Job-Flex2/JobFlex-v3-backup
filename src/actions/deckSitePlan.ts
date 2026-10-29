@@ -17,6 +17,7 @@ import { censusGeocode } from "@/lib/hvac/publicGeo";
 import { geocode, isMapsEnabled } from "@/lib/maps";
 import { lookupParcelByPoint } from "@/lib/parcelLookup";
 import { addressKey, writeSitePlan } from "@/lib/deck/sitePlanStore";
+import { usgsSeismicCategory } from "@/lib/deck/seismic";
 import { boxOf, lotFromRing, normalizeSitePlan, pointInPolygon, polygonArea, streetFrom, type SitePlan, type XY } from "@/lib/deck/sitePlan";
 
 type Gate = { ok: true; organizationId: string } | { ok: false; error: string };
@@ -50,14 +51,17 @@ export async function saveDeckSitePlan(input: { address: string; plan: unknown; 
 }
 
 /** The county the address lies in (the Census Bureau's geocoder), for the county's design values. */
-export async function readDeckCounty(address: string): Promise<{ ok: true; county: { name: string; state: string } | null; street: string | null } | { ok: false; error: string }> {
+export async function readDeckCounty(address: string): Promise<{ ok: true; county: { name: string; state: string; city: string | null; sdc: string | null } | null; street: string | null } | { ok: false; error: string }> {
   const g = await gate();
   if (!g.ok) return g;
   const text = (address ?? "").trim().slice(0, 300);
   if (text.length < 8) return { ok: false, error: "Set the job's street address first." };
   const hit = await censusGeocode(text);
   if (!hit) return { ok: true, county: null, street: null };
-  return { ok: true, county: hit.county && hit.state ? { name: hit.county, state: hit.state.toUpperCase() } : null, street: hit.matched ? streetFrom(hit.matched) : null };
+  // The city too (the Census geocoder's address components): a city with its own permit office reads its own figures.
+  // The seismic category from the USGS for this point (lib/deck/seismic): the figure for a city nobody has on file.
+  const sdc = await usgsSeismicCategory(hit.lat, hit.lng);
+  return { ok: true, county: hit.county && hit.state ? { name: hit.county, state: hit.state.toUpperCase(), city: hit.city?.trim() || null, sdc } : null, street: hit.matched ? streetFrom(hit.matched) : null };
 }
 
 /**

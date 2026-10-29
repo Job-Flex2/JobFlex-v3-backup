@@ -5329,5 +5329,87 @@ export const COUNTY_CODES: DeckCountyCode[] = [
    }
   ],
   "confidence": "medium"
- }
+ },
+ // Added by hand 2026-10-28 (owner: "Sacramento — does it get the right code and submittal sizes?"): every figure
+ // with its source below; the County's ST-18 sheet was read from its search excerpt (the file returned 404 that day).
+ {
+  "state": "CA",
+  "county": "Sacramento County",
+  "fips": "06067",
+  "jurisdiction": "Sacramento County Building Permits & Inspection Division (unincorporated Sacramento County: Carmichael, Fair Oaks, Orangevale, Arden-Arcade, Antelope, Rio Linda and the rest outside the cities). A lot inside the City of Sacramento answers to the City's Community Development Department instead, with the City's own figures and plan-check rules.",
+  "edition": "2025 California Residential Code (Title 24, Part 2.5), effective January 1, 2026, with Sacramento County's amendments (County Code Title 16) — confirm the amendments with the division",
+  "frostIn": 12,
+  "groundSnowPsf": 0,
+  "windMph": 95,
+  "windBasis": "Risk Category II and prescriptive CRC work, per the County's ST-18 Building Design Criteria (90 mph Risk Category I, 105 mph Risk Category III/IV; lower speeds may apply to a specific site); ASCE 7 ultimate",
+  "sdc": "D",
+  "weathering": "Negligible",
+  "termite": "Very Heavy",
+  "deckNotes": [
+   "Plans go in electronically through the County's Citizen Access portal (actonline.saccounty.net), as PDF: drawings from 11 x 17 in. up to 24 x 36 in., every sheet to the same scale, fully dimensioned and legible (PR-11).",
+   "The cover sheet carries the project name and address, the owner's name and address, the Assessor's Parcel Number, the occupancy group (R-3 / U) and construction type, fire sprinklers if any, the California codes in force, the square footage, the zoning, the scope of work, an index of drawings and a vicinity map with a north arrow (PR-11).",
+   "The site plan shows the whole parcel with its dimensions and property lines, every structure on it, the distances from the new work to the property lines and to the street centerline, easements and setbacks, the direction of lot drainage and any retaining wall (PR-11).",
+   "Snow loads are not required for the design of structures in the County; the 100-year hourly rainfall is 1.5 in. per hour (ST-18).",
+   "There is no frost line: the CRC's 12-in. minimum footing depth below undisturbed ground (R403.1.4, R507.3.1) governs the deck's footings.",
+   "In a Fire Hazard Severity Zone or wildland-urban interface area the work meets CRC R337 (PR-11 still names it Section 327); the Office of the State Fire Marshal's map says whether the lot is in one.",
+   "Structural calculations, when the design leaves the prescriptive tables or the building official asks for them, come as two sets stamped and wet-signed by a design professional (PR-11)."
+  ],
+  "note": "ST-18 still cites the 2022 CBC and gives no seismic design category or frost line: D is the category the City of Sacramento publishes for the same ground (D0) and the CBC maps carry across the county; frost is 'N/A' on the City's table, so the CRC's 12-in. minimum is the figure. PR-11 is dated 1/18/2018. Confirm the 2025-code figures with the division before a submittal.",
+  "sources": [
+   {
+    "title": "Sacramento County PR-11 Residential Plan Requirements (1/18/2018)",
+    "url": "https://d2l2jhoszs7d12.cloudfront.net/state/CA/Counties/Sacramento%20County/Building%20Permit%20Applications/httpwww.building.saccounty.netContractorDeveloperPagesBuilding-Permits.aspx/Forms/PR-11%20Residential%20Plan%20Requirements.pdf"
+   },
+   {
+    "title": "Sacramento County ST-18 Building Design Criteria (wind by risk category, no snow, rainfall)",
+    "url": "https://development.saccounty.gov/content/dam/cd/building/docs/transition/ST-18%20Sacramento%20County%20Building%20Design%20Criteria.pdf"
+   },
+   {
+    "title": "Sacramento County Building Permits & Inspection Division (electronic submittal only)",
+    "url": "https://building.saccounty.gov/"
+   }
+  ],
+  "confidence": "medium",
+  "cities": [
+   {
+    "city": "Sacramento",
+    "jurisdiction": "City of Sacramento Community Development Department, Building Division (300 Richards Blvd.) — Electronic Plan Check only",
+    "edition": "2025 California Residential Code (Title 24, Part 2.5), effective January 1, 2026, as adopted by the City of Sacramento (City Code Title 15) with the City's amendments — confirm them with the Building Division",
+    "frostIn": 12,
+    "groundSnowPsf": 0,
+    "windMph": 110,
+    "windBasis": "Table R301.2 of the City's Residential Seismic and Wind Design Criteria (02-13-2024): 110 mph, topographic effects yes, no special wind region, no windborne-debris zone; ASCE 7 ultimate",
+    "sdc": "D0",
+    "weathering": "Negligible",
+    "termite": "Very Heavy",
+    "minSiteScaleFtPerIn": 8,
+    "deckNotes": [
+     "A permit is required for any deck attached to the house, whatever its size; a detached deck of 200 sq ft or less, not more than 30 in. above grade at any point and not serving the required exit door is exempt (CDD-0417, revised 01-01-2026; CRC R105.2).",
+     "Planning clearance comes first — a Planning approval or exemption stamp on the plans, or a signed exemption form, before the building submittal; setbacks, lot coverage and height are Planning's (CDD-0417, EPC guide).",
+     "Electronic Plan Check only: one vector PDF plotted to scale (plans at 1/4 in. = 1 ft or larger, the site plan at 1/8 in. = 1 ft or larger), landscape, no sheet smaller than 11 x 17 in., bookmarked by sheet, black and white; no electronic signatures and no locked files; a design professional's stamp, where one is needed, placed as an image and signed from the second review cycle on (EPC Submittal Guide v27; CDD-0312, revised 01-21-2025).",
+     "The set: cover sheet, site plan, foundation plan, floor plan, elevations, cross-sections and roof framing plan — combinable as long as the scale is kept — with enhanced attachment details: ledger attachment and waterproofing, post to beam, post to footing; species, grade, sizes and spans of every member; every fastener specified (CDD-0417).",
+     "The site plan states the square footage of every proposed structure, every setback to the property lines and the distances to the other structures; projections near a property line follow CRC Table R302.1(1) (CDD-0417).",
+     "Table R301.2 (City): wind 110 mph with topographic effects, Seismic Design Category D0, weathering negligible, no frost line, termite very heavy, no ground snow; flood hazards per the City's floodplain information."
+    ],
+    "sources": [
+     {
+      "title": "City of Sacramento — Residential Seismic and Wind Design Criteria (Table R301.2, created 02-13-2024)",
+      "url": "https://www.cityofsacramento.gov/content/dam/portal/cdd/Building/Plan-Review/Residential%20Seismic%20and%20Wind%20Design%20Criteria.pdf"
+     },
+     {
+      "title": "City of Sacramento CDD-0417 Residential Accessory Structures handout (revised 01-01-2026)",
+      "url": "https://www.cityofsacramento.gov/content/dam/portal/cdd/Building/Forms/CDD-0417_Residential-Accessory-Structures-Handout.pdf"
+     },
+     {
+      "title": "City of Sacramento Electronic Plan Check Submittal Guide, full version (v27, revised 2/12/2020)",
+      "url": "https://www.cityofsacramento.gov/content/dam/portal/cdd/Building/Plan-Review/Electronic-Plan-Check/EPC-Submittal-Guide-Full-Version.pdf"
+     },
+     {
+      "title": "City of Sacramento CDD-0312 New Residential Building submittal checklist (sheet size and scale minimums, revised 01-21-2025)",
+      "url": "https://www.cityofsacramento.gov/content/dam/portal/cdd/Building/Forms/CDD-0312_New-Residential-Building-1-2-Units-Submittal-Checklist.pdf"
+     }
+    ]
+   }
+  ]
+ },
 ];

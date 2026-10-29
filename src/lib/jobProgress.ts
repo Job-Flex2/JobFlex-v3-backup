@@ -121,6 +121,12 @@ export async function recordJobProgress(input: {
     // COMPLETED, the review request goes out.
     if (job.proposalId) {
       await db.proposal.updateMany({ where: { id: job.proposalId, organizationId, status: "ACCEPTED" }, data: { status: "COMPLETED" } });
+      // A client paying with a Wisetack loan is asked to confirm the job is done — the contractor's payout follows.
+      const financedId = job.proposalId;
+      afterResponse(async () => {
+        const { askClientDone } = await import("@/lib/financing/service");
+        await askClientDone(organizationId, financedId);
+      });
     }
     try {
       const { createReviewRequestInternal } = await import("@/lib/reviewRequestInternal");
