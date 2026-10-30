@@ -6,7 +6,9 @@
 // PRECISION FIRST (controller's rulings, 2026-10-30). A false positive here blocks a real how-to with no model call; a
 // miss still meets the model's PERSON_ONLY_TOPICS rule, commitsMoneyOrData and the cancel/delete/extension button
 // guard after it (cleanAnswer). So:
-//   · SECRETS run always, before any exemption — a pasted card number, password or sign-in code never reaches OpenAI.
+//   · SECRETS run always, before any exemption — a pasted card number, password, sign-in code or PIN never reaches
+//     OpenAI. secretTopic() is that check on its own: the one an "Answer it anyway" ask (Task 5) can never skip. A long
+//     digit string is a card only if it passes the Luhn check (tracking numbers, square footages mostly don't).
 //   · Every other pattern is said in the first person about their own JobFlex ("I want to cancel", "can you refund
 //     me", "my subscription") or ends the sentence there ("how do I turn off billing?"). A word alone — refund,
 //     chargeback, cancel, real person, owner — is never enough: contractors refund deposits, cancel visits, forward
@@ -22,7 +24,8 @@
 //   "cerrar la cuenta" (without "mi") · "dejar de cobrar" · "plan más barato" · "отписаться" · "GDPR request" ·
 //   "data deletion" · "suspicious email" · "my card was stolen" · "How do I cancel? My clients don't use it" (a client
 //   or AI desk word anywhere keeps a bare cancel null) · "my account was hacked and my proposals are gone" (a work word
-//   switches the break-in words off — never the secret detectors).
+//   switches the break-in words off — never the secret detectors) · "I'll file a chargeback on the job's deposit" and
+//   other MONEY_LOOSE phrasings that name the work.
 
 export type PersonTopic = "leaving" | "money" | "data" | "security" | "person";
 
@@ -80,14 +83,45 @@ const featureContext = (q: string) => someoneElses(q) || DESK_SIDE.test(q) || WO
 
 // ── Security ─────────────────────────────────────────────────────────────────
 
-/** A secret pasted in. Always on: a client's card number is still a card number. */
+/** A secret pasted in: a password, a sign-in code, a PIN. Always on: a client's card is still a card. */
 const SECRETS: RegExp[] = [
-  /\b(my|the|our) (password|passcode|pass) ?(is|was|:|=) ?["']?(?=\S*[\d!@#$%^&*])\S{4,}/,
-  /\b(mi|la|nuestra) (contrasena|clave) ?(es|era|:|=) ?["']?(?=\S*[\d!@#$%^&*])\S{4,}/,
-  /\b((verification|one-?time|login|log-?in|sign-?in|security|confirmation|2fa|auth\w*) code|(my|the|our) code) ?:? ?(is |was |= ?)?\d{6}\b/,
-  /\b(mi|el) codigo ?:? ?(es |era )?\d{6}\b/,
-  /\b\d{4}([ -]?)\d{4}\1\d{4}\1\d{1,7}\b|\b\d{13,19}\b/,
+  /\b(my|the|our) (password|passcode|pass) ?(is|was|:|=) ?["']?(?!\d+%)(?=\S*[\d!@#$%^&*])\S{4,}/,
+  /\b(mi|la|nuestra) (contrasena|clave) ?(es|era|:|=) ?["']?(?!\d+%)(?=\S*[\d!@#$%^&*])\S{4,}/,
+  /\b((verification|one-?time|login|log-?in|sign-?in|security|2fa|authenticat\w*) code|(my|the|our) code) ?:? ?(is |was |= ?)?\d{6}\b/,
+  /\bmi codigo ?:? ?(es |era )?\d{6}\b|\bel codigo (es|era) ?:? ?\d{6}\b/,
+  /\b(my|our) pin ?(is|was|:|=)? ?\d{4,8}\b/,
 ];
+/** A card number's shape: 4-4-4-n digits with one separator style, or 13–19 digits in a row. */
+const CARD_SHAPE = /\b\d{4}([ -]?)\d{4}\1\d{4}\1\d{1,7}\b|\b\d{13,19}\b/g;
+
+/** The Luhn check every card number passes — and most tracking numbers, square footages and invoice numbers don't. */
+function luhn(digits: string): boolean {
+  let sum = 0;
+  for (let i = 0; i < digits.length; i++) {
+    let d = digits.charCodeAt(digits.length - 1 - i) - 48;
+    if (i % 2 === 1) {
+      d *= 2;
+      if (d > 9) d -= 9;
+    }
+    sum += d;
+  }
+  return sum % 10 === 0;
+}
+
+function hasCardNumber(q: string): boolean {
+  for (const m of q.matchAll(CARD_SHAPE)) {
+    const digits = m[0].replace(/\D/g, "");
+    if (digits.length >= 13 && digits.length <= 19 && luhn(digits)) return true;
+  }
+  return false;
+}
+
+/** "security" when the question carries a secret — a card number (Luhn-checked), a password, a sign-in code, a PIN.
+ *  personTopic runs it first; it is also the one check an "Answer it anyway" ask can never skip (Task 5). */
+export function secretTopic(question: string): "security" | null {
+  const q = fold(question);
+  return SECRETS.some((r) => r.test(q)) || hasCardNumber(q) ? "security" : null;
+}
 /** Someone in their account, a stolen login, a phishing attempt — words, so a client or the work switches them off. */
 const BREAK_IN: RegExp[] = [
   /\b(hacked|hack into|hacking into)\b/,
@@ -122,15 +156,9 @@ const LEAVING_MINE: RegExp[] = [
   /\bdar(me|nos) de baja\b(?! de (los |las |el |la )?(correos?|emails?|mensajes?|notificaciones?|textos?|sms|alertas?|recordatorios?|boletin|newsletter))/,
   new RegExp(`\\b(quiero|queremos|voy a|vamos a|me gustaria|nos gustaria|necesito|decidi|decidimos) dejar (de usar )?jobflex${REASON_ES}`),
   new RegExp(`\\bno quiero seguir (pagando${REASON_ES}|pagando (por )?(jobflex|esto|el plan|la suscripcion)|usando jobflex|con jobflex)`),
-  new RegExp(`\\bya no (quiero|queremos|necesito|necesitamos) (pagar|jobflex|usar jobflex|la suscripcion|el plan|el servicio)${REASON_ES}`),
-  /\b(dejen|deje) de cobrar(me|nos)\b/,
-  new RegExp(`\\bno (me|nos) (cobren|cobres|cobre)( mas)?${STOP}`),
-  /\bbajar (de |mi |el )?plan\b(?! de )/,
   // Russian
   /отмен[а-я]*\s+(мо[а-я]*\s+)?подписк/,
   /закрыт[а-я]*\s+(мо[а-я]*\s+)?(аккаунт|акк|учетн)/,
-  /понизит[а-я]*\s+тариф/,
-  /перейти на (бесплатн|дешевл)[а-я]*\s+тариф/,
 ];
 /** Said without "my" — counts only when nothing in the question is the contractor's work, clients, team or desk. */
 const LEAVING: RegExp[] = [
@@ -152,6 +180,14 @@ const LEAVING: RegExp[] = [
   new RegExp(`\\bi('m| am) (leaving|quitting)( jobflex)?${REASON}|\\bi('m| am) done with (jobflex|this (app|software))\\b`),
   new RegExp(`\\b(don'?t|do not|no longer) (want|need) (jobflex|this (app|software|subscription)|the subscription|my (subscription|${PLAN}))${REASON}`),
   new RegExp(`\\bunsubscribe (me|us)( from (jobflex|the (${PLAN}|subscription|app)))?${STOP}|\\b(i want to|i'd like to|i need to|how do i|how can i|please) unsubscribe( from (jobflex|the (${PLAN}|subscription|app)|this (app|service)))?${STOP}`),
+  // Spanish — "el plan", "el servicio", "dejen de cobrarme" are also a client's plan or Stripe's fee: behind the gate
+  new RegExp(`\\bya no (quiero|queremos|necesito|necesitamos) (pagar|jobflex|usar jobflex|la suscripcion|el plan|el servicio)${REASON_ES}`),
+  /\b(dejen|deje) de cobrar(me|nos)\b/,
+  new RegExp(`\\bno (me|nos) (cobren|cobres|cobre)( mas)?${STOP}`),
+  /\bbajar (de |mi |el )?plan\b(?! de )/,
+  // Russian
+  /понизит[а-я]*\s+тариф/,
+  /перейти на (бесплатн|дешевл)[а-я]*\s+тариф/,
 ];
 /** "I want to cancel." / "How do I cancel? I don't use the calendar" / "Quiero cancelar" — cancel right after asking
  *  for it in the first person, and nothing after it but "now" or "please" before the sentence ends. Not "When I
@@ -162,8 +198,9 @@ function bareCancel(q: string): boolean {
   // "How do I cancel? The client changed their mind" is a client's job: a client or the AI desk anywhere keeps it null.
   if (CLIENT_SIDE.test(q) || DESK_SIDE.test(q)) return false;
   for (const m of [...q.matchAll(BARE_CANCEL), ...q.matchAll(BARE_CANCEL_ES)]) {
-    const before = q.slice(0, m.index).split(/[.?!;]/).pop() ?? "";
-    if (!featureContext(before)) return true;
+    // The order rule: work named BEFORE the cancel ("I sent the wrong proposal. How do I cancel?") is what they
+    // cancel; work named only after it ("I want to cancel. The estimates are wrong.") is their reason for leaving.
+    if (!featureContext(q.slice(0, m.index))) return true;
   }
   return false;
 }
@@ -186,7 +223,6 @@ const MONEY: RegExp[] = [
   new RegExp(`\\b(can|could|would|will) you (please )?waive (this month|this month'?s (bill|charge|fee|payment)|my (bill|fee|charge|payment|subscription)|(the|this) (fee|charge|bill)( for (me|us))?|it)${STOP}`),
   new RegExp(`\\bcredit (me|us)( back)?( please)?${STOP}`),
   /\bcredit (my|our) (account|card|bill)\b/,
-  /\b(can|could|would|will) you (give|issue|send|add|put) (me|us) (a |some |any )?credit\b(?! (cards?|scores?|checks?|approvals?|lines?|limits?|reports?))/,
   new RegExp(`\\b(i|we) (want|need|deserve|expect) (a |some )?credit( for (the|this|that|last) (month|outage|downtime|trouble|problem|issue|bug|error|mistake))?${STOP}`),
   /\b(extend|extension of|longer|more days on) (my|our|the) (free )?trial\b/,
   /\bdiscounts? (on|for|off|to) (my|our) (bill|billing|subscription|renewal|jobflex)\b/,
@@ -194,14 +230,8 @@ const MONEY: RegExp[] = [
   new RegExp(`\\b(can|could|would|will) you (give|offer) (me|us) (a |any |some )?(discount|deal|better price|lower price)${ON_THE_BILL}${STOP}`),
   new RegExp(`\\b(give|offer) (me|us) (a |any |some )?(discount|deal|better price)${STOP}`),
   /\b(i|we) (was|were|have been|'ve been|got|am being|'m being) (charged|billed) (twice|two times|double|again|by mistake|wrongly|without)/,
-  /\b(i|we) (was|were|have been|'ve been|got) (double[- ]?(charged|billed)|over-?charged)\b|\byou (over-?charged|double[- ]?charged) (me|us)\b/,
   /\byou (charged|billed) (me|us)\b/,
-  /\bunauthori[sz]ed (charge|payment) (on|from|to) (my|our)\b/,
-  /\b(i|we)('ll| will|'m going to| am going to|'m gonna| might| may| could)( just)? (file|open|start|request|do)( a)? (chargeback|dispute)\b/,
-  /\b(i|we)('ll| will|'m going to| am going to|'m gonna| want to| need to)( just)? dispute (the|this|your|a|my) (charge|payment|bill)\b/,
   /\b(compensate|reimburse) (me|us)\b/,
-  /\b(i|we) (want|deserve|expect|demand) (some |a |any )?(compensation|reimbursement)\b/,
-  /\b(can|could) (i|we) (get|have) (a |one |another |an )?(free|extra) months?\b|\b(give|offer) (me|us) (a |one |another |an )?(free|extra) months?\b/,
   // Spanish
   /\b(mi|nuestro) dinero de vuelta\b/,
   /\bdevolver(me|nos) (mi |el |nuestro )?(dinero|pago|cargo|cobro)\b/,
@@ -213,6 +243,18 @@ const MONEY: RegExp[] = [
   // Russian
   /верн[а-я]*\s+(мне\s+|мои\s+)?деньг/,
   /возврат[а-я]*\s+(денег|средств|оплат)/,
+];
+/** First person too, but also how a contractor talks about the work — a credit memo for a returned order, being
+ *  overcharged on materials, disputing a supplier's charge, reimbursing job expenses, an extra month on a client's
+ *  financing — so they count only when the question names nothing of the work, clients, team or desk. */
+const MONEY_LOOSE: RegExp[] = [
+  /\b(can|could|would|will) you (give|issue|send|add|put) (me|us) (a |some |any )?credit\b(?! (cards?|scores?|checks?|approvals?|lines?|limits?|reports?))/,
+  /\b(i|we) (was|were|have been|'ve been|got) (double[- ]?(charged|billed)|over-?charged)\b|\byou (over-?charged|double[- ]?charged) (me|us)\b/,
+  /\bunauthori[sz]ed (charge|payment) (on|from|to) (my|our)\b/,
+  /\b(i|we)('ll| will|'m going to| am going to|'m gonna| might| may| could)( just)? (file|open|start|request|do)( a)? (chargeback|dispute)\b/,
+  /\b(i|we)('ll| will|'m going to| am going to|'m gonna| want to| need to)( just)? dispute (the|this|your|a|my) (charge|payment|bill)\b/,
+  /\b(i|we) (want|deserve|expect|demand) (some |a |any )?(compensation|reimbursement)\b/,
+  /\b(can|could) (i|we) (get|have) (a |one |another |an )?(free|extra) months?\b|\b(give|offer) (me|us) (a |one |another |an )?(free|extra) months?\b/,
 ];
 
 // ── Data ─────────────────────────────────────────────────────────────────────
@@ -244,12 +286,12 @@ const PERSON_MINE: RegExp[] = [
   new RegExp(`\\b(can|could) (someone|somebody|a person)( from (jobflex|support|your team))? (please )?(call|phone) (me|us)( back)?( please| today| now| asap)?${STOP}`),
   /\b(speak|talk) (to|with) your (manager|supervisor|boss)\b/,
   // Spanish
-  /\bque alguien (me|nos) (llame|contacte|ayude)\b/,
+  /\bque alguien (me|nos) llame\b/,
   // Russian ("живой" folds to "живои", "поддержкой" to "поддержкои")
   /(поговорить|связаться|соедините)\s+с\s+(живым\s+)?(человеком|оператором|поддержко[иы]|менеджером)/,
   /жив(ои|ого|ым)\s+человек/,
 ];
-const PEOPLE = "(?:a |an |some |the )?(?:real |live |actual )?(?:human|person|agent|representative|rep|operator|someone|somebody|support|customer (?:service|support))";
+const PEOPLE = "(?:a |an |some |the )?(?:real |live |actual )?(?:human|person|agent|representative|operator|someone|somebody|support|customer (?:service|support))";
 /** Asking for a person in the first person — not when it's about callers, clients or the crew. */
 const PERSON_ASKED: RegExp[] = [
   new RegExp(`\\b${INTENT}\\s+(talk|speak|chat)\\s+(to|with)\\s+${PEOPLE}\\b(?! (on|at|in) (my|our|the|a) )`),
@@ -287,14 +329,14 @@ const LAW_OR_ANGER: RegExp[] = [
 /** A question only a person answers, said any way we know (English, Spanish, some Russian), or null. Precision
  *  first: a feature question that sounds alike is null, and the model's rules catch what this leaves. */
 export function personTopic(question: string): PersonTopic | null {
+  if (secretTopic(question)) return "security";
   const q = fold(question);
   if (!q) return null;
   const any = (rs: RegExp[]) => rs.some((r) => r.test(q));
   const work = featureContext(q);
-  if (any(SECRETS)) return "security";
   if (!work && !OWN_PEOPLE.test(q) && any(BREAK_IN)) return "security";
   if (any(LEAVING_MINE) || (!work && any(LEAVING)) || bareCancel(q)) return "leaving";
-  if (!someoneElses(q) && any(MONEY)) return "money";
+  if ((!someoneElses(q) && any(MONEY)) || (!work && any(MONEY_LOOSE))) return "money";
   if (!someoneElses(q) && any(DATA)) return "data";
   if (any(PERSON_MINE)) return "person";
   if (!CLIENT_SIDE.test(q) && !DESK_SIDE.test(q) && !CREW.test(q) && any(PERSON_ASKED)) return "person";

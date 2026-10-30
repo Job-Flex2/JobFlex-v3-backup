@@ -16,7 +16,7 @@ import {
   targetPage,
   type SmartHelpAnswer,
 } from "../../../src/lib/smarthelp/answer";
-import { personTopic as personTopicModule, PERSON_REPLY as PERSON_REPLY_MODULE } from "../../../src/lib/smarthelp/personTopic";
+import { personTopic as personTopicModule, PERSON_REPLY as PERSON_REPLY_MODULE, secretTopic } from "../../../src/lib/smarthelp/personTopic";
 import { GUIDES, GUIDE_TARGETS } from "../../../src/lib/smarthelp/guides";
 import { customerHandbook } from "../../../src/lib/smarthelp/knowledge";
 import { PERSON_ONLY_TOPICS, SUPPORT_AI_RULES } from "../../../src/lib/support/aiReply";
@@ -175,6 +175,45 @@ expectTopic(null, [
   "is the roof measurement checked by a real person?", "how do I add the co-owner's name to the client so both can sign?",
   "the house sold, how do I change the client to the new owner?", "in the HVAC estimator, how do I switch to the cheaper tier?",
 ]);
+
+// fix round 3 — NB1: the round-2 first-person money, Spanish and "rep" patterns need the work-word gate (findings r3).
+expectTopic(null, [
+  "we want reimbursement for job expenses on the Ramp card", "I want reimbursement tracking on jobs",
+  "I was overcharged on materials for the Smith job, how do I add a line for it?", "can we get an extra month on the financing for this job?",
+  "can you send me a credit memo for the returned shingles order?", "I need to dispute the charge on a supplier invoice",
+  "how do I talk to the rep who sold the job?", "I want to speak to the rep assigned to this lead",
+  "Ya no queremos el plan porque el cliente se mudó, ¿cómo lo cierro?", "Ya no necesito el servicio, el cliente canceló el trabajo",
+  "¿Cómo hago que Stripe deje de cobrarme comisión en los pagos de clientes?", "Quiero bajar el plan del cliente a básico",
+  "¿Cómo hago que alguien me ayude a medir el techo?",
+]);
+// fix round 3 — M2: codes and passwords that aren't secrets.
+expectTopic(null, [
+  "the confirmation code 482913 for the roof report order", "where do I record the payment authorization code 482913?",
+  "¿Dónde pongo el código 482913 del portón en las notas del trabajo?", "el código 104233 del material no aparece en la lista",
+  "mi contraseña es 100% correcta pero no entra", "my password is 100% correct but it won't let me in",
+]);
+// fix round 3 — M3: a PIN is a secret; a pin size is not.
+expectTopic("security", ["my pin is 4829"]);
+expectTopic(null, ['the pin is 3/8"']);
+// fix round 3 — M4: a long digit string is a card only if it passes the Luhn check. Luhn: 4242424242424242,
+// 4111111111111111, 5555555555554444 pass; 9400111202062100, 40217500005011, 794644790138495, 2400260018001200 fail.
+expectTopic("security", ["my card is 5555555555554444", "here is my card 4242 4242 4242 4242", "the client gave me card 4111111111111111 exp 12/27, how do I take the payment?"]);
+expectTopic(null, [
+  "the client's tracking number is 9400111202062100", "the parcel number is 40217500005011, where do I attach it to the job?",
+  "FedEx tracking 794644790138495 for the materials order", "the four roofs are 2400 2600 1800 1200 square feet",
+]);
+// fix round 3 — the order rule for a bare cancel: work named BEFORE the cancel is what they cancel; work named only
+// AFTER it is their reason for leaving.
+expectTopic(null, ["I sent the wrong proposal. How do I cancel?", "The job hasn't started yet. Can I cancel?"]);
+expectTopic("leaving", ["I want to cancel. The estimates are wrong.", "How do I cancel? I don't use the calendar"]);
+// fix round 3 — secretTopic: the secret check on its own (the one "Answer it anyway" can never skip).
+const secretCases = [
+  "my customer's card is 4242 4242 4242 4242, how do I charge it?",
+  "the client gave me card 4111111111111111 exp 12/27, how do I take the payment?",
+  "my password is Hunter22! and my client can't open the proposal",
+];
+check("secretTopic: a card or a password is security", secretCases.every((q) => secretTopic(q) === "security"), secretCases.map(secretTopic));
+check("secretTopic: a leaving question is not a secret", secretTopic("how do I cancel my plan") === null && personTopic("how do I cancel my plan") === "leaving");
 
 // THE PRECISION CORPUS (fix round 2, binding): realistic feature questions from every guide area, in English and
 // Spanish, phrased with the words the guard listens for — cancel, pause, stop, credit, refund, discount, delete,
