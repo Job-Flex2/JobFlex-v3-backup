@@ -29,8 +29,8 @@ export function guideCards(guides: Guide[], ctx: HelpContext): GuideCard[] {
   return [...todo, ...none, ...done, ...how];
 }
 
-/** A step with `blocked` set when the viewer's role or plan cannot open its page. */
-export function stepView(step: HelpStep, ctx: HelpContext): StepView {
+/** A step with `blocked` set when the viewer's role or plan cannot open its page. Needs only those two. */
+export function stepView(step: HelpStep, ctx: Pick<HelpContext, "role" | "lockedHrefs">): StepView {
   if (!step.open) return { ...step };
   const route = pathOf(step.open);
   if (!roleMayOpen(ctx.role, route)) return { ...step, blocked: "role" };
