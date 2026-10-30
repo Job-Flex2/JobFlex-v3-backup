@@ -1173,11 +1173,11 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
           </div>
 
           {/* TABS */}
-          <div className={styles.ptabs}>
+          <div className={styles.ptabs} data-active={tab}>
             <span className={styles.ptabInd} style={{ transform: `translateX(${tabIndex * 100}%)` }} />
             {TABS.map((t) => (
               <button key={t.key} className={`${styles.ptab} ${tab === t.key ? styles.active : ""}`}
-                type="button" aria-current={tab === t.key ? "page" : undefined} onClick={() => setTab(t.key)}>
+                type="button" data-tab={t.key} aria-current={tab === t.key ? "page" : undefined} onClick={() => setTab(t.key)}>
                 {t.label}
                 <span className={styles.ptabCount}>{counts[t.key]}</span>
               </button>

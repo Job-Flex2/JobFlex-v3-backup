@@ -2266,3 +2266,29 @@
 .bp :global(.content #allCard .ppl-side) { display: flex; flex-direction: column; justify-content: flex-start; }
 .bp :global(.content #allCard .ppl-acts) { gap: 5px; }
 .bp :global(.content #allCard .ppl-act) { height: 30px; }
+
+/* THE TABS, BIGGER AND IN COLOUR (owner, 2026-10-29: "make the All / Completed / Accepted buttons a bit bigger, and
+   add a bit of colour"). Each tab carries its own colour — All the blueprint blue, Accepted green as its status
+   badge, Completed the darker paid green — as a bar at its left edge and on its count; the open tab fills with a
+   tint of it and takes its offset shadow. */
+.bp :global(.content .ptabs .ptab) {
+  --tab: var(--blueprint);
+  gap: 10px; min-height: 46px; padding: 11px 20px 11px 17px;
+  border-left: 4px solid var(--tab);
+  font-size: 14.5px;
+}
+.bp :global(.content .ptabs .ptab[data-tab="accepted"]) { --tab: var(--success); }
+.bp :global(.content .ptabs .ptab[data-tab="completed"]) { --tab: var(--success-dark); }
+.bp :global(.content .ptabs .ptab .ptab-count) {
+  padding: 3px 7px; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--tab) 11%, #fff); color: var(--tab);
+  font-size: 12px; font-weight: 700;
+}
+.bp :global(.content .ptabs .ptab:hover) { background: color-mix(in srgb, var(--tab) 6%, #fff); color: var(--ink); }
+.bp :global(.content .ptabs .ptab.active) {
+  padding: 10.5px 19.5px 10.5px 17px;
+  border: 2px solid var(--tab); border-left-width: 4px;
+  background: color-mix(in srgb, var(--tab) 9%, #fff); color: var(--ink);
+  box-shadow: 2px 2px 0 var(--tab);
+}
+.bp :global(.content .ptabs .ptab.active .ptab-count) { background: var(--tab); color: #fff; }
