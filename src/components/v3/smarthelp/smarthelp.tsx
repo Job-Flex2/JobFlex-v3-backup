@@ -18,8 +18,14 @@
 // Help composer opens with the question and SmartHelp's answer in it, marked as SmartHelp's hand-off, so the support AI
 // only drafts and a person sends (support-widget/composer).
 //
-// MEMORY: the open state and the conversation (last 20 entries) live in this tab's sessionStorage — nothing is saved
-// to the account. Every read and write is in a try/catch: private windows and blocked storage just start empty.
+// MEMORY: the open state (folded too) and the conversation (last 20 entries) live in this tab's sessionStorage —
+// nothing is saved to the account. Every read and write is in a try/catch: private windows and blocked storage just
+// start empty.
+//
+// GOING TO A STEP'S PAGE is the app router's — except the page already showing with another ?query (an AI desk step,
+// a Settings pane): those pages read their section from the address when they load and keep it in their own state
+// after, so a router move would leave the old section up. That trip is a fresh load; the panel comes back from this
+// tab's memory and a Show me waits for the new page (showMeAfterLoad).
 
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -63,7 +69,7 @@ import { lockScroll } from "@/lib/scrollLock";
 import { HANDHELD, useIsHandheld } from "@/components/v3/responsive-shell/use-handheld";
 import { openSupportComposer, type SupportPrefill } from "@/components/v3/support-widget/support-widget";
 import { OPEN_EVENT, type OpenDetail } from "./events";
-import { MISS_EVENT, SmartHelpSpotlight, showMe } from "./spotlight";
+import { MISS_EVENT, SmartHelpSpotlight, showMe, showMeAfterLoad } from "./spotlight";
 import styles from "./smarthelp.module.css";
 
 export { openSmartHelp } from "./events";
@@ -119,7 +125,7 @@ type Saved = { view: "home" | "thread"; entries: Entry[] };
 
 // ── This tab's memory ────────────────────────────────────────────────────────
 
-function readSaved(): { open: boolean; chat: Saved } {
+function readSaved(): { open: boolean; folded: boolean; chat: Saved } {
   const chat: Saved = { view: "home", entries: [] };
   try {
     const raw = window.sessionStorage.getItem(CHAT_KEY);
@@ -135,13 +141,13 @@ function readSaved(): { open: boolean; chat: Saved } {
   } catch {
     /* storage blocked or junk: start empty */
   }
-  let open = false;
+  let state: string | null = null;
   try {
-    open = window.sessionStorage.getItem(OPEN_KEY) === "1";
+    state = window.sessionStorage.getItem(OPEN_KEY);
   } catch {
     /* storage blocked */
   }
-  return { open, chat };
+  return { open: state === "1" || state === "fold", folded: state === "fold", chat };
 }
 
 function save(key: string, value: string): void {
@@ -166,7 +172,7 @@ function pageName(open: string): string {
  *  sentence (it names the button). */
 function lookFor(step: StepView): string {
   if (step.show?.startsWith("nav:")) return `${pageName(step.show.slice(4))} in the menu`;
-  const first = step.text.split(/(?<=[.!?])\s/)[0].trim();
+  const first = step.text.split(/(?<=[.!?])\s/)[0].trim().replace(/[.!?]+$/, "");
   return first.length <= 90 ? first : `${first.slice(0, 89).trimEnd()}…`;
 }
 
@@ -192,6 +198,12 @@ function handoff(entry: Entry | undefined): SupportPrefill {
   }
   const said = entry.reply ? `\n\nSmartHelp said:\n${replyText(entry.reply)}` : "";
   return { message: `${entry.q}${said}`, category: categoryOf(entry), origin: "smarthelp", logId: entry.logId };
+}
+
+/** True when going to `open` must be a fresh load: the page already showing, with another ?query (see the header). */
+function needsLoad(open: string): boolean {
+  const to = new URL(open, window.location.href);
+  return to.pathname === window.location.pathname && to.search !== window.location.search;
 }
 
 // ── The viewport ─────────────────────────────────────────────────────────────
@@ -243,14 +255,15 @@ export function SmartHelpRoot() {
       const saved = readSaved();
       setChat(saved.chat);
       setOpen(saved.open);
+      setFolded(saved.folded);
       setMounted(true);
     };
     restore();
   }, []);
 
   useEffect(() => {
-    if (mounted) save(OPEN_KEY, open ? "1" : "0");
-  }, [open, mounted]);
+    if (mounted) save(OPEN_KEY, open ? (foldedRaw ? "fold" : "1") : "0");
+  }, [open, foldedRaw, mounted]);
   useEffect(() => {
     if (mounted) save(CHAT_KEY, JSON.stringify({ view: chat.view, entries: chat.entries.slice(-KEEP_ENTRIES) }));
   }, [chat, mounted]);
@@ -379,20 +392,34 @@ export function SmartHelpRoot() {
   function goOpen(step: StepView) {
     if (!step.open) return;
     setMiss(null);
-    router.push(step.open as Route);
     if (phone) setFolded(true);
+    if (needsLoad(step.open)) window.location.assign(step.open);
+    else router.push(step.open as Route);
   }
 
   /** Show me: the step's page, then its element lit. Below the desk the panel folds so the element is in view. */
   function goShow(step: StepView) {
     if (!step.show) return;
     setMiss(null);
+    if (!wide) setFolded(true);
+    if (step.open && needsLoad(step.open)) {
+      showMeAfterLoad(step.show, lookFor(step));
+      window.location.assign(step.open);
+      return;
+    }
     if (step.open) router.push(step.open as Route);
     showMe(step.show, lookFor(step));
-    if (!wide) setFolded(true);
   }
 
-  if (!mounted || !open) return <SmartHelpSpotlight />;
+  // The spotlight keeps its place in the tree whether the panel is up or not, so opening the panel never resets it.
+  if (!mounted || !open) {
+    return (
+      <>
+        <SmartHelpSpotlight />
+        {null}
+      </>
+    );
+  }
 
   const owner = panel?.ctx.role === "OWNER";
   const lastEntry = chat.entries[chat.entries.length - 1];

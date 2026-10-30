@@ -14,6 +14,7 @@ import { makeCx } from "@/components/v3/admin-users/admin-kit";
 import shared from "@/components/v3/admin-users/admin-shared.module.css";
 import { ago } from "@/components/v3/admin-overview/admin-ui";
 import { smartHelpSummary, type QuestionLog } from "@/lib/smarthelp/log";
+import styles from "./smarthelp-admin.module.css";
 
 const sx = makeCx(shared);
 
@@ -22,12 +23,12 @@ export type SmartHelpGuideRow = { id: string; title: string; opens: number; up: 
 /** The page's two views, as links: each reads only its own data. */
 export function SupportViewTabs({ view }: { view: "tickets" | "smarthelp" }) {
   const tab = (to: "tickets" | "smarthelp", label: string, href: string) => (
-    <Link href={href as Route} role="tab" aria-selected={view === to} className={cx(ui.segBtn, view === to && ui.segOn)}>
+    <Link href={href as Route} role="tab" aria-selected={view === to} className={cx(ui.segBtn, styles.view, view === to && ui.segOn)}>
       {label}
     </Link>
   );
   return (
-    <div className={ui.seg} role="tablist" aria-label="Support views" data-support-views>
+    <div className={cx(ui.seg, styles.views)} role="tablist" aria-label="Support views" data-support-views>
       {tab("tickets", "Tickets", "/admin/support")}
       {tab("smarthelp", "SmartHelp", "/admin/support?view=smarthelp")}
     </div>
