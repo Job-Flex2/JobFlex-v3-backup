@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { MetaConnection } from "../meta-connection";
 import { GmailConnection } from "./gmail-connection";
+import { RampConnection } from "./ramp-connection";
 import {
   COMING_SOON_TAB, comingSoonNote, connectionSubTabs, isVisibleSubTab,
   type PaneProps, type SubTabKey,
@@ -12,7 +13,7 @@ import {
 // Payments pane on 2026-09-26 (owner). Keep each provider mounted so switching
 // tabs retains unsaved fields.
 export function IntegrationsPane({ data, sub: wanted, notice }: PaneProps) {
-  const { gmail, meta } = data.integrations;
+  const { gmail, meta, ramp } = data.integrations;
   const tabs = connectionSubTabs({ gmail: !gmail.comingSoon || gmail.connected || Boolean(gmail.revokedAt) });
   const [sub, setSub] = useState<SubTabKey>(isVisibleSubTab(wanted, tabs) ? (wanted as SubTabKey) : tabs[0].key);
   const [seenWanted, setSeenWanted] = useState(wanted);
@@ -20,8 +21,8 @@ export function IntegrationsPane({ data, sub: wanted, notice }: PaneProps) {
     setSeenWanted(wanted);
     if (isVisibleSubTab(wanted, tabs)) setSub(wanted as SubTabKey);
   }
-  const soon: Partial<Record<SubTabKey, boolean>> = { gmail: gmail.comingSoon, meta: meta.comingSoon };
-  const names: Partial<Record<SubTabKey, string>> = { gmail: "Gmail sending", meta: "Meta business" };
+  const soon: Partial<Record<SubTabKey, boolean>> = { gmail: gmail.comingSoon, meta: meta.comingSoon, ramp: !ramp.enabled && !ramp.connected };
+  const names: Partial<Record<SubTabKey, string>> = { gmail: "Gmail sending", meta: "Meta business", ramp: "Ramp cards" };
 
   return <>
     {soon[sub] && <div className="note note--soon" style={{ marginBottom: "14px" }}>
@@ -35,5 +36,6 @@ export function IntegrationsPane({ data, sub: wanted, notice }: PaneProps) {
     </div>
     <div className={sub === "gmail" ? "subpane on" : "subpane"}><GmailConnection data={gmail} notice={notice?.gmail} /></div>
     <div className={sub === "meta" ? "subpane on" : "subpane"}><MetaConnection data={meta} /></div>
+    <div className={sub === "ramp" ? "subpane on" : "subpane"}><RampConnection data={ramp} /></div>
   </>;
 }

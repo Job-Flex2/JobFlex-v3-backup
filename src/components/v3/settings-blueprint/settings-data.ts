@@ -568,7 +568,7 @@ export const BILLING_CONTACT_LABELS = { billingEmail: 'Billing email' } as const
 /* Integrations pane — subtabs                                         */
 /* ------------------------------------------------------------------ */
 
-export type SubTabKey = 'gmail' | 'meta' | 'stripe' | 'square' | 'stax' | 'financing';
+export type SubTabKey = 'gmail' | 'meta' | 'ramp' | 'stripe' | 'square' | 'stax' | 'financing';
 
 export interface SubTab {
   readonly key: SubTabKey;
@@ -592,6 +592,7 @@ export function comingSoonNote(name: string): string {
    remains visible only for enabled or previously connected accounts. */
 export const INTEGRATION_SUBTABS: readonly SubTab[] = [
   { key: 'meta', label: 'Meta business' },
+  { key: 'ramp', label: 'Ramp cards' },
   { key: 'stripe', label: 'Stripe' },
   { key: 'square', label: 'Square' },
   { key: 'stax', label: 'Stax' },
@@ -1466,9 +1467,28 @@ export interface ProcessorIntegrationData {
   lastEventAt: string | null;
 }
 
+/** Ramp cards (2026-10-29): the company's Ramp business, connected or not, and what the card is allowed to do. */
+export interface RampData {
+  enabled: boolean;
+  connected: boolean;
+  businessName: string;
+  connectedAt: string | null;
+  lastSyncAt: string | null;
+  lastSyncCount: number;
+  lastError: string | null;
+  fieldReady: boolean;
+  webhookReady: boolean;
+  askByText: boolean;
+  requireJob: boolean;
+  billsApproved: boolean;
+  connectHref: string;
+  canManage: boolean;
+}
+
 export interface IntegrationsData {
   gmail: GmailData;
   meta: MetaData;
+  ramp: RampData;
   stripe: ProcessorIntegrationData;
   square: ProcessorIntegrationData;
   connections: PaymentConnectionStatusView;
