@@ -24,12 +24,17 @@ const HISTORY_KEEP = 20;
 
 // ── Keys ─────────────────────────────────────────────────────────────────────
 
-/** `smarthelp:q:<ISO time>-<rand>` — an ISO time has a fixed width, so the keys sort by time as strings. */
-export function logKey(at: Date, rand: string): string {
-  return `${LOG_PREFIX}${at.toISOString()}-${rand}`;
+/** A log entry's id, `<ISO time>-<rand>`: its key without the prefix — what the panel holds and sends back to rate it.
+ *  The one place an id is made. */
+export function logIdOf(at: Date, rand: string): string {
+  return `${at.toISOString()}-${rand}`;
 }
 
-/** A log entry's id: its key without the prefix — what the panel holds and sends back to rate it. */
+/** `smarthelp:q:<ISO time>-<rand>` — an ISO time has a fixed width, so the keys sort by time as strings. */
+export function logKey(at: Date, rand: string): string {
+  return `${LOG_PREFIX}${logIdOf(at, rand)}`;
+}
+
 const LOG_ID = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z-[a-z0-9]{4,16}$/;
 
 /** True for the id of a log entry, and nothing else — the panel's id never names another row. */
@@ -78,7 +83,7 @@ export function questionLog(input: {
 }): QuestionLog {
   const { at, question, reply } = input;
   return {
-    id: logKey(at, input.rand).slice(LOG_PREFIX.length),
+    id: logIdOf(at, input.rand),
     at: at.toISOString(),
     orgId: input.orgId,
     orgName: input.orgName,
@@ -193,10 +198,23 @@ export function questionOf(raw: unknown): { question: string } | { error: string
   return { question };
 }
 
-/** The page the panel says it is on. Context words for the model and the log only — never a link: an app path of
- *  up to 300 characters with no spaces, else the Overview. */
+const HOME = "/dashboard";
+/** A settings pane's key, as in /dashboard/settings?pane=payments. */
+const PANE = /^[a-z-]{1,30}$/;
+
+/** The page the panel says it is on. Context words for the model and the log only — never a link: an app path of up
+ *  to 300 characters with no spaces, plus its settings pane (`?pane=<key>`) if it names one. Every other query and the
+ *  hash are dropped — a sign-in code, a token or a search for a client never reaches the prompt or the log. Anything
+ *  else is the Overview. */
 export function cleanPage(page: unknown): string {
-  return typeof page === "string" && /^\/\S{0,299}$/.test(page) ? page : "/dashboard";
+  if (typeof page !== "string") return HOME;
+  const noHash = page.split("#")[0];
+  const q = noHash.indexOf("?");
+  const path = q < 0 ? noHash : noHash.slice(0, q);
+  if (!/^\/\S{0,299}$/.test(path)) return HOME;
+  const pane = q < 0 ? null : new URLSearchParams(noHash.slice(q + 1)).get("pane");
+  const withPane = pane && PANE.test(pane) ? `${path}?pane=${pane}` : path;
+  return withPane.length <= 300 ? withPane : path;
 }
 
 export type Turn = { q: string; a: string };

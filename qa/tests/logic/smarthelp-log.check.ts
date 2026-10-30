@@ -13,6 +13,7 @@ import {
   cleanPage,
   guideKey,
   isLogId,
+  logIdOf,
   logKey,
   parseGuideCounts,
   parseQuestionLog,
@@ -75,6 +76,16 @@ const notIds: unknown[] = [
   { id: anId },
 ];
 check("isLogId: not a key, not another row, not junk", notIds.every((v) => !isLogId(v)), notIds.filter((v) => isLogId(v)));
+// The one place an id is made — questionLog and the server's log write both use it.
+check(
+  "logIdOf: <ISO time>-<rand>, exactly logKey's suffix, and a log id",
+  typeof logIdOf === "function" &&
+    times.every((t, i) => {
+      const rand = `r${i}x9z8y7`;
+      const id = logIdOf(new Date(t), rand);
+      return id === `${new Date(t).toISOString()}-${rand}` && LOG_PREFIX + id === logKey(new Date(t), rand) && isLogId(id);
+    }),
+);
 
 // ── The text of a reply ──────────────────────────────────────────────────────
 
@@ -183,6 +194,12 @@ check(
     rec.outcome === "none",
   rec,
 );
+check("questionLog: its id is logIdOf(at, rand)", typeof logIdOf === "function" && rec.id === logIdOf(at, "a1b2c3d4"), rec.id);
+check(
+  "questionLog: the page keeps no query but its pane, and no hash",
+  questionLog({ ...who, page: "/dashboard/clients?q=Test%20Person#notes", question: "where are my clients?", reply: steps }).page === "/dashboard/clients" &&
+    questionLog({ ...who, page: "/dashboard/settings?pane=payments&code=123", question: "how do I get paid?", reply: steps }).page === "/dashboard/settings?pane=payments",
+);
 const heldPassword = questionLog({ ...who, question: SECRET_PASSWORD, reply: personReply("security") });
 const heldCard = questionLog({ ...who, question: SECRET_CARD, reply: personReply("security") });
 check(
@@ -278,6 +295,27 @@ const pages: Array<[unknown, string]> = [
   [undefined, "/dashboard"],
 ];
 check("cleanPage: an app path of up to 300 characters, else /dashboard", pages.every(([p, want]) => cleanPage(p) === want), pages.map(([p]) => cleanPage(p)));
+// Only a settings pane survives: a sign-in code, a token or a search for a client never reaches the prompt or the log.
+const panes: Array<[unknown, string]> = [
+  ["/dashboard/settings?pane=payments", "/dashboard/settings?pane=payments"],
+  ["/dashboard/x?code=123&state=abc", "/dashboard/x"],
+  ["/dashboard#tok", "/dashboard"],
+  ["/dashboard/settings?tab=billing&pane=payments#top", "/dashboard/settings?pane=payments"],
+  ["/dashboard/settings?pane=Pay_Ments", "/dashboard/settings"],
+  [`/dashboard/settings?pane=${"a".repeat(31)}`, "/dashboard/settings"],
+  ["/dashboard/settings?pane=pay ments", "/dashboard/settings"],
+  ["/dashboard/phone?tab=settings&step=business", "/dashboard/phone"],
+  ["/dashboard/clients?q=Test%20Person", "/dashboard/clients"],
+  ["/dashboard?", "/dashboard"],
+  ["#/dashboard/x", "/dashboard"],
+  [`/${"a".repeat(285)}?pane=${"b".repeat(30)}`, `/${"a".repeat(285)}`],
+];
+check(
+  "cleanPage: the path and its settings pane only — any other query, and the hash, are dropped",
+  panes.every(([p, want]) => cleanPage(p) === want),
+  panes.map(([p]) => cleanPage(p)),
+);
+check("cleanPage: cleaning a clean page changes nothing", [...pages, ...panes].every(([p]) => cleanPage(cleanPage(p)) === cleanPage(p)));
 
 const history = cleanHistory([
   { q: " how do I send a proposal? ", a: " Open Proposals. " },

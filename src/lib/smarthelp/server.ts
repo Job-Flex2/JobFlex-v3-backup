@@ -3,9 +3,11 @@ import "server-only";
 // question log, the guide counters). What is asked when, and the limits, are the actions' (src/actions/smartHelp.ts);
 // the pure parts are ./log.
 //
-// THE CONTEXT is read fresh for every panel open, guide and question, all at once: eight setup facts — each one that
-// can't be read counts as "not done", so its guide stays on top (the safe side) — the plan, the pages it locks, and
-// the two features still opening (online booking, website estimators). No client, lead or money data.
+// THE CONTEXT is read fresh, all at once, and only as far as it is needed. A panel open and a question for the model
+// read it all (helpContextFor): eight setup facts — each one that can't be read counts as "not done", so its guide
+// stays on top (the safe side) — the plan, the pages it locks, and the two features still opening (online booking,
+// website estimators). A guide reads only what the person may open (viewerAccess); a reply given without the model
+// reads only the plan, for its log row. No client, lead or money data.
 //
 // THE MODEL IS THE PLATFORM'S COST: lib/support/unmeteredOpenAI, never getOpenAI() or anything that meters the
 // organization's trial budget (lib/trialMeter).
@@ -32,6 +34,7 @@ import {
   cleanPage,
   guideKey,
   isLogId,
+  logIdOf,
   logKey,
   parseGuideCounts,
   parseQuestionLog,
@@ -95,36 +98,41 @@ export async function readSetupState(orgId: string): Promise<SetupState> {
   return { profile, aiDesk, texting, payments, booking, website, team, proposalSent };
 }
 
-/** The plan by the name the sidebar shows (app/(dashboard)/layout): an ended subscription is the Free plan. */
-async function planNameOf(orgId: string): Promise<string | null> {
-  const sub = await db.subscription.findUnique({ where: { organizationId: orgId }, select: { plan: true, status: true } });
-  if (onFreePlan(sub)) return FREE_PLAN_NAME;
-  return sub?.plan ? await getPlanDisplayName(sub.plan) : null;
+/** The plan by the name the sidebar shows (app/(dashboard)/layout): an ended subscription is the Free plan. Null when
+ *  there is none, or it can't be read. */
+export async function planNameOf(orgId: string): Promise<string | null> {
+  try {
+    const sub = await db.subscription.findUnique({ where: { organizationId: orgId }, select: { plan: true, status: true } });
+    if (onFreePlan(sub)) return FREE_PLAN_NAME;
+    return sub?.plan ? await getPlanDisplayName(sub.plan) : null;
+  } catch {
+    return null;
+  }
+}
+
+type Viewer = { organizationId: string; role: string | null; user: { email?: string | null } };
+
+/** What the person may open: their role (requireOrg's), the pages their plan locks and the features still opening —
+ *  all a guide's steps need (stepView), so a guide tap reads no setup facts. */
+export async function viewerAccess(who: Viewer): Promise<Pick<HelpContext, "role" | "lockedHrefs" | "features">> {
+  const [locked, website] = await Promise.all([
+    getBlockedCustomPages(who.organizationId).catch(() => null),
+    fact(() => webEstimatorOpen()),
+  ]);
+  return {
+    role: who.role,
+    lockedHrefs: locked ?? [],
+    // Online booking is early access (the page itself redirects everyone else); website estimators open with the
+    // owner's one switch.
+    features: { booking: canSeeEarlyAccess(who.user.email), website },
+  };
 }
 
 /** Everything SmartHelp knows about the person: role, plan, locked pages, setup, open features, and the page they
  *  are on (`page` is the panel's word — context only, see cleanPage). */
-export async function helpContextFor(
-  ctx: { organizationId: string; role: string | null; user: { email?: string | null } },
-  page: string,
-): Promise<HelpContext> {
-  const orgId = ctx.organizationId;
-  const [setup, plan, locked, website] = await Promise.all([
-    readSetupState(orgId),
-    planNameOf(orgId).catch(() => null),
-    getBlockedCustomPages(orgId).catch(() => null),
-    fact(() => webEstimatorOpen()),
-  ]);
-  return {
-    role: ctx.role,
-    plan,
-    lockedHrefs: locked ?? [],
-    setup,
-    // Online booking is early access (the page itself redirects everyone else); website estimators open with the
-    // owner's one switch.
-    features: { booking: canSeeEarlyAccess(ctx.user.email), website },
-    page: cleanPage(page),
-  };
+export async function helpContextFor(ctx: Viewer, page: string): Promise<HelpContext> {
+  const [setup, plan, access] = await Promise.all([readSetupState(ctx.organizationId), planNameOf(ctx.organizationId), viewerAccess(ctx)]);
+  return { ...access, plan, setup, page: cleanPage(page) };
 }
 
 // ── The model ────────────────────────────────────────────────────────────────
@@ -133,15 +141,20 @@ export async function helpContextFor(
  *  isn't a JSON object — the action shows its one plain line instead. */
 export async function modelReply(input: { question: string; history: Turn[]; ctx: HelpContext }): Promise<SmartHelpReply> {
   const model = await resolveOpenAIModel();
-  const completion = await unmeteredOpenAI().chat.completions.create({
-    model,
-    ...(await samplingOptions(0.2)),
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: smartHelpSystemPrompt() },
-      { role: "user", content: smartHelpUserPrompt({ question: input.question, history: input.history.slice(-HISTORY_TURNS), ctx: input.ctx }) },
-    ],
-  });
+  const completion = await unmeteredOpenAI().chat.completions.create(
+    {
+      model,
+      ...(await samplingOptions(0.2)),
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: smartHelpSystemPrompt() },
+        { role: "user", content: smartHelpUserPrompt({ question: input.question, history: input.history.slice(-HISTORY_TURNS), ctx: input.ctx }) },
+      ],
+    },
+    // Someone is waiting in the panel: one try of at most 30 seconds, then the plain line (the client's own 120 s and
+    // retry are for the support AI, which answers after the response).
+    { timeout: 30_000, maxRetries: 0 },
+  );
   const answer = smartHelpAnswerSchema.parse(JSON.parse(completion.choices[0]?.message?.content ?? ""));
   return cleanAnswer(answer, input.ctx, helpTargets());
 }
@@ -151,68 +164,81 @@ export async function modelReply(input: { question: string; history: Turn[]; ctx
 const SWEEP_EVERY_MS = 3_600_000;
 let sweptAt = 0;
 
-/** Questions untouched for LOG_KEEP_DAYS go — looked for at most once an hour on each server instance. */
+/** Questions untouched for LOG_KEEP_DAYS go — looked for at most once an hour on each server instance. Its own
+ *  failure is its own log line: the question it follows was written. */
 async function sweepOldQuestions(now: number): Promise<void> {
   if (now - sweptAt < SWEEP_EVERY_MS) return;
   sweptAt = now;
-  await db.syncState.deleteMany({
-    where: { key: { startsWith: LOG_PREFIX }, updatedAt: { lt: new Date(now - LOG_KEEP_DAYS * 86_400_000) } },
-  });
+  try {
+    await db.syncState.deleteMany({
+      where: { key: { startsWith: LOG_PREFIX }, updatedAt: { lt: new Date(now - LOG_KEEP_DAYS * 86_400_000) } },
+    });
+  } catch (err) {
+    console.warn("[smarthelp] the 90-day sweep of old questions failed:", err instanceof Error ? err.message : err);
+  }
 }
 
-/** One typed question's log entry: its id at once (the panel rates it, "Ask a person" carries it), and `save`, which
- *  writes the row — the action runs it after the response. Best-effort: a failed write is a log line, never a lost
- *  answer. A secret in the question is not kept (questionLog). */
-export function questionEntry(who: Asker, ctx: HelpContext, question: string, reply: SmartHelpReply): { id: string; save: () => Promise<void> } {
+/** The parts of the person's context a question's row keeps. */
+export type LogView = Pick<HelpContext, "role" | "plan" | "page">;
+
+/** Keeps one typed question (questionLog: a secret in it is not kept) and returns its id — the panel rates the entry
+ *  by it and "Ask a person" carries it. The action awaits it, so the row exists before the id is used. Best-effort: a
+ *  failed write is a log line, never a lost answer. */
+export async function logQuestion(who: Asker, view: LogView, question: string, reply: SmartHelpReply): Promise<string> {
   const at = new Date();
   const rand = randomBytes(4).toString("hex");
-  return {
-    id: logKey(at, rand).slice(LOG_PREFIX.length),
-    save: async () => {
-      try {
-        const org = await db.organization.findUnique({ where: { id: who.organizationId }, select: { name: true } });
-        const rec = questionLog({
-          at,
-          rand,
-          orgId: who.organizationId,
-          orgName: org?.name ?? "",
-          userId: who.user.id,
-          userName: who.user.name ?? null,
-          role: ctx.role,
-          plan: ctx.plan,
-          page: ctx.page,
-          question,
-          reply,
-        });
-        await db.syncState.create({ data: { key: logKey(at, rand), cursor: JSON.stringify(rec) } });
-        await sweepOldQuestions(at.getTime());
-      } catch (err) {
-        console.warn("[smarthelp] the question log was not written:", err instanceof Error ? err.message : err);
-      }
-    },
-  };
+  const id = logIdOf(at, rand);
+  try {
+    const org = await db.organization.findUnique({ where: { id: who.organizationId }, select: { name: true } });
+    const rec = questionLog({
+      at,
+      rand,
+      orgId: who.organizationId,
+      orgName: org?.name ?? "",
+      userId: who.user.id,
+      userName: who.user.name ?? null,
+      role: view.role,
+      plan: view.plan,
+      page: view.page,
+      question,
+      reply,
+    });
+    await db.syncState.create({ data: { key: logKey(at, rand), cursor: JSON.stringify(rec) } });
+  } catch (err) {
+    console.warn("[smarthelp] the question log was not written:", err instanceof Error ? err.message : err);
+    return id;
+  }
+  await sweepOldQuestions(at.getTime());
+  return id;
 }
 
-/** A 👍 / 👎 — or "Ask a person" — on one log entry, by the person who asked it and nobody else. */
+/** Compare-and-swap rounds before a write gives up (a row two requests change at once). */
+const CAS_ATTEMPTS = 4;
+
+/** A 👍 / 👎 — or "Ask a person" — on one log entry, by the person who asked it and nobody else. A compare-and-swap on
+ *  the row, re-read when another write got there first, so a 👍 racing the "Ask a person" mark can't write over it
+ *  (withOutcome keeps "person"). "busy": still racing after CAS_ATTEMPTS rounds — nothing was written. */
 export async function setQuestionOutcome(
   logId: string,
   userId: string,
   outcome: Exclude<QuestionLog["outcome"], "none">,
-): Promise<"ok" | "gone" | "not-yours"> {
+): Promise<"ok" | "gone" | "not-yours" | "busy"> {
   if (!isLogId(logId)) return "gone";
   const key = `${LOG_PREFIX}${logId}`;
-  const row = await db.syncState.findUnique({ where: { key }, select: { cursor: true } });
-  const rec = row ? parseQuestionLog(row.cursor) : null;
-  if (!rec) return "gone";
-  if (rec.userId !== userId) return "not-yours";
-  const next = withOutcome(rec, outcome);
-  if (next.outcome !== rec.outcome) await db.syncState.updateMany({ where: { key }, data: { cursor: JSON.stringify(next) } });
-  return "ok";
+  for (let attempt = 0; attempt < CAS_ATTEMPTS; attempt++) {
+    const row = await db.syncState.findUnique({ where: { key }, select: { cursor: true } });
+    const rec = row ? parseQuestionLog(row.cursor) : null;
+    if (!row || !rec) return "gone";
+    if (rec.userId !== userId) return "not-yours";
+    const next = withOutcome(rec, outcome);
+    if (next.outcome === rec.outcome) return "ok";
+    const { count } = await db.syncState.updateMany({ where: { key, cursor: row.cursor }, data: { cursor: JSON.stringify(next) } });
+    if (count === 1) return "ok";
+  }
+  return "busy";
 }
 
 // ── Guide counters ───────────────────────────────────────────────────────────
-
-const CAS_ATTEMPTS = 4;
 
 /** One more open, 👍 or 👎 on a guide (`id`: a GUIDES id). Compare-and-swap like lib/rateLimit, so two at once both
  *  count. Best-effort: a counter never stands in a guide's way. */
