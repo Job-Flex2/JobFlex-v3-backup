@@ -11,218 +11,26 @@
 // buttons, gives no steps below CONFIDENCE_MIN, and turns an answer that commits money or data — or names the buttons
 // that cancel or delete — into "Ask a person".
 //
-// PERSON TOPICS ARE CAUGHT TWICE: personTopic() before the model (no call is made), and after it the model's own kind
-// "person" plus commitsMoneyOrData on everything it wrote. The topics are the support AI's own (PERSON_ONLY_TOPICS,
-// lib/support/aiReply) — shared, not copied.
+// PERSON TOPICS ARE CAUGHT TWICE: personTopic() (./personTopic, re-exported here) before the model, so no call is
+// made; and after it the model's own kind "person" plus commitsMoneyOrData and the cancel/delete buttons on everything
+// it wrote. The topics are the support AI's own (PERSON_ONLY_TOPICS, lib/support/aiReply) — shared, not copied.
 import { z } from "zod";
 import { NAV_SECTIONS, flattenNavItems } from "@/components/v3/blueprint-shell/nav-map";
 import { PERSON_ONLY_TOPICS, commitsMoneyOrData } from "@/lib/support/aiReply";
 import { GUIDES, GUIDE_TARGETS } from "./guides";
 import { customerHandbook } from "./knowledge";
 import { HELP_PAGES, isHelpPage, pathOf } from "./pages";
+import { PERSON_REPLY, type PersonTopic } from "./personTopic";
 import type { HelpContext, HelpStep, SetupKey, StepView } from "./types";
 import { stepView } from "./view";
+
+export { PERSON_REPLY, personTopic, type PersonTopic } from "./personTopic";
 
 /** Below this the panel shows no steps, only "Ask a person". */
 export const CONFIDENCE_MIN = 60;
 /** The turns of the conversation the model reads. */
 export const HISTORY_TURNS = 6;
 const STEPS_MAX = 8;
-
-// ── The person-topic guard (before the model) ───────────────────────────────
-
-export type PersonTopic = "leaving" | "money" | "data" | "security" | "person";
-
-/** Lower case, accents off (Spanish "suscripción" → "suscripcion", Russian "й" → "и"), one kind of apostrophe. */
-function fold(q: string): string {
-  return q
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[’‘`´]/g, "'")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/** Someone else's account, plan or card — the contractor's clients, their service plans, their team: features. */
-const CLIENT_SIDE = /\b(clients?|customers?|homeowners?|clientes?|service plans?|maintenance plans?|their (card|plan|account|subscription|membership)|team ?members?|members?)\b/;
-/** Work a contractor cancels every day — a job, a visit, a proposal — and the screens they press Cancel on. */
-const WORK_OBJECT =
-  /\b(jobs?|appointments?|visits?|bookings?|reservations?|proposals?|invoices?|estimates?|quotes?|meetings?|events?|orders?|calls?|texts?|messages?|sms|emails?|leads?|projects?|reminders?|inspections?|install\w*|shifts?|deliver\w*|requests?|signatures?|schedul\w*|calendar|crew|workers?|deposits?|drafts?|uploads?|imports?|changes?|edits?|reports?|tours?|plan sets?|permits?|downloads?|files?|photos?|videos?|payments?|button|dialog|window|pop-?up|modal|screen|form|estimator|studio|drawing|design|cita|citas|trabajos?|visitas?|reservas?|propuestas?|facturas?|presupuestos?|cotizacion\w*|estimados?|reunion\w*|eventos?|orden\w*|llamadas?|mensajes?|proyectos?|recordatorios?|instalacion\w*|inspeccion\w*)\b/;
-const MINE = "(?:my|our|mi|mis|nuestra|nuestro)";
-const FILLER = "(?:the|this|a|an|whole|entire|current|free|paid|monthly|yearly|annual|jobflex|jobflex's|pro|professional|starter|advanced|la|el|de|del|una|un)";
-/** Their JobFlex plan — never a plan set or a plan sheet (the blueprint and deck plans). */
-const PLAN = "plan(?! (?:sets?|sheets?|pages?|views?|drawings?|reviews?|checks?))";
-/** The contractor's own JobFlex: the plan, the subscription, an add-on, the account, the trial. */
-const OWN_THING = `(?:${PLAN}|subscriptions?|account|membership|trial|billing|renewal|auto-?renew\\w*|add-?ons?|deck studio(?! (?:designs?|drawings?|projects?|proposals?|links?))|jobflex|service(?! (?:calls?|visits?|plans?|appointments?|requests?|tickets?|area|radius|menu|desk))|suscripcion|subscripcion|cuenta|membresia|prueba|servicio)`;
-const CANCEL_WORD = /\bcancel\w*/;
-
-/** Leaving said of their own account ("cancel my plan", "close my account") — no client words can make it a feature. */
-const LEAVING_MINE: RegExp[] = [
-  new RegExp(`\\bcancel\\w*\\s+${MINE}\\s+(?:${FILLER}\\s+){0,2}${OWN_THING}\\b`),
-  /\b(close|deactivate|shut down|shutdown|terminate|suspend|pause|freeze|end)\s+(my|our)\s+(jobflex\s+)?(account|subscription|membership|plan)\b/,
-  /\bstop (charging|billing) (me|us|my card|our card|my account)\b/,
-  /\bcerrar (mi|nuestra) cuenta\b/,
-];
-/** Leaving said more loosely — read as leaving only when nothing in the question is about a client. */
-const LEAVING: RegExp[] = [
-  new RegExp(`\\bcancel\\w*\\s+(?:${FILLER}\\s+){0,3}${OWN_THING}\\b`),
-  /\bstop (charging|billing|the (charges|billing|subscription|renewal)|my (subscription|plan|membership|payments|billing|renewal)|paying)\b/,
-  /\b(don'?t|do not|never) (charge|bill) (me|us|my card)\b/,
-  /\b(don'?t|do not) want to (be )?(charged|billed|pay)\b/,
-  /\bno more (charges|payments|billing)\b/,
-  /\b(turn off|disable|stop|cancel) (the |my )?(auto-?renew\w*|automatic (renewal|billing|payments?|charges?))\b/,
-  /\bdowngrad\w*/,
-  /\b(switch|move|go|change|put|drop)( me| us)?( back| down)? (to|onto) (the |a )?(free|cheaper|cheapest|lower|smaller|starter) ?(plan|tier|version|one|subscription|$|[.!?,])/,
-  /\b(close|deactivate|shut down|shutdown|terminate|suspend|pause|freeze)\s+(the\s+)?(jobflex\s+)?(account|subscription|membership)\b/,
-  /\b(quit|quitting|leave|leaving|stop using|done with|get rid of)\s+jobflex\b/,
-  /\bi('m| am) (leaving|quitting|done with (jobflex|this))\b/,
-  new RegExp(`\\b(don'?t|do not|no longer) (want|need) (jobflex|this (app|software|subscription|${PLAN})|the (subscription|${PLAN})|my (subscription|${PLAN}))\\b`),
-  /\bunsubscribe\b(?!.*\b(emails?|notifications?|digests?|newsletters?|texts?|sms|alerts?|reminders?|messages?|mailing)\b)/,
-  // Spanish
-  /\bdar(me|nos|se)? de baja\b/,
-  /\bcerrar (la )?cuenta\b/,
-  /\b(dejar|dejen|deje) de (cobrar|pagar)\w*/,
-  /\bno (me |nos )?(cobren|cobres|cobre)\b/,
-  /\bno quiero (que me cobren|pagar)\b/,
-  /\bya no (quiero|queremos|necesito) (pagar|usar|jobflex|la suscripcion|el plan)\b/,
-  /\bbajar (de |mi |el )?plan\b/,
-  /\bplan (mas barato|gratis|gratuito)\b/,
-  // Russian
-  /отмен[а-я]*\s+(мо[а-я]*\s+)?подписк/,
-  /отписат/,
-  /закрыт[а-я]*\s+(мо[а-я]*\s+)?(аккаунт|акк|учетн)/,
-  /понизит[а-я]*\s+тариф/,
-  /перейти на (бесплатн|дешевл)/,
-];
-
-/** Money back, money off, a credit, a disputed charge — never "credit card", never a proposal's discount line. */
-const MONEY: RegExp[] = [
-  /\brefund\w*/,
-  /\breimburs\w*/,
-  /\bmoney back\b/,
-  /\bcompensat\w*/,
-  /\bchargeback\w*/,
-  /\bdisput\w* (a |the |this |my )?(charge|payment|bill)/,
-  /\b(charged|billed)( me)? (twice|two times|double|again|by mistake|wrongly|without)/,
-  /\bdouble[- ]?(charged|billed|charge)\b/,
-  /\bover-?charg\w*/,
-  /\bunauthori[sz]ed (charge|payment)/,
-  /\bfraud\w*/,
-  /\baccount credit\b/,
-  /\bcredit (me|us)\b/,
-  /\bcredits? (to|on|for|back to) (my|our|the) (account|bill|subscription|plan)\b/,
-  /\b(free|extra) months?\b/,
-  /\b(extend|extension of|longer|more days on) (my |the |our )?(free )?trial\b/,
-  /\bdiscounts? (on|for|off|to) (my|our|the) (bill|billing|subscription|plan|membership|renewal|price|payment|account|jobflex)\b/,
-  // Spanish
-  /\breembols\w*/,
-  /\b(devolver(me|nos)?|devuelv\w*|devolucion (de|del)) (mi |el |nuestro )?(dinero|pago|cargo|cobro)\b/,
-  /\bdevuelvan(me|nos)\b/,
-  /\bme cobraron (dos veces|de mas|doble)\b/,
-  /\bcobro (doble|indebido)\b/,
-  /\bmes(es)? gratis\b/,
-  /\bdescuento (en|para|de) (mi|nuestra|la) (factura|suscripcion|plan|cuenta|membresia|mensualidad)\b/,
-  // Russian
-  /верн[а-я]*\s+(мне\s+|мои\s+)?деньг/,
-  /возврат[а-я]*\s+(денег|средств|оплат)/,
-];
-/** Asking for a better price or a credit — money only when nothing in the question is a proposal, an invoice or a client's. */
-const PRICE_ASK: RegExp[] = [
-  /\b(give|get|issue|owe|want|offer)( me| us)? (a |some |any )?credit\b(?! (cards?|scores?|checks?|approvals?|lines?|limits?|reports?))/,
-  /\b(can|could|may|would) (i|we|you) (get|have|receive|give|offer)( me| us)? (a |any |some )?(discount|better price|lower price|cheaper price|deal)\b/,
-  /\b(give|offer) (me|us) (a |any |some )?(discount|deal|better price)\b/,
-  /\b(me|nos) (pueden|puede|podrian|podria|dan|da) (dar |hacer )?(un )?descuento\b/,
-];
-const FEATURE_DOC =
-  /\b(proposals?|estimates?|quotes?|invoices?|lines?|items?|clients?|customers?|jobs?|projects?|propuestas?|presupuestos?|facturas?|cotizacion\w*|clientes?)\b/;
-
-/** Deleting the account, the company or all of it — never one proposal, line or client. */
-const DATA: RegExp[] = [
-  /\b(delete|erase|wipe|remove|purge|destroy)\s+(all\s+(of\s+)?)?(my|our)\s+(jobflex\s+)?(account|company|business|organi[sz]ation|org|data|information|info|records|history|workspace)\b(?!\s+(logo|photo|picture|pic|name|address|email|phone|number|image|colou?rs?|description|hours|website|page|link|card|line|item))/,
-  /\b(delete|erase|wipe|remove|purge)\s+the\s+(jobflex\s+)?(account|company|organi[sz]ation|workspace)\s*($|[.!?,])/,
-  /\b(delete|erase|wipe|remove|purge)\s+(it\s+)?(all|everything)(\s+(of\s+)?(my|our)\s+(data|information|info|stuff|records))?(?=\s*($|[.!?,])|\s+(from|in|on|at)\s+(my|our|the)\s+(account|company|jobflex|system|database)|\s+(about|for)\s+(me|us|my company)|\s+(permanently|forever|for good|and close))/,
-  /\bgdpr\b|\bccpa\b|\bright to be forgotten\b|\bdata deletion\b/,
-  // Spanish
-  /\b(borrar|eliminar|suprimir|borra|elimina)\s+(toda\s+|todos\s+)?(mi|mis|nuestra|nuestros|nuestras|la)\s+(cuenta|datos|informacion|empresa|compania|negocio)\b/,
-  /\b(borrar|eliminar) todo(?=\s*($|[.!?,])|\s+(de|en) (mi|la) (cuenta|empresa))/,
-  // Russian
-  /удал[а-я]*\s+(мо[а-я]*\s+|все\s+)?(аккаунт|акк|учетн|данн)/,
-];
-
-/** Someone in their account, a stolen login, a secret pasted into the box. */
-const SECURITY: RegExp[] = [
-  /\bhack\w*/,
-  /\bcompromis\w*/,
-  /\bbreach\w*/,
-  /\bphish\w*/,
-  /\bunauthori[sz]ed (access|log ?-?in|sign[- ]?in|user|person|use)\b/,
-  /\bsuspicious (log ?-?in|sign[- ]?in|activity|email|access)\b/,
-  /\b(stolen|stole)\b.{0,30}\b(account|password|login|card)\b|\b(account|password|login|card)\b.{0,30}\b(stolen|stole)\b/,
-  /\b(my|the) (password|passcode|pin|verification code|one-?time code|login code|code) ?(is|:|=) ?["']?(?=\S*[\d!@#$%^&*])\S{4,}/,
-  /\b\d{4}([ -]?)\d{4}\1\d{4}\1\d{1,7}\b|\b\d{13,19}\b/,
-  // Spanish
-  /\b(hackearon|hackeado|hackeada|me robaron)\b/,
-  /\balguien (entro|accedio|inicio sesion|esta usando|uso) (a |en )?(mi|nuestra) cuenta\b/,
-  // Russian
-  /взлом/,
-];
-/** "Someone got into my account" — but someone on their own team signing in is the team guide. */
-const SOMEONE_IN_MY_ACCOUNT = /\b(someone|somebody|a stranger|an? unknown (person|user))\b.{0,40}\b(my|our) (account|login|password|email)\b/;
-const TEAM = /\b(team|crew|workers?|employees?|staff|office manager|my manager|partner)\b/;
-
-/** A person asked for, ownership, the law, anger. */
-const PERSON: RegExp[] = [
-  /\b(a|real|live|actual) human\b|\bhuman being\b|\b(real|live|actual) (person|agent)\b/,
-  /\bcustomer (service|support)\b/,
-  /\bcontact (support|you|jobflex|your team|the (jobflex )?team)\b/,
-  /\b(email|phone number|number) (for|of|to) (support|jobflex)\b/,
-  /\btransfer\w*\s+(the\s+|my\s+|our\s+)?(ownership|account|company|business)\b/,
-  /\b(change|switch|replace)\s+(the\s+)?(account\s+)?owner(ship)?\b(?!'s)/,
-  /\bnew (account )?owner\b/,
-  /\badd (an?|another|a second|a new) (co-?)?owners?\b|\bco-?owners?\b/,
-  /\bmake\s+(?!sure\b)(\S+\s+){1,3}(the|an?|co-?)\s*owners?\b(?!'s)/,
-  /\b(sold|selling|sell)\s+(my|the|our)\s+(business|company)\b/,
-  /\b(lawyer|attorney|lawsuit|legal action|legal team|sue (you|jobflex|them)|suing|subpoena|small claims|class action|better business bureau)\b/,
-  /\b(scam\w*|rip[- ]?off|ripped off|wtf|f+u+c+k\w*|bullshit)\b/,
-  // Spanish
-  /\bhablar con (una |un |alguna |algun |el |la )?(persona|humano|agente|representante|asesor|operador|alguien|soporte)\b/,
-  /\b(persona real|ser humano|atencion al cliente|servicio al cliente)\b/,
-  /\btransferir (la )?(cuenta|propiedad|empresa)\b/,
-  /\b(cambiar|nuevo) (el )?(dueno|propietario)\b/,
-  /\b(abogad\w*|demandar\w*|estafa\w*)\b|\b(una|poner|presentar) demanda\b/,
-  // Russian
-  /(поговорить|связаться|соедините)\s+с\s+(живым\s+)?(человеком|оператором|поддержкой|менеджером)/,
-  /жив(ой|ого|ым) человек/,
-  /юрист|адвокат|мошенни/,
-];
-/** "Talk to someone" — unless it's how their clients reach someone (the AI desk). */
-const TALK_TO_SOMEONE = /\b(talk|speak|chat)\s+(to|with)\s+(an?\s+|some\s+|the\s+)?(real\s+|live\s+|actual\s+)?(human|person|agent|representative|operator|someone|somebody|support)\b/;
-
-/** A question only a person answers, said any way we know (English, Spanish, a little Russian), or null. Features
- *  that sound alike — a discount line, a credit card, deleting a line item, cancelling a job or a visit — are null. */
-export function personTopic(question: string): PersonTopic | null {
-  const q = fold(question);
-  if (!q) return null;
-  const any = (rs: RegExp[]) => rs.some((r) => r.test(q));
-  const clientSide = CLIENT_SIDE.test(q);
-  if (any(SECURITY) || (SOMEONE_IN_MY_ACCOUNT.test(q) && !TEAM.test(q))) return "security";
-  const bareCancel = CANCEL_WORD.test(q) && !WORK_OBJECT.test(q);
-  if (any(LEAVING_MINE) || (!clientSide && (any(LEAVING) || bareCancel))) return "leaving";
-  if (any(MONEY) || (!FEATURE_DOC.test(q) && any(PRICE_ASK))) return "money";
-  if (any(DATA)) return "data";
-  if (any(PERSON) || (!clientSide && TALK_TO_SOMEONE.test(q))) return "person";
-  return null;
-}
-
-/** The line a person-topic reply shows (no steps; Ask a person comes first). */
-export const PERSON_REPLY: Record<PersonTopic, string> = {
-  leaving: "Cancelling or downgrading your plan is something a person on our team helps you with. Press Ask a person — your question goes with it.",
-  money: "Refunds, credits and discounts on your bill are answered by a person on our team. Press Ask a person — your question goes with it.",
-  data: "Deleting an account or its data is done with a person on our team, so nothing is lost by mistake. Press Ask a person.",
-  security: "A person on our team will help with your account's security right away. Press Ask a person — and never share a password, card number or code; we never need them.",
-  person: "A person on our team will answer you. Press Ask a person — your question goes with it.",
-};
 
 /** The line an answer shows when the model was not sure enough to give steps. */
 export const UNKNOWN_REPLY = "I'm not sure about this one — rather than guess, press Ask a person and our team will answer.";
@@ -301,30 +109,80 @@ export function helpTargets(): ReadonlySet<string> {
   return targetsMemo;
 }
 
+/** Guide targets whose guide step names no page: "Save & send" sits on the proposal draft
+ *  (components/v3/manual-card-lab/manual-blueprint), which every estimator's proposal button opens. */
+const TARGET_HOME: Readonly<Record<string, string>> = { "proposal-send": "/dashboard/manual-blueprint" };
+
+let targetPagesMemo: Map<string, { page?: string; guide: string }> | null = null;
+
+/** Where each guide target lives: the page its guide step opens, else the last page that guide opened before it. */
+function guideTargetPages(): Map<string, { page?: string; guide: string }> {
+  if (!targetPagesMemo) {
+    targetPagesMemo = new Map();
+    for (const g of GUIDES) {
+      let page: string | undefined;
+      for (const s of g.steps) {
+        page = s.open ?? page;
+        if (s.show && !targetPagesMemo.has(s.show)) targetPagesMemo.set(s.show, { page: TARGET_HOME[s.show] ?? page, guide: g.title });
+      }
+    }
+  }
+  return targetPagesMemo;
+}
+
+/** The page a Show me target is on: a sidebar row's own page, or the guide page that holds the target. */
+export function targetPage(show: string): string | undefined {
+  return show.startsWith("nav:") ? show.slice(4) : guideTargetPages().get(show)?.page;
+}
+
+/** The same page for Show me: a sidebar row by route (it is drawn on every page); a page target by its full link. */
+function samePage(home: string, open: string, nav: boolean): boolean {
+  return nav ? pathOf(home) === pathOf(open) : home.split("#")[0] === open.split("#")[0];
+}
+
 /** The buttons that cancel the plan or delete the account — an answer naming them is giving the person-only steps. */
 const LEAVING_BUTTONS = /\b(Cancel subscription|Continue to cancel|Request a trial extension|Delete my account|Delete account|Downgrade)\b/;
+const DELETE_WORDS = /\b(Delete (my )?account|(delete|deleted|erase|erased|remove|removed) your (account|data|company))\b/i;
+
+/** What a guarded answer is about, if it commits money or data or names the cancel/delete buttons. */
+function guardTopic(words: string): PersonTopic | null {
+  if (DELETE_WORDS.test(words) && (commitsMoneyOrData(words) || LEAVING_BUTTONS.test(words))) return "data";
+  if (LEAVING_BUTTONS.test(words)) return "leaving";
+  if (commitsMoneyOrData(words)) return "money";
+  return null;
+}
 
 function cleanStep(s: HelpStep, ctx: HelpContext, targets: ReadonlySet<string>): StepView {
   const open = s.open && isHelpPage(s.open) ? s.open : undefined;
-  const show = s.show && targets.has(s.show) ? s.show : undefined;
-  // A sidebar row is its page: a row the viewer may not open is blocked like an Open to it.
-  const page = open ?? (show?.startsWith("nav:") ? show.slice(4) : undefined);
+  let show = s.show && targets.has(s.show) ? s.show : undefined;
+  const home = show ? targetPage(show) : undefined;
+  // A target on another page than the step's Open would light nothing there: the Show me goes, the Open stays.
+  if (show && open && home && !samePage(home, open, show.startsWith("nav:"))) show = undefined;
+  // The page the step's buttons lead to — the target's page (a sidebar row is its page), else the Open.
+  const page = (show ? home : undefined) ?? open;
   const blocked = page ? stepView({ text: s.text, open: page }, ctx).blocked : undefined;
   if (blocked) return { text: s.text, blocked };
   return { text: s.text, ...(open ? { open } : {}), ...(show ? { show } : {}) };
 }
 
-/** The model's answer as the panel may show it. `targets` is helpTargets() (a parameter so a check can narrow it). */
+/** The model's answer as the panel may show it. `targets` is helpTargets() (a parameter so a check can narrow it).
+ *  A reply forced to "person" or "unknown" keeps the model's own title where it can — it is in the asker's language. */
 export function cleanAnswer(a: SmartHelpAnswer, ctx: HelpContext, targets: ReadonlySet<string>): SmartHelpReply {
   const words = [a.title, a.note ?? "", ...a.steps.map((s) => s.text)].join("\n");
-  if (commitsMoneyOrData(words) || LEAVING_BUTTONS.test(words)) return { kind: "person", title: PERSON_REPLY.person, steps: [], note: null };
+  const guarded = guardTopic(words);
+  if (guarded) {
+    // The model's title only when the model itself said person/unknown, and the title is not what tripped the guard.
+    const own = (a.kind === "person" || a.kind === "unknown") && a.title && !guardTopic(a.title) ? a.title : null;
+    return { kind: "person", title: own ?? PERSON_REPLY[guarded], steps: [], note: null };
+  }
   if (a.kind === "person") return { kind: "person", title: a.title || PERSON_REPLY.person, steps: [], note: a.note };
   if (a.kind === "unknown") return { kind: "unknown", title: a.title || UNKNOWN_REPLY, steps: [], note: a.note };
-  if (a.confidence < CONFIDENCE_MIN) return { kind: "unknown", title: UNKNOWN_REPLY, steps: [], note: null };
+  const unsure = (): SmartHelpReply => ({ kind: "unknown", title: a.title || UNKNOWN_REPLY, steps: [], note: a.title ? UNKNOWN_REPLY : null });
+  if (a.confidence < CONFIDENCE_MIN) return unsure();
   const steps = a.steps.map((s) => cleanStep(s, ctx, targets));
   if (steps.length) return { kind: a.kind, title: a.title, steps, note: a.note };
   if (a.note) return { kind: "explain", title: a.title, steps: [], note: a.note };
-  return { kind: "unknown", title: UNKNOWN_REPLY, steps: [], note: null };
+  return unsure();
 }
 
 // ── What the model reads ─────────────────────────────────────────────────────
@@ -366,18 +224,12 @@ function pagesBlock(): string {
 
 function targetsBlock(): string {
   const rows = sidebarRows();
-  // Where each guide target lives: the page its guide step opens, or the last page the guide opened before it.
-  const where = new Map<string, string>();
-  for (const g of GUIDES) {
-    let page: string | undefined;
-    for (const s of g.steps) {
-      page = s.open ?? page;
-      if (s.show && !where.has(s.show)) where.set(s.show, page ? `on ${page} (guide "${g.title}")` : `in the guide "${g.title}"`);
-    }
-  }
-  const lines = [...helpTargets()].map((t) =>
-    t.startsWith("nav:") ? `- ${t} — the "${rows.get(t.slice(4))}" row in the sidebar` : `- ${t} — ${where.get(t)}`,
-  );
+  const where = guideTargetPages();
+  const lines = [...helpTargets()].map((t) => {
+    if (t.startsWith("nav:")) return `- ${t} — the "${rows.get(t.slice(4))}" row in the sidebar`;
+    const w = where.get(t);
+    return `- ${t} — ${w?.page ? `on ${w.page} ` : ""}(guide "${w?.guide}")`;
+  });
   return `ALLOWED TARGETS — the only values "show" may take. A sidebar row is drawn only for people who may open its page:\n${lines.join("\n")}`;
 }
 

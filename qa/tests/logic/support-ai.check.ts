@@ -2,6 +2,7 @@
 // waits for a person, the notes around an answer, the copy to the support inbox, the fix brief, the row badges —
 // and the handbook it reads. Pure: no model, no database, no mail.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/support-ai.check.ts
+import { createHash } from "node:crypto";
 import {
   DEFAULT_SUPPORT_AI_MODE,
   SEND_CONFIDENCE_MIN,
@@ -111,6 +112,13 @@ check("the rules: the customer's language, exact names and links, nothing invent
 const user = supportUserPrompt({ ticket: { ref: "J7RCFS", subject: "S", body: "B", category: "technical", priority: "high", filedAt: "2026-10-15" }, facts: ["Plan Professional"], thread: [{ by: "JobFlex support", at: "t", body: "earlier" }], errors: [], appUrl: "https://jobflex.app/" });
 check("the ticket as the model reads it: ref, words, facts, the thread, errors, links", user.includes("TICKET J7RCFS") && user.includes("Message:\nB") && user.includes("- Plan Professional") && user.includes("ALREADY ANSWERED") && user.includes("- none recorded") && user.includes("Links go to https://jobflex.app."));
 check("the system message is the rules then the handbook", supportSystemPrompt().startsWith(SUPPORT_AI_RULES) && supportSystemPrompt().includes("HANDBOOK"));
+// SmartHelp moved the NEVER topics into PERSON_ONLY_TOPICS and interpolated them back (2026-10-29): the rules must read
+// byte for byte as at origin/main 646ab9eb — length + sha256 taken before that edit. A deliberate change to the rules
+// updates this pin.
+check(
+  "the rules read exactly as before PERSON_ONLY_TOPICS was moved out",
+  SUPPORT_AI_RULES.length === 6809 && createHash("sha256").update(SUPPORT_AI_RULES, "utf8").digest("hex") === "0014eadd6ebcbfc8bcd117c130a30e3c455e8843b87f0fd89743661ff61e135a",
+);
 
 // ── The answer in the Help window ───────────────────────────────────────────
 const thread: ThreadMessage[] = [

@@ -1,20 +1,22 @@
 // SmartHelp pure core: guide order, step gating, page registry vs real routes; the AI answer contract, the prompts and
 // the person-topic guard (Task 4). Pure: no model, no database.
 //   NODE_PATH="" npx --no-install tsx --tsconfig tsconfig.json qa/tests/logic/smarthelp.check.ts
-import { createHash } from "node:crypto";
 import { HELP_PAGES, isHelpPage, pathOf } from "../../../src/lib/smarthelp/pages";
 import { guideCards, stepView } from "../../../src/lib/smarthelp/view";
 import type { Guide, HelpContext, SetupState } from "../../../src/lib/smarthelp/types";
 import {
   PERSON_REPLY,
+  UNKNOWN_REPLY,
   cleanAnswer,
   helpTargets,
   personTopic,
   smartHelpAnswerSchema,
   smartHelpSystemPrompt,
   smartHelpUserPrompt,
+  targetPage,
   type SmartHelpAnswer,
 } from "../../../src/lib/smarthelp/answer";
+import { personTopic as personTopicModule, PERSON_REPLY as PERSON_REPLY_MODULE } from "../../../src/lib/smarthelp/personTopic";
 import { GUIDES, GUIDE_TARGETS } from "../../../src/lib/smarthelp/guides";
 import { customerHandbook } from "../../../src/lib/smarthelp/knowledge";
 import { PERSON_ONLY_TOPICS, SUPPORT_AI_RULES } from "../../../src/lib/support/aiReply";
@@ -80,17 +82,37 @@ expectTopic("leaving", [
   "How do I cancel my subscription?", "I want to cancel.", "cancel my JobFlex account", "pause my subscription",
   "switch me to the free plan", "quiero darme de baja", "Cancelar mi suscripcion por favor", "how do I stop paying for this",
   "turn off auto-renew", "отменить подписку", "cancel the Deck Studio add-on", "Quiero cancelar",
+  // fix round 1 — "cancel" with a reason attached; Spanish and English said other ways
+  "I want to cancel. The estimates are wrong.", "How do I cancel? I don't use the calendar",
+  "pausar mi suscripción", "no quiero seguir pagando", "quiero dejar JobFlex", "quiero dejar de usar JobFlex",
+  "ya no quiero el servicio", "no renovar mi plan",
+  "don't renew my plan", "how do I turn off billing", "how do I get off the paid plan",
 ]);
 expectTopic("money", [
   "I want my money back", "can I get a discount on my bill", "refund please", "I was charged twice",
   "quiero un reembolso", "can you give me a credit on my account", "I'll file a chargeback", "devuélvanme mi dinero",
+  // fix round 1
+  "quiero mi dinero de vuelta", "me cobraron sin autorización",
+  "can you waive this month?", "please credit my account", "can I get my last payment back",
 ]);
-expectTopic("data", ["delete everything", "delete my account", "borrar mi cuenta", "erase all my data", "удалить мой аккаунт"]);
-expectTopic("security", ["someone logged into my account", "I think I was hacked", "my password is hunter22", "alguien entró a mi cuenta", "here is my card 4242 4242 4242 4242"]);
+expectTopic("data", [
+  "delete everything", "delete my account", "borrar mi cuenta", "erase all my data", "удалить мой аккаунт",
+  // fix round 1
+  "quiero que borren mi cuenta", "eliminen todos mis datos", "I want all my data gone",
+]);
+expectTopic("security", [
+  "someone logged into my account", "I think I was hacked", "my password is hunter22", "alguien entró a mi cuenta",
+  "here is my card 4242 4242 4242 4242",
+  // fix round 1
+  "I got an email asking for my JobFlex password",
+]);
 expectTopic("person", [
   "let me talk to a human", "can I speak to a real person", "quiero hablar con una persona", "transfer ownership to my partner",
   "make Maria the owner", "my lawyer will hear about this", "this is a scam", "this app is a rip off", "add another owner",
   "Хочу поговорить с человеком",
+  // fix round 1
+  "can someone call me", "I need help from a person", "ask a person", "how do I reach support",
+  "I want to speak to your manager", "que alguien me llame", "Нужен живой человек", "соедините с поддержкой",
 ]);
 expectTopic(null, [
   "how do I send a proposal by text", "add a discount line to a proposal", "change my credit card",
@@ -104,18 +126,38 @@ expectTopic(null, [
   "¿Cómo devuelvo una llamada?", "Sue from my team can't log in", "make sure the owner gets the texts", "go to the free roof estimator",
   "I don't need the plan set", "can my clients get credit through financing", "call 801 555 1234 or 801 555 4321",
   "change the owner's phone number", "how do I talk to people who visit my website", "how do I stop taking card payments",
+  // fix round 1 — the AI desk talks about live people and customer service
+  "how do I have the AI desk forward calls to a live person", "does the AI desk sound like a real human?",
+  "set up customer service hours on the AI desk", "how do callers talk to someone after hours",
+  "how do I transfer my business number to the AI desk",
+  // fix round 1 — the contractor's own discounts, credit and refunds to clients
+  "can I offer a discount for paying cash?", "can we give a discount to veterans?", "can homeowners get credit through financing",
+  "refund a deposit to a homeowner", "compensation for my sales reps",
+  // fix round 1 — cancelling, stopping and deleting work, not the account
+  "cancel a task", "cancel a contract", "cancel a subcontractor", "cancel a financing application", "charge a cancellation fee",
+  "stop charging a deposit on proposals", "downgrade a worker's role", "How do clients cancel?",
+  "delete my company's logo", "remove my company info from the invoice", "delete my company profile picture",
+  // fix round 1 — owners of other things, hacks that aren't break-ins
+  "change the owner of a lead", "any hacks to make proposals faster?",
+  // fix round 1 — self-review probe of feature questions near the new patterns
+  "can you call me back when a lead comes in", "how do I get help from a person on my crew",
+  "how do I see the account credit on my invoice", "pause my membership plans for clients", "is there a free month for referrals",
+  "phishing emails to my clients", "dejar de cobrar el depósito", "turn off billing emails", "leave jobflex a review",
+  "what happens to a booking when I cancel?", "if a homeowner wants to cancel, what do they press?", "Can my crew cancel?",
+  "the cancel button doesn't work", "how does the AI desk transfer to a real person", "connect callers to customer service",
+  "who is the owner of this lead", "my password is not working", "unsubscribe me from texts",
+  "no quiero seguir pagando a mi trabajador", "borrar la cuenta de un trabajador", "how do I end my trial early and pay now",
+  "don't renew the client's plan", "how do I issue a credit to a client", "my client wants a refund",
 ]);
 check("PERSON_REPLY has a line for every topic, each pointing at Ask a person",
   (["leaving", "money", "data", "security", "person"] as const).every((t) => PERSON_REPLY[t].includes("Ask a person")));
 
-// The NEVER topics moved out of SUPPORT_AI_RULES and back in: the support rules must read exactly as before. Pinned at
-// the extraction (2026-10-29) to the text at origin/main 646ab9eb — length + sha256 computed before the edit. A
-// deliberate change to the support rules updates this pin.
-check("SUPPORT_AI_RULES byte-identical after the extraction",
-  SUPPORT_AI_RULES.length === 6809 && createHash("sha256").update(SUPPORT_AI_RULES, "utf8").digest("hex") === "0014eadd6ebcbfc8bcd117c130a30e3c455e8843b87f0fd89743661ff61e135a",
-  SUPPORT_AI_RULES.length);
-check("SUPPORT_AI_RULES carries PERSON_ONLY_TOPICS under NEVER",
-  PERSON_ONLY_TOPICS.length > 100 && SUPPORT_AI_RULES.indexOf(PERSON_ONLY_TOPICS) > SUPPORT_AI_RULES.indexOf("NEVER ("));
+// The NEVER topics moved out of SUPPORT_AI_RULES and back in — proven by shape here: the NEVER heading, the topics, then
+// the "less than 60% sure" line, exactly as the support rules read before. The byte pin lives in support-ai.check.ts.
+check("SUPPORT_AI_RULES: NEVER heading, PERSON_ONLY_TOPICS, then the 60% line",
+  PERSON_ONLY_TOPICS.length > 100 && SUPPORT_AI_RULES.includes(
+    `NEVER (set needsHuman=true instead, and still write your best suggested reply for the team to review)\n${PERSON_ONLY_TOPICS}\n- Anything you are less than 60% sure of.\n`,
+  ));
 
 // The schema mends junk instead of refusing it.
 const junk = smartHelpAnswerSchema.parse({ kind: "nonsense", steps: "x", confidence: 140 });
@@ -154,12 +196,28 @@ check("a sidebar row target kept; an invented one dropped", clean.steps[3].show 
 check("kind and title kept on a sure answer", clean.kind === "steps" && clean.title === "Set up the AI desk" && clean.steps.length === 5);
 const unsure = cleanAnswer(ans({ confidence: 55, steps: [{ text: "x", open: "/dashboard" }] }), ctx, targets);
 check("confidence 55 → unknown, no steps", unsure.kind === "unknown" && unsure.steps.length === 0 && unsure.title.length > 0, unsure);
+const unsureEs = cleanAnswer(ans({ language: "es", title: "Cómo cobrar en línea", confidence: 40, steps: [{ text: "x" }] }), ctx, targets);
+check("forced unknown keeps the model's own title (the asker's language), says why in the note",
+  unsureEs.kind === "unknown" && unsureEs.title === "Cómo cobrar en línea" && unsureEs.note === UNKNOWN_REPLY && unsureEs.steps.length === 0, unsureEs);
+check("forced unknown with no title of its own: the unknown line",
+  cleanAnswer(ans({ title: "", confidence: 10 }), ctx, targets).title === UNKNOWN_REPLY);
 const money = cleanAnswer(ans({ steps: [{ text: "We'll refund last month to your card." }] }), ctx, targets);
-check("a step that commits money → person, no steps", money.kind === "person" && money.steps.length === 0 && !/refund/i.test(`${money.title}${money.note}`), money);
+check("a step that commits money → person, no steps, the money line", money.kind === "person" && money.steps.length === 0 && money.title === PERSON_REPLY.money && money.note === null, money);
 const dataNote = cleanAnswer(ans({ kind: "explain", note: "We will delete your account today.", steps: [] }), ctx, targets);
-check("a note that commits data → person", dataNote.kind === "person" && !/delete/i.test(`${dataNote.title}${dataNote.note}`), dataNote);
+check("a note that commits data → person, the data line", dataNote.kind === "person" && dataNote.title === PERSON_REPLY.data && dataNote.note === null, dataNote);
 const cancelSteps = cleanAnswer(ans({ steps: [{ text: "Open Settings → Billing" }, { text: "Press Manage subscription, then Cancel subscription." }] }), ctx, targets);
-check("steps that name the cancel button → person", cancelSteps.kind === "person" && cancelSteps.steps.length === 0, cancelSteps);
+check("steps that name the cancel button → person, the leaving line", cancelSteps.kind === "person" && cancelSteps.steps.length === 0 && cancelSteps.title === PERSON_REPLY.leaving, cancelSteps);
+const deleteSteps = cleanAnswer(ans({ steps: [{ text: "Press Delete account" }] }), ctx, targets);
+check("steps that name the delete button → person, the data line", deleteSteps.kind === "person" && deleteSteps.title === PERSON_REPLY.data, deleteSteps);
+const personEs = cleanAnswer(ans({ kind: "person", language: "es", title: "Una persona te ayudará", note: "Te devolveremos el dinero: a refund is on its way." }), ctx, targets);
+check("model said person but its note commits money: its title kept, the note dropped",
+  personEs.kind === "person" && personEs.title === "Una persona te ayudará" && personEs.note === null, personEs);
+const unknownEs = cleanAnswer(ans({ kind: "unknown", title: "No estoy seguro", note: "Press Cancel subscription." }), ctx, targets);
+check("model said unknown but named the cancel button: person, its title kept", unknownEs.kind === "person" && unknownEs.title === "No estoy seguro" && unknownEs.note === null, unknownEs);
+const titleTrips = cleanAnswer(ans({ kind: "person", title: "We'll refund you today", note: null }), ctx, targets);
+check("model's person title that commits money is not kept", titleTrips.kind === "person" && titleTrips.title === PERSON_REPLY.money, titleTrips);
+const stepsEs = cleanAnswer(ans({ language: "es", title: "Cómo cancelar", steps: [{ text: "Pulsa Cancel subscription" }] }), ctx, targets);
+check("model gave steps and the guard fired: the topic line, not the model's title", stepsEs.title === PERSON_REPLY.leaving, stepsEs);
 const modelPerson = cleanAnswer(ans({ kind: "person", title: "Una persona te ayudará", note: "Pulsa Ask a person.", steps: [{ text: "x" }] }), ctx, targets);
 check("the model's own person reply: its words kept, never steps", modelPerson.kind === "person" && modelPerson.steps.length === 0 && modelPerson.title === "Una persona te ayudará", modelPerson);
 const modelUnknown = cleanAnswer(ans({ kind: "unknown", steps: [{ text: "x" }] }), ctx, targets);
@@ -182,12 +240,48 @@ check("INSTALLER: Jobs step open", crew.steps[1].blocked === undefined && crew.s
 check("INSTALLER: a sidebar row they don't have is blocked too", crew.steps[2].blocked === "role" && !("show" in crew.steps[2]), crew.steps[2]);
 const locked = cleanAnswer(ans({ steps: [{ text: "Open the AI desk", open: "/dashboard/phone" }] }), { ...ctx, lockedHrefs: ["/dashboard/phone"] }, targets);
 check("plan-locked page: blocked plan, no open", locked.steps[0].blocked === "plan" && !("open" in locked.steps[0]), locked.steps[0]);
+// A guide target is checked on the page it lives on, whatever the step's Open says.
+const shows = cleanAnswer(ans({
+  steps: [
+    { text: "Type your trade", show: "ai-desk:kind" },
+    { text: "Type your trade", open: "/dashboard/ai-desk", show: "ai-desk:kind" },
+    { text: "Type your trade", open: "/dashboard/jobs", show: "ai-desk:kind" },
+    { text: "Open Jobs", open: "/dashboard/jobs", show: "nav:/dashboard/phone" },
+    { text: "Register the number", show: "texting:register" },
+  ],
+}), installer, targets);
+check("INSTALLER: a desk target with no Open is blocked, no Show me", shows.steps[0].blocked === "role" && !("show" in shows.steps[0]), shows.steps[0]);
+check("INSTALLER: a desk target with an invented Open is blocked", shows.steps[1].blocked === "role" && !("show" in shows.steps[1]) && !("open" in shows.steps[1]), shows.steps[1]);
+check("INSTALLER: a desk target beside a Jobs Open: Show me dropped, Jobs kept",
+  shows.steps[2].blocked === undefined && shows.steps[2].open === "/dashboard/jobs" && !("show" in shows.steps[2]), shows.steps[2]);
+check("INSTALLER: a sidebar row of another page beside Jobs: Show me dropped",
+  shows.steps[3].open === "/dashboard/jobs" && !("show" in shows.steps[3]) && shows.steps[3].blocked === undefined, shows.steps[3]);
+check("INSTALLER: the texting guide's register target is blocked", shows.steps[4].blocked === "role" && !("show" in shows.steps[4]), shows.steps[4]);
+const deskPlan = cleanAnswer(ans({ steps: [{ text: "Type your trade", show: "ai-desk:kind" }] }), { ...ctx, lockedHrefs: ["/dashboard/phone"] }, targets);
+check("plan lock: a desk target with no Open is blocked plan", deskPlan.steps[0].blocked === "plan" && !("show" in deskPlan.steps[0]), deskPlan.steps[0]);
+const otherStep = cleanAnswer(ans({ steps: [{ text: "Type your trade", open: "/dashboard/phone?tab=settings", show: "ai-desk:kind" }] }), ctx, targets);
+check("OWNER: a target on another desk step than the Open: Show me dropped, Open kept",
+  otherStep.steps[0].open === "/dashboard/phone?tab=settings" && !("show" in otherStep.steps[0]), otherStep.steps[0]);
+const unpaged = [...GUIDE_TARGETS].filter((t) => { const p = targetPage(t); return !p || !isHelpPage(p); });
+check("every guide target has a SmartHelp page it lives on", unpaged.length === 0, unpaged);
+check("targetPage: a sidebar row is its own page", targetPage("nav:/dashboard/jobs") === "/dashboard/jobs");
 // The model told to give a guide's steps must not be stopped by the guards: every guide, as an answer, passes whole.
 const guideAnswers = GUIDES.map((g) => ({ g, r: cleanAnswer(ans({ title: g.title, steps: g.steps.slice(0, 8) }), ctx, targets) }));
 const stopped = guideAnswers
   .filter(({ g, r }) => r.kind !== "steps" || r.steps.some((s, i) => s.open !== g.steps[i].open || s.show !== g.steps[i].show || s.blocked))
   .map(({ g }) => g.id);
 check("every guide given as an answer keeps all its Open and Show me", stopped.length === 0, stopped);
+// …and as an INSTALLER's answer, no Open or Show me survives on a page the role can't open.
+const leaks = GUIDES.flatMap((g) =>
+  cleanAnswer(ans({ title: g.title, steps: g.steps.slice(0, 8) }), installer, targets).steps.flatMap((s, i) => {
+    const pages = [s.open, s.show ? targetPage(s.show) : undefined].filter((p): p is string => !!p);
+    return pages.some((p) => stepView({ text: "", open: p }, installer).blocked) ? [`${g.id}#${i + 1}`] : [];
+  }),
+);
+check("every guide as an INSTALLER's answer: no button to a page they can't open", leaks.length === 0, leaks);
+const installerKept = GUIDES.flatMap((g) => cleanAnswer(ans({ title: g.title, steps: g.steps }), installer, targets).steps).filter((s) => s.open);
+check("…while their own pages keep their buttons (Jobs)", installerKept.some((s) => s.open === "/dashboard/jobs"), installerKept.map((s) => s.open));
+check("answer.ts re-exports the guard from personTopic.ts", personTopic === personTopicModule && PERSON_REPLY === PERSON_REPLY_MODULE);
 const titleTopics = GUIDES.filter((g) => personTopic(g.title) !== null).map((g) => g.title);
 check("no guide title reads as a person topic", titleTopics.length === 0, titleTopics);
 
