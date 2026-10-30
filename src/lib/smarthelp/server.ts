@@ -27,7 +27,9 @@ import { readRegistration } from "@/lib/sms/registration";
 import { unmeteredOpenAI } from "@/lib/support/unmeteredOpenAI";
 import { readWebSettings, webEstimatorOpen } from "@/lib/webEstimatorServer";
 import { HISTORY_TURNS, cleanAnswer, helpTargets, smartHelpAnswerSchema, smartHelpSystemPrompt, smartHelpUserPrompt, type SmartHelpReply } from "./answer";
+import { GUIDES } from "./guides";
 import {
+  GUIDE_PREFIX,
   LOG_KEEP_DAYS,
   LOG_PREFIX,
   bumpGuideCount,
@@ -262,4 +264,24 @@ export async function countGuide(id: string, field: keyof GuideCounts): Promise<
   } catch (err) {
     console.warn(`[smarthelp] guide ${id} was not counted:`, err instanceof Error ? err.message : err);
   }
+}
+
+// ── What the owner sees ──────────────────────────────────────────────────────
+
+/** The SmartHelp tab of /admin/support: the newest questions (a log key starts with its time, so newest by key) and
+ *  every guide's counters, a guide no one has opened at 0. Platform admins only — the page asks
+ *  requirePlatformAdmin() before it reads this. */
+export async function listSmartHelp(opts?: { limit?: number }): Promise<{
+  questions: QuestionLog[];
+  guides: Array<{ id: string; title: string; opens: number; up: number; down: number }>;
+}> {
+  const limit = Math.min(Math.max(Math.trunc(opts?.limit ?? 200), 1), 500);
+  const [rows, counters] = await Promise.all([
+    db.syncState.findMany({ where: { key: { startsWith: LOG_PREFIX } }, orderBy: { key: "desc" }, take: limit, select: { cursor: true } }),
+    db.syncState.findMany({ where: { key: { startsWith: GUIDE_PREFIX } }, select: { key: true, cursor: true } }),
+  ]);
+  const questions = rows.map((r) => parseQuestionLog(r.cursor)).filter((q): q is QuestionLog => q !== null);
+  const countsOf = new Map(counters.map((c) => [c.key, parseGuideCounts(c.cursor)]));
+  const guides = GUIDES.map((g) => ({ id: g.id, title: g.title, ...(countsOf.get(guideKey(g.id)) ?? parseGuideCounts(null)) }));
+  return { questions, guides };
 }
