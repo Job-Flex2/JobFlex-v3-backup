@@ -270,6 +270,23 @@ monthly" is one 12px line (weight 600) under the price.
   the element is a bar on the screen's foot. Numbered squares are flat. The
   sidebar chip is one 44px row: an ink-framed count square, "First estimate"
   and a blue sub-line.
+- SmartHelp (owner, 2026-10-29: look "a" of three mockups;
+  [smarthelp](src/components/v3/smarthelp/smarthelp.tsx)). The one filled row
+  in the sidebar, first in every nav (desk, blueprint, both drawers, More): a
+  44px `--ink` block, a white square holding Lucide Sparkles in ink, white
+  800 "SmartHelp", a square "ASK" tag in a 1.5px white frame, on a hard
+  `3px 3px 0 var(--accent)` shadow; the folded rail shows the square alone.
+  No amber, gradient or pill. The panel's header repeats the block. The panel
+  is white with a 2px ink edge: 380px beside the page at ≥1024 (the page moves
+  over, nothing is covered), over the page at 769–1023, a bottom sheet of
+  85dvh on the sheets' scrim at ≤768. Guides are 44px cards in a 1.5px ink
+  frame with an ink-framed icon square — a to-do one has a small accent
+  square, a done one a ✓. Steps are flat ink-framed number squares; Open is
+  white in an ink frame, Show me white in an accent frame, Ask a person the
+  one blue button. Show me's light is a 2px accent frame on a hard 4px ink
+  shadow, nothing dimmed. Folded (Show me below the desk, Open on a phone) it
+  is a 44px ink "Back to SmartHelp" bar at the top middle of the screen — the
+  corners are the menu and Help, the foot is the tab bar and create button.
 - Roof estimator buildings (owner, 2026-10-26, ticket 8KETUL). Before the
   order the intake map's pin can be dragged (or the map tapped) onto the
   building to measure, with "Measure the building under the pin" in 15px 800

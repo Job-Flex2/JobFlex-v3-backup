@@ -302,3 +302,14 @@ body {
     visibility: hidden;
   }
 }
+
+/* SmartHelp's desk panel (components/v3/smarthelp, 2026-10-30) stands on the
+   right, 380px wide, beside the page — not over it: the person is following
+   steps on that page. The page moves over while the panel is drawn. Below
+   1024px the panel is over the page (and a sheet on a phone), so nothing
+   moves. */
+@media (min-width: 1024px) {
+  html[data-smarthelp-open] body {
+    padding-right: 380px;
+  }
+}
