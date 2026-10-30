@@ -234,3 +234,32 @@ export function cleanHistory(raw: unknown): Turn[] {
   }
   return turns;
 }
+
+// ── What the owner sees (/admin/support → SmartHelp) ─────────────────────────
+
+const WEEK_MS = 7 * 86_400_000;
+
+/** The SmartHelp tab's four facts over the last 7 days (a question exactly 7 days old still counts): questions asked,
+ *  👍, 👎, sent to a person — and the questions SmartHelp didn't answer (it left them to a person, wasn't sure, or got
+ *  a 👎), newest first, so the owner sees which guide to write next. A row that can't say when it was asked is left
+ *  out. */
+export function smartHelpSummary(
+  questions: QuestionLog[],
+  now: Date,
+): { week: number; up: number; down: number; person: number; unanswered: QuestionLog[] } {
+  const since = now.getTime() - WEEK_MS;
+  const recent = questions
+    .filter((q) => {
+      const t = Date.parse(q.at);
+      return Number.isFinite(t) && t >= since;
+    })
+    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const count = (outcome: QuestionLog["outcome"]) => recent.filter((q) => q.outcome === outcome).length;
+  return {
+    week: recent.length,
+    up: count("up"),
+    down: count("down"),
+    person: count("person"),
+    unanswered: recent.filter((q) => q.kind === "unknown" || q.kind === "person" || q.outcome === "down"),
+  };
+}

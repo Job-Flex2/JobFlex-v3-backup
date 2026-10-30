@@ -22,7 +22,9 @@ import {
   questionOf,
   replyText,
   replyWithoutModel,
+  smartHelpSummary,
   withOutcome,
+  type QuestionLog,
 } from "../../../src/lib/smarthelp/log";
 import { PERSON_REPLY, type PersonTopic } from "../../../src/lib/smarthelp/personTopic";
 import type { SmartHelpReply } from "../../../src/lib/smarthelp/answer";
@@ -342,6 +344,49 @@ check("cleanHistory: at most the last 20 turns", many.length === 20 && many[0].q
 const clipped = cleanHistory([{ q: "q".repeat(1500), a: "a".repeat(3000) }]);
 check("cleanHistory: a turn is clipped (question 1000, answer 2000)", clipped[0]?.q.length === 1000 && clipped[0]?.a.length === 2000);
 check("cleanHistory: not a list is no history", [undefined, null, "x", { q: "a", a: "b" }].every((h) => cleanHistory(h).length === 0));
+
+// ── What the owner sees (Task 9, /admin/support → SmartHelp) ─────────────────
+
+const NOW = new Date("2026-10-30T12:00:00.000Z");
+const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3_600_000).toISOString();
+const logged = (id: string, at: string, kind: QuestionLog["kind"], outcome: QuestionLog["outcome"]): QuestionLog => ({
+  id,
+  at,
+  orgId: "org-1",
+  orgName: "QA Co",
+  userId: "user-1",
+  userName: null,
+  role: "OWNER",
+  plan: null,
+  page: "/dashboard",
+  question: `question ${id}`,
+  answer: "answer",
+  kind,
+  outcome,
+});
+// Out of order on purpose: the summary sorts its own list.
+const week = [
+  logged("e", hoursAgo(5), "explain", "none"),
+  logged("a", hoursAgo(1), "steps", "up"),
+  logged("c", hoursAgo(3), "person", "person"),
+  logged("b", hoursAgo(2), "steps", "down"),
+  logged("d", hoursAgo(4), "unknown", "none"),
+  logged("f", hoursAgo(24 * 7), "steps", "up"), // exactly seven days ago: in
+  logged("g", hoursAgo(24 * 7 + 1), "unknown", "down"), // an hour older: out
+  logged("h", "not a date", "unknown", "none"), // a row that can't say when: out
+];
+const sum = smartHelpSummary(week, NOW);
+check("smartHelpSummary: the questions of the last 7 days, the edge counted", sum.week === 6, sum.week);
+check("smartHelpSummary: 👍, 👎 and sent to a person, in those 7 days", sum.up === 2 && sum.down === 1 && sum.person === 1, sum);
+check(
+  "smartHelpSummary: not answered = an unknown or person answer, or a 👎 — newest first, older ones left out",
+  sum.unanswered.map((q) => q.id).join(",") === "b,c,d",
+  sum.unanswered.map((q) => q.id),
+);
+check(
+  "smartHelpSummary: no questions → all zero",
+  JSON.stringify(smartHelpSummary([], NOW)) === JSON.stringify({ week: 0, up: 0, down: 0, person: 0, unanswered: [] }),
+);
 
 // ── Safe to import in the browser (the panel's Ask a person uses replyText) ────
 
