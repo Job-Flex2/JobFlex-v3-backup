@@ -67,6 +67,7 @@ import { answerBlocks, type AnswerPiece, type LiveState } from "@/lib/support/ai
 import { lockScroll } from "@/lib/scrollLock";
 // The categories, the message limit and SmartHelp's hand-off are the composer's pure half (./composer).
 import { BODY_MAX, CATEGORIES, composerOpening, composerTicket, type HandoffMark, type SupportPrefill } from "./composer";
+import { SmartHelpRoot } from "@/components/v3/smarthelp/smarthelp";
 import "./support-widget.css";
 
 export type { SupportPrefill } from "./composer";
@@ -784,7 +785,7 @@ export function SupportWidget({
 
   const cls = ["jfsup", open && "jfsup--open", on && "jfsup--on"].filter(Boolean).join(" ");
 
-  return (
+  const widget = (
     // data-nest: the widget resets itself (.jfsup *); a page root's reset steps around it (docs/design/mobile.md).
     <div className={cls} data-nest="">
       {/* The launcher travels WITH the widget now: one mount is one button, so
@@ -957,5 +958,14 @@ export function SupportWidget({
         )}
       </div>
     </div>
+  );
+
+  // SmartHelp (components/v3/smarthelp) lives beside the composer, so it is wherever Help is — and in the same
+  // stacking context, under the composer that its "Ask a person" opens.
+  return (
+    <>
+      {widget}
+      <SmartHelpRoot />
+    </>
   );
 }
