@@ -9,7 +9,9 @@
 //   Not found (a role, a plan, a changed page) → the event `jf:smarthelp-miss` carries the label, and the panel says
 //   "Look for <label> on this page".
 // A page change during the 8-second search is the Show me's own trip to its page: the search starts again there
-// instead of ending (a sidebar link is on every page, so it could be lit on the page being left).
+// instead of ending (a sidebar link is on every page, so it could be lit on the page being left). A trip that is a
+// fresh load (the same page with another ?query — the panel decides) waits in this tab for the next page:
+// showMeAfterLoad.
 // Module scope, like the shell's other stores: showMe can run before the spotlight has drawn.
 
 import { useCallback, useEffect, useState } from "react";
@@ -29,10 +31,36 @@ type Request = { target: string; label: string; at: number };
 
 let pending: Request | null = null;
 
+/** A Show me whose trip to its page is a fresh load waits in this tab for the new page (showMeAfterLoad): picked up
+ *  within KEPT_MS, with a fresh 8-second search from there. */
+const KEPT_KEY = "smarthelp:show";
+const KEPT_MS = 20_000;
+
+function kept(): Request | null {
+  try {
+    const raw = window.sessionStorage.getItem(KEPT_KEY);
+    window.sessionStorage.removeItem(KEPT_KEY);
+    const r = raw ? (JSON.parse(raw) as Partial<Request>) : null;
+    if (!r || typeof r.target !== "string" || typeof r.label !== "string" || typeof r.at !== "number") return null;
+    return Date.now() - r.at < KEPT_MS ? { target: r.target, label: r.label, at: Date.now() } : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Light `target` (a `data-tour` name) once it is on the page; `label` is the words the panel shows if it never is. */
 export function showMe(target: string, label: string): void {
   pending = { target, label, at: Date.now() };
   window.dispatchEvent(new CustomEvent(SHOW_EVENT, { detail: { target, label } }));
+}
+
+/** The same, for a trip to the page that is a fresh load (the page is about to go): the next page lights it. */
+export function showMeAfterLoad(target: string, label: string): void {
+  try {
+    window.sessionStorage.setItem(KEPT_KEY, JSON.stringify({ target, label, at: Date.now() } satisfies Request));
+  } catch {
+    /* storage blocked: the step still names the button */
+  }
 }
 
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -52,9 +80,10 @@ export function SmartHelpSpotlight() {
     setFrame(null);
   }, []);
 
-  // A request made before this mounted, then every new one.
+  // A request made before this mounted — on this page, or on the one before a fresh load — then every new one.
   useEffect(() => {
     const take = () => {
+      pending ??= kept();
       if (!pending) return;
       setLit(null);
       setFrame(null);

@@ -313,3 +313,20 @@ body {
     padding-right: 380px;
   }
 }
+/* The Help corner (components/v3/support-widget: its plate, then the composer
+   it opens) stands left of SmartHelp's panel while the panel is up, so it never
+   sits on the panel's ask box. */
+@media (min-width: 769px) {
+  html[data-smarthelp-open] .jfsup,
+  html[data-smarthelp-open] .jfsup-fab.jfsup-fab {
+    right: calc(380px + 22px);
+  }
+}
+/* On a phone the panel is a sheet across the whole width, its ask box where the
+   plate stands: the plate steps out while the sheet is up (the sheet has its
+   own Ask a person) and is back with the "Back to SmartHelp" bar. */
+@media (max-width: 768px) {
+  html[data-smarthelp-open] .jfsup-fab.jfsup-fab {
+    display: none;
+  }
+}
