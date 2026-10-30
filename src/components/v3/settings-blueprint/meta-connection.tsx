@@ -118,7 +118,7 @@ export function MetaConnection({ data, mobile = false }: { data: MetaData; mobil
   }
 
   return (
-    <section className={`${styles.root} ${mobile ? styles.mobile : ""}`} aria-label="Meta Business connection">
+    <section className={`${styles.root} ${mobile ? styles.mobile : ""}`} aria-label="Meta Business connection" data-tour="leads:meta">
       <header className={styles.header}>
         <div className={styles.brand}><Facebook size={22} aria-hidden="true" /><h2>Meta Business</h2></div>
         <span className={`${styles.status} ${data.connected ? styles.connected : ""}`}>

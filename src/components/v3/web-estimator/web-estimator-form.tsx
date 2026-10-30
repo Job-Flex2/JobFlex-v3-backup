@@ -85,7 +85,7 @@ export function WebEstimatorForm() {
         </div>
       ) : null}
 
-      <div className={styles.cards}>
+      <div className={styles.cards} data-tour="website:trades">
         {WEB_TRADES.map((t) => {
           const info = WEB_TRADE[t], ts = settings.trades[t], held = billing.held[t] ?? null, q = quotes[t];
           const words = webBillingWords({ mode: view.open ? billing.mode : "preview", trade: t, interval: billing.interval, held, on: ts.on, trialEndsAt: billing.trialEndsAt });
@@ -188,7 +188,7 @@ export function WebEstimatorForm() {
       </section>
 
       <div className={styles.foot}>
-        <button type="button" className={styles.btn} disabled={pending} onClick={save} data-web-save>
+        <button type="button" className={styles.btn} disabled={pending} onClick={save} data-web-save data-tour="website:save">
           {pending ? "Saving…" : adding.length ? `Save and add to my plan (${adding.map((t) => WEB_TRADE[t].name.split(" ")[0]).join(", ")})` : removing.length ? "Save and take off my plan" : "Save"}
         </button>
         {saved ? <span className={styles.ok} data-web-saved>{saved}{onTrades.length ? ` ${onTrades.map((t) => WEB_TRADE[t].name.split(" ")[0]).join(", ")} on.` : ""}</span> : null}

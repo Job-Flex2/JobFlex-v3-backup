@@ -76,7 +76,7 @@ export function PaymentsPane({ data, sub: wanted, notice }: PaneProps) {
           </div>
         </div>
       ) : null}
-      <div className="sub">
+      <div className="sub" data-tour="payments:processors">
         {tabs.map((tab) => (
           <button
             key={tab.key}

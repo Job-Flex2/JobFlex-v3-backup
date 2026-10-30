@@ -44,6 +44,14 @@ export const HELP_PAGES: ReadonlyArray<{ path: string; name: string }> = [
   { path: "/dashboard/settings?pane=estimating", name: "Settings: Estimating" },
   { path: "/dashboard/settings?pane=website", name: "Settings: Website" },
   { path: "/dashboard/subscription", name: "Subscription" },
+  // Added with the guides (Task 2): the AI desk opens on the step its address names (desk-overview firstTab, ?step=),
+  // Smart Proposal's own page, and the Meta leads tab of Integrations (settings-content reads ?sub=).
+  { path: "/dashboard/phone?tab=settings&step=numbers", name: "AI desk: Phone & forwarding" },
+  { path: "/dashboard/phone?tab=settings&step=business", name: "AI desk: Your business" },
+  { path: "/dashboard/phone?tab=settings&step=booking", name: "AI desk: Booking" },
+  { path: "/dashboard/phone?tab=settings&step=voice", name: "AI desk: Voice & test" },
+  { path: "/dashboard/advanced-ai", name: "Smart Proposal" },
+  { path: "/dashboard/settings?pane=integrations&sub=meta", name: "Settings: Meta business leads" },
 ];
 
 /** The route part of an app link: drops ?query and #hash. */
