@@ -6,7 +6,8 @@ import { requireOrg, requirePlatformAdmin } from "@/lib/orgContext";
 import { db } from "@/lib/db";
 import { notifySupportTicket, supportTicketRef } from "@/lib/notify";
 import { rateLimitShared, retryInWords } from "@/lib/rateLimit";
-import { answerTicketWithAi, readSupportAi } from "@/lib/support/aiSupport";
+import { answerTicketWithAi, markSmartHelpTicket, readSupportAi } from "@/lib/support/aiSupport";
+import { setQuestionOutcome } from "@/lib/smarthelp/server";
 import { alertSupportTicket } from "@/lib/adminAlerts";
 import { acceptSupportMessage } from "@/lib/support/acceptMessage";
 import { checkReply, openingMessage, type ThreadMessage } from "@/lib/supportReply";
@@ -33,6 +34,10 @@ const ticketInput = z.object({
   body: z.string().trim().min(1, "Describe the issue").max(5000),
   category: z.enum(SUPPORT_CATEGORIES).default("general"),
   priority: z.enum(SUPPORT_PRIORITIES).default("normal"),
+  // SmartHelp's "Ask a person" (2026-10-30): the composer it opened pre-filled marks the ticket as its hand-off, with
+  // the SmartHelp question it carries — the support AI then only drafts for it, and a person sends.
+  origin: z.literal("smarthelp").optional(),
+  smartHelpLogId: z.string().max(80).optional(),
 });
 
 /** The message's first line, clipped to a subject-sized string. The user's own
@@ -44,6 +49,25 @@ function subjectFromBody(body: string): string {
   const cut = firstLine.slice(0, 80);
   const lastSpace = cut.lastIndexOf(" ");
   return `${(lastSpace > 40 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+}
+
+/** A SmartHelp hand-off, as it is filed: marked so the support AI only drafts for it (lib/support/aiSupport), and the
+ *  SmartHelp question it carries marked "person" — only its asker's own (lib/smarthelp/server). Both best-effort: the
+ *  ticket is already filed, and failing it now would only invite the same ticket twice. */
+async function markSmartHelpHandoff(ticketId: string, userId: string, logId: string | null): Promise<void> {
+  const ref = supportTicketRef(ticketId);
+  try {
+    await markSmartHelpTicket(ticketId, logId);
+  } catch (err) {
+    console.error(`[support] ${ref}: the SmartHelp mark was not kept — the AI may answer it on its own:`, err instanceof Error ? err.message : err);
+  }
+  if (!logId) return;
+  try {
+    const r = await setQuestionOutcome(logId, userId, "person");
+    if (r !== "ok") console.warn(`[support] ${ref}: its SmartHelp question was not marked "person" (${r}).`);
+  } catch (err) {
+    console.warn(`[support] ${ref}: its SmartHelp question was not marked "person":`, err instanceof Error ? err.message : err);
+  }
 }
 
 export interface SubmitTicketResult {
@@ -101,6 +125,8 @@ export async function submitSupportTicket(raw: unknown): Promise<SubmitTicketRes
       status: "OPEN",
     },
   });
+  // Marked before anything reads the ticket (the AI's answer below runs after the response).
+  if (data.origin === "smarthelp") await markSmartHelpHandoff(ticket.id, user.id, data.smartHelpLogId || null);
 
   // Heads-up to the operator. Best-effort by contract — notifySupportTicket
   // never throws, so a dead transport cannot fail a submission that is already

@@ -21,6 +21,7 @@ import {
   recordFor,
   supportAiAnswerSchema,
   supportAiMode,
+  supportOriginOf,
   supportSystemPrompt,
   supportUserPrompt,
   teamCopyEmail,
@@ -178,6 +179,18 @@ check("no subscription, or a plan granted by hand: not available", !extensionOff
 const pending = extensionOfferFact({ status: "TRIALING", trialEndsAt: d(5), provider: "STRIPE" }, { days: 14 });
 check("a request already pending: say we're on it, don't offer again", pending.eligible && /PENDING/.test(pending.fact) && /don't offer again/.test(pending.fact));
 check("the offer's words never trip the money regex, so a draft in auto mode isn't held for that reason", !commitsMoneyOrData("If you simply haven't had time to explore it properly, we'll gladly add two more weeks, free — just reply yes and we'll set it up."));
+
+// ── SmartHelp's "Ask a person" (2026-10-30): the hand-off waits for a person ──
+const SMARTHELP_HELD = "Came from SmartHelp — a person sends this one.";
+check("a SmartHelp hand-off is never sent on its own: held, with its reason", (() => { const d = deliveryFor(howTo, "auto", "smarthelp"); return !d.send && d.reason === SMARTHELP_HELD; })());
+check("…the same sure answer without the mark still goes out", deliveryFor(howTo, "auto").send === true);
+check("…drafts-only and off keep their own reason", [deliveryFor(howTo, "draft", "smarthelp"), deliveryFor(howTo, "off", "smarthelp")].every((x) => !x.send && x.reason === "The AI is set to draft for you."));
+check("…and in auto the mark is the reason, whatever the model made of it", (() => { const x = deliveryFor({ ...howTo, needsHuman: true, humanReason: "Refund request" }, "auto", "smarthelp"); return !x.send && x.reason === SMARTHELP_HELD; })());
+check(
+  "the mark is read from the ticket's row; no row, a broken one or another origin is none",
+  supportOriginOf('{"origin":"smarthelp","logId":"2026-10-30T10:15:00.000Z-1a2b3c4d"}') === "smarthelp" && supportOriginOf('{"origin":"smarthelp","logId":null}') === "smarthelp" &&
+    [null, undefined, "", "{bad", "null", "[]", '"smarthelp"', '{"origin":"email","logId":null}', '{"logId":"x"}'].every((raw) => supportOriginOf(raw) === undefined),
+);
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);
