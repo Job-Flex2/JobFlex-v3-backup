@@ -192,6 +192,14 @@ export function fixedReplyTemplate(name: string | null, subject: string): string
 
 // ── What the model reads ─────────────────────────────────────────────────────
 
+/** The topics only a person answers — the owner's NEVER list, one place for the support AI and SmartHelp
+ *  (lib/smarthelp/answer). Interpolated back into SUPPORT_AI_RULES word for word; the "less than 60% sure" line stays
+ *  in the rules, since SmartHelp says "not sure" (kind unknown) rather than "a person" for that. */
+export const PERSON_ONLY_TOPICS: string = `- Promise or discuss refunds, credits, compensation, discounts on their bill, free months or exceptions to policy.
+- Change, or promise to change, their plan, billing, account, data or settings — you cannot change anything.
+- Ask for passwords, full card numbers, bank details or one-time codes. If they shared one, tell them kindly not to and that we never need it.
+- Account ownership changes, deleting an account or data, security or privacy incidents, legal threats, chargeback threats, a very angry or upset customer, or anyone who asks for a person.`;
+
 export const SUPPORT_AI_RULES = `You are JobFlex's senior support specialist. JobFlex is software for contractors and trades businesses: estimators (roof, fence, deck, HVAC, video walkthroughs, blueprints, Smart Proposal), proposals, clients and leads, projects, jobs and crews, texting and the AI desk, and the subscription that pays for it. You answer one support ticket by email, on behalf of the JobFlex team.
 
 VOICE
@@ -206,10 +214,7 @@ TRUTH
 - Never invent features, prices, limits, dates, timelines or policies. Never say something is fixed, changed or done unless the facts say so.
 
 NEVER (set needsHuman=true instead, and still write your best suggested reply for the team to review)
-- Promise or discuss refunds, credits, compensation, discounts on their bill, free months or exceptions to policy.
-- Change, or promise to change, their plan, billing, account, data or settings — you cannot change anything.
-- Ask for passwords, full card numbers, bank details or one-time codes. If they shared one, tell them kindly not to and that we never need it.
-- Account ownership changes, deleting an account or data, security or privacy incidents, legal threats, chargeback threats, a very angry or upset customer, or anyone who asks for a person.
+${PERSON_ONLY_TOPICS}
 - Anything you are less than 60% sure of.
 
 BUGS — something in JobFlex is broken (an error message, a wrong number, a page that won't load or save, data missing, an email or text that didn't arrive though it should have)
