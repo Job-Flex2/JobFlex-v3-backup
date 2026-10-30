@@ -1,5 +1,5 @@
 // POST /api/webhooks/ramp — Ramp tells JobFlex a card transaction cleared, needs a job, or got its receipt
-// (2026-10-29). Two kinds of request: the verification challenge when the subscription is made (answered through
+// (2026-10-29); a bill was approved or paid; an invited person accepted (round 2). Two kinds of request: the verification challenge when the subscription is made (answered through
 // Ramp's verify endpoint), and the business events, each signed with the subscription's secret (X-Ramp-Signature,
 // HMAC-SHA256 of the raw body). An event names the business and the transaction; the transaction is read from the
 // API and processed like any other. Always 200 once the signature holds, so Ramp does not retry forever.
@@ -7,6 +7,8 @@ import crypto from "node:crypto";
 import { after, NextResponse } from "next/server";
 import { orgOfRampBusiness, orgOfRampWebhook, patchRampConnection, rampApiFor, readRampConnection } from "@/lib/ramp/connection";
 import { processRampTransaction } from "@/lib/ramp/sync";
+import { refreshRampBill } from "@/lib/ramp/bills";
+import { resumeRampCardOrders } from "@/lib/ramp/cards";
 import { rampEventTransactionId, rampSignatureMatches } from "@/lib/ramp/shared";
 
 export const runtime = "nodejs";
@@ -52,6 +54,25 @@ export async function POST(req: Request) {
   if (!conn) return NextResponse.json({ ok: true, ignored: "not connected" });
   if (!conn.webhookSecret || !rampSignatureMatches(raw, conn.webhookSecret, req.headers.get("x-ramp-signature"), hmacHex, hmacB64)) {
     return NextResponse.json({ error: "Bad signature" }, { status: 401 });
+  }
+  // A bill moved (approved, paid, rejected…): read it again; paid books the job's expense.
+  if (type.startsWith("bills.")) {
+    const billId = String(payload.object?.id ?? payload.object?.bill_id ?? (payload as { data?: { id?: string } }).data?.id ?? "");
+    if (billId) after(async () => {
+      try {
+        await refreshRampBill(organizationId, billId);
+      } catch (err) {
+        console.warn("[ramp] webhook", type, billId, err instanceof Error ? err.message : err);
+      }
+    });
+    return NextResponse.json({ ok: true });
+  }
+  // Someone accepted Ramp's invite: a card order waiting on them goes ahead.
+  if (type === "users.invite_accepted") {
+    after(async () => {
+      await resumeRampCardOrders(organizationId).catch((err) => console.warn("[ramp] webhook invite", err instanceof Error ? err.message : err));
+    });
+    return NextResponse.json({ ok: true });
   }
   if (!type.startsWith("transactions.")) return NextResponse.json({ ok: true, ignored: type });
   const txId = rampEventTransactionId(payload);

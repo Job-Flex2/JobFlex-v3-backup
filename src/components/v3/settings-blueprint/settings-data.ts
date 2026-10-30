@@ -1480,6 +1480,7 @@ export interface RampData {
   webhookReady: boolean;
   askByText: boolean;
   requireJob: boolean;
+  billsApproved: boolean;
   connectHref: string;
   canManage: boolean;
 }

@@ -60,6 +60,9 @@ export async function GET(req: NextRequest) {
       lastError: null,
       askByText: true,
       requireJob: true,
+      billsApproved: false,
+      entityId: null,
+      sourceBankAccountId: null,
     });
     await logActivity({ organizationId, actorId: user.id, kind: TRAIL_KINDS.SETTINGS, summary: `Connected Ramp — ${biz.business_name_legal || biz.business_name_on_card || "the business"}: card spend lands on the jobs`, meta: { area: "ramp" } });
     // The field, the webhook and the first read: each on its own, none allowed to undo the connection.

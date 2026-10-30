@@ -7,6 +7,8 @@ import "server-only";
 //     of the cardholder by text from the company's line and listed under "Needs a job" in Financials;
 //   · the tech's reply, or the office's pick, books it and writes a memo back to Ramp so both sides agree.
 // Every transaction is remembered in SyncState `rampTx:<org>:<id>` — once booked, never twice.
+// Round 2 (same day): a swipe SPLIT in Ramp (line items, each with its own job) books one expense per line; the
+// office can split one from Financials and the split is written back to Ramp; bills and card orders ride the sync.
 import { db } from "@/lib/db";
 import { logActivity, TRAIL_KINDS } from "@/lib/activityLog";
 import { ExpensePaidBy, ExpenseStatus } from "@/lib/prismaEnums";
@@ -16,6 +18,8 @@ import { sendText, textWorker } from "@/lib/sms/send";
 import { appBaseUrl } from "@/lib/appUrl";
 import { patchRampConnection, rampApiFor, type RampConnection } from "./connection";
 import type { RampApi } from "./client";
+import { refreshOpenRampBills } from "./bills";
+import { resumeRampCardOrders } from "./cards";
 import {
   ASK_MAX_OPTIONS,
   ASK_TTL_MS,
@@ -33,17 +37,25 @@ import {
   rampCategory,
   rampExpenseNote,
   rampJobTag,
+  rampLineParts,
   rampMerchant,
   rampSpentAt,
   rampTxState,
+  splitPlanError,
+  toCents,
   type JobOption,
   type RampTransaction,
+  type SplitPart,
 } from "./shared";
 
 const txKey = (org: string, id: string) => `rampTx:${org}:${id}`;
 const askKey = (phone: string) => `rampAsk:${phone}`;
 const RECEIPT_MAX_BYTES = 8 * 1024 * 1024;
-export const RAMP_WEBHOOK_EVENTS = ["transactions.cleared", "transactions.ready_for_review", "transactions.receipt_added", "transactions.body_coding_updated"];
+export const RAMP_WEBHOOK_EVENTS = [
+  "transactions.cleared", "transactions.ready_for_review", "transactions.receipt_added", "transactions.body_coding_updated",
+  "bills.created", "bills.approved", "bills.paid", "bills.rejected", "bills.archived", "bills.updated",
+  "users.invite_accepted",
+];
 
 /** What JobFlex remembers of one Ramp transaction. */
 export interface RampTxRecord {
@@ -67,7 +79,18 @@ export interface RampTxRecord {
   receiptDone: boolean;
   receiptIds: string[];
   seenAt: string;
+  /** A split: one expense per part. `expenseId` is then the first part's; `remainder` the money no part names yet. */
+  parts?: RampTxPart[];
+  remainder?: number;
 }
+export interface RampTxPart {
+  expenseId: string;
+  amount: number;
+  jobId: string | null;
+  jobTitle: string | null;
+  stock: boolean;
+}
+type Dest = { kind: "job"; jobId: string } | { kind: "stock" };
 
 async function readTx(org: string, id: string): Promise<RampTxRecord | null> {
   const row = await db.syncState.findUnique({ where: { key: txKey(org, id) }, select: { cursor: true } }).catch(() => null);
@@ -104,11 +127,11 @@ export async function ensureRampField(organizationId: string): Promise<{ fieldRa
   let fieldRampId = conn.fieldRampId;
   const required = conn.requireJob ? ["TRANSACTION"] : [];
   if (!fieldRampId) {
-    const f = await api.createField({ id: RAMP_FIELD_ID, name: RAMP_FIELD_NAME, input_type: "SINGLE_CHOICE", is_required_for: required, is_splittable: false });
+    const f = await api.createField({ id: RAMP_FIELD_ID, name: RAMP_FIELD_NAME, input_type: "SINGLE_CHOICE", is_required_for: required, is_splittable: true });
     fieldRampId = f.ramp_id ?? f.id ?? null;
     if (!fieldRampId) throw new Error("Ramp made the field but returned no id.");
   } else {
-    await api.updateField(fieldRampId, { is_required_for: required }).catch(() => null);
+    await api.updateField(fieldRampId, { is_required_for: required, is_splittable: true }).catch(() => null);
   }
   const [options, jobs] = await Promise.all([api.fieldOptions(fieldRampId), openJobOptions(organizationId)]);
   const byId = new Map(options.map((o) => [o.id ?? "", o]));
@@ -197,9 +220,8 @@ async function pullReceipt(api: RampApi, tx: RampTransaction, jobId: string): Pr
   }
 }
 
-/** The expense written on the job (or the warehouse), and the trail line. */
-async function bookTransaction(organizationId: string, conn: RampConnection, api: RampApi, tx: RampTransaction, to: { kind: "job"; jobId: string } | { kind: "stock" }, by: { userId: string | null; name: string }): Promise<RampTxRecord> {
-  const amount = rampAmount(tx);
+/** One expense written on a job (or the warehouse) for all or part of a swipe, and its trail line. */
+async function bookPart(organizationId: string, conn: RampConnection, api: RampApi, tx: RampTransaction, to: Dest, by: { userId: string | null; name: string }, amount: number, partWords: string | null): Promise<RampTxPart & { receiptUrl: string | null }> {
   const category = rampCategory(tx);
   const who = rampCardholderName(tx) || by.name;
   const job = to.kind === "job" ? await db.job.findFirst({ where: { id: to.jobId, organizationId }, select: { id: true, title: true, proposalId: true, clientId: true } }) : null;
@@ -214,7 +236,7 @@ async function bookTransaction(organizationId: string, conn: RampConnection, api
       submittedById: actorId || null,
       category,
       amount: Math.max(-1_000_000, Math.min(amount, 1_000_000)),
-      note: rampExpenseNote(tx),
+      note: `${rampExpenseNote(tx)}${partWords ? ` · ${partWords}` : ""}`,
       receiptUrl,
       vendor: rampMerchant(tx),
       spentAt: rampSpentAt(tx) ?? now,
@@ -229,30 +251,85 @@ async function bookTransaction(organizationId: string, conn: RampConnection, api
     organizationId,
     actorId: actorId || null,
     kind: TRAIL_KINDS.EXPENSE,
-    summary: `Ramp card: ${money(amount)}${amount < 0 ? " back" : ""} at ${rampMerchant(tx)} on ${where}${who ? ` — ${who}` : ""}${receiptUrl ? " (receipt attached)" : ""}`,
+    summary: `Ramp card: ${money(amount)}${amount < 0 ? " back" : ""} at ${rampMerchant(tx)} on ${where}${partWords ? ` (${partWords})` : ""}${who ? ` — ${who}` : ""}${receiptUrl ? " (receipt attached)" : ""}`,
     proposalId: job?.proposalId ?? null,
     clientId: job?.clientId ?? null,
-    meta: { jobId: job?.id ?? null, expenseId: row.id, amount, category, source: "ramp", rampTransactionId: tx.id },
+    meta: { jobId: job?.id ?? null, expenseId: row.id, amount, category, source: "ramp", rampTransactionId: tx.id, split: !!partWords },
   });
-  const rec: RampTxRecord = {
+  return { expenseId: row.id, amount, jobId: job?.id ?? null, jobTitle: job?.title ?? null, stock: to.kind === "stock", receiptUrl };
+}
+
+function freshRecord(tx: RampTransaction, who: string): RampTxRecord {
+  return {
     txId: tx.id,
     state: rampTxState(tx),
-    amount,
+    amount: rampAmount(tx),
     merchant: rampMerchant(tx),
     who,
     cardholderUserId: tx.card_holder?.user_id ?? null,
     at: rampSpentAt(tx)?.toISOString() ?? null,
-    category,
-    expenseId: row.id,
-    jobId: job?.id ?? null,
-    jobTitle: job?.title ?? null,
-    stock: to.kind === "stock",
-    needsJob: false,
+    category: rampCategory(tx),
+    expenseId: null,
+    jobId: null,
+    jobTitle: null,
+    stock: false,
+    needsJob: true,
     askedAt: null,
     askedPhone: null,
-    receiptDone: !!receiptUrl,
+    receiptDone: false,
     receiptIds: tx.receipts ?? [],
-    seenAt: now.toISOString(),
+    seenAt: new Date().toISOString(),
+  };
+}
+
+/** The whole swipe on one job (or the warehouse). */
+async function bookTransaction(organizationId: string, conn: RampConnection, api: RampApi, tx: RampTransaction, to: Dest, by: { userId: string | null; name: string }): Promise<RampTxRecord> {
+  const part = await bookPart(organizationId, conn, api, tx, to, by, rampAmount(tx), null);
+  const rec: RampTxRecord = { ...freshRecord(tx, rampCardholderName(tx) || by.name), expenseId: part.expenseId, jobId: part.jobId, jobTitle: part.jobTitle, stock: part.stock, needsJob: false, receiptDone: !!part.receiptUrl };
+  await writeTx(organizationId, rec);
+  return rec;
+}
+
+/**
+ * A swipe in parts: each part that names a job (or stock) becomes its own expense; what no part names is the
+ * remainder, left waiting for a job. Parts already booked on the record stay; a tagged line equal to one of them
+ * (same place, same money) is not booked twice.
+ */
+async function bookSplit(organizationId: string, conn: RampConnection, api: RampApi, tx: RampTransaction, lines: Array<{ amount: number; tag: Dest | null }>, by: { userId: string | null; name: string }, existing: RampTxRecord | null): Promise<RampTxRecord> {
+  const parts: RampTxPart[] = [...(existing?.parts ?? [])];
+  const taken = new Set(parts.map((p) => `${p.stock ? "stock" : p.jobId}|${p.amount.toFixed(2)}`));
+  const n = lines.length;
+  let i = 0;
+  for (const line of lines) {
+    i += 1;
+    if (!line.tag) continue;
+    const key = `${line.tag.kind === "stock" ? "stock" : line.tag.jobId}|${line.amount.toFixed(2)}`;
+    if (taken.has(key)) continue;
+    try {
+      const part = await bookPart(organizationId, conn, api, tx, line.tag, by, line.amount, `split ${i} of ${n}`);
+      parts.push({ expenseId: part.expenseId, amount: part.amount, jobId: part.jobId, jobTitle: part.jobTitle, stock: part.stock });
+      taken.add(key);
+    } catch {
+      /* a job that is not this company's: that part stays in the remainder */
+    }
+  }
+  const total = rampAmount(tx);
+  const booked = Math.round(parts.reduce((a, p) => a + p.amount, 0) * 100) / 100;
+  const remainder = Math.round((total - booked) * 100) / 100;
+  const first = parts[0] ?? null;
+  const rec: RampTxRecord = {
+    ...(existing ?? freshRecord(tx, rampCardholderName(tx) || by.name)),
+    state: rampTxState(tx),
+    amount: total,
+    receiptIds: tx.receipts ?? [],
+    expenseId: first?.expenseId ?? null,
+    jobId: first?.jobId ?? null,
+    jobTitle: parts.length > 1 ? `split · ${parts.length} parts` : (first?.jobTitle ?? null),
+    stock: parts.length === 1 && !!first?.stock,
+    parts,
+    remainder: Math.abs(remainder) >= 0.01 ? remainder : 0,
+    needsJob: Math.abs(remainder) >= 0.01,
+    receiptDone: parts.length > 0,
   };
   await writeTx(organizationId, rec);
   return rec;
@@ -277,10 +354,19 @@ async function askCardholder(organizationId: string, api: RampApi, tx: RampTrans
 export async function processRampTransaction(organizationId: string, conn: RampConnection, api: RampApi, tx: RampTransaction): Promise<"booked" | "needs-job" | "updated" | "skipped"> {
   if (!tx.id || rampTxState(tx) === "declined") return "skipped";
   const existing = await readTx(organizationId, tx.id);
+  if (existing?.expenseId && existing.parts?.length && existing.needsJob) {
+    // A split with money still unplaced: a line tagged since (in Ramp, or by the tech) books now.
+    const lines = rampLineParts(tx, conn.fieldRampId);
+    if (lines.some((l) => l.tag)) {
+      const before = existing.parts.length;
+      const rec = await bookSplit(organizationId, conn, api, tx, lines, { userId: null, name: existing.who }, existing);
+      if (rec.parts && rec.parts.length > before) return rec.needsJob ? "updated" : "booked";
+    }
+  }
   if (existing?.expenseId) {
     let changed = false;
     const amount = rampAmount(tx);
-    if (Math.abs(amount - existing.amount) >= 0.01) {
+    if (Math.abs(amount - existing.amount) >= 0.01 && !existing.parts?.length) {
       await db.jobExpense.update({ where: { id: existing.expenseId }, data: { amount } }).catch(() => null);
       existing.amount = amount;
       changed = true;
@@ -302,6 +388,18 @@ export async function processRampTransaction(organizationId: string, conn: RampC
     if (changed) await writeTx(organizationId, existing);
     return changed ? "updated" : "skipped";
   }
+  // Split in Ramp: each line with a job books on its own; the rest waits.
+  const lines = rampLineParts(tx, conn.fieldRampId);
+  if (lines.length) {
+    const holder = await cardholderInJobFlex(api, organizationId, tx.card_holder?.user_id ?? null);
+    const rec = await bookSplit(organizationId, conn, api, tx, lines, { userId: holder.userId, name: holder.name }, existing);
+    if (!rec.needsJob) return "booked";
+    if (!rec.askedAt && conn.askByText) {
+      const asked = await askCardholder(organizationId, api, { ...tx, entity_amount: { value: rec.remainder ?? rampAmount(tx) }, amount: rec.remainder ?? rampAmount(tx) }, rec);
+      await writeTx(organizationId, asked);
+    }
+    return rec.parts?.length ? "updated" : "needs-job";
+  }
   const tag = rampJobTag(tx, conn.fieldRampId);
   if (tag) {
     const holder = await cardholderInJobFlex(api, organizationId, tx.card_holder?.user_id ?? null);
@@ -312,26 +410,7 @@ export async function processRampTransaction(organizationId: string, conn: RampC
       /* a job that is not this company's: fall through to "needs a job" */
     }
   }
-  let rec: RampTxRecord = existing ?? {
-    txId: tx.id,
-    state: rampTxState(tx),
-    amount: rampAmount(tx),
-    merchant: rampMerchant(tx),
-    who: rampCardholderName(tx),
-    cardholderUserId: tx.card_holder?.user_id ?? null,
-    at: rampSpentAt(tx)?.toISOString() ?? null,
-    category: rampCategory(tx),
-    expenseId: null,
-    jobId: null,
-    jobTitle: null,
-    stock: false,
-    needsJob: true,
-    askedAt: null,
-    askedPhone: null,
-    receiptDone: false,
-    receiptIds: tx.receipts ?? [],
-    seenAt: new Date().toISOString(),
-  };
+  let rec: RampTxRecord = existing ?? freshRecord(tx, rampCardholderName(tx));
   rec = { ...rec, state: rampTxState(tx), amount: rampAmount(tx), receiptIds: tx.receipts ?? [], needsJob: true };
   if (!rec.askedAt && conn.askByText) rec = await askCardholder(organizationId, api, tx, rec);
   await writeTx(organizationId, rec);
@@ -339,7 +418,7 @@ export async function processRampTransaction(organizationId: string, conn: RampC
 }
 
 /** Every transaction since the last sync (three days back for safety), the field's options refreshed first. */
-export async function syncRamp(organizationId: string, opts: { since?: Date | null; full?: boolean } = {}): Promise<{ ok: true; booked: number; needsJob: number; updated: number; read: number } | { ok: false; error: string }> {
+export async function syncRamp(organizationId: string, opts: { since?: Date | null; full?: boolean } = {}): Promise<{ ok: true; booked: number; needsJob: number; updated: number; read: number; billsPaid: number } | { ok: false; error: string }> {
   const got = await rampApiFor(organizationId);
   if (!got) return { ok: false, error: "Ramp is not connected." };
   const { api, conn } = got;
@@ -358,8 +437,10 @@ export async function syncRamp(organizationId: string, opts: { since?: Date | nu
       else if (r === "needs-job") needsJob += 1;
       else if (r === "updated") updated += 1;
     }
+    const billsPaid = await refreshOpenRampBills(organizationId).catch(() => 0);
+    await resumeRampCardOrders(organizationId).catch(() => 0);
     await patchRampConnection(organizationId, { lastSyncAt: new Date().toISOString(), lastSyncCount: txs.length, lastError: null });
-    return { ok: true, booked, needsJob, updated, read: txs.length };
+    return { ok: true, booked, needsJob, updated, read: txs.length, billsPaid };
   } catch (err) {
     const error = err instanceof Error ? err.message : "The sync failed.";
     await patchRampConnection(organizationId, { lastError: error });
@@ -373,7 +454,7 @@ export async function assignRampTransaction(organizationId: string, txId: string
   if (!got) return { ok: false, error: "Ramp is not connected." };
   const { api, conn } = got;
   const rec = await readTx(organizationId, txId);
-  if (rec?.expenseId) return { ok: true, where: rec.jobTitle ?? "stock" };
+  if (rec?.expenseId && !(rec.parts?.length && rec.needsJob)) return { ok: true, where: rec.jobTitle ?? "stock" };
   if (to.kind === "none") {
     if (rec) await writeTx(organizationId, { ...rec, needsJob: false, askedAt: rec.askedAt ?? new Date().toISOString() });
     if (rec?.askedPhone) await db.syncState.deleteMany({ where: { key: askKey(rec.askedPhone) } }).catch(() => null);
@@ -382,6 +463,16 @@ export async function assignRampTransaction(organizationId: string, txId: string
   const tx = await api.transaction(txId).catch(() => null);
   if (!tx) return { ok: false, error: "Ramp did not return that transaction." };
   try {
+    if (rec?.parts?.length && rec.needsJob) {
+      // The rest of a split goes to one place; Ramp's own lines stay as they are, the memo says where the rest went.
+      const remainder = rec.remainder ?? Math.round((rampAmount(tx) - rec.parts.reduce((a, p) => a + p.amount, 0)) * 100) / 100;
+      const part = await bookPart(organizationId, conn, api, tx, to, by, remainder, `split ${rec.parts.length + 1} of ${rec.parts.length + 1}`);
+      const parts = [...rec.parts, { expenseId: part.expenseId, amount: part.amount, jobId: part.jobId, jobTitle: part.jobTitle, stock: part.stock }];
+      await writeTx(organizationId, { ...rec, parts, remainder: 0, needsJob: false, jobTitle: `split · ${parts.length} parts`, stock: false });
+      await api.memo(txId, `JobFlex: split — ${parts.map((p) => `${p.stock ? "stock" : p.jobTitle} ${money(p.amount)}`).join(" · ")}`).catch(() => null);
+      if (rec.askedPhone) await db.syncState.deleteMany({ where: { key: askKey(rec.askedPhone) } }).catch(() => null);
+      return { ok: true, where: part.jobTitle ?? "stock" };
+    }
     const booked = await bookTransaction(organizationId, conn, api, tx, to, by);
     await api.memo(txId, `JobFlex: ${to.kind === "job" ? `${booked.jobTitle ?? to.jobId} (${to.jobId})` : "stock"}`).catch(() => null);
     if (rec?.askedPhone) await db.syncState.deleteMany({ where: { key: askKey(rec.askedPhone) } }).catch(() => null);
@@ -389,6 +480,52 @@ export async function assignRampTransaction(organizationId: string, txId: string
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Could not book it." };
   }
+}
+
+/**
+ * The office splits a swipe across jobs: one expense per part here, and the split written back to Ramp as line items
+ * coded with the JobFlex job field (cents; Ramp wants the parts to sum to the swipe). A swipe Ramp already split
+ * is placed, not re-split.
+ */
+export async function splitRampTransaction(organizationId: string, txId: string, parts: SplitPart[], by: { userId: string | null; name: string }): Promise<{ ok: true; where: string; rampTook: boolean } | { ok: false; error: string }> {
+  const got = await rampApiFor(organizationId);
+  if (!got) return { ok: false, error: "Ramp is not connected." };
+  const { api, conn } = got;
+  const rec = await readTx(organizationId, txId);
+  if (rec?.expenseId) return { ok: false, error: rec.parts?.length ? "Ramp already split this one — place the rest on one job." : "This swipe is already on a job." };
+  const tx = await api.transaction(txId).catch(() => null);
+  if (!tx) return { ok: false, error: "Ramp did not return that transaction." };
+  const total = rampAmount(tx);
+  const bad = splitPlanError(total, parts);
+  if (bad) return { ok: false, error: bad };
+  const booked: RampTxPart[] = [];
+  let i = 0;
+  for (const p of parts) {
+    i += 1;
+    try {
+      const part = await bookPart(organizationId, conn, api, tx, p.to, by, p.amount, `split ${i} of ${parts.length}`);
+      booked.push({ expenseId: part.expenseId, amount: part.amount, jobId: part.jobId, jobTitle: part.jobTitle, stock: part.stock });
+    } catch (err) {
+      // Undo what was written, so a bad job in the list leaves nothing half-booked.
+      await db.jobExpense.deleteMany({ where: { id: { in: booked.map((b) => b.expenseId) } } }).catch(() => null);
+      return { ok: false, error: err instanceof Error ? err.message : "Could not book a part." };
+    }
+  }
+  const first = booked[0];
+  await writeTx(organizationId, { ...(rec ?? freshRecord(tx, rampCardholderName(tx) || by.name)), state: rampTxState(tx), amount: total, expenseId: first.expenseId, jobId: first.jobId, jobTitle: `split · ${booked.length} parts`, stock: false, parts: booked, remainder: 0, needsJob: false, receiptDone: true, receiptIds: tx.receipts ?? [] });
+  if (rec?.askedPhone) await db.syncState.deleteMany({ where: { key: askKey(rec.askedPhone) } }).catch(() => null);
+  // Ramp's side: the same split as line items on the transaction, each coded to its job; the memo as a plain-words copy.
+  const cents = parts.map((p) => toCents(p.amount));
+  const drift = toCents(total) - cents.reduce((a, b) => a + b, 0);
+  cents[cents.length - 1] += drift;
+  const lines = parts.map((p, k) => ({
+    amount: cents[k],
+    memo: `JobFlex: ${p.to.kind === "job" ? (booked[k].jobTitle ?? p.to.jobId) : "stock"}`,
+    accounting_field_selections: conn.fieldRampId ? [{ field_id: conn.fieldRampId, field_option_external_id: p.to.kind === "job" ? p.to.jobId : RAMP_STOCK_OPTION_ID }] : [],
+  }));
+  const rampTook = !!(await api.splitTransaction(txId, lines).catch(() => null));
+  await api.memo(txId, `JobFlex: split — ${booked.map((p) => `${p.stock ? "stock" : p.jobTitle} ${money(p.amount)}`).join(" · ")}`).catch(() => null);
+  return { ok: true, where: booked.map((p) => `${p.stock ? "stock" : p.jobTitle} ${money(p.amount)}`).join(" · "), rampTook };
 }
 
 /** What Financials and the Integrations card list: the swipes with no job first, then the latest booked. */
@@ -403,7 +540,7 @@ export async function rampCardSpend(organizationId: string, max = 60): Promise<{
     }
   }
   const byTime = (a: RampTxRecord, b: RampTxRecord) => (b.at ?? b.seenAt).localeCompare(a.at ?? a.seenAt);
-  return { needsJob: recs.filter((r) => r.needsJob && !r.expenseId).sort(byTime).slice(0, max), recent: recs.filter((r) => !!r.expenseId).sort(byTime).slice(0, max) };
+  return { needsJob: recs.filter((r) => r.needsJob && (!r.expenseId || (r.remainder ?? 0) !== 0)).sort(byTime).slice(0, max), recent: recs.filter((r) => !!r.expenseId).sort(byTime).slice(0, max) };
 }
 
 /* ── the tech's text back ───────────────────────────────────────────────── */

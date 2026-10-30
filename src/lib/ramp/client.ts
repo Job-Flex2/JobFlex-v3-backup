@@ -27,7 +27,10 @@ export function rampEnv(): RampEnv | null {
 export const rampEnabled = (): boolean => rampEnv() !== null;
 
 /** What the contractor grants JobFlex: read the business, its users, transactions and receipts; keep the job field and its options; write memos; run webhooks. */
-export const RAMP_SCOPES = ["business:read", "users:read", "transactions:read", "receipts:read", "accounting:read", "accounting:write", "memos:write", "webhooks:read", "webhooks:write"] as const;
+export const RAMP_SCOPES = [
+  "business:read", "users:read", "users:write", "transactions:read", "transactions:write", "receipts:read", "accounting:read", "accounting:write", "memos:write",
+  "webhooks:read", "webhooks:write", "entities:read", "vendors:read", "vendors:write", "bills:read", "bills:write", "cards:read", "cards:write", "funds:read", "funds:write",
+] as const;
 
 export function rampAuthorizeUrl(env: RampEnv, state: string): string {
   const q = new URLSearchParams({ response_type: "code", client_id: env.clientId, redirect_uri: env.redirectUri, scope: RAMP_SCOPES.join(" "), state });
@@ -41,6 +44,37 @@ export interface RampTokenResponse {
   refresh_token_expires_in?: number | null;
   scope?: string;
   token_type?: string;
+}
+
+export interface RampVendor {
+  id: string;
+  name: string;
+  display_name?: string | null;
+  is_active?: boolean;
+  contacts?: string[];
+  address?: { address_line_1: string; address_line_2?: string; city: string; state?: string; postal_code: string; country: string } | null;
+  addresses?: Array<{ id: string; address_line_1: string; city: string; state?: string; postal_code: string; country: string; is_default: boolean; pay_to_name?: string }>;
+  default_payment_method?: { policy?: unknown; update_source?: string | null } | null;
+  default_entity_id?: string | null;
+}
+export interface RampBill {
+  id: string;
+  amount?: { amount: number; currency_code?: string; minor_unit_conversion_rate?: number | null } | null;
+  approval_status?: string | null;
+  status?: string | null;
+  status_summary?: string | null;
+  paid_at?: string | null;
+  archived_at?: string | null;
+  deep_link_url?: string;
+  due_at?: string;
+  issued_at?: string;
+  invoice_number?: string;
+  invoice_urls?: string[];
+  attachments?: Array<{ attachment_type?: string; id: string; url?: string }>;
+  payment?: { payment_method?: string | null; amount?: { amount: number; minor_unit_conversion_rate?: number | null } | null } | null;
+  vendor?: { id: string; name: string } | null;
+  draft_bill_id?: string | null;
+  memo?: string;
 }
 
 export class RampApiError extends Error {
@@ -105,6 +139,13 @@ export class RampApi {
   delete<T>(path: string): Promise<T> {
     return this.call<T>("DELETE", path);
   }
+  /** A multipart upload (a bill's invoice): the body is a FormData, the content type the browser's. */
+  async postForm<T>(path: string, form: FormData): Promise<T> {
+    const r = await fetch(`${this.env.apiBase}/developer/v1${path}`, { method: "POST", headers: { Authorization: `Bearer ${this.accessToken}`, Accept: "application/json" }, body: form, signal: AbortSignal.timeout(30_000), cache: "no-store" });
+    const text = await r.text();
+    if (!r.ok) throw new RampApiError(r.status, `Ramp POST ${path} failed (${r.status})`, text.slice(0, 600));
+    return (text ? JSON.parse(text) : {}) as T;
+  }
   /** Every page of a list, following `page.next`, never past `max` rows. */
   async listAll<T>(path: string, query: Record<string, string>, max = 2000): Promise<T[]> {
     const out: T[] = [];
@@ -146,7 +187,7 @@ export class RampApi {
   createField(body: { id: string; name: string; input_type: "SINGLE_CHOICE"; is_required_for: string[]; is_splittable: boolean }): Promise<{ ramp_id?: string; id?: string; is_required_for?: string[] }> {
     return this.post("/accounting/fields", body);
   }
-  updateField(rampId: string, body: { is_required_for?: string[]; name?: string }): Promise<{ ramp_id?: string }> {
+  updateField(rampId: string, body: { is_required_for?: string[]; is_splittable?: boolean; name?: string }): Promise<{ ramp_id?: string }> {
     return this.patch(`/accounting/fields/${encodeURIComponent(rampId)}`, body);
   }
   fieldOptions(fieldRampId: string): Promise<Array<{ id?: string; ramp_id?: string; value?: string; is_active?: boolean; visibility?: string }>> {
@@ -169,6 +210,69 @@ export class RampApi {
   }
   inviteUser(body: { email: string; first_name: string; last_name: string; idempotency_key: string; role: "BUSINESS_USER" }): Promise<{ id: string }> {
     return this.post("/users/deferred", body);
+  }
+  userTask(taskId: string): Promise<{ status?: string; data?: { user_id?: string; error?: string } }> {
+    return this.get(`/users/deferred/status/${encodeURIComponent(taskId)}`);
+  }
+  /** The split written back: lines in minor units with their coding; an empty list unsplits. */
+  splitTransaction(id: string, lineItems: Array<{ amount: number; memo?: string | null; accounting_field_selections?: Array<{ field_id?: string | null; field_external_id?: string | null; field_option_id?: string | null; field_option_external_id?: string | null }> }>): Promise<RampTransaction> {
+    return this.patch(`/transactions/${encodeURIComponent(id)}`, { line_items: lineItems });
+  }
+  // ── Bill Pay ──
+  entities(): Promise<Array<{ id: string; entity_name?: string; is_primary?: boolean | null; default_bill_pay_payment_account_id?: string | null; payment_accounts?: Array<{ id: string; account_name?: string; account_number_last_four?: string; currency?: string }>; accounts?: Array<{ bank_account_id?: string | null; usage_type?: string | null }> }>> {
+    return this.listAll("/entities", { page_size: "50" }, 50);
+  }
+  vendors(): Promise<RampVendor[]> {
+    return this.listAll("/vendors", { page_size: "100" }, 1000);
+  }
+  createVendor(body: { name: string; business_vendor_contacts: { email: string; first_name?: string; last_name?: string; phone?: string }; address?: { address_line_1: string; address_line_2?: string | null; city: string; state?: string | null; postal_code: string; country: string; pay_to_name?: string | null }; request_payment_details?: boolean; default_entity_id?: string | null; external_vendor_id?: string | null; country?: string | null }): Promise<RampVendor> {
+    return this.post("/vendors", body);
+  }
+  vendorAccounts(vendorId: string): Promise<Array<{ id: string; is_default?: boolean; payment_method?: string; account_number_last_four?: string | null }>> {
+    return this.listAll(`/vendors/${encodeURIComponent(vendorId)}/accounts`, { page_size: "50" }, 50);
+  }
+  vendorContacts(vendorId: string): Promise<Array<{ id: string; email: string; is_default?: boolean }>> {
+    return this.listAll(`/vendors/${encodeURIComponent(vendorId)}/contacts`, { page_size: "50" }, 50);
+  }
+  /** An approved bill: Ramp pays it by the payment details given. */
+  createBill(body: Record<string, unknown>): Promise<RampBill> {
+    return this.post("/bills", body);
+  }
+  /** A draft bill: lands in Ramp's inbox for a person to approve there. */
+  createDraftBill(body: Record<string, unknown>): Promise<{ id: string } & Record<string, unknown>> {
+    return this.post("/bills/drafts", body);
+  }
+  submitDraftBill(draftId: string): Promise<RampBill> {
+    return this.post(`/bills/drafts/${encodeURIComponent(draftId)}/submit`, {});
+  }
+  bill(id: string): Promise<RampBill> {
+    return this.get(`/bills/${encodeURIComponent(id)}`);
+  }
+  draftBill(id: string): Promise<Record<string, unknown>> {
+    return this.get(`/bills/drafts/${encodeURIComponent(id)}`);
+  }
+  /** The invoice on the bill (or the draft). Ramp takes PDFs here, not pictures. */
+  uploadBillAttachment(billId: string, file: { bytes: Buffer; filename: string; contentType: string }, attachmentType: "INVOICE" | "FILE", draft = false): Promise<{ id: string }> {
+    const form = new FormData();
+    form.set("attachment_type", attachmentType);
+    form.set("file", new Blob([new Uint8Array(file.bytes)], { type: file.contentType }), file.filename);
+    return this.postForm(draft ? `/bills/drafts/${encodeURIComponent(billId)}/attachments` : `/bills/${encodeURIComponent(billId)}/attachments`, form);
+  }
+  // ── Cards ──
+  createFund(body: Record<string, unknown>): Promise<{ id: string; display_name?: string; state?: string }> {
+    return this.post("/funds", body);
+  }
+  physicalCards(): Promise<Array<{ id?: string; cardholder_id?: string; cardholder_name?: string; display_name?: string; last_four?: string; state?: string; is_suspended?: boolean; fund_id?: string | null; fulfillment?: { fulfillment_status?: string; shipping_eta?: string } | null; created_at?: string }>> {
+    return this.listAll("/cards/physical", { page_size: "100" }, 500);
+  }
+  virtualCards(): Promise<Array<{ id?: string; user_id?: string; fund_id?: string | null; is_card_suspended?: boolean; display_name?: string; last_four?: string; created_at?: string }>> {
+    return this.listAll("/cards/virtual", { page_size: "100" }, 500);
+  }
+  createPhysicalCard(body: { user_id: string; fund_id?: string | null; shipping_address: { address1: string; address2?: string | null; city: string; state?: string | null; postal_code: string; country: string } }): Promise<{ id?: string; last_four?: string; display_name?: string; state?: string; fulfillment?: { shipping_eta?: string } | null }> {
+    return this.post("/cards/physical", body);
+  }
+  suspendCard(id: string, suspended: boolean): Promise<unknown> {
+    return suspended ? this.post(`/cards/physical/${encodeURIComponent(id)}/suspension`, {}) : this.delete(`/cards/physical/${encodeURIComponent(id)}/suspension`);
   }
 }
 

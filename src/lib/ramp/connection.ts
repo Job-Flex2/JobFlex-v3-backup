@@ -31,6 +31,11 @@ export interface RampConnection {
   askByText: boolean;
   /** Ramp asks the job on every swipe (the field is required for transactions). */
   requireJob: boolean;
+  /** Bills from JobFlex are approved bills Ramp pays (true), or drafts someone approves in Ramp (false, the default). */
+  billsApproved: boolean;
+  /** Bill Pay: the paying entity and its bill-pay bank account, remembered on the first bill. */
+  entityId: string | null;
+  sourceBankAccountId: string | null;
 }
 
 const connKey = (org: string) => `ramp:${org}`;
@@ -64,6 +69,9 @@ export async function readRampConnection(organizationId: string): Promise<RampCo
       lastError: c.lastError ?? null,
       askByText: c.askByText !== false,
       requireJob: c.requireJob !== false,
+      billsApproved: c.billsApproved === true,
+      entityId: c.entityId ?? null,
+      sourceBankAccountId: c.sourceBankAccountId ?? null,
     };
   } catch {
     return null;
@@ -156,6 +164,7 @@ export interface RampView {
   webhookReady: boolean;
   askByText: boolean;
   requireJob: boolean;
+  billsApproved: boolean;
   connectHref: string;
 }
 export async function rampConnectionView(organizationId: string): Promise<RampView> {
@@ -173,6 +182,7 @@ export async function rampConnectionView(organizationId: string): Promise<RampVi
     webhookReady: !!conn?.webhookVerified,
     askByText: conn?.askByText ?? true,
     requireJob: conn?.requireJob ?? true,
+    billsApproved: conn?.billsApproved ?? false,
     connectHref: "/api/integrations/ramp/connect",
   };
 }

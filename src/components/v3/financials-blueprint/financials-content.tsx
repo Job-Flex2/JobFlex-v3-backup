@@ -341,7 +341,7 @@ export function FinancialsContent(props: FinancialsContentProps) {
             manager, and what is owed to workers — on top, where the work is. */}
         <OfficeReview data={props.office ?? EMPTY_OFFICE_MONEY} onChanged={reloadExpenses} />
         {/* Ramp (2026-10-29): the swipes still waiting for a job, placed here by the office. Nothing when Ramp is not connected. */}
-        <RampCardSpend jobs={props.jobs} onChanged={reloadExpenses} />
+        <RampCardSpend jobs={props.jobs} />
         <div className="card card--table">
           <div className="tb-head">
             <span className="kpi-lbl">Expenses</span>

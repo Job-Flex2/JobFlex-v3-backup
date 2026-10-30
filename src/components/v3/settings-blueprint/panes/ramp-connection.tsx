@@ -9,6 +9,7 @@ import { disconnectRamp, setRampSwitches, syncRampNow } from "@/actions/ramp";
 import { toast } from "@/components/ui/Toast";
 import type { RampData } from "../settings-data";
 import { Toggle } from "../ui";
+import { RampCardsSection } from "./ramp-cards-section";
 import styles from "../meta-connection.module.css";
 import layout from "./integration-cards.module.css";
 
@@ -35,14 +36,14 @@ export function RampConnection({ data: initial, mobile = false }: { data: RampDa
       const r = await syncRampNow();
       if (!r.ok) throw new Error(r.error);
       setData((d) => ({ ...d, ...r.view }));
-      toast.success("Ramp read", `${r.read} transactions read · ${r.booked} booked on jobs · ${r.needsJob} waiting for a job · ${r.updated} updated.`);
+      toast.success("Ramp read", `${r.read} transactions read · ${r.booked} booked on jobs · ${r.needsJob} waiting for a job · ${r.updated} updated${r.billsPaid ? ` · ${r.billsPaid} bill${r.billsPaid > 1 ? "s" : ""} paid` : ""}.`);
     } catch (error) {
       toast.error("Ramp sync failed", error instanceof Error ? error.message : "Try again in a minute.");
     } finally {
       setBusy(null);
     }
   }
-  async function flip(key: "askByText" | "requireJob", value: boolean) {
+  async function flip(key: "askByText" | "requireJob" | "billsApproved", value: boolean) {
     setBusy("switch");
     const before = data;
     setData((d) => ({ ...d, [key]: value }));
@@ -129,6 +130,9 @@ export function RampConnection({ data: initial, mobile = false }: { data: RampDa
           <li>The purchase lands on that job&apos;s expenses, approved, with the receipt and the cardholder&apos;s name. The owner&apos;s trail says &ldquo;Ramp card: $212.40 at Home Depot on Smith roof — Mike&rdquo;.</li>
           <li>A swipe with no job: the tech gets a text from your company&apos;s line — &ldquo;$212.40 at Home Depot — which job? Reply 1 Smith roof · 2 Lopez deck…&rdquo; — and the reply books it. Until then it waits under Financials → Expenses → Needs a job, where the office can place it.</li>
           <li>Refunds come back as negative lines; an amount that changes when a charge clears is corrected on the job. Your accounting export stays on Ramp&apos;s side — nothing is entered twice.</li>
+          <li>One receipt, two jobs: split it in Ramp (each line its own job) or from Financials with &ldquo;Split…&rdquo; — one expense per part, and Ramp gets the same split.</li>
+          <li>Vendor bills: Financials → Expenses → &ldquo;Pay a vendor bill&rdquo; makes the bill in Ramp, coded to the job, invoice attached. Ramp pays it (ACH or check); the day it pays, the money is on the job.</li>
+          <li>Cards: give a crew member a card from here — Ramp invites them, sets the monthly limit you typed, ships the card. Freeze one in a tap.</li>
         </ol>
         {data.connected && data.canManage && (
           <>
@@ -140,9 +144,14 @@ export function RampConnection({ data: initial, mobile = false }: { data: RampDa
               <div><strong>Text the tech when a swipe has no job</strong><p>From your company&apos;s line, to the cardholder&apos;s mobile on file; the reply books it.</p></div>
               <Toggle checked={data.askByText} onChange={(v) => void flip("askByText", v)} ariaLabel="Text the tech when a swipe has no job" />
             </div>
+            <div className={layout.toggleRow}>
+              <div><strong>Bills from JobFlex are approved — Ramp pays them</strong><p>Off: a bill goes to Ramp&apos;s inbox and someone approves it there before anything pays. On: it goes in approved and Ramp pays it on the due date.</p></div>
+              <Toggle checked={data.billsApproved} onChange={(v) => void flip("billsApproved", v)} ariaLabel="Bills from JobFlex are approved and paid by Ramp" />
+            </div>
           </>
         )}
       </div>
+      {data.connected && data.canManage && <RampCardsSection canManage={data.canManage} />}
     </section>
   );
 }
