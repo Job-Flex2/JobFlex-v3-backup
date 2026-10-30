@@ -24,17 +24,18 @@ import { trialExtensionEligible } from "@/lib/trialExtension";
 // the request's organization through lib/trialMeter, and a new ticket's
 // answer runs inside the CUSTOMER's request — their trial AI budget would pay
 // for our support. Answering tickets is the platform's cost, so this client is
-// not metered. Same key, same model (resolveOpenAIModel), same sampling rule.
+// not metered (lib/support/unmeteredOpenAI, shared with SmartHelp). Same key,
+// same model (resolveOpenAIModel), same sampling rule.
 //
 // NOTHING HERE CHANGES AN ACCOUNT. It reads the customer's facts, writes a
 // letter, keeps a record (SyncState `supportAi:<ticketId>`, `supportAi:
 // settings` — no schema change) and sends email. A fix is a proposal that
 // waits for an admin's Approve; "Mark fixed" only tells the customer.
 
-import OpenAI from "openai";
 import { db } from "@/lib/db";
 import { appBaseUrl } from "@/lib/appUrl";
 import { isOpenAIEnabled, resolveOpenAIModel, samplingOptions } from "@/lib/sdk/openai";
+import { unmeteredOpenAI } from "@/lib/support/unmeteredOpenAI";
 import { isEmailEnabled, sendEmail } from "@/lib/sdk/resend";
 import { supportRecipients, supportTicketRef } from "@/lib/notify";
 import { postSupportMessage, recipientForTicket, threadOf, threadsFor } from "@/lib/supportThread";
@@ -204,14 +205,10 @@ async function accountFacts(t: TicketRow): Promise<string[]> {
 
 // ── The call ─────────────────────────────────────────────────────────────────
 
-/** Unmetered on purpose — see the header. Reads OPENAI_BASE_URL like the SDK always does. */
-function supportClient(): OpenAI {
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY, maxRetries: 1, timeout: 120_000 });
-}
-
+/** Unmetered on purpose — see the header. */
 async function askModel(system: string, user: string): Promise<{ model: string; text: string }> {
   const model = await resolveOpenAIModel();
-  const completion = await supportClient().chat.completions.create({
+  const completion = await unmeteredOpenAI().chat.completions.create({
     model,
     ...(await samplingOptions(0.3)),
     messages: [
