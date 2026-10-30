@@ -182,10 +182,10 @@ check("the offer's words never trip the money regex, so a draft in auto mode isn
 
 // ── SmartHelp's "Ask a person" (2026-10-30): the hand-off waits for a person ──
 const SMARTHELP_HELD = "Came from SmartHelp — a person sends this one.";
-check("a SmartHelp hand-off is never sent on its own: held, with its reason", (() => { const d = deliveryFor(howTo, "auto", "smarthelp"); return !d.send && d.reason === SMARTHELP_HELD; })());
+check("a SmartHelp hand-off is never sent on its own: when nothing else holds it, held with its reason", (() => { const d = deliveryFor(howTo, "auto", "smarthelp"); return !d.send && d.reason === SMARTHELP_HELD; })());
 check("…the same sure answer without the mark still goes out", deliveryFor(howTo, "auto").send === true);
 check("…drafts-only and off keep their own reason", [deliveryFor(howTo, "draft", "smarthelp"), deliveryFor(howTo, "off", "smarthelp")].every((x) => !x.send && x.reason === "The AI is set to draft for you."));
-check("…and in auto the mark is the reason, whatever the model made of it", (() => { const x = deliveryFor({ ...howTo, needsHuman: true, humanReason: "Refund request" }, "auto", "smarthelp"); return !x.send && x.reason === SMARTHELP_HELD; })());
+check("…and an answer the model held for a person keeps the model's own reason", (() => { const x = deliveryFor({ ...howTo, needsHuman: true, humanReason: "Refund request" }, "auto", "smarthelp"); return !x.send && x.reason === "Refund request"; })());
 check(
   "the mark is read from the ticket's row; no row, a broken one or another origin is none",
   supportOriginOf('{"origin":"smarthelp","logId":"2026-10-30T10:15:00.000Z-1a2b3c4d"}') === "smarthelp" && supportOriginOf('{"origin":"smarthelp","logId":null}') === "smarthelp" &&

@@ -32,10 +32,12 @@ import { trialExtensionEligible } from "@/lib/trialExtension";
 // settings` — no schema change) and sends email. A fix is a proposal that
 // waits for an admin's Approve; "Mark fixed" only tells the customer.
 //
-// A SMARTHELP HAND-OFF ("Ask a person", 2026-10-30) is marked when it is filed
-// (SyncState `supportOrigin:<ticketId>`): every answer the AI writes for it —
-// the first, a follow-up, the safety net's — waits for a person to send.
+// A SMARTHELP HAND-OFF ("Ask a person", 2026-10-30) is marked in the same
+// transaction that files it (SyncState `supportOrigin:<ticketId>`), so none
+// exists unmarked: every answer the AI writes for it — the first, a
+// follow-up, the safety net's — waits for a person to send.
 
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { appBaseUrl } from "@/lib/appUrl";
 import { isOpenAIEnabled, resolveOpenAIModel, samplingOptions } from "@/lib/sdk/openai";
@@ -119,16 +121,18 @@ async function writeSupportAi(ticketId: string, rec: SupportAiRecord): Promise<v
   await db.syncState.upsert({ where: { key: RECORD_KEY(ticketId) }, create: { key: RECORD_KEY(ticketId), cursor }, update: { cursor } });
 }
 
-/** Marks a ticket filed from SmartHelp's "Ask a person" (actions/support, as it is filed): the AI only drafts for it.
- *  `logId`: the SmartHelp question it carries, or null. */
-export async function markSmartHelpTicket(ticketId: string, logId: string | null): Promise<void> {
+/** Marks a ticket filed from SmartHelp's "Ask a person": the AI only drafts for it. `tx` is the transaction that
+ *  creates the ticket (actions/support), so a hand-off never exists unmarked. `logId`: the SmartHelp question it
+ *  carries, or null. */
+export async function markSmartHelpTicket(tx: Prisma.TransactionClient, ticketId: string, logId: string | null): Promise<void> {
   const cursor = JSON.stringify({ origin: "smarthelp", logId });
-  await db.syncState.upsert({ where: { key: ORIGIN_KEY(ticketId) }, create: { key: ORIGIN_KEY(ticketId), cursor }, update: { cursor } });
+  await tx.syncState.upsert({ where: { key: ORIGIN_KEY(ticketId) }, create: { key: ORIGIN_KEY(ticketId), cursor }, update: { cursor } });
 }
 
-/** Where a ticket came from (aiReply supportOriginOf) — no row, or one that can't be read, is none. */
+/** Where a ticket came from (aiReply supportOriginOf): no row is none. A failed read REJECTS rather than taking a
+ *  hand-off for a plain ticket — every caller of answerTicketWithAi catches it, and the safety net tries again. */
 async function readSupportOrigin(ticketId: string): Promise<SupportOrigin | undefined> {
-  const row = await db.syncState.findUnique({ where: { key: ORIGIN_KEY(ticketId) }, select: { cursor: true } }).catch(() => null);
+  const row = await db.syncState.findUnique({ where: { key: ORIGIN_KEY(ticketId) }, select: { cursor: true } });
   return supportOriginOf(row?.cursor);
 }
 
