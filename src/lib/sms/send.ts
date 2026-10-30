@@ -45,6 +45,7 @@ import { houseLineFor } from "./houseLine";
 import { orgMayText } from "@/lib/paidCaps";
 import { smsAllowanceFor } from "@/lib/entitlements";
 import { getOrgPlanById } from "@/lib/orgPlan";
+import { activeCapture } from "@/lib/leadCenter/outboxContext";
 
 const CAP_PER_NUMBER_PER_DAY = 25;
 const CAP_PER_ORG_PER_DAY = 500;
@@ -78,6 +79,13 @@ export async function sendText(input: SendTextInput): Promise<SendTextResult> {
   const to = toE164(input.to);
   if (!to) return { ok: false, reason: "invalid-number" };
   const body = clip(input.body, SMS_MAX);
+  // THE LEAD CENTER TEST ENVIRONMENT (lib/leadCenter/sandbox, 2026-10-29): recorded on the Lead Center, never sent,
+  // no SmsMessage row (it would count against the company's allowance).
+  const capture = activeCapture();
+  if (capture) {
+    await capture.record({ channel: "sms", to, body, what: input.kind, note: input.organizationId ? "From the company's number" : "From JobFlex's number" });
+    return { ok: true, id: "lead-test:captured", status: "SKIPPED", why: "test-environment" };
+  }
   try {
     if (await db.smsOptOut.findUnique({ where: { phone: to }, select: { phone: true } })) return { ok: false, reason: "opted-out" };
     const since = new Date(Date.now() - DUPLICATE_WINDOW_MS);
