@@ -2238,8 +2238,25 @@
 .bp :global(.content #allCard .ppl-acts-k) { display: none; }
 /* The accepted day rides on the status badge. */
 .bp :global(.pstatus-d) { margin-left: 6px; padding-left: 6px; border-left: 1.5px solid currentColor; font-style: normal; font-family: var(--font-mono); letter-spacing: 0.06em; }
-/* Sent stays a stamp; Resend is a real button beside it. */
-.bp :global(.content .pbar .pbar-btn.pact--resend) { color: var(--blueprint); }
+/* SENT TURNS INTO RESEND (owner, 2026-10-29: "the sent message when hovered turns into a resend button, and it
+   has to be visible you can hover over it"). One button, two faces stacked in the same cell so the plate keeps its
+   width: Sent and when, in green; on hover or keyboard focus the plate goes blueprint blue and reads Resend. The
+   send icon at the plate's end says there is more under it. Without a hover (touch) both faces show, side by side. */
+.bp :global(.content .pbar .pbar-btn.pact--swap) { display: inline-grid; grid-template-columns: auto; align-items: center; padding: 0 12px; cursor: pointer; border-color: var(--success); }
+.bp :global(.content .pbar .pbar-btn.pact--swap > .pswap) { grid-area: 1 / 1; display: inline-flex; align-items: center; gap: 6px; transition: opacity 0.12s var(--ease); }
+.bp :global(.content .pbar .pbar-btn.pact--swap > .pswap--resend) { opacity: 0; justify-content: center; }
+.bp :global(.content .pbar .pbar-btn.pact--swap > .pswap--sent::after) { content: ""; width: 0; height: 0; margin-left: 2px; border-left: 5px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent; opacity: 0.55; }
+.bp :global(.content .pbar .pbar-btn.pact--swap:hover),
+.bp :global(.content .pbar .pbar-btn.pact--swap:focus-visible) { background: var(--blueprint); border-color: var(--blueprint); color: #fff; }
+.bp :global(.content .pbar .pbar-btn.pact--swap:hover > .pswap--sent),
+.bp :global(.content .pbar .pbar-btn.pact--swap:focus-visible > .pswap--sent) { opacity: 0; }
+.bp :global(.content .pbar .pbar-btn.pact--swap:hover > .pswap--resend),
+.bp :global(.content .pbar .pbar-btn.pact--swap:focus-visible > .pswap--resend) { opacity: 1; }
+@media (hover: none) {
+  .bp :global(.content .pbar .pbar-btn.pact--swap) { grid-template-columns: auto auto; column-gap: 10px; }
+  .bp :global(.content .pbar .pbar-btn.pact--swap > .pswap--resend) { grid-area: 1 / 2; opacity: 1; padding-left: 10px; border-left: 1.5px solid currentColor; color: var(--blueprint); }
+  .bp :global(.content .pbar .pbar-btn.pact--swap > .pswap--sent::after) { display: none; }
+}
 
 /* ── Payments lined up (owner, 2026-10-28: "the payment cards and the buttons more inlined"): the stage boxes and
    the three buttons share one top and one bottom; the buttons a step shorter so the column is the boxes' height. ── */

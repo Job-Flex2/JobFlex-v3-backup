@@ -1318,16 +1318,27 @@
   display: flex; align-items: center; gap: 10px;
   margin-top: 10px;
 }
-.mSentStamp { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--success-dark, #2c6335); }
-.mSentStamp svg { width: 15px; height: 15px; }
-.mSentAgain {
-  margin-left: auto;
+.mSentSwap {
+  display: inline-grid; grid-template-columns: auto; align-items: center;
   min-height: 44px; padding: 0 14px;
   border: 1.5px solid var(--success); border-radius: var(--radius);
   background: var(--success-soft); color: var(--success-dark, #2c6335);
-  font-size: 12.5px; font-weight: 800;
+  font-size: 13px; font-weight: 800; cursor: pointer;
 }
-.mSentAgain:active { background: var(--success); color: #fff; }
+.mSwapSent, .mSwapResend { grid-area: 1 / 1; display: inline-flex; align-items: center; gap: 6px; transition: opacity 0.12s var(--ease); }
+.mSwapSent svg, .mSwapResend svg { width: 15px; height: 15px; }
+.mSwapResend { opacity: 0; justify-content: center; }
+.mSentSwap:hover, .mSentSwap:focus-visible { background: var(--blueprint); border-color: var(--blueprint); color: #fff; }
+.mSentSwap:hover .mSwapSent, .mSentSwap:focus-visible .mSwapSent { opacity: 0; }
+.mSentSwap:hover .mSwapResend, .mSentSwap:focus-visible .mSwapResend { opacity: 1; }
+@media (hover: none) {
+  .mSentSwap { grid-template-columns: auto auto; column-gap: 12px; }
+  .mSwapResend { grid-area: 1 / 2; opacity: 1; padding-left: 12px; border-left: 1.5px solid currentColor; color: var(--blueprint); }
+  .mSentSwap:hover, .mSentSwap:focus-visible { background: var(--success-soft); border-color: var(--success); color: var(--success-dark, #2c6335); }
+  .mSentSwap:hover .mSwapSent { opacity: 1; }
+  .mSentSwap:active { background: var(--blueprint); border-color: var(--blueprint); color: #fff; }
+  .mSentSwap:active .mSwapResend { color: #fff; }
+}
 
 .mPay {
   grid-column: 1 / -1;
@@ -1380,4 +1391,4 @@
 .mActPaid:active:not(:disabled) { background: var(--success); color: #fff; }
 .mActInv:active:not(:disabled) { background: var(--blueprint); color: #fff; }
 .mActRem:active:not(:disabled) { background: var(--warning); color: #fff; }
-.mSend:focus-visible, .mSentAgain:focus-visible, .mPayAct:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+.mSend:focus-visible, .mSentSwap:focus-visible, .mPayAct:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 2px; }

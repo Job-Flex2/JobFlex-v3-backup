@@ -143,7 +143,8 @@ function PaymentSummary({ p }: { p: ProposalRow }) {
 /**
  * SEND ON THE CARD (owner, 2026-10-23: "Send proposal, or it's been sent") — the desk row's rule
  * (proposals-data → sendState): a draft gets the green button across the card; one out and waiting says when it
- * went, with Send again; a signed or declined one keeps the stamp alone.
+ * went; once sent it can always go again — the Sent plate turns into Resend, signed or not (owner, 2026-10-28,
+ * 2026-10-29), the same as the desk row.
  */
 function RowSend({ p, onSend }: { p: ProposalRow; onSend: () => void }) {
   const s = sendState(p);
@@ -157,8 +158,18 @@ function RowSend({ p, onSend }: { p: ProposalRow; onSend: () => void }) {
   }
   return (
     <div className={styles.mSent} data-row-send={s}>
-      <span className={styles.mSentStamp}><Icon id="i-check" />Sent {p.sentAgo}</span>
-      {s === "resend" ? <button className={styles.mSentAgain} type="button" onClick={onSend}>Send again</button> : null}
+      {/* One button (owner, 2026-10-29): Sent and when; on hover or focus it reads Resend. A phone has no hover,
+          so there both halves show side by side. */}
+      <button
+        className={styles.mSentSwap}
+        type="button"
+        onClick={onSend}
+        title={"Sent " + (p.sentAgo ?? "") + " — send it again" + (p.clientEmail ? " to " + p.clientEmail : "")}
+        aria-label={"Sent " + (p.sentAgo ?? "") + ". Resend"}
+      >
+        <span className={styles.mSwapSent}><Icon id="i-check" />Sent {p.sentAgo}</span>
+        <span className={styles.mSwapResend}><Icon id="i-send" />Resend</span>
+      </button>
     </div>
   );
 }
