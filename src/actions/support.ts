@@ -51,17 +51,9 @@ function subjectFromBody(body: string): string {
   return `${(lastSpace > 40 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
 
-/** A SmartHelp hand-off, as it is filed: marked so the support AI only drafts for it (lib/support/aiSupport), and the
- *  SmartHelp question it carries marked "person" — only its asker's own (lib/smarthelp/server). Both best-effort: the
- *  ticket is already filed, and failing it now would only invite the same ticket twice. */
-async function markSmartHelpHandoff(ticketId: string, userId: string, logId: string | null): Promise<void> {
-  const ref = supportTicketRef(ticketId);
-  try {
-    await markSmartHelpTicket(ticketId, logId);
-  } catch (err) {
-    console.error(`[support] ${ref}: the SmartHelp mark was not kept — the AI may answer it on its own:`, err instanceof Error ? err.message : err);
-  }
-  if (!logId) return;
+/** A SmartHelp hand-off's question is marked "person" — only its asker's own counts (lib/smarthelp/server). Runs after
+ *  the response, best-effort: a failure is a log line, never the ticket's. */
+async function markQuestionForPerson(logId: string, userId: string, ref: string): Promise<void> {
   try {
     const r = await setQuestionOutcome(logId, userId, "person");
     if (r !== "ok") console.warn(`[support] ${ref}: its SmartHelp question was not marked "person" (${r}).`);
@@ -114,19 +106,25 @@ export async function submitSupportTicket(raw: unknown): Promise<SubmitTicketRes
   const data = ticketInput.parse(raw);
   const subject = data.subject?.trim() || subjectFromBody(data.body);
 
-  const ticket = await db.supportTicket.create({
-    data: {
-      organizationId,
-      userId: user.id,
-      subject,
-      body: data.body,
-      category: data.category,
-      priority: data.priority,
-      status: "OPEN",
-    },
-  });
-  // Marked before anything reads the ticket (the AI's answer below runs after the response).
-  if (data.origin === "smarthelp") await markSmartHelpHandoff(ticket.id, user.id, data.smartHelpLogId || null);
+  const fields = {
+    organizationId,
+    userId: user.id,
+    subject,
+    body: data.body,
+    category: data.category,
+    priority: data.priority,
+    status: "OPEN",
+  };
+  // A SmartHelp hand-off is created and marked in one transaction (lib/support/aiSupport): none exists unmarked, so
+  // the support AI never answers one on its own. Every other ticket is created as it always was.
+  const handoff = data.origin === "smarthelp" ? { logId: data.smartHelpLogId || null } : null;
+  const ticket = handoff
+    ? await db.$transaction(async (tx) => {
+        const created = await tx.supportTicket.create({ data: fields });
+        await markSmartHelpTicket(tx, created.id, handoff.logId);
+        return created;
+      })
+    : await db.supportTicket.create({ data: fields });
 
   // Heads-up to the operator. Best-effort by contract — notifySupportTicket
   // never throws, so a dead transport cannot fail a submission that is already
@@ -154,13 +152,15 @@ export async function submitSupportTicket(raw: unknown): Promise<SubmitTicketRes
 
   // The support AI reads it and answers (owner, 2026-10-15) — after the
   // response, so "Send" never waits on a model. What it may send on its own,
-  // and the copy every outcome sends to the support inbox: lib/support.
-  after(() =>
-    answerTicketWithAi(ticket.id, { trigger: "new" }).then(
+  // and the copy every outcome sends to the support inbox: lib/support. A
+  // SmartHelp hand-off's question is marked "person" first, here too.
+  after(async () => {
+    if (handoff?.logId) await markQuestionForPerson(handoff.logId, user.id, ref);
+    await answerTicketWithAi(ticket.id, { trigger: "new" }).then(
       () => undefined,
       (err) => console.error(`[support-ai] ticket ${ref} was not answered:`, err instanceof Error ? err.message : err),
-    ),
-  );
+    );
+  });
 
   revalidatePath("/dashboard/support");
   revalidatePath("/admin/support");

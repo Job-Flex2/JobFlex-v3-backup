@@ -12,14 +12,14 @@
 // admin's switches are actions/supportAi.ts.
 //
 // WHAT GOES OUT BY ITSELF, AND WHAT WAITS
-// An answer is sent when the switch says "answers on its own", the ticket is
-// not a SmartHelp hand-off ("Ask a person" — a person sends that one), the
-// model is at least SEND_CONFIDENCE_MIN sure, did not ask for a person, and
-// wrote nothing that commits money or data (a refund, a credit, a deleted
-// account) — those are the owner's to say. Anything else is HELD: the
-// customer gets a short "we've got it, a person is on it" note at once, and
-// the AI's full draft waits in admin for a person to send or rewrite. Every
-// outcome — sent, held, drafted — is copied to the support inbox.
+// An answer is sent when the switch says "answers on its own", the model is at
+// least SEND_CONFIDENCE_MIN sure, did not ask for a person, and wrote nothing
+// that commits money or data (a refund, a credit, a deleted account) — those
+// are the owner's to say — unless it is a SmartHelp hand-off ("Ask a person":
+// a person sends that one). Anything else is HELD: the customer gets a short
+// "we've got it, a person is on it" note at once, and the AI's full draft
+// waits in admin for a person to send or rewrite. Every outcome — sent, held,
+// drafted — is copied to the support inbox.
 //
 // A BUG is answered (thanks, our engineers have it, we'll email when it's
 // fixed, a workaround if there is one) and carries a FIX PROPOSAL for the team:
@@ -107,17 +107,17 @@ export type Delivery = { send: true } | { send: false; reason: string };
 /** Where a ticket came from, when it matters to the answer: "smarthelp" — filed from SmartHelp's "Ask a person". */
 export type SupportOrigin = "smarthelp";
 
-/** `origin` "smarthelp": the person asked SmartHelp first and pressed "Ask a person" — the AI only drafts, a person
- *  sends (after the switch, so drafts-only and off keep their own reason). */
+/** `origin` "smarthelp": the person asked SmartHelp first and pressed "Ask a person" — an answer that could have gone
+ *  out on its own waits for a person instead. Checked last, so any other reason to hold it is the one the team reads. */
 export function deliveryFor(a: SupportAiAnswer, mode: SupportAiMode, origin?: SupportOrigin): Delivery {
   if (mode !== "auto") return { send: false, reason: "The AI is set to draft for you." };
-  if (origin === "smarthelp") return { send: false, reason: "Came from SmartHelp — a person sends this one." };
   if (a.needsHuman) return { send: false, reason: a.humanReason || "It asked for a person to answer." };
   if (a.confidence < SEND_CONFIDENCE_MIN) return { send: false, reason: `Not sure enough to send on its own (${a.confidence}% sure).` };
   if (a.reply.length < 40) return { send: false, reason: "The answer came back too short to send." };
   if (commitsMoneyOrData(a.reply)) {
     return { send: false, reason: "The answer talks about money back, credits or deleting data — that's yours to say." };
   }
+  if (origin === "smarthelp") return { send: false, reason: "Came from SmartHelp — a person sends this one." };
   return { send: true };
 }
 

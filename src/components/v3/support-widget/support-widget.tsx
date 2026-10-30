@@ -65,7 +65,11 @@ import { submitSupportTicket } from "@/actions/support";
 import { answerSupportVerdict, liveSupportAnswer } from "@/actions/supportLive";
 import { answerBlocks, type AnswerPiece, type LiveState } from "@/lib/support/aiState";
 import { lockScroll } from "@/lib/scrollLock";
+// The categories, the message limit and SmartHelp's hand-off are the composer's pure half (./composer).
+import { BODY_MAX, CATEGORIES, composerOpening, composerTicket, type HandoffMark, type SupportPrefill } from "./composer";
 import "./support-widget.css";
+
+export type { SupportPrefill } from "./composer";
 
 /** Longest panel transition (the handheld sheet's 0.28s slide). */
 const EXIT_MS = 280;
@@ -73,20 +77,6 @@ const EXIT_MS = 280;
 /** The one channel between a launcher and the composer. */
 const OPEN_EVENT = "jf:support";
 
-/** The model's own taxonomy — `SupportTicket.category`, the same five values
- *  the /dashboard/support form writes and the admin triage filters on. Four of
- *  them, in the words the owner used: a bug, a billing problem, an account
- *  problem, a question. Nothing new is invented here; "feature" is the one
- *  value left out, because an idea is not a call for help. */
-const CATEGORIES = [
-  { value: "technical", label: "Bug" },
-  { value: "billing", label: "Billing" },
-  { value: "account", label: "Account" },
-  { value: "general", label: "Question" },
-] as const;
-
-/** `SupportTicket.body` is capped at 5000 by the action's validator. */
-const BODY_MAX = 5000;
 /** How long the window waits for the AI's answer before saying it will come by email. */
 const LIVE_WAIT_MS = 90_000;
 const LIVE_FIRST_MS = 1_200;
@@ -198,16 +188,6 @@ function Icon({ d, className }: { d: string[]; className?: string }) {
     </svg>
   );
 }
-
-/** SmartHelp's "Ask a person" (2026-10-30): the words and category the composer starts from, and the mark that files
- *  the ticket as SmartHelp's hand-off (`origin`, with the SmartHelp question's `logId`) — the support AI then only
- *  drafts for it, and a person sends. */
-export type SupportPrefill = {
-  message: string;
-  category?: "technical" | "billing" | "account" | "general";
-  origin?: "smarthelp";
-  logId?: string;
-};
 
 /** What a launcher may hand the composer along with the request to open. */
 type OpenDetail = { opener: HTMLElement | null; prefill: SupportPrefill | null };
@@ -523,7 +503,7 @@ export function SupportWidget({
    *  on close. */
   const openerRef = useRef<HTMLElement | null>(null);
   /** The SmartHelp hand-off mark this opening carries to the send, or null — set by every `show()`. */
-  const handoffRef = useRef<{ origin: "smarthelp"; logId?: string } | null>(null);
+  const handoffRef = useRef<HandoffMark>(null);
   /** True only while the dialog owns focus. Cleared BEFORE the close path
    *  moves focus out, so the containment guard below does not fight it. */
   const trapping = useRef(false);
@@ -586,12 +566,13 @@ export function SupportWidget({
     const focused = active instanceof HTMLElement && active !== document.body ? active : null;
     openerRef.current = isRendered(opener) ? opener : focused;
     // SmartHelp's hand-off starts from its words and category, and its mark
-    // rides on the send. Any other opening carries no mark, so one left by an
-    // earlier hand-off never files a ticket the person started themselves.
-    handoffRef.current = prefill?.origin ? { origin: prefill.origin, logId: prefill.logId } : null;
-    if (prefill) {
-      setMessage(prefill.message.slice(0, BODY_MAX));
-      if (prefill.category) setCategory(prefill.category);
+    // rides on the send (./composer). Any other opening carries no mark, so one
+    // left by an earlier hand-off never files a ticket the person started.
+    const opening = composerOpening(prefill);
+    handoffRef.current = opening.mark;
+    if (opening.start) {
+      setMessage(opening.start.message);
+      setCategory(opening.start.category);
     }
     setError(null);
     setFiled(null);
@@ -787,12 +768,7 @@ export function SupportWidget({
     setBusy(true);
     setError(null);
     try {
-      const handoff = handoffRef.current;
-      const result = await submitSupportTicket({
-        body,
-        category,
-        ...(handoff ? { origin: handoff.origin, ...(handoff.logId ? { smartHelpLogId: handoff.logId } : {}) } : {}),
-      });
+      const result = await submitSupportTicket(composerTicket(body, category, handoffRef.current));
       setFiled({ id: result.id, ref: result.ref, notified: result.notified });
       setLive({ state: "pending" });
       setVerdict(null);
