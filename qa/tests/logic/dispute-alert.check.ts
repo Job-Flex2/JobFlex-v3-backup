@@ -15,7 +15,7 @@ const base = { id: "dp_1QabcXYZ", orgName: "Summit Ridge Roofing", plan: "Profes
 
 const t1 = disputeOpenedText(base);
 check("opened: who, how much, the plan, the bank's reason in plain words", t1.includes("Summit Ridge Roofing") && t1.includes("$95.00") && t1.includes("Professional") && t1.includes("doesn't recognize the charge"), t1);
-check("opened: a chargeback says so, with the deadline to answer", /CHARGEBACK/.test(t1) && t1.includes("Nov 8"), t1);
+check("opened: a chargeback says so — the money is already out of the balance — with the deadline to answer", /CHARGEBACK/.test(t1) && /took it/.test(t1) && t1.includes("Nov 8"), t1);
 check("opened: the dispute's own Stripe page and the admin page", t1.includes("https://dashboard.stripe.com/disputes/dp_1QabcXYZ") && t1.includes("/admin/subscribers"), t1);
 check("opened: one text, under two SMS segments of plain words", t1.length <= 320, String(t1.length));
 const inquiry = disputeOpenedText({ ...base, status: "warning_needs_response" });
@@ -30,8 +30,8 @@ check("reasons in plain words", disputeReasonWords("fraudulent") === "says it wa
 const won = disputeClosedText({ ...base, status: "won", feeCents: 0 });
 const lost = disputeClosedText({ ...base, status: "lost", feeCents: 1500 });
 const closedInquiry = disputeClosedText({ ...base, status: "warning_closed", feeCents: 0 });
-check("closed: won — the money stays", /WON/.test(won) && won.includes("$95.00") && /stays/.test(won), won);
-check("closed: lost — the money and Stripe's fee are gone", /LOST/.test(lost) && lost.includes("$95.00") && lost.includes("$15.00"), lost);
+check("closed: won — Stripe returns the money", /WON/.test(won) && won.includes("$95.00") && /returns/.test(won), won);
+check("closed: lost — the money and Stripe's fee are gone", /LOST/.test(lost) && lost.includes("$95.00") && /won't come back/.test(lost) && lost.includes("$15.00"), lost);
 check("closed: an inquiry closed without a chargeback", /no chargeback/i.test(closedInquiry), closedInquiry);
 // An inquiry that escalates stays the same dispute: Stripe sends charge.dispute.funds_withdrawn, not a second
 // created. One text per stage — an ordinary chargeback (created + funds_withdrawn) texts once; a closed one, never.

@@ -72,19 +72,19 @@ export function disputeOpenedText(d: DisputeInfo): string {
   const due = d.dueBy ? ` by ${day(d.dueBy)}` : "";
   const head = isInquiry(d.status)
     ? `JobFlex: dispute INQUIRY (not a chargeback yet) — ${d.orgName} asked their bank about ${amount}${plan}: ${why}. Answer in Stripe${due} so it doesn't become a chargeback.`
-    : `JobFlex: CHARGEBACK — ${d.orgName} disputed ${amount}${plan} with their bank: ${why}. Answer with evidence in Stripe${due} or the money is lost.`;
+    : `JobFlex: CHARGEBACK — ${d.orgName} disputed ${amount}${plan} with their bank: ${why}. Stripe took it from our balance; answer with evidence${due} to win it back.`;
   return `${head}${mode(d.livemode)} ${stripeDisputeUrl(d.id, d.livemode)} ${d.adminUrl}`;
 }
 
 /** charge.dispute.closed — won, lost, or an inquiry closed. */
 export function disputeClosedText(d: DisputeInfo & { feeCents: number }): string {
   const amount = money(d.cents, d.currency);
-  const fee = d.feeCents > 0 ? `, plus Stripe's ${money(d.feeCents, d.currency)} dispute fee` : "";
+  const fee = d.feeCents > 0 ? `; Stripe keeps its ${money(d.feeCents, d.currency)} dispute fee` : "";
   const body =
     d.status === "won"
-      ? `JobFlex: dispute WON — ${d.orgName}'s ${amount} chargeback; the money stays.`
+      ? `JobFlex: dispute WON — ${d.orgName}'s ${amount} chargeback; Stripe returns the money.`
       : d.status === "lost"
-        ? `JobFlex: dispute LOST — ${d.orgName}'s ${amount} went back to their bank${fee}.`
+        ? `JobFlex: dispute LOST — ${d.orgName}'s ${amount} won't come back${fee}.`
         : d.status === "warning_closed"
           ? `JobFlex: dispute inquiry closed — ${d.orgName}, ${amount}; no chargeback.`
           : `JobFlex: dispute closed (${d.status.replace(/_/g, " ")}) — ${d.orgName}, ${amount}.`;
