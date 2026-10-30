@@ -199,8 +199,18 @@ function Icon({ d, className }: { d: string[]; className?: string }) {
   );
 }
 
+/** SmartHelp's "Ask a person" (2026-10-30): the words and category the composer starts from, and the mark that files
+ *  the ticket as SmartHelp's hand-off (`origin`, with the SmartHelp question's `logId`) — the support AI then only
+ *  drafts for it, and a person sends. */
+export type SupportPrefill = {
+  message: string;
+  category?: "technical" | "billing" | "account" | "general";
+  origin?: "smarthelp";
+  logId?: string;
+};
+
 /** What a launcher may hand the composer along with the request to open. */
-type OpenDetail = { opener: HTMLElement | null };
+type OpenDetail = { opener: HTMLElement | null; prefill: SupportPrefill | null };
 
 /**
  * Open the composer from anywhere. For a host whose Help control is not an
@@ -211,9 +221,13 @@ type OpenDetail = { opener: HTMLElement | null };
  * `document.activeElement`, and a drawer that closes as it opens the composer
  * leaves focus on a node that is about to unmount. Focus then has nowhere to go
  * and lands on `<body>` — the whole page's tab order, from the top.
+ *
+ * `prefill` is SmartHelp's hand-off: the message (clipped to the composer's own
+ * limit) and category, and the mark the send carries. Opened without one, the
+ * composer is as it always was, and a mark left by an earlier hand-off is gone.
  */
-export function openSupportComposer(opener?: HTMLElement | null): void {
-  const detail: OpenDetail = { opener: opener ?? null };
+export function openSupportComposer(opener?: HTMLElement | null, prefill?: SupportPrefill): void {
+  const detail: OpenDetail = { opener: opener ?? null, prefill: prefill ?? null };
   document.dispatchEvent(new CustomEvent<OpenDetail>(OPEN_EVENT, { detail }));
 }
 
@@ -508,6 +522,8 @@ export function SupportWidget({
    *  surface draws, or the tab bar's More row below 768. Focus goes back to it
    *  on close. */
   const openerRef = useRef<HTMLElement | null>(null);
+  /** The SmartHelp hand-off mark this opening carries to the send, or null — set by every `show()`. */
+  const handoffRef = useRef<{ origin: "smarthelp"; logId?: string } | null>(null);
   /** True only while the dialog owns focus. Cleared BEFORE the close path
    *  moves focus out, so the containment guard below does not fight it. */
   const trapping = useRef(false);
@@ -549,7 +565,7 @@ export function SupportWidget({
     );
   }, []);
 
-  const show = useCallback((opener?: HTMLElement | null) => {
+  const show = useCallback((opener?: HTMLElement | null, prefill?: SupportPrefill | null) => {
     if (!signedIn) return;
     // Caught mid-exit: `open` is still true, so the enter effect below will not
     // re-run and the panel would sit in its faded-out state forever. Putting
@@ -569,6 +585,14 @@ export function SupportWidget({
     const active = document.activeElement;
     const focused = active instanceof HTMLElement && active !== document.body ? active : null;
     openerRef.current = isRendered(opener) ? opener : focused;
+    // SmartHelp's hand-off starts from its words and category, and its mark
+    // rides on the send. Any other opening carries no mark, so one left by an
+    // earlier hand-off never files a ticket the person started themselves.
+    handoffRef.current = prefill?.origin ? { origin: prefill.origin, logId: prefill.logId } : null;
+    if (prefill) {
+      setMessage(prefill.message.slice(0, BODY_MAX));
+      if (prefill.category) setCategory(prefill.category);
+    }
     setError(null);
     setFiled(null);
     setLive(null);
@@ -581,7 +605,10 @@ export function SupportWidget({
 
   // Any launcher, anywhere in the document.
   useEffect(() => {
-    const onOpen = (e: Event) => show((e as CustomEvent<OpenDetail>).detail?.opener ?? null);
+    const onOpen = (e: Event) => {
+      const detail = (e as CustomEvent<OpenDetail>).detail;
+      show(detail?.opener ?? null, detail?.prefill ?? null);
+    };
     document.addEventListener(OPEN_EVENT, onOpen);
     return () => document.removeEventListener(OPEN_EVENT, onOpen);
   }, [show]);
@@ -760,7 +787,12 @@ export function SupportWidget({
     setBusy(true);
     setError(null);
     try {
-      const result = await submitSupportTicket({ body, category });
+      const handoff = handoffRef.current;
+      const result = await submitSupportTicket({
+        body,
+        category,
+        ...(handoff ? { origin: handoff.origin, ...(handoff.logId ? { smartHelpLogId: handoff.logId } : {}) } : {}),
+      });
       setFiled({ id: result.id, ref: result.ref, notified: result.notified });
       setLive({ state: "pending" });
       setVerdict(null);

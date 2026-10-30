@@ -31,6 +31,10 @@ import { trialExtensionEligible } from "@/lib/trialExtension";
 // letter, keeps a record (SyncState `supportAi:<ticketId>`, `supportAi:
 // settings` — no schema change) and sends email. A fix is a proposal that
 // waits for an admin's Approve; "Mark fixed" only tells the customer.
+//
+// A SMARTHELP HAND-OFF ("Ask a person", 2026-10-30) is marked when it is filed
+// (SyncState `supportOrigin:<ticketId>`): every answer the AI writes for it —
+// the first, a follow-up, the safety net's — waits for a person to send.
 
 import { db } from "@/lib/db";
 import { appBaseUrl } from "@/lib/appUrl";
@@ -58,6 +62,7 @@ import {
   recordFor,
   supportAiAnswerSchema,
   supportAiMode,
+  supportOriginOf,
   supportSystemPrompt,
   supportUserPrompt,
   teamCopyEmail,
@@ -67,10 +72,12 @@ import {
   type SupportAiMode,
   type SupportAiOutcome,
   type SupportAiRecord,
+  type SupportOrigin,
 } from "./aiReply";
 
 const SETTINGS_KEY = "supportAi:settings";
 const RECORD_KEY = (ticketId: string) => `supportAi:${ticketId}`;
+const ORIGIN_KEY = (ticketId: string) => `supportOrigin:${ticketId}`;
 const TEAM_SIGNATURE = "JobFlex support";
 
 // ── The switch and the records ───────────────────────────────────────────────
@@ -110,6 +117,19 @@ export async function supportAiForTickets(ticketIds: string[]): Promise<Record<s
 async function writeSupportAi(ticketId: string, rec: SupportAiRecord): Promise<void> {
   const cursor = JSON.stringify(rec);
   await db.syncState.upsert({ where: { key: RECORD_KEY(ticketId) }, create: { key: RECORD_KEY(ticketId), cursor }, update: { cursor } });
+}
+
+/** Marks a ticket filed from SmartHelp's "Ask a person" (actions/support, as it is filed): the AI only drafts for it.
+ *  `logId`: the SmartHelp question it carries, or null. */
+export async function markSmartHelpTicket(ticketId: string, logId: string | null): Promise<void> {
+  const cursor = JSON.stringify({ origin: "smarthelp", logId });
+  await db.syncState.upsert({ where: { key: ORIGIN_KEY(ticketId) }, create: { key: ORIGIN_KEY(ticketId), cursor }, update: { cursor } });
+}
+
+/** Where a ticket came from (aiReply supportOriginOf) — no row, or one that can't be read, is none. */
+async function readSupportOrigin(ticketId: string): Promise<SupportOrigin | undefined> {
+  const row = await db.syncState.findUnique({ where: { key: ORIGIN_KEY(ticketId) }, select: { cursor: true } }).catch(() => null);
+  return supportOriginOf(row?.cursor);
 }
 
 // ── What the model is told about the customer ───────────────────────────────
@@ -267,7 +287,7 @@ export async function answerTicketWithAi(ticketId: string, opts: AnswerOptions):
   const link = `${base.replace(/\/$/, "")}/admin/support?ticket=${t.id}`;
   const customerEmail = t.user?.email ?? null;
   const ticketForMail = { ref, subject: t.subject, body: t.body, orgName: t.organization.name, customerEmail };
-  const [previous, thread] = await Promise.all([readSupportAi(t.id), threadOf(t.id)]);
+  const [previous, thread, origin] = await Promise.all([readSupportAi(t.id), threadOf(t.id), readSupportOrigin(t.id)]);
   const automatic = opts.trigger !== "admin";
 
   // In the conversation the AI keeps out once a person leads it (owner, 2026-10-17).
@@ -313,7 +333,8 @@ export async function answerTicketWithAi(ticketId: string, opts: AnswerOptions):
   // A person may have written while the model was reading: their word stands, the AI's is a draft.
   const overtaken = automatic && (await threadOf(t.id)).some((m) => m.from === "team");
   const effective: SupportAiMode = !automatic || overtaken ? "draft" : mode;
-  const delivery = deliveryFor(answer, effective);
+  // A SmartHelp hand-off is held here on every trigger — the first answer, a follow-up, the safety net's.
+  const delivery = deliveryFor(answer, effective, origin);
   let outcome: SupportAiOutcome = effective === "auto" ? "held" : "drafted";
   let reason: string | undefined = overtaken ? "A person on the team answered while the AI was reading." : undefined;
   let sentBody: string | null = null;

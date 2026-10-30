@@ -12,13 +12,14 @@
 // admin's switches are actions/supportAi.ts.
 //
 // WHAT GOES OUT BY ITSELF, AND WHAT WAITS
-// An answer is sent when the switch says "answers on its own", the model is at
-// least SEND_CONFIDENCE_MIN sure, did not ask for a person, and wrote nothing
-// that commits money or data (a refund, a credit, a deleted account) — those
-// are the owner's to say. Anything else is HELD: the customer gets a short
-// "we've got it, a person is on it" note at once, and the AI's full draft
-// waits in admin for a person to send or rewrite. Every outcome — sent, held,
-// drafted — is copied to the support inbox.
+// An answer is sent when the switch says "answers on its own", the ticket is
+// not a SmartHelp hand-off ("Ask a person" — a person sends that one), the
+// model is at least SEND_CONFIDENCE_MIN sure, did not ask for a person, and
+// wrote nothing that commits money or data (a refund, a credit, a deleted
+// account) — those are the owner's to say. Anything else is HELD: the
+// customer gets a short "we've got it, a person is on it" note at once, and
+// the AI's full draft waits in admin for a person to send or rewrite. Every
+// outcome — sent, held, drafted — is copied to the support inbox.
 //
 // A BUG is answered (thanks, our engineers have it, we'll email when it's
 // fixed, a workaround if there is one) and carries a FIX PROPOSAL for the team:
@@ -103,8 +104,14 @@ export function commitsMoneyOrData(reply: string): boolean {
 
 export type Delivery = { send: true } | { send: false; reason: string };
 
-export function deliveryFor(a: SupportAiAnswer, mode: SupportAiMode): Delivery {
+/** Where a ticket came from, when it matters to the answer: "smarthelp" — filed from SmartHelp's "Ask a person". */
+export type SupportOrigin = "smarthelp";
+
+/** `origin` "smarthelp": the person asked SmartHelp first and pressed "Ask a person" — the AI only drafts, a person
+ *  sends (after the switch, so drafts-only and off keep their own reason). */
+export function deliveryFor(a: SupportAiAnswer, mode: SupportAiMode, origin?: SupportOrigin): Delivery {
   if (mode !== "auto") return { send: false, reason: "The AI is set to draft for you." };
+  if (origin === "smarthelp") return { send: false, reason: "Came from SmartHelp — a person sends this one." };
   if (a.needsHuman) return { send: false, reason: a.humanReason || "It asked for a person to answer." };
   if (a.confidence < SEND_CONFIDENCE_MIN) return { send: false, reason: `Not sure enough to send on its own (${a.confidence}% sure).` };
   if (a.reply.length < 40) return { send: false, reason: "The answer came back too short to send." };
@@ -112,6 +119,18 @@ export function deliveryFor(a: SupportAiAnswer, mode: SupportAiMode): Delivery {
     return { send: false, reason: "The answer talks about money back, credits or deleting data — that's yours to say." };
   }
   return { send: true };
+}
+
+/** A ticket's origin from its row (SyncState `supportOrigin:<ticketId>`, `{"origin":"smarthelp","logId":…}`, written
+ *  when it was filed). No row, or one that can't be read, is no origin. */
+export function supportOriginOf(raw: string | null | undefined): SupportOrigin | undefined {
+  if (!raw) return undefined;
+  try {
+    const v = JSON.parse(raw) as { origin?: unknown } | null;
+    return v && typeof v === "object" && v.origin === "smarthelp" ? "smarthelp" : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // ── What is kept per ticket (SyncState `supportAi:<ticketId>`) ───────────────
