@@ -94,6 +94,10 @@ expectTopic("money", [
   // fix round 1
   "quiero mi dinero de vuelta", "me cobraron sin autorización",
   "can you waive this month?", "please credit my account", "can I get my last payment back",
+  // fix round 2 — first-person forms the narrowed money patterns still catch
+  "I need some credit for the outage", "credit us please", "can you waive it?", "I'll open a dispute with my bank",
+  "we will dispute the charge", "compensate me for the downtime", "can I get a free month?", "give us an extra month",
+  "you billed us for a cancelled report", "can I get a better price?", "¿me pueden dar un descuento?",
 ]);
 expectTopic("data", [
   "delete everything", "delete my account", "borrar mi cuenta", "erase all my data", "удалить мой аккаунт",
@@ -105,6 +109,14 @@ expectTopic("security", [
   "here is my card 4242 4242 4242 4242",
   // fix round 1
   "I got an email asking for my JobFlex password",
+  // fix round 2 — a secret next to a client word is still a secret: never sent to the model
+  "my customer's card is 4242 4242 4242 4242, how do I charge it?",
+  "the client gave me card 4111111111111111 exp 12/27, how do I take the payment?",
+  "my password is Hunter22! and my client can't open the proposal",
+  "my verification code is 482913 but texting won't turn on", "mi contraseña es Casa2024 y no puedo entrar",
+  // fix round 2 — the incident wording the narrowed word patterns still catch
+  "my email was compromised", "I got a phishing email pretending to be JobFlex", "I noticed a suspicious login on my account",
+  "someone gained unauthorized access to my account", "me robaron la cuenta",
 ]);
 expectTopic("person", [
   "let me talk to a human", "can I speak to a real person", "quiero hablar con una persona", "transfer ownership to my partner",
@@ -149,6 +161,137 @@ expectTopic(null, [
   "no quiero seguir pagando a mi trabajador", "borrar la cuenta de un trabajador", "how do I end my trial early and pay now",
   "don't renew the client's plan", "how do I issue a credit to a client", "my client wants a refund",
 ]);
+// fix round 2 — feature questions the round-1 patterns misfired on (findings N2, N3).
+expectTopic(null, [
+  "When I cancel, what happens to the booking?", "If I cancel, does the client get a text?", "I clicked Cancel. Is my roof estimate lost?",
+  "¿Qué pasa cuando alguien me llama y no contesto?", "¿Puedo dejar JobFlex abierto todo el día en la computadora de la oficina?",
+  "No quiero seguir usando Google Calendar, ¿cómo uso el calendario de JobFlex?", "how do I pause billing on a membership for the winter?",
+  "don't auto-renew my membership plans, how do I make them end after a year?", "can you waive the deposit on a proposal?",
+  "I'd like my info removed from the proposal footer", "how can my installers talk to a supervisor from the job page?",
+  "I never got the text asking for my code when I set up texting", "will you call me, or text me, when a new lead comes in?",
+  "¿Cómo pueden los que llaman hablar con alguien después del horario?", "¿Cómo hago que las llamadas pasen a una persona real?",
+  "¿Cómo puedo eliminar la información de mi empresa de la factura?", "where do I put my refund policy on proposals?",
+  "how do I give a discount on my membership plans?", "when a lead fills in the website estimator, can they talk to someone right away?",
+  "is the roof measurement checked by a real person?", "how do I add the co-owner's name to the client so both can sign?",
+  "the house sold, how do I change the client to the new owner?", "in the HVAC estimator, how do I switch to the cheaper tier?",
+]);
+
+// THE PRECISION CORPUS (fix round 2, binding): realistic feature questions from every guide area, in English and
+// Spanish, phrased with the words the guard listens for — cancel, pause, stop, credit, refund, discount, delete,
+// remove, owner, person, someone, human, code, password, plan. Every one must be null: a person-topic pattern that
+// trips one is narrowed or removed (precision beats recall; the model's rules catch what the guard leaves).
+const PRECISION_CORPUS: string[] = [
+  // AI desk
+  "how do I set up the AI desk so it answers my calls?", "can the AI desk cancel an appointment for a caller?",
+  "how do I pause the AI desk over the holidays?", "how do I stop the AI desk from answering after 6pm?",
+  "can the AI desk transfer a caller to a real person?", "what happens when someone calls and the AI desk can't answer?",
+  "how do I make the AI desk voice sound more human?", "how do I remove a reserved hour from the AI desk booking?",
+  "¿Cómo configuro el AI desk para que conteste mis llamadas?", "¿Cómo hago que el AI desk pase la llamada a una persona?",
+  // texting
+  "how do I turn on texting?", "I never got the verification code for my texting number", "the code to verify my phone didn't arrive, what do I do?",
+  "how do I stop texting a client who replied STOP?", "can I cancel a scheduled text to a client?", "¿Cómo activo los mensajes de texto?",
+  // payments
+  "how do I connect Stripe to get paid online?", "can a client pay a proposal by credit card?", "how do I refund a client who paid a deposit by card?",
+  "how do I remove Square and use Stripe instead?", "can I stop charging a deposit on small jobs?", "¿Cómo conecto Stripe para cobrar en línea?",
+  // website estimators
+  "how do I put the roof estimator on my website?", "how do I remove the fence estimator from my website?",
+  "can someone who uses my website estimator book a visit right away?", "¿Cómo pongo el estimador de techos en mi página web?",
+  // online booking
+  "how do I turn on online booking?", "how do clients cancel a booking?", "can a client reschedule or cancel online?",
+  "how do I pause online booking for a week?", "¿Cómo cancelo una cita en el calendario?",
+  // company profile and branding
+  "how do I complete my company profile?", "how do I change my business address for leads?", "how do I delete my company logo?",
+  "how do I remove the old logo from my proposals?", "how do I change the color on my proposals?", "¿Cómo quito el logo viejo de las propuestas?",
+  // team and workers
+  "how do I invite my crew?", "how do I remove a worker who quit?", "how do I delete a worker's account?",
+  "how do I change someone's role to manager?", "can someone else on my team log in with their own password?",
+  "how do I add another person to my team?", "how do I reset a worker's password?", "¿Cómo invito a mi equipo?", "¿Cómo elimino a un trabajador?",
+  // proposals and sending
+  "how do I cancel a proposal I already sent?", "how do I delete a draft proposal?", "can the client sign the proposal without a password?",
+  "how do I resend a proposal if the client lost the link?", "how do I put a discount on a proposal for a repeat customer?",
+  "¿Cómo envío una propuesta por mensaje de texto?", "¿Cómo borro una propuesta?",
+  // roof, fence, HVAC
+  "how does the roof estimator measure the roof?", "how do I delete a roof report?", "how do I cancel a roof report I ordered by mistake?",
+  "how do I draw a fence on the map?", "how do I remove a gate from the fence drawing?",
+  "how does the HVAC estimator size the system?", "how do I pick a cheaper equipment option in the HVAC estimator?",
+  "can I give a homeowner a discount on the HVAC replacement?",
+  // Deck Studio, Smart Proposal, blueprints, video
+  "how do I start a deck from a photo?", "how do I send a deck design to a client?", "how do I delete a deck design?",
+  "how do I cancel the client link for a deck design?", "how do I use Smart Proposal for a bathroom remodel?",
+  "can I give a discount on a Smart Proposal?", "how do I upload a plan set?", "my plans are password-protected PDFs, can I upload them?",
+  "how do I delete a plan sheet I uploaded by mistake?", "how do I estimate from a walkthrough video?", "how do I remove a video I uploaded?",
+  // reviews and own leads
+  "how do I ask clients for reviews?", "can I stop the review request text for one client?", "how do I import my own leads?",
+  "how do I delete a lead?", "how do I connect my Facebook leads?", "how do I remove a lead source I don't use anymore?",
+  // projects, change orders, invoices
+  "how do I make a change order?", "how do I delete a change order?", "how do I cancel an invoice I sent by mistake?",
+  "how do I credit a client on an invoice?", "how do I record a refund on an invoice?", "how do I remove a payment I marked by mistake?",
+  "¿Cómo hago una orden de cambio?", "¿Cómo cancelo una factura?",
+  // crew and jobs, calendar
+  "how do I schedule a job for my crew?", "how do I cancel a job and tell the crew?", "how do I pause a job until the materials arrive?",
+  "how do I delete an event from the calendar?", "how do I stop a job from showing on the crew's schedule?", "¿Cómo cancelo un trabajo?",
+  // service plans and memberships
+  "how do I cancel a client's membership?", "how do I stop charging a client's card for their service plan?",
+  "how do I pause a membership for the winter?", "can I give members a discount on repairs?", "¿Cómo pauso una membresía de un cliente?",
+  // financing
+  "how do I turn off financing on my proposals?", "can a homeowner with bad credit still apply for financing?",
+  // subscription how-tos (features, not leaving)
+  "how do I change my card?", "how do I upgrade my plan?", "how do I switch to annual billing?",
+  "where do I see my invoices from JobFlex?", "how do I change my password?", "I forgot my password", "how do I add the Deck Studio add-on?",
+  "what plan am I on?", "how do I use a referral code?", "where do I see the card on file?", "¿Cómo cambio mi tarjeta?",
+  "¿Cómo cambio mi contraseña?", "¿Cómo subo de plan?",
+  // second sweep — untailored questions run against the guard during round 2
+  "can I cancel the appointment reminder text?", "how do I cancel my booking page?", "how do I cancel my texting number?",
+  "how do I cancel my roof report order?", "how do I cancel my service call for tomorrow?", "I want to cancel my appointment with a client",
+  "how do I pause my account notifications?", "can I pause my plan's texting during winter?", "don't charge my card until the client accepts",
+  "I don't want to pay for texting, how do I turn it off?", "how do I stop paying for the roof reports?", "can I downgrade the materials on an estimate?",
+  "how do I switch to the starter template?", "how do I go back to the free estimate page?", "how do I get off the email list for daily digests?",
+  "I'm leaving the office early, can the AI desk take calls?", "I'm done with this estimate, how do I send it?",
+  "I don't need this app on my old phone anymore, how do I log out?", "unsubscribe me from the daily digest",
+  "How do I cancel? The client changed their mind about the deck.", "how do I turn off billing for one client?", "stop billing my client every month",
+  "no more payments on this invoice, how do I close it?", "how do I turn off auto-renew for a client's membership?",
+  "can a member cancel their membership online?", "can I get a discount for my client on a roof report?",
+  "can I get a better price on shingles through JobFlex?", "how do I credit my account with a client's overpayment?",
+  "I need a credit check for financing", "I want a credit line on my invoices for returned materials", "how do I extend the trial for a homeowner?",
+  "how do I show discounts on my bill to clients?", "how do I delete my account on the old iPad?", "how do I delete my company from the map of contractors?",
+  "how do I remove my data from a proposal?", "how do I wipe my company's leads?", "erase everything on the drawing and start over",
+  "How do I delete everything I uploaded today?", "¿Cómo borro todo de la propuesta?", "¿Cómo elimino mis datos de la propuesta?",
+  "quiero eliminar mi empresa de la lista", "how do I talk to someone in the office from the job page?",
+  "can I speak to the homeowner through JobFlex?", "how do I get a human to answer my calls instead of the AI desk?",
+  "I need a person to help me measure the roof", "I want a human touch in my proposals", "how do I contact support from the app?",
+  "can I ask a person on my crew to finish the estimate?", "can someone call me when the job is done?", "¿Cómo hablo con un cliente?",
+  "necesito un agente para mi negocio de techos", "how do I transfer a lead to another rep?", "how do I transfer the job to another crew?",
+  "how do I change the owner on a project?", "who's the account owner?", "how do I make my office manager an admin?",
+  "I sold my truck, how do I remove it from equipment?", "we're selling the company next year, will proposals still work?",
+  "how do I add my attorney's contract template?", "how do I block scam leads?", "how do I flag a scam caller?",
+  "the client threatened a lawsuit, how do I export the proposal?", "my password is too short, what are the rules?",
+  "my password is 8 characters, is that enough?", "the code is 6 digits", "the gate code is 4829, where do I put it in the job notes?",
+  "job code 482913 for the HOA", "someone changed the price on my proposal", "¿Cómo cancelo mi plan de mantenimiento con un cliente?",
+  "¿Cómo pauso mi cuenta de trabajador?", "no quiero seguir pagando por los reportes de techo", "ya no quiero el plan de mantenimiento del cliente",
+  "can I pause texting for a client?", "how do I stop the reminders from going out?", "how do I remove the discount from a proposal?",
+  "how do I refund a deposit through Stripe?", "where are refunds shown in Financials?", "how do I delete a client?",
+  "how do I remove a client's email?", "how do I let someone else access my account to help with proposals?",
+  "is there a way to talk to a person at the supplier from JobFlex?", "my owner wants weekly reports, how do I send them?",
+  "the owner of the house wants a cheaper option", "can a person sign for the homeowner?", "how do I set the code for the lockbox in job notes?",
+  "what's the plan for the HVAC tiers?", "how do I stop the AI desk from booking Sundays?",
+  "I want a refund button on my invoices", "I need a refund form for my website", "where is my refund setting?",
+  "how do I add credit to my account for AI desk minutes?", "I need credit for AI desk minutes", "can we get a free month for our crew?",
+  "quiero un reembolso para mi cliente", "necesito un reembolso del depósito de un cliente", "¿me pueden dar un descuento en materiales?",
+  "devuélvanme el depósito del cliente", "how do I delete my account picture?", "how do I chat with my crew?",
+  "how can I speak with the client?", "how can we talk to the homeowner after hours?", "how do I talk to an operator on the AI desk?",
+  "how do I reach the client by text?", "how do I get in touch with my team?", "transfer ownership of a lead",
+  "how do I transfer my business to a new phone?", "how do I make Joe the owner of a job?", "is JobFlex safe from hackers?",
+  "how does JobFlex protect against phishing?", "what does a compromised password mean?", "has JobFlex ever had a data breach?",
+  "how do I block unauthorized access to my account?", "where do I see suspicious login alerts?",
+  "what happens if my phone with JobFlex is stolen?", "me robaron las herramientas del camión, ¿cómo lo anoto?",
+  "me robaron el celular, ¿cómo cierro la sesión?", "can my lawyer see the proposals?", "do you have a lawyer-approved contract?",
+  "how do I quit JobFlex on my laptop?", "¿Cómo doy de baja a un trabajador?", "¿Cómo puedo cerrar mi cuenta de Stripe?",
+  "quiero darme de baja de los mensajes", "¿Cómo cancelo mi cita?", "how do I cancel my subscription to texting alerts?",
+];
+check(`precision corpus: ${PRECISION_CORPUS.length} feature questions (≥80)`, PRECISION_CORPUS.length >= 80, PRECISION_CORPUS.length);
+const corpusHits = PRECISION_CORPUS.filter((q) => personTopic(q) !== null).map((q) => `${q} → ${personTopic(q)}`);
+check("precision corpus: every feature question is null", corpusHits.length === 0, corpusHits);
+
 check("PERSON_REPLY has a line for every topic, each pointing at Ask a person",
   (["leaving", "money", "data", "security", "person"] as const).every((t) => PERSON_REPLY[t].includes("Ask a person")));
 
@@ -218,6 +361,12 @@ const titleTrips = cleanAnswer(ans({ kind: "person", title: "We'll refund you to
 check("model's person title that commits money is not kept", titleTrips.kind === "person" && titleTrips.title === PERSON_REPLY.money, titleTrips);
 const stepsEs = cleanAnswer(ans({ language: "es", title: "Cómo cancelar", steps: [{ text: "Pulsa Cancel subscription" }] }), ctx, targets);
 check("model gave steps and the guard fired: the topic line, not the model's title", stepsEs.title === PERSON_REPLY.leaving, stepsEs);
+const extension = cleanAnswer(ans({ steps: [{ text: "Press Request a trial extension and pick 14 days." }] }), ctx, targets);
+check("the trial-extension button → person, the money line (as personTopic files trial extensions)",
+  extension.kind === "person" && extension.title === PERSON_REPLY.money, extension);
+const unsureNote = cleanAnswer(ans({ language: "es", title: "Cómo cobrar en línea", note: "No estoy seguro de este paso.", confidence: 30, steps: [{ text: "x" }] }), ctx, targets);
+check("forced unknown keeps the model's own note when it has one",
+  unsureNote.kind === "unknown" && unsureNote.title === "Cómo cobrar en línea" && unsureNote.note === "No estoy seguro de este paso.", unsureNote);
 const modelPerson = cleanAnswer(ans({ kind: "person", title: "Una persona te ayudará", note: "Pulsa Ask a person.", steps: [{ text: "x" }] }), ctx, targets);
 check("the model's own person reply: its words kept, never steps", modelPerson.kind === "person" && modelPerson.steps.length === 0 && modelPerson.title === "Una persona te ayudará", modelPerson);
 const modelUnknown = cleanAnswer(ans({ kind: "unknown", steps: [{ text: "x" }] }), ctx, targets);

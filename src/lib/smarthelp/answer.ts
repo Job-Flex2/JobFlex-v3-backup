@@ -140,15 +140,19 @@ function samePage(home: string, open: string, nav: boolean): boolean {
   return nav ? pathOf(home) === pathOf(open) : home.split("#")[0] === open.split("#")[0];
 }
 
-/** The buttons that cancel the plan or delete the account — an answer naming them is giving the person-only steps. */
-const LEAVING_BUTTONS = /\b(Cancel subscription|Continue to cancel|Request a trial extension|Delete my account|Delete account|Downgrade)\b/;
-const DELETE_WORDS = /\b(Delete (my )?account|(delete|deleted|erase|erased|remove|removed) your (account|data|company))\b/i;
+/** The buttons of the person-only flows — an answer naming them is giving those steps: the account's delete button
+ *  (data), the cancel and downgrade buttons (leaving), and the cancel window's trial extension (money — a free-time
+ *  request, as personTopic files trial extensions). */
+const DELETE_BUTTONS = /\b(Delete my account|Delete account)\b/;
+const CANCEL_BUTTONS = /\b(Cancel subscription|Continue to cancel|Downgrade)\b/;
+const EXTENSION_BUTTON = /\bRequest a trial extension\b/;
+const DELETE_WORDS = /\b(delete|deleted|erase|erased|remove|removed) your (account|data|company)\b/i;
 
-/** What a guarded answer is about, if it commits money or data or names the cancel/delete buttons. */
+/** What a guarded answer is about, if it commits money or data or names a person-only flow's button. */
 function guardTopic(words: string): PersonTopic | null {
-  if (DELETE_WORDS.test(words) && (commitsMoneyOrData(words) || LEAVING_BUTTONS.test(words))) return "data";
-  if (LEAVING_BUTTONS.test(words)) return "leaving";
-  if (commitsMoneyOrData(words)) return "money";
+  if (DELETE_BUTTONS.test(words) || (DELETE_WORDS.test(words) && commitsMoneyOrData(words))) return "data";
+  if (CANCEL_BUTTONS.test(words)) return "leaving";
+  if (EXTENSION_BUTTON.test(words) || commitsMoneyOrData(words)) return "money";
   return null;
 }
 
@@ -177,7 +181,13 @@ export function cleanAnswer(a: SmartHelpAnswer, ctx: HelpContext, targets: Reado
   }
   if (a.kind === "person") return { kind: "person", title: a.title || PERSON_REPLY.person, steps: [], note: a.note };
   if (a.kind === "unknown") return { kind: "unknown", title: a.title || UNKNOWN_REPLY, steps: [], note: a.note };
-  const unsure = (): SmartHelpReply => ({ kind: "unknown", title: a.title || UNKNOWN_REPLY, steps: [], note: a.title ? UNKNOWN_REPLY : null });
+  // Not sure: the model's own title and note (already in the asker's language); UNKNOWN_REPLY fills what it left out.
+  const unsure = (): SmartHelpReply => ({
+    kind: "unknown",
+    title: a.title || UNKNOWN_REPLY,
+    steps: [],
+    note: a.note ?? (a.title ? UNKNOWN_REPLY : null),
+  });
   if (a.confidence < CONFIDENCE_MIN) return unsure();
   const steps = a.steps.map((s) => cleanStep(s, ctx, targets));
   if (steps.length) return { kind: a.kind, title: a.title, steps, note: a.note };
