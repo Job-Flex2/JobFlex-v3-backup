@@ -233,7 +233,7 @@ export const GUIDES: Guide[] = [
         show: "team:invite",
       },
       {
-        text: "Type their Full name and Email — the email is how they sign in. On a computer, tick Text their schedule to this phone to send them their jobs by text.",
+        text: "Type their Full name and Email — the email is how they sign in — and their number under Phone (optional). On a computer, tick Text their schedule to this phone to send them their jobs by text.",
       },
       {
         text: "Pick the Role: Installer, Sales, Estimator or Manager. The box under it says what that role will see and do.",
@@ -370,6 +370,9 @@ export const GUIDES: Guide[] = [
         show: "roof-package",
       },
       {
+        text: "If you see Order measurement report (under Edges, in Measurement source & report), it orders the full aerial report for this roof. It’s billed and usually arrives within 48 hours; its measured lengths then load into the package by themselves.",
+      },
+      {
         text: "Press Convert to proposal. It opens as a draft you can still edit. Roofs you measured stay under Recent measurements to reopen later.",
         show: "roof-convert",
       },
@@ -441,7 +444,7 @@ export const GUIDES: Guide[] = [
         open: "/dashboard/deck-estimator",
       },
       {
-        text: "Under Deck size & house placement, set Along the house and Out from the house.",
+        text: "Under Deck size & house placement (Size & placement for a gazebo or pergola without a deck), set the size — on a deck, Along the house and Out from the house.",
       },
       {
         text: "Under House & ground, at Build the house from a photo, press Upload a photo or Take a photo of the back wall where the deck goes.",
@@ -546,7 +549,7 @@ export const GUIDES: Guide[] = [
         open: "/dashboard/projects",
       },
       {
-        text: "Press New proposal to start one inside the project, or Attach proposal to file one you already made.",
+        text: "Press New proposal (on a phone, New proposal in this project) to start one inside the project, or Attach proposal to file one you already made.",
       },
       {
         text: "On a computer, press Change order on a proposal’s row. Add the extra work and press Send for approval — the sheet shows what the Contract becomes.",
