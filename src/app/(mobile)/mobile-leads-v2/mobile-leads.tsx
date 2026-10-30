@@ -938,7 +938,7 @@ export function MobileLeads() {
               {/* "Import" opens the CSV pane, not the paste pane: paste is now a
                   one-lead action and belongs behind New lead's own tab strip. */}
               <button className={`${styles.btn} ${styles.btnGhost}`} type="button"
-                onClick={() => openAdd("file")}>
+                onClick={() => openAdd("file")} data-tour="leads:import">
                 <Icon id="i-file" />Import
               </button>
             </div>

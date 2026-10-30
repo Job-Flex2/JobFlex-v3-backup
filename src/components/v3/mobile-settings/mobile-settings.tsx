@@ -670,7 +670,7 @@ function PaymentsPane({
         </div>
       ) : null}
       {/* ── Get paid ── */}
-      <section className="mst-card">
+      <section className="mst-card" data-tour="payments:processors">
         <CardHeader card={PROCESSORS_CARD} />
         <div className="mst-cardB mst-cardB--rows">
           <div className="mst-grp">
