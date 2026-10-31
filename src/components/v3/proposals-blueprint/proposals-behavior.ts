@@ -63,6 +63,7 @@ import { mountIsland, type Island } from "@/components/v3/blueprint-shell/react-
 import { clientProposalUrl } from "@/lib/proposalLink";
 import { whoHtml } from "@/lib/team/who";
 import { familyCounts, kindWord, type WorkFamily } from "@/lib/proposalKind";
+import { CARD_RENDERERS, type CardKit } from "./cards";
 import {
   PAGE_ACC,
   PAGE_ALL,
@@ -210,6 +211,28 @@ export function initProposalsContent(
   function fmtMoney(n: number) {
     return "$" + Math.round(n).toLocaleString("en-US");
   }
+  // All-list card variants under review (2026-10-30, cards/card-kit.ts): ?card=a|b|c.
+  const cardVariant = CARD_RENDERERS[new URLSearchParams(window.location.search).get("card") ?? ""] ?? null;
+  if (cardVariant) root.dataset.card = new URLSearchParams(window.location.search).get("card") ?? "";
+  const cardKit: CardKit = {
+    esc,
+    fmtMoney,
+    proposalHref: (id) => proposalHref(id),
+    subLine: (p) => subLine(p),
+    kindHtml: (p) => kindHtml(p),
+    clientDesignHtml: (p) => clientDesignHtml(p),
+    bloomOnce: (id, kind, at) => bloomOnce(id, kind, at),
+    viewsCellHtml: (p) => viewsCellHtml(p),
+    paidCellHtml: (p) => paidCellHtml(p),
+    payBarHtml: (p, withTotal) => payBarHtml(p, withTotal),
+    sendCellHtml: (p) => sendCellHtml(p),
+    payActsHtml: (p, next) => payActsHtml(p, next),
+    finHtml: (p) => finHtml(p),
+    instDollars: (p, it) => instDollars(p, it),
+    payRowHtml: (p, chain) => payRowHtml(p, chain),
+    barRowHtml: (p, chain) => barRowHtml(p, chain),
+    classicHtml: (p, chain) => classicRowHtml(p, chain),
+  };
   /** Money that has to be exact because a write uses the same figure: the
    *  invoice dialog's quote and the confirmation of what was actually sent. */
   function fmtCents(n: number) {
@@ -778,6 +801,9 @@ export function initProposalsContent(
     return { rows, pages, slice: rows.slice((pstate.pageAll - 1) * PAGE_ALL, pstate.pageAll * PAGE_ALL) };
   }
   function allRowHtml(p: ProposalRow, chain = "") {
+    return cardVariant ? cardVariant(p, chain, cardKit) : classicRowHtml(p, chain);
+  }
+  function classicRowHtml(p: ProposalRow, chain = "") {
     const st = statusPlate(p.status);
     const pay = payRowHtml(p, chain);
     return (

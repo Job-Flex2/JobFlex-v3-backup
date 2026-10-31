@@ -1,0 +1,306 @@
+/* All-list card, variant E — every rule scoped under .content[data-card="e"].
+   "Calm at rest, detail on demand": one index line per proposal (what · where it stands · money · one action),
+   everything else in a native <details> under it. Every selector carries ≥ 2 classes plus the #allCard id, so it
+   beats proposals.module.css (`.bp .content #allCard …`) and the shell's single-class prod reset alike.
+
+   Type scale at rest:  title 18/800 · amount 24/900 tabular · fact & meta 14/600·500 · stamp 11/800 caps (house stamp)
+   Inside the fold:     section heads 12/800 caps · ledger 14.5/700 + 15/800 · facts 13.5 · tools 13.5/600 · 40px  */
+
+/* ── The table becomes a stack of cards ───────────────────────────────────────────────────────── */
+.content[data-card="e"] #allCard .ptable tr.e-row > td.e-td {
+  position: relative;
+  padding: 0 0 12px;
+  border: 0;
+  background: transparent;
+  vertical-align: top;
+}
+.content[data-card="e"] #allCard .ptable tr.e-row:hover > td.e-td { background: transparent; }
+.content[data-card="e"] #allCard .ptable tr.e-row > td.e-td::before,
+.content[data-card="e"] #allCard .ptable tr.e-row > td.e-td::after { content: none; }
+
+.content[data-card="e"] #allCard .e-row .e-card {
+  --e-gut: 24px;
+  position: relative;
+  container-type: inline-size;
+  background: var(--paper-deep);
+  border: 2px solid var(--ink);
+  border-radius: var(--r-sm, 2px);
+  font-family: var(--font-sans, var(--font));
+  color: var(--ink);
+  transition: border-color 0.14s var(--ease-out, ease-out);
+}
+.content[data-card="e"] #allCard .e-row.is-leaving .e-card { background: var(--danger-soft); }
+.content[data-card="e"] #allCard .e-row.is-fresh .e-card { animation: eFresh 2.2s ease-out forwards; }
+@keyframes eFresh {
+  0%, 55% { background: var(--accent-soft); }
+  100% { background: var(--paper-deep); }
+}
+
+/* ── At rest: one index line ──────────────────────────────────────────────────────────────────── */
+.content[data-card="e"] #allCard .e-card .e-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 208px 160px 156px 44px;
+  grid-template-areas: "id st mo do .";
+  column-gap: 24px;
+  row-gap: 16px;
+  align-items: start;
+  padding: 20px var(--e-gut);
+}
+.content[data-card="e"] #allCard .e-main .e-id { grid-area: id; min-width: 0; }
+.content[data-card="e"] #allCard .e-main .e-stand { grid-area: st; }
+.content[data-card="e"] #allCard .e-main .e-money { grid-area: mo; }
+.content[data-card="e"] #allCard .e-main .e-do { grid-area: do; }
+
+/* WHAT */
+.content[data-card="e"] #allCard .e-id .e-tags { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; min-height: 18px; margin: 0 0 6px; }
+.content[data-card="e"] #allCard .e-id .e-tags:empty { display: none; }
+.content[data-card="e"] #allCard .e-tags .pkind { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
+.content[data-card="e"] #allCard .e-tags .pkind b { font-weight: 700; }
+.content[data-card="e"] #allCard .e-tags .e-owner { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+.content[data-card="e"] #allCard .e-id .e-title {
+  display: block;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.28;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+.content[data-card="e"] #allCard .e-row:hover .e-id .e-title,
+.content[data-card="e"] #allCard .e-id .e-title:focus-visible {
+  color: var(--blueprint);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+.content[data-card="e"] #allCard .e-id .e-meta {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 2px 8px;
+  margin-top: 5px;
+  font-size: 15px; font-weight: 500; line-height: 1.4; color: var(--ink-soft);
+}
+.content[data-card="e"] #allCard .e-meta .e-dot { font-style: normal; color: var(--muted-faint); }
+.content[data-card="e"] #allCard .e-meta .e-proj { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; color: var(--blueprint); text-decoration: none; }
+.content[data-card="e"] #allCard .e-meta .e-proj:hover { text-decoration: underline; text-underline-offset: 3px; }
+.content[data-card="e"] #allCard .e-meta .e-proj .ic { width: 14px; height: 14px; }
+
+/* WHERE IT STANDS — the house stamp, then one fact or one flag */
+.content[data-card="e"] #allCard .e-main .e-stand { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; padding-top: 1px; }
+.content[data-card="e"] #allCard .e-stand .pstatus { margin: 0; }
+.content[data-card="e"] #allCard .e-stand .e-fact { font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--ink-soft); }
+.content[data-card="e"] #allCard .e-stand .e-fact--quiet { font-weight: 500; color: var(--muted); }
+.content[data-card="e"] #allCard .e-stand .e-fact--wait { color: var(--warning-dark); }
+.content[data-card="e"] #allCard .e-stand .e-flag {
+  display: inline-flex; align-items: flex-start; gap: 7px;
+  align-self: stretch;
+  padding: 7px 10px;
+  border: 1.5px solid currentColor;
+  font-size: 14px; font-weight: 600; line-height: 1.35;
+}
+.content[data-card="e"] #allCard .e-stand .e-flag b { display: block; font-size: 15px; font-weight: 800; }
+.content[data-card="e"] #allCard .e-stand .e-flag .ic { width: 15px; height: 15px; margin-top: 2px; }
+.content[data-card="e"] #allCard .e-stand .e-flag--late { color: var(--danger); background: var(--danger-soft); }
+.content[data-card="e"] #allCard .e-stand .e-flag--new { color: var(--blueprint); background: var(--accent-soft); }
+
+/* MONEY */
+.content[data-card="e"] #allCard .e-main .e-money { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; text-align: right; }
+.content[data-card="e"] #allCard .e-money .e-amt {
+  font-size: 27px; font-weight: 900; line-height: 1.05; letter-spacing: -0.015em;
+  font-variant-numeric: tabular-nums; color: var(--ink);
+}
+.content[data-card="e"] #allCard .e-money .e-amt--off { color: var(--muted); }
+.content[data-card="e"] #allCard .e-money .e-meter { display: block; width: 100%; max-width: 132px; height: 6px; border: 1px solid var(--ink); background: var(--paper-deep); }
+.content[data-card="e"] #allCard .e-money .e-meter i { display: block; height: 100%; background: var(--success); }
+.content[data-card="e"] #allCard .e-money .e-meter--low i { background: var(--danger); }
+.content[data-card="e"] #allCard .e-money .e-meter--part i { background: var(--warning); }
+.content[data-card="e"] #allCard .e-money .e-msub { display: inline-flex; align-items: center; gap: 5px; font-size: 14.5px; font-weight: 500; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.content[data-card="e"] #allCard .e-money .e-msub b { font-weight: 800; color: var(--ink); }
+.content[data-card="e"] #allCard .e-money .e-msub--ok { font-weight: 700; color: var(--success-dark); }
+.content[data-card="e"] #allCard .e-money .e-msub--ok .ic { width: 15px; height: 15px; }
+.content[data-card="e"] #allCard .e-money .e-msub--quiet { color: var(--muted); }
+
+/* THE ONE ACTION */
+.content[data-card="e"] #allCard .e-main .e-do { display: flex; }
+.content[data-card="e"] #allCard .e-do .e-go {
+  flex: 1 1 auto;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 44px; padding: 0 14px;
+  border: 2px solid var(--ink); border-radius: var(--r-sm, 2px);
+  font: 800 15px/1 var(--font-sans, var(--font)); letter-spacing: 0.01em;
+  color: #fff; text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition: transform 0.12s var(--ease-out, ease-out), box-shadow 0.12s var(--ease-out, ease-out), background 0.12s;
+}
+.content[data-card="e"] #allCard .e-do .e-go .ic { width: 16px; height: 16px; }
+.content[data-card="e"] #allCard .e-do .e-go--send { background: var(--success); }
+.content[data-card="e"] #allCard .e-do .e-go--send:hover { background: var(--success-dark); }
+.content[data-card="e"] #allCard .e-do .e-go--blue { background: var(--blueprint); }
+.content[data-card="e"] #allCard .e-do .e-go--blue:hover { background: var(--blueprint-dark); }
+.content[data-card="e"] #allCard .e-do .e-go--amber { background: var(--warning-dark); }
+.content[data-card="e"] #allCard .e-do .e-go--amber:hover { background: color-mix(in srgb, var(--warning-dark) 82%, var(--ink)); }
+.content[data-card="e"] #allCard .e-do .e-go--quiet { background: var(--paper-deep); color: var(--ink); border-width: 1.5px; font-weight: 700; }
+.content[data-card="e"] #allCard .e-do .e-go--quiet:hover { background: var(--paper); }
+.content[data-card="e"] #allCard .e-do .e-go:hover { transform: translate(-1px, -1px); box-shadow: 2px 2px 0 var(--ink); }
+.content[data-card="e"] #allCard .e-do .e-go.is-busy { transform: none; box-shadow: none; }
+
+/* The disclosure square, pinned to the line's last column. */
+.content[data-card="e"] #allCard .e-card .e-tog {
+  position: absolute; top: 20px; right: var(--e-gut);
+  display: grid; place-items: center;
+  width: 44px; height: 44px;
+  border: 1.5px solid var(--ink); border-radius: var(--r-sm, 2px);
+  background: var(--paper-deep); color: var(--ink);
+  list-style: none; cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+}
+.content[data-card="e"] #allCard .e-card .e-tog::-webkit-details-marker { display: none; }
+.content[data-card="e"] #allCard .e-card .e-tog::marker { content: ""; }
+.content[data-card="e"] #allCard .e-card .e-tog:hover { background: var(--paper); }
+.content[data-card="e"] #allCard .e-card .e-tog .ic { width: 20px; height: 20px; stroke-width: 2.25; transition: transform 0.22s var(--ease-out, ease-out); }
+.content[data-card="e"] #allCard .e-card .e-more[open] > .e-tog { background: var(--ink); color: var(--paper-deep); }
+.content[data-card="e"] #allCard .e-card .e-more[open] > .e-tog .ic { transform: rotate(180deg); }
+.content[data-card="e"] #allCard .e-card .e-sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.content[data-card="e"] #allCard .e-card :is(a, button, summary):focus-visible { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+
+/* ── On demand: the fold ──────────────────────────────────────────────────────────────────────── */
+.content[data-card="e"] #allCard .e-more .e-panel { border-top: 1.5px solid var(--ink); cursor: default; }
+.content[data-card="e"] #allCard .e-panel .e-cols { display: grid; grid-template-columns: minmax(0, 1fr); }
+.content[data-card="e"] #allCard .e-panel .e-cols:has(> .e-sec--pay) { grid-template-columns: minmax(0, 1fr) 320px; }
+.content[data-card="e"] #allCard .e-cols .e-sec { min-width: 0; padding: 18px var(--e-gut) 20px; }
+.content[data-card="e"] #allCard .e-cols .e-sec--pay + .e-sec--act { border-left: 1px solid var(--ink-line); }
+.content[data-card="e"] #allCard .e-sec .e-h {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px;
+  margin: 0 0 12px;
+  font-size: 12.5px; font-weight: 800; line-height: 1.2; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink);
+}
+.content[data-card="e"] #allCard .e-sec .e-h span { font-size: 15px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+/* Payments: a ledger, one stage per line */
+.content[data-card="e"] #allCard .e-sec .e-stages { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--ink-line); }
+.content[data-card="e"] #allCard .e-stages .e-st {
+  display: grid;
+  grid-template-columns: 10px minmax(120px, 0.8fr) minmax(0, 1.7fr) 104px;
+  grid-template-areas: "mk k s v";
+  align-items: baseline; column-gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--ink-line);
+}
+.content[data-card="e"] #allCard .e-st .e-st-mk { grid-area: mk; align-self: center; width: 10px; height: 10px; border: 1.5px solid var(--ink); background: var(--paper-deep); }
+.content[data-card="e"] #allCard .e-st .e-st-k { grid-area: k; font-size: 15px; font-weight: 700; color: var(--ink); }
+.content[data-card="e"] #allCard .e-st .e-st-k em { margin-left: 6px; font-style: normal; font-size: 13px; font-weight: 600; color: var(--muted); }
+.content[data-card="e"] #allCard .e-st .e-st-s { grid-area: s; font-size: 14px; font-weight: 500; line-height: 1.4; color: var(--ink-soft); }
+.content[data-card="e"] #allCard .e-st .e-st-v { grid-area: v; text-align: right; font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ink); }
+.content[data-card="e"] #allCard .e-st--paid .e-st-mk { background: var(--success); border-color: var(--success); }
+.content[data-card="e"] #allCard .e-st--paid .e-st-s,
+.content[data-card="e"] #allCard .e-st--paid .e-st-v { color: var(--success-dark); }
+.content[data-card="e"] #allCard .e-st--next .e-st-mk { background: var(--blueprint); border-color: var(--blueprint); }
+.content[data-card="e"] #allCard .e-st--next .e-st-s { color: var(--ink); font-weight: 600; }
+.content[data-card="e"] #allCard .e-st--late .e-st-mk { background: var(--danger); border-color: var(--danger); }
+.content[data-card="e"] #allCard .e-st--late .e-st-s,
+.content[data-card="e"] #allCard .e-st--late .e-st-v { color: var(--danger); font-weight: 700; }
+.content[data-card="e"] #allCard .e-st--plan .e-st-mk { border-style: dashed; }
+.content[data-card="e"] #allCard .e-st--closed .e-st-v { color: var(--muted); text-decoration: line-through; }
+
+.content[data-card="e"] #allCard .e-sec .e-bills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.content[data-card="e"] #allCard .e-bills .e-bill,
+.content[data-card="e"] #allCard .e-sec .ppl-fin .ppl-act {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 44px; padding: 0 15px;
+  border: 1.5px solid var(--ink); border-radius: var(--r-sm, 2px);
+  background: var(--paper-deep); color: var(--ink);
+  font: 700 14px/1 var(--font-sans, var(--font)); cursor: pointer;
+  transition: background 0.12s;
+}
+.content[data-card="e"] #allCard .e-bills .e-bill .ic,
+.content[data-card="e"] #allCard .e-sec .ppl-fin .ppl-act .ic { width: 15px; height: 15px; }
+.content[data-card="e"] #allCard .e-bills .e-bill--paid { border-color: var(--success); background: var(--success-soft); color: var(--success-dark); }
+.content[data-card="e"] #allCard .e-bills .e-bill--inv { border-color: var(--blueprint); background: var(--accent-soft); color: var(--blueprint); }
+.content[data-card="e"] #allCard .e-bills .e-bill--rem { border-color: var(--warning); background: var(--warning-soft); color: var(--warning-dark); }
+.content[data-card="e"] #allCard .e-bills .e-bill:hover:not(:disabled),
+.content[data-card="e"] #allCard .e-sec .ppl-fin .ppl-act:hover { background: var(--paper); }
+.content[data-card="e"] #allCard .e-bills .e-bill:disabled { opacity: 0.45; cursor: not-allowed; }
+.content[data-card="e"] #allCard .e-sec .e-note { margin: 12px 0 0; font-size: 15px; font-weight: 600; color: var(--ink-soft); }
+.content[data-card="e"] #allCard .e-sec .e-note b { font-weight: 800; color: var(--ink); }
+.content[data-card="e"] #allCard .e-sec .ppl-fin .ppl-act { flex: none; width: auto; }
+.content[data-card="e"] #allCard .e-sec .ppl-fin { display: flex; justify-content: flex-start; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--ink-line); }
+.content[data-card="e"] #allCard .e-sec .ppl-fin .ppl-note { display: inline-flex; align-items: center; gap: 7px; margin: 0; font-size: 15px; font-weight: 600; color: var(--ink-soft); text-align: left; }
+.content[data-card="e"] #allCard .e-sec .ppl-fin .ppl-note .ic { width: 16px; height: 16px; }
+
+/* Activity: short label / value pairs */
+.content[data-card="e"] #allCard .e-sec .e-dl { display: grid; gap: 9px; margin: 0; }
+.content[data-card="e"] #allCard .e-cols:not(:has(> .e-sec--pay)) .e-dl { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); column-gap: 24px; }
+.content[data-card="e"] #allCard .e-dl > div { display: grid; grid-template-columns: 80px minmax(0, 1fr); align-items: baseline; column-gap: 10px; }
+.content[data-card="e"] #allCard .e-dl dt { font: 600 11.5px/1.3 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); }
+.content[data-card="e"] #allCard .e-dl dd { margin: 0; font-size: 15px; font-weight: 500; line-height: 1.4; color: var(--ink); }
+.content[data-card="e"] #allCard .e-dl dd .e-wait { color: var(--warning-dark); font-weight: 600; }
+.content[data-card="e"] #allCard .e-sec .pt-cd { display: flex; margin-top: 14px; font-size: 13.5px; }
+
+/* Tools: every other thing that can be done to the proposal; Delete apart */
+.content[data-card="e"] #allCard .e-panel .e-bar {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 12px var(--e-gut);
+  border-top: 1px solid var(--ink-line);
+  background: var(--paper);
+}
+.content[data-card="e"] #allCard .e-bar .e-bar-l { display: flex; flex-wrap: wrap; gap: 8px; }
+.content[data-card="e"] #allCard .e-bar .e-tool {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 44px; padding: 0 15px;
+  border: 1.5px solid var(--ink); border-radius: var(--r-sm, 2px);
+  background: var(--paper-deep); color: var(--ink);
+  font: 600 14px/1 var(--font-sans, var(--font)); text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition: transform 0.12s var(--ease-out, ease-out), box-shadow 0.12s var(--ease-out, ease-out);
+}
+.content[data-card="e"] #allCard .e-bar .e-tool .ic { width: 15px; height: 15px; }
+.content[data-card="e"] #allCard .e-bar .e-tool:hover { transform: translate(-1px, -1px); box-shadow: 2px 2px 0 var(--ink); }
+.content[data-card="e"] #allCard .e-bar .e-tool--open { color: var(--blueprint); border-color: var(--blueprint); font-weight: 700; }
+.content[data-card="e"] #allCard .e-bar .e-tool--del { flex: none; color: var(--danger); border-color: var(--danger); }
+.content[data-card="e"] #allCard .e-bar .e-tool--del:hover { box-shadow: 2px 2px 0 var(--danger); }
+
+/* The fold slides open where the browser can animate to auto height; elsewhere it simply opens. */
+@supports selector(::details-content) {
+  .content[data-card="e"] #allCard .e-row .e-card { interpolate-size: allow-keywords; }
+  .content[data-card="e"] #allCard .e-card .e-more::details-content {
+    block-size: 0; overflow: clip;
+    transition: block-size 0.26s var(--ease-out, ease-out), content-visibility 0.26s allow-discrete;
+  }
+  .content[data-card="e"] #allCard .e-card .e-more[open]::details-content { block-size: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .content[data-card="e"] #allCard .e-card .e-more::details-content { transition: none; }
+  .content[data-card="e"] #allCard .e-card .e-tog .ic,
+  .content[data-card="e"] #allCard .e-do .e-go,
+  .content[data-card="e"] #allCard .e-bar .e-tool { transition: none; }
+}
+
+/* ── Project chains: an indented guide joins the project's proposals ─────────────────────────── */
+.content[data-card="e"] #allCard .ptable tr.e-row.prow--chain > td.e-td { padding-left: 28px; padding-bottom: 8px; }
+.content[data-card="e"] #allCard .ptable tr.e-row.prow--chain-end > td.e-td { padding-bottom: 12px; }
+.content[data-card="e"] #allCard .ptable tr.e-row.prow--chain > td.e-td::before {
+  content: ""; position: absolute; left: 11px; top: 0; bottom: 0; width: 2px;
+  background: color-mix(in srgb, var(--blueprint) 55%, transparent);
+}
+.content[data-card="e"] #allCard .ptable tr.e-row.prow--chain-end > td.e-td::before { bottom: auto; height: 44px; }
+.content[data-card="e"] #allCard .ptable tr.e-row.prow--chain > td.e-td::after {
+  content: ""; position: absolute; left: 11px; top: 42px; width: 17px; height: 2px; margin: 0;
+  border: 0; border-radius: 0;
+  background: color-mix(in srgb, var(--blueprint) 55%, transparent);
+}
+
+/* ── Narrow desk (≈1024 window): the line folds to two rows, the columns keep their order ──── */
+@container (max-width: 860px) {
+  .content[data-card="e"] #allCard .e-card .e-main {
+    grid-template-columns: minmax(0, 1fr) 160px 156px 44px;
+    grid-template-areas: "id id id ." "st mo do .";
+    --e-gut: 20px;
+    padding-inline: 20px;
+  }
+  .content[data-card="e"] #allCard .e-card .e-tog { right: 20px; }
+  .content[data-card="e"] #allCard .e-card .e-panel .e-cols:has(> .e-sec--pay) { grid-template-columns: minmax(0, 1fr); }
+  .content[data-card="e"] #allCard .e-card .e-cols .e-sec--pay + .e-sec--act { border-left: 0; border-top: 1px solid var(--ink-line); }
+  .content[data-card="e"] #allCard .e-card .e-cols .e-sec,
+  .content[data-card="e"] #allCard .e-card .e-panel .e-bar { padding-inline: 20px; }
+  .content[data-card="e"] #allCard .e-card .e-stages .e-st { grid-template-columns: 10px minmax(110px, 0.8fr) minmax(0, 1.4fr) 92px; }
+}

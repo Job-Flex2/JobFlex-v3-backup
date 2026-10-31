@@ -1,0 +1,308 @@
+/* All-list card, variant F — "Bold state blocks" (2026-10-30). Every rule is scoped under
+   .content[data-card="f"] #allCard, which outranks the classic `.bp .content #allCard …` rules, and every
+   selector carries at least two classes/attributes so the shell's prod reset never ties it.
+
+   The card: a white sheet in a 2px ink frame on a hard 5px ink offset. Its left edge is a solid block in the
+   state's colour holding the label, the money that matters now (the biggest type on the card), one line of
+   context and the one action. The body to its right is what the job is; the foot is the quiet tool row. */
+
+/* ── the table becomes a stack of cards ─────────────────────────────────── */
+.content[data-card="f"] #allCard .ptable { border-collapse: separate; border-spacing: 0; min-width: 0; }
+.content[data-card="f"] #allCard .ptable thead { display: none; }
+.content[data-card="f"] #allCard .ptable tbody tr.prow.f-row,
+.content[data-card="f"] #allCard .ptable tbody tr.prow.f-row:hover { background: transparent; }
+.content[data-card="f"] #allCard .ptable tbody tr.prow.f-row > td.f-td.f-td {
+  padding: 0 6px 28px 0;
+  border: 0;
+  background: transparent;
+  vertical-align: top;
+}
+.content[data-card="f"] #allCard .ptable tbody tr.prow.f-row > td.f-td.f-td::before,
+.content[data-card="f"] #allCard .ptable tbody tr.prow.f-row > td.f-td.f-td::after { content: none; }
+
+/* project chain: the cards step in on a blueprint rail, a square node at each card */
+.content[data-card="f"] #allCard .ptable tbody tr.prow.f-row.prow--chain > td.f-td.f-td { position: relative; padding-left: 30px; }
+.content[data-card="f"] #allCard .ptable tbody tr.prow.f-row.prow--chain > td.f-td.f-td::before {
+  content: ""; position: absolute; left: 10px; top: -12px; bottom: 0; width: 2px;
+  background: color-mix(in srgb, var(--blueprint) 45%, transparent); opacity: 1;
+}
+.content[data-card="f"] #allCard .ptable tbody tr.prow.f-row.prow--chain-end > td.f-td.f-td::before { bottom: auto; height: 50px; }
+.content[data-card="f"] #allCard .ptable tbody tr.prow.f-row.prow--chain > td.f-td.f-td::after {
+  content: ""; position: absolute; left: 5px; top: 30px; width: 12px; height: 12px; margin: 0;
+  border: 2px solid var(--blueprint); border-radius: 0; background: var(--paper);
+}
+.content[data-card="f"] #allCard .ptable tbody tr.prow-grp > td { padding: 6px 4px 12px; }
+
+/* ── the card ───────────────────────────────────────────────────────────── */
+.content[data-card="f"] #allCard .f-card {
+  --f-block: 252px;
+  display: grid;
+  grid-template-columns: var(--f-block) minmax(0, 1fr);
+  grid-template-areas: "state body" "foot foot";
+  background: var(--paper-deep);
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  box-shadow: 5px 5px 0 var(--ink);
+  cursor: pointer;
+}
+.content[data-card="f"] #allCard .f-row:hover .f-card { box-shadow: 5px 5px 0 var(--blueprint); }
+.content[data-card="f"] #allCard .f-row.is-fresh .f-card { box-shadow: 5px 5px 0 var(--blueprint); }
+.content[data-card="f"] #allCard .f-row.is-leaving .f-card { border-color: var(--danger); box-shadow: 5px 5px 0 var(--danger); }
+.content[data-card="f"] #allCard .f-card .ic { flex: none; }
+
+/* ── the state block ────────────────────────────────────────────────────── */
+.content[data-card="f"] #allCard .f-card .f-state {
+  --f-bg: var(--paper);
+  --f-fg: var(--ink);
+  --f-sub: var(--ink-soft);
+  --f-k: var(--ink);
+  grid-area: state;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  padding: 20px 22px 22px;
+  border-right: 2px solid var(--ink);
+  background: var(--f-bg);
+  color: var(--f-fg);
+}
+.content[data-card="f"] #allCard .f-state.f-state--wait { --f-bg: var(--blueprint); --f-fg: var(--paper-deep); --f-sub: color-mix(in srgb, var(--paper-deep) 86%, var(--blueprint)); --f-k: var(--paper-deep); }
+.content[data-card="f"] #allCard .f-state.f-state--collect { --f-bg: var(--amber); --f-fg: var(--ink); --f-sub: var(--ink); --f-k: var(--ink); }
+.content[data-card="f"] #allCard .f-state.f-state--late { --f-bg: var(--danger); --f-fg: var(--paper-deep); --f-sub: color-mix(in srgb, var(--paper-deep) 88%, var(--danger)); --f-k: var(--paper-deep); }
+.content[data-card="f"] #allCard .f-state.f-state--paid { --f-bg: var(--success); --f-fg: var(--paper-deep); --f-sub: color-mix(in srgb, var(--paper-deep) 88%, var(--success)); --f-k: var(--paper-deep); }
+.content[data-card="f"] #allCard .f-state.f-state--expired { --f-k: var(--warning-dark); --f-sub: var(--ink-muted); }
+.content[data-card="f"] #allCard .f-state.f-state--lost,
+.content[data-card="f"] #allCard .f-state.f-state--quiet { --f-bg: color-mix(in srgb, var(--ink) 7%, var(--paper-deep)); --f-fg: var(--ink-muted); --f-sub: var(--ink-muted); --f-k: var(--ink-muted); }
+.content[data-card="f"] #allCard .f-state.f-state--lost { --f-k: var(--danger); }
+
+.content[data-card="f"] #allCard .f-state .f-state-k {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 900; line-height: 1.2; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--f-k);
+}
+.content[data-card="f"] #allCard .f-state .f-state-k .ic { width: 16px; height: 16px; }
+.content[data-card="f"] #allCard .f-state .f-state-v {
+  margin-top: 16px;
+  font-size: 40px; font-weight: 900; line-height: 1; letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+  color: var(--f-fg);
+  overflow-wrap: anywhere;
+}
+.content[data-card="f"] #allCard .f-state--lost .f-state-v,
+.content[data-card="f"] #allCard .f-state--quiet .f-state-v { color: var(--ink-muted); }
+.content[data-card="f"] #allCard .f-state .f-state-c {
+  margin-top: 10px;
+  font-size: 15px; font-weight: 700; line-height: 1.3;
+  color: var(--f-fg);
+}
+.content[data-card="f"] #allCard .f-state .f-state-s {
+  display: flex; align-items: baseline; gap: 8px;
+  margin-top: 6px;
+  font-size: 14px; font-weight: 600; line-height: 1.35;
+  color: var(--f-sub);
+}
+/* not opened: a hollow square; opened: a filled one — the thing to check after sending */
+.content[data-card="f"] #allCard .f-state .f-state-s.is-unseen::before,
+.content[data-card="f"] #allCard .f-state .f-state-s.is-seen::before {
+  content: ""; flex: none; width: 9px; height: 9px; transform: translateY(-1px);
+  border: 2px solid currentColor;
+}
+.content[data-card="f"] #allCard .f-state .f-state-s.is-seen::before { background: currentColor; }
+.content[data-card="f"] #allCard .f-state .f-state-s.is-unseen { font-weight: 800; color: var(--f-fg); }
+
+/* the one action, at the foot of the block */
+.content[data-card="f"] #allCard .f-state .f-state-go { margin-top: auto; padding-top: 20px; }
+.content[data-card="f"] #allCard .f-state .f-go {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; height: 46px; padding: 0 14px;
+  border: 2px solid var(--ink); border-radius: var(--radius);
+  background: var(--paper-deep); color: var(--ink);
+  box-shadow: 3px 3px 0 var(--ink);
+  font-family: inherit; font-size: 13.5px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.12s var(--ease-out);
+}
+.content[data-card="f"] #allCard .f-state .f-go .ic { width: 16px; height: 16px; }
+.content[data-card="f"] #allCard .f-state .f-go:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
+.content[data-card="f"] #allCard .f-state .f-go:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+.content[data-card="f"] #allCard .f-state .f-go:focus-visible { outline: 3px solid var(--f-fg); outline-offset: 3px; }
+.content[data-card="f"] #allCard .f-state .f-go:disabled { cursor: not-allowed; box-shadow: none; background: color-mix(in srgb, var(--paper-deep) 70%, var(--f-bg)); color: var(--ink-muted); border-color: var(--ink-muted); }
+.content[data-card="f"] #allCard .f-state .f-go.f-go--send { background: var(--success); color: var(--paper-deep); }
+.content[data-card="f"] #allCard .f-state .f-go.f-go--send:hover:not(:disabled) { background: var(--success-dark); }
+.content[data-card="f"] #allCard .f-state .f-go.is-flashed { background: var(--success); color: var(--paper-deep); }
+
+/* the bloom on a fresh accept/decline: a ring inside the block that fades out — transform + opacity only */
+.content[data-card="f"] #allCard .f-state.pstatus--fresh { animation: none; box-shadow: none; }
+.content[data-card="f"] #allCard .f-state.pstatus--fresh::after {
+  content: ""; position: absolute; inset: 6px; pointer-events: none;
+  border: 3px solid var(--f-fg); opacity: 0;
+  animation: fBloom 1.6s var(--ease-out) 4;
+}
+@keyframes fBloom {
+  0% { opacity: 0.95; transform: scale(0.94); }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+/* ── the body: what the job is ──────────────────────────────────────────── */
+.content[data-card="f"] #allCard .f-card .f-body {
+  grid-area: body;
+  display: flex; flex-direction: column; align-items: flex-start;
+  min-width: 0;
+  padding: 18px 24px 22px;
+}
+.content[data-card="f"] #allCard .f-body .f-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 22px; }
+.content[data-card="f"] #allCard .f-body .f-top .pkind { margin: 0; font-size: 13.5px; }
+.content[data-card="f"] #allCard .f-body .f-top .pkind .pkind-sq { width: 10px; height: 10px; }
+.content[data-card="f"] #allCard .f-body .f-meta { display: inline-flex; align-items: center; gap: 14px; margin-left: auto; min-width: 0; }
+.content[data-card="f"] #allCard .f-body .f-meta .who { font-size: 13px; }
+.content[data-card="f"] #allCard .f-body .f-owner { font-size: 13px; font-weight: 700; color: var(--ink); }
+.content[data-card="f"] #allCard .f-body .f-upd { font-family: var(--font-mono); font-size: 12px; color: var(--ink-muted); white-space: nowrap; }
+.content[data-card="f"] #allCard .f-body .f-title {
+  margin-top: 8px;
+  font-size: 22px; font-weight: 800; line-height: 1.22; letter-spacing: -0.01em;
+  color: var(--ink); text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.content[data-card="f"] #allCard .f-body .f-title:hover { color: var(--blueprint); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.content[data-card="f"] #allCard .f-body .f-title:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 3px; }
+.content[data-card="f"] #allCard .f-body .f-sub {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px;
+  margin-top: 6px;
+  font-size: 15.5px; font-weight: 500; line-height: 1.35; color: var(--ink-soft);
+}
+.content[data-card="f"] #allCard .f-body .f-proj { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--blueprint); text-decoration: none; }
+.content[data-card="f"] #allCard .f-body .f-proj .ic { width: 15px; height: 15px; }
+.content[data-card="f"] #allCard .f-body .f-proj:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+.content[data-card="f"] #allCard .f-body .f-facts { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 14px; }
+.content[data-card="f"] #allCard .f-body .f-fact {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.content[data-card="f"] #allCard .f-body .f-fact .ic { width: 15px; height: 15px; color: var(--ink-muted); }
+.content[data-card="f"] #allCard .f-body .f-fact.f-fact--ok { color: var(--success-dark); }
+.content[data-card="f"] #allCard .f-body .f-fact.f-fact--ok .ic { color: var(--success); }
+.content[data-card="f"] #allCard .f-body .f-fact.f-fact--wait { color: var(--warning-dark); font-weight: 700; }
+.content[data-card="f"] #allCard .f-body .f-fact.f-fact--wait .ic { color: var(--warning-dark); }
+
+/* the client's deck design line (kit.clientDesignHtml), at the body's scale; no box-shadow pulse */
+.content[data-card="f"] #allCard .f-body .pt-cd { margin-top: 14px; padding: 6px 10px; font-size: 14px; border-width: 1.5px; animation: none; }
+.content[data-card="f"] #allCard .f-body .pt-cd .ic { width: 15px; height: 15px; }
+.content[data-card="f"] #allCard .f-body .pt-cd.pt-cd--new .pt-cd-open { padding: 3px 10px; }
+
+/* ── payments: the plan as one proportional track ───────────────────────── */
+.content[data-card="f"] #allCard .f-body .f-pay {
+  align-self: stretch;
+  margin-top: 18px; padding-top: 16px;
+  border-top: 1.5px solid var(--ink-line);
+}
+.content[data-card="f"] #allCard .f-pay .f-pay-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; min-height: 36px; }
+.content[data-card="f"] #allCard .f-pay .f-pay-k { font-size: 12px; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); }
+.content[data-card="f"] #allCard .f-pay .f-pay-sum { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 500; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.content[data-card="f"] #allCard .f-pay .f-pay-sum b { font-weight: 800; color: var(--ink); }
+.content[data-card="f"] #allCard .f-pay .f-pay-sum .f-owed { color: var(--warning-dark); }
+.content[data-card="f"] #allCard .f-pay .f-pay-sum.f-pay-sum--ok { color: var(--success-dark); font-weight: 700; }
+.content[data-card="f"] #allCard .f-pay .f-pay-sum.f-pay-sum--ok .ic { width: 15px; height: 15px; }
+.content[data-card="f"] #allCard .f-pay .f-pay-note { margin-left: auto; font-size: 14px; font-weight: 600; color: var(--ink-muted); }
+.content[data-card="f"] #allCard .f-pay .f-bills { display: inline-flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.content[data-card="f"] #allCard .f-pay .f-bill {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 36px; padding: 0 14px;
+  border: 1.5px solid; border-radius: var(--radius);
+  font-family: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer;
+  transition: background 0.12s;
+}
+.content[data-card="f"] #allCard .f-pay .f-bill .ic { width: 15px; height: 15px; }
+.content[data-card="f"] #allCard .f-pay .f-bill.f-bill--paid { color: var(--success-dark); border-color: var(--success); background: var(--success-soft); }
+.content[data-card="f"] #allCard .f-pay .f-bill.f-bill--paid:hover:not(:disabled) { background: color-mix(in srgb, var(--success) 16%, var(--paper-deep)); }
+.content[data-card="f"] #allCard .f-pay .f-bill.f-bill--inv { color: var(--blueprint); border-color: var(--blueprint); background: var(--accent-soft); }
+.content[data-card="f"] #allCard .f-pay .f-bill.f-bill--inv:hover:not(:disabled) { background: color-mix(in srgb, var(--blueprint) 15%, var(--paper-deep)); }
+.content[data-card="f"] #allCard .f-pay .f-bill.f-bill--rem { color: var(--warning-dark); border-color: var(--warning); background: var(--warning-soft); }
+.content[data-card="f"] #allCard .f-pay .f-bill.f-bill--rem:hover:not(:disabled) { background: color-mix(in srgb, var(--warning) 20%, var(--paper-deep)); }
+.content[data-card="f"] #allCard .f-pay .f-bill:disabled { opacity: 0.45; cursor: not-allowed; }
+.content[data-card="f"] #allCard .f-pay .f-bill:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+.content[data-card="f"] #allCard .f-pay .f-bill.is-flashed { color: var(--paper-deep); background: var(--success); border-color: var(--success); }
+
+.content[data-card="f"] #allCard .f-pay .f-track { display: flex; flex-wrap: wrap; gap: 14px 6px; margin: 14px 0 0; padding: 0; list-style: none; }
+.content[data-card="f"] #allCard .f-track .f-seg { flex: var(--w, 1) 1 0; min-width: 128px; display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 0; }
+.content[data-card="f"] #allCard .f-track .f-seg .f-seg-bar { display: block; height: 10px; margin-bottom: 7px; background: color-mix(in srgb, var(--ink) 12%, var(--paper-deep)); }
+.content[data-card="f"] #allCard .f-track .f-seg--paid .f-seg-bar { background: var(--success); }
+.content[data-card="f"] #allCard .f-track .f-seg--next .f-seg-bar { background: var(--amber); }
+.content[data-card="f"] #allCard .f-track .f-seg--late .f-seg-bar { background: var(--danger); }
+.content[data-card="f"] #allCard .f-track .f-seg--plan .f-seg-bar { background: transparent; border: 2px dashed color-mix(in srgb, var(--blueprint) 70%, var(--paper-deep)); }
+.content[data-card="f"] #allCard .f-track .f-seg--closed .f-seg-bar { background: var(--ink-faint); }
+.content[data-card="f"] #allCard .f-track .f-seg .f-seg-k { font-size: 13px; font-weight: 700; line-height: 1.25; color: var(--ink-soft); }
+.content[data-card="f"] #allCard .f-track .f-seg .f-seg-k em { margin-left: 6px; font-style: normal; font-weight: 600; color: var(--ink-muted); }
+.content[data-card="f"] #allCard .f-track .f-seg .f-seg-v { font-size: 19px; font-weight: 800; line-height: 1.15; color: var(--ink); font-variant-numeric: tabular-nums; }
+.content[data-card="f"] #allCard .f-track .f-seg .f-seg-s { display: inline-flex; align-items: center; gap: 5px; font-size: 13.5px; font-weight: 600; line-height: 1.3; color: var(--ink-muted); }
+.content[data-card="f"] #allCard .f-track .f-seg .f-seg-s .ic { width: 14px; height: 14px; }
+.content[data-card="f"] #allCard .f-track .f-seg--paid .f-seg-s { color: var(--success-dark); }
+.content[data-card="f"] #allCard .f-track .f-seg--next .f-seg-s { color: var(--ink); font-weight: 700; }
+.content[data-card="f"] #allCard .f-track .f-seg--late .f-seg-s { color: var(--danger); font-weight: 800; }
+.content[data-card="f"] #allCard .f-track .f-seg--closed .f-seg-v { color: var(--ink-muted); }
+
+/* financing (kit.finHtml) under the track */
+.content[data-card="f"] #allCard .f-pay .ppl-fin { justify-content: flex-start; gap: 10px 14px; margin-top: 14px; }
+.content[data-card="f"] #allCard .f-pay .ppl-fin .ppl-note { margin: 0; font-size: 14px; font-weight: 600; color: var(--ink-soft); text-align: left; }
+.content[data-card="f"] #allCard .f-pay .ppl-fin .ppl-note .ic { width: 15px; height: 15px; }
+.content[data-card="f"] #allCard .f-pay .ppl-fin .ppl-act {
+  height: 36px; padding: 0 14px; gap: 7px;
+  font-size: 13.5px; color: var(--ink); border-color: var(--ink); background: var(--paper-deep);
+}
+.content[data-card="f"] #allCard .f-pay .ppl-fin .ppl-act:hover { background: var(--paper); }
+.content[data-card="f"] #allCard .f-pay.f-pay--none { padding-top: 0; border-top: 0; margin-top: 8px; }
+
+/* ── the foot: every other tool, quiet ──────────────────────────────────── */
+.content[data-card="f"] #allCard .f-card .f-foot {
+  grid-area: foot;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+  padding: 6px 10px;
+  border-top: 2px solid var(--ink);
+  background: var(--paper-deep);
+  cursor: default;
+}
+.content[data-card="f"] #allCard .f-foot .f-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; }
+.content[data-card="f"] #allCard .f-foot .f-tool {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 38px; padding: 0 12px;
+  border: 1.5px solid transparent; border-radius: var(--radius);
+  background: transparent; color: var(--ink);
+  font-family: inherit; font-size: 14px; font-weight: 600; text-decoration: none; white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.content[data-card="f"] #allCard .f-foot .f-tool .ic { width: 16px; height: 16px; color: var(--ink-muted); }
+.content[data-card="f"] #allCard .f-foot .f-tool:hover { background: var(--paper); border-color: var(--ink-line); }
+.content[data-card="f"] #allCard .f-foot .f-tool:hover .ic { color: var(--ink); }
+.content[data-card="f"] #allCard .f-foot .f-tool:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 1px; }
+.content[data-card="f"] #allCard .f-foot .f-tool.f-tool--open { font-weight: 800; }
+.content[data-card="f"] #allCard .f-foot .f-tool.f-tool--open .ic { color: var(--blueprint); }
+.content[data-card="f"] #allCard .f-foot .f-tool.f-tool--del { color: var(--danger); }
+.content[data-card="f"] #allCard .f-foot .f-tool.f-tool--del .ic { color: var(--danger); }
+.content[data-card="f"] #allCard .f-foot .f-tool.f-tool--del:hover { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+.content[data-card="f"] #allCard .f-foot .f-tool:disabled { opacity: 0.5; cursor: not-allowed; }
+.content[data-card="f"] #allCard .f-foot .f-tool.is-flashed { color: var(--success-dark); background: var(--success-soft); }
+.content[data-card="f"] #allCard .f-foot .f-tool .f-l-short { display: none; }
+.content[data-card="f"] #allCard .f-body .f-fact.f-fact--sent { color: var(--success-dark); }
+.content[data-card="f"] #allCard .f-body .f-fact.f-fact--sent .ic { color: var(--success); }
+
+/* ── middle widths (1024–1240): a narrower block, the same order ────────── */
+@media (max-width: 1240px) {
+  .content[data-card="f"] #allCard .f-card { --f-block: 214px; }
+  .content[data-card="f"] #allCard .f-card .f-state { padding: 18px 18px 20px; }
+  .content[data-card="f"] #allCard .f-state .f-state-v { font-size: 34px; }
+  .content[data-card="f"] #allCard .f-card .f-body { padding: 16px 20px 20px; }
+  .content[data-card="f"] #allCard .f-body .f-title { font-size: 20px; }
+  .content[data-card="f"] #allCard .f-state .f-go { letter-spacing: 0.04em; padding: 0 10px; font-size: 13px; }
+  .content[data-card="f"] #allCard .f-foot .f-tool { gap: 6px; padding: 0 8px; font-size: 13.5px; }
+  .content[data-card="f"] #allCard .f-foot .f-tool .f-l-long { display: none; }
+  .content[data-card="f"] #allCard .f-foot .f-tool .f-l-short { display: inline; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content[data-card="f"] #allCard .f-state.pstatus--fresh::after { animation: none; opacity: 0; }
+  .content[data-card="f"] #allCard .f-state .f-go { transition: none; }
+}

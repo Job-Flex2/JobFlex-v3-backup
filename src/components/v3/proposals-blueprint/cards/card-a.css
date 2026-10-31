@@ -1,0 +1,221 @@
+/* All-list card, variant A — "Headline ledger" (2026-10-30). Every rule scoped under .content[data-card="a"].
+   The order of loudness: title + money (one baseline) → the payment figure → the metadata line → the stage
+   captions and the quiet actions. Status is the card's left band and the first word of the metadata line. */
+
+/* ── The table steps aside: one cell per proposal, the card inside it ── */
+.content[data-card="a"] #allCard .ptable thead { display: none; }
+.content[data-card="a"] #allCard .ptable tbody tr.prow.pla-row > td,
+.content[data-card="a"] #allCard .ptable tbody tr.prow.pla-row:hover > td {
+  padding: 0 0 12px; border: 0; background: transparent; vertical-align: top;
+}
+.content[data-card="a"] #allCard .ptable tbody tr.prow.pla-row:last-child > td { padding-bottom: 0; }
+
+/* ── The card ── */
+.content[data-card="a"] #allCard .pla {
+  --pla-tone: var(--ink-faint);
+  --pla-tone-ink: var(--ink-muted);
+  container-type: inline-size;
+  position: relative;
+  display: block;
+  background: var(--paper-deep);
+  border: 1.5px solid var(--ink);
+  border-left: 6px solid var(--pla-tone);
+  border-radius: 0;
+  font-family: var(--font-sans);
+  transition: border-color 0.15s var(--ease-out);
+}
+.content[data-card="a"] #allCard .pla[data-tone="sent"]    { --pla-tone: var(--sky);          --pla-tone-ink: var(--blueprint); }
+.content[data-card="a"] #allCard .pla[data-tone="viewed"]  { --pla-tone: var(--blueprint);    --pla-tone-ink: var(--blueprint); }
+.content[data-card="a"] #allCard .pla[data-tone="won"]     { --pla-tone: var(--success);      --pla-tone-ink: var(--success-dark); }
+.content[data-card="a"] #allCard .pla[data-tone="paid"]    { --pla-tone: var(--success-dark); --pla-tone-ink: var(--success-dark); }
+.content[data-card="a"] #allCard .pla[data-tone="lost"]    { --pla-tone: var(--danger);       --pla-tone-ink: var(--danger); }
+.content[data-card="a"] #allCard .pla[data-tone="expired"] { --pla-tone: var(--warning);      --pla-tone-ink: var(--warning-dark); }
+.content[data-card="a"] #allCard tr.prow.is-leaving .pla { background: var(--danger-soft); }
+.content[data-card="a"] #allCard tr.prow.is-fresh .pla { background: var(--accent-soft); }
+
+/* ── The headline: title and money on one baseline ── */
+.content[data-card="a"] #allCard .pla .pla-main { padding: 16px 20px 14px; }
+.content[data-card="a"] #allCard .pla .pla-head {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 24px;
+}
+.content[data-card="a"] #allCard .pla .pla-title {
+  min-width: 0; overflow-wrap: anywhere;
+  font: 800 19px/1.3 var(--font-sans); letter-spacing: -0.01em; color: var(--ink); text-decoration: none;
+}
+.content[data-card="a"] #allCard tr.prow:hover .pla .pla-title,
+.content[data-card="a"] #allCard .pla .pla-title:focus-visible {
+  color: var(--blueprint); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px;
+}
+.content[data-card="a"] #allCard .pla .pla-title:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 3px; }
+.content[data-card="a"] #allCard .pla .pla-money {
+  font: 900 24px/1.1 var(--font-sans); letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+  color: var(--ink); white-space: nowrap; text-align: right;
+}
+
+/* ── The metadata line: one quiet line, the status word first ── */
+.content[data-card="a"] #allCard .pla .pla-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; margin-top: 8px;
+  font: 500 13.5px/1.4 var(--font-sans); color: var(--ink-muted);
+}
+.content[data-card="a"] #allCard .pla .pla-st {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  font: 800 12px/1.4 var(--font-sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--pla-tone-ink);
+}
+.content[data-card="a"] #allCard .pla .pla-st em { font-style: normal; font-weight: 700; letter-spacing: 0.02em; text-transform: none; }
+.content[data-card="a"] #allCard .pla .pla-st.pstatus--fresh { padding: 0 4px; margin: 0 -4px; }
+.content[data-card="a"] #allCard .pla .pla-m { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.content[data-card="a"] #allCard .pla .pla-m .ic { width: 14px; height: 14px; flex: none; }
+.content[data-card="a"] #allCard .pla .pla-kind .pkind { display: inline-flex; margin: 0; font-size: 13.5px; font-weight: 500; color: var(--ink-muted); }
+.content[data-card="a"] #allCard .pla .pla-kind .pkind b { font-weight: 600; color: var(--ink-soft); }
+.content[data-card="a"] #allCard .pla .pla-client { color: var(--ink-soft); }
+.content[data-card="a"] #allCard .pla .pla-proj { color: var(--blueprint); font-weight: 600; text-decoration: none; }
+.content[data-card="a"] #allCard .pla .pla-proj:hover { text-decoration: underline; text-underline-offset: 3px; }
+.content[data-card="a"] #allCard .pla .pla-co { color: var(--ink-soft); }
+.content[data-card="a"] #allCard .pla .pla-co--wait { color: var(--warning-dark); font-weight: 600; }
+.content[data-card="a"] #allCard .pla .pla-views b { font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+.content[data-card="a"] #allCard .pla .pla-views--seen { color: var(--ink-soft); }
+.content[data-card="a"] #allCard .pla .pla-views--seen .ic { color: var(--blueprint); }
+.content[data-card="a"] #allCard .pla .pla-views--seen b { color: var(--blueprint); }
+.content[data-card="a"] #allCard .pla .pla-views--none { color: var(--warning-dark); font-weight: 600; }
+.content[data-card="a"] #allCard .pla .pla-dim { color: var(--ink-muted); font-weight: 500; }
+.content[data-card="a"] #allCard .pla .pla-upd { color: var(--ink-muted); }
+.content[data-card="a"] #allCard .pla .pla-owner { margin-left: auto; display: inline-flex; align-items: center; }
+.content[data-card="a"] #allCard .pla .pt-cd { margin-top: 10px; }
+
+/* ── Payments: the one figure, the stages as a bar under it ── */
+.content[data-card="a"] #allCard .pla .pla-pay { padding: 12px 20px 14px; border-top: 1px solid var(--ink-line); }
+.content[data-card="a"] #allCard .pla .pla-pay-top {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px;
+}
+.content[data-card="a"] #allCard .pla .pla-pay-key { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-width: 0; }
+.content[data-card="a"] #allCard .pla .pla-pk {
+  display: inline-flex; align-items: center; gap: 6px; align-self: baseline;
+  font: 700 13px/1.3 var(--font-sans); color: var(--ink-soft);
+}
+.content[data-card="a"] #allCard .pla .pla-pk .ic { width: 14px; height: 14px; }
+.content[data-card="a"] #allCard .pla .pla-pv { font: 800 18px/1.2 var(--font-sans); font-variant-numeric: tabular-nums; color: var(--ink); }
+.content[data-card="a"] #allCard .pla .pla-pf { font: 500 13px/1.35 var(--font-sans); color: var(--ink-muted); overflow-wrap: anywhere; }
+.content[data-card="a"] #allCard .pla .pla-pay--collect .pla-pv { color: var(--blueprint); }
+.content[data-card="a"] #allCard .pla .pla-pf b { font-weight: 700; color: var(--ink-soft); }
+.content[data-card="a"] #allCard .pla .pla-pf em { font-style: normal; }
+.content[data-card="a"] #allCard .pla .pla-pay--collect .pla-pv.is-late,
+.content[data-card="a"] #allCard .pla .pla-pf em.is-late { color: var(--danger); font-weight: 700; }
+.content[data-card="a"] #allCard .pla .pla-pay--paid .pla-pk,
+.content[data-card="a"] #allCard .pla .pla-pay--paid .pla-pv { color: var(--success-dark); }
+.content[data-card="a"] #allCard .pla .pla-pnote { font: 500 13px/1.3 var(--font-sans); color: var(--ink-muted); }
+.content[data-card="a"] #allCard .pla .pla-pnote b { font-weight: 800; color: var(--warning-dark); font-variant-numeric: tabular-nums; }
+
+/* Mark paid · Send invoice · Remind: one row of small tinted buttons beside the figure. */
+.content[data-card="a"] #allCard .pla .pla-pay-side .ppl-acts {
+  display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px; width: auto; max-width: none; margin: 0;
+}
+.content[data-card="a"] #allCard .pla .ppl-act {
+  width: auto; height: 36px; gap: 6px; padding: 0 12px; justify-content: center;
+  font: 700 13px/1 var(--font-sans); border-width: 1.5px; border-radius: var(--r-sm);
+}
+.content[data-card="a"] #allCard .pla .ppl-act .ic { width: 14px; height: 14px; }
+.content[data-card="a"] #allCard .pla .ppl-act--paid { background: var(--success-soft); color: var(--success-dark); border-color: var(--success); }
+.content[data-card="a"] #allCard .pla .ppl-act--paid:hover:not(:disabled) { background: color-mix(in srgb, var(--success) 16%, var(--paper-deep)); }
+.content[data-card="a"] #allCard .pla .ppl-act--inv { background: var(--accent-soft); color: var(--blueprint); border-color: var(--blueprint); }
+.content[data-card="a"] #allCard .pla .ppl-act--rem { background: var(--warning-soft); color: var(--warning-dark); border-color: var(--warning); }
+.content[data-card="a"] #allCard .pla .ppl-act.is-flashed { color: var(--paper-deep); background: var(--success); border-color: var(--success); }
+
+/* The stages: proportional segments, each with a small caption. */
+.content[data-card="a"] #allCard .pla .pla-pay-track { display: flex; align-items: flex-start; gap: 20px; margin-top: 12px; }
+.content[data-card="a"] #allCard .pla .pla-segs { flex: 1 1 auto; display: flex; gap: 4px; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.content[data-card="a"] #allCard .pla .pla-seg { flex: 1 1 0; min-width: 92px; display: grid; gap: 3px; margin: 0; padding: 0; border: 0; background: none; }
+.content[data-card="a"] #allCard .pla .pla-seg-bar { display: block; height: 8px; margin-bottom: 3px; background: var(--ink-line); }
+.content[data-card="a"] #allCard .pla .pla-seg-k,
+.content[data-card="a"] #allCard .pla .pla-seg-v { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.content[data-card="a"] #allCard .pla .pla-seg-k { font: 600 12px/1.3 var(--font-sans); color: var(--ink-soft); }
+.content[data-card="a"] #allCard .pla .pla-seg-k em { margin-left: 4px; font-style: normal; font-weight: 500; color: var(--ink-muted); }
+.content[data-card="a"] #allCard .pla .pla-seg-v { display: flex; align-items: center; gap: 4px; font: 700 12.5px/1.3 var(--font-sans); font-variant-numeric: tabular-nums; color: var(--ink); }
+.content[data-card="a"] #allCard .pla .pla-seg-v .ic { width: 12px; height: 12px; flex: none; }
+.content[data-card="a"] #allCard .pla .pla-seg-t { font-weight: 500; color: var(--ink-muted); }
+.content[data-card="a"] #allCard .pla .pla-seg--paid .pla-seg-bar { background: var(--success); }
+.content[data-card="a"] #allCard .pla .pla-seg--paid .pla-seg-v { color: var(--success-dark); }
+.content[data-card="a"] #allCard .pla .pla-seg--next .pla-seg-bar { background: color-mix(in srgb, var(--blueprint) 22%, var(--paper-deep)); box-shadow: inset 0 0 0 1.5px var(--blueprint); }
+.content[data-card="a"] #allCard .pla .pla-seg--next .pla-seg-v { color: var(--blueprint); }
+.content[data-card="a"] #allCard .pla .pla-seg--late .pla-seg-bar { background: color-mix(in srgb, var(--danger) 22%, var(--paper-deep)); box-shadow: inset 0 0 0 1.5px var(--danger); }
+.content[data-card="a"] #allCard .pla .pla-seg--late .pla-seg-v,
+.content[data-card="a"] #allCard .pla .pla-seg--late .pla-seg-t { color: var(--danger); }
+.content[data-card="a"] #allCard .pla .pla-seg--plan .pla-seg-bar { background: transparent; box-shadow: none; border: 1.5px dashed var(--ink-faint); box-sizing: border-box; }
+.content[data-card="a"] #allCard .pla .pla-seg--closed .pla-seg-v { text-decoration: line-through; color: var(--ink-muted); }
+.content[data-card="a"] #allCard .pla .pla-pay-sum {
+  flex: none; margin-top: -4px; font: 600 12.5px/1.3 var(--font-sans); font-variant-numeric: tabular-nums; color: var(--ink-muted); white-space: nowrap;
+}
+
+/* Financing: one quiet line under the stages. */
+.content[data-card="a"] #allCard .pla .ppl-fin { justify-content: flex-start; gap: 6px 14px; margin-top: 12px; }
+.content[data-card="a"] #allCard .pla .ppl-fin .ppl-note { margin: 0; font: 500 13px/1.3 var(--font-sans); color: var(--ink-muted); text-align: left; }
+.content[data-card="a"] #allCard .pla .ppl-fin .ppl-act { background: var(--paper-deep); color: var(--ink); border-color: var(--ink); }
+.content[data-card="a"] #allCard .pla .ppl-fin .ppl-act:hover { background: var(--accent-soft); }
+
+/* ── Actions: one primary for the state, the rest quiet text buttons, Delete apart ── */
+.content[data-card="a"] #allCard .pla .pla-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 12px 6px 14px; border-top: 1px solid var(--ink-line);
+  background: color-mix(in srgb, var(--paper) 45%, var(--paper-deep));
+}
+.content[data-card="a"] #allCard .pla .pla-bar-l { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; }
+.content[data-card="a"] #allCard .pla .pla-btn {
+  display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 10px;
+  border: 1.5px solid transparent; border-radius: var(--r-sm); background: transparent; color: var(--ink);
+  font: 600 13px/1 var(--font-sans); letter-spacing: 0; text-transform: none; text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, transform 0.12s, box-shadow 0.12s;
+}
+.content[data-card="a"] #allCard .pla .pla-btn .ic { width: 15px; height: 15px; flex: none; }
+.content[data-card="a"] #allCard .pla .pla-btn:hover { border-color: var(--ink); background: var(--paper-deep); }
+.content[data-card="a"] #allCard .pla .pla-btn:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+.content[data-card="a"] #allCard .pla .pla-btn--primary,
+.content[data-card="a"] #allCard .pla .pla-btn--send {
+  padding: 0 16px; margin-right: 6px; border-color: var(--ink); color: var(--paper-deep); font-weight: 700;
+}
+.content[data-card="a"] #allCard .pla .pla-btn--primary { background: var(--blueprint); }
+.content[data-card="a"] #allCard .pla .pla-btn--send { background: var(--success); }
+.content[data-card="a"] #allCard .pla .pla-btn--primary:hover { background: var(--blueprint-dark); border-color: var(--ink); transform: translate(-1px, -1px); box-shadow: 2px 2px 0 var(--ink); }
+.content[data-card="a"] #allCard .pla .pla-btn--send:hover { background: var(--success-dark); border-color: var(--ink); transform: translate(-1px, -1px); box-shadow: 2px 2px 0 var(--ink); }
+.content[data-card="a"] #allCard .pla .pla-sent {
+  display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 6px 0 4px;
+  font: 700 13px/1 var(--font-sans); color: var(--success-dark); white-space: nowrap;
+}
+.content[data-card="a"] #allCard .pla .pla-sent .ic { width: 15px; height: 15px; }
+.content[data-card="a"] #allCard .pla .pla-sent small { font: 500 12.5px/1 var(--font-sans); color: var(--ink-muted); }
+.content[data-card="a"] #allCard .pla .pla-sep { width: 1px; height: 20px; margin: 0 8px; background: var(--ink-line); }
+.content[data-card="a"] #allCard .pla .pla-btn--del { flex: none; color: var(--danger); }
+.content[data-card="a"] #allCard .pla .pla-btn--del:hover { border-color: var(--danger); background: var(--danger-soft); }
+.content[data-card="a"] #allCard .pla .pla-btn.is-flashed { color: var(--paper-deep); background: var(--success); border-color: var(--success); }
+
+/* Narrow desk (the card under ~900px, a 1024 window): the quiet actions drop their icons so the bar stays one line. */
+@container (max-width: 900px) {
+  .content[data-card="a"] #allCard .pla .pla-bar-l .pla-btn:not(.pla-btn--primary):not(.pla-btn--send) .ic { display: none; }
+  .content[data-card="a"] #allCard .pla .pla-bar-l .pla-btn:not(.pla-btn--primary):not(.pla-btn--send) { padding: 0 8px; }
+  .content[data-card="a"] #allCard .pla .pla-sep { margin: 0 4px; }
+  /* Delete keeps its place at the far end as a 36px icon square (named for assistive tech). */
+  .content[data-card="a"] #allCard .pla .pla-btn--del { width: 36px; padding: 0; justify-content: center; }
+  .content[data-card="a"] #allCard .pla .pla-btn--del .pla-btn-t { display: none; }
+}
+@container (max-width: 760px) {
+  .content[data-card="a"] #allCard .pla .pla-main { padding: 14px 16px 12px; }
+  .content[data-card="a"] #allCard .pla .pla-pay { padding: 12px 16px 14px; }
+  .content[data-card="a"] #allCard .pla .pla-title { font-size: 18px; }
+  .content[data-card="a"] #allCard .pla .pla-money { font-size: 22px; }
+}
+
+/* ── A project's chain: the cards hang off a rail, a square node at each title ── */
+.content[data-card="a"] #allCard .ptable tbody tr.prow--chain.pla-row > td:first-child { position: relative; padding-left: 30px; }
+.content[data-card="a"] #allCard .ptable tbody tr.prow--chain.pla-row > td:first-child::before {
+  content: ""; position: absolute; left: 12px; top: 0; bottom: 0; width: 2px; height: auto; margin: 0;
+  background: color-mix(in srgb, var(--blueprint) 40%, transparent); opacity: 1;
+}
+.content[data-card="a"] #allCard .ptable tbody tr.prow--chain-end.pla-row > td:first-child::before { bottom: auto; height: 28px; }
+.content[data-card="a"] #allCard .ptable tbody tr.prow--chain.pla-row > td:first-child::after {
+  content: ""; position: absolute; left: 7px; top: 24px; width: 12px; height: 12px; margin: 0;
+  border: 2px solid var(--blueprint); border-radius: 0; background: var(--paper-deep); box-sizing: border-box;
+}
+.content[data-card="a"] #allCard .ptable tbody tr.prow-grp > td { padding: 14px 4px 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .content[data-card="a"] #allCard .pla .pla-btn { transition: none; }
+  .content[data-card="a"] #allCard .pla .pla-btn:hover { transform: none; }
+}
