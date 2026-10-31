@@ -1530,6 +1530,9 @@ export interface DeskSettingsData {
   /** Whether the business phone really forwards to the desk, for the forwarding chosen (lib/aiDesk/forwardCheck). */
   forwardCheck: ForwardCheck | null;
   facts: CompanyFacts;
+  /** Call new leads (2026-10-31, lib/aiDesk/leadCalls): the switch, the wait, and whether the desk could dial now —
+   *  `why` says what is missing when it could not. */
+  leadCalls: { on: boolean; afterMinutes: number; ready: boolean; why: string | null };
 }
 
 export interface DeskMinutesData {

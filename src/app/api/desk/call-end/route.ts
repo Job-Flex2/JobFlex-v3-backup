@@ -1,5 +1,6 @@
 // The call is over: the transcript and outcome (lib/aiDesk/liveCall finishCall).
 import { finishCall, type CallOutcome } from "@/lib/aiDesk/liveCall";
+import { finishLeadCall } from "@/lib/aiDesk/leadCalls";
 import { finishOutreachCall } from "@/lib/outreach/server";
 import { deskRequest, json, str } from "../route-helpers";
 
@@ -21,6 +22,11 @@ export async function POST(req: Request) {
     return json({ ok: true });
   }
   const booked = r.body.booked && typeof r.body.booked === "object" ? { appointmentId: str((r.body.booked as Record<string, unknown>).appointmentId, 60) } : null;
+  // The desk's own call to a lead: onto that lead (never a new one), and the lead marked reached when they talked.
+  if (r.token.kind === "lead") {
+    await finishLeadCall(r.token, { outcome, transcript, seconds: Number(r.body.seconds) || 0, booked: booked?.appointmentId ? booked : null, messageTaken: r.body.messageTaken === true, error: str(r.body.error, 300) || null });
+    return json({ ok: true });
+  }
   await finishCall({ callSid: r.token.callSid, organizationId: r.token.organizationId }, { outcome, transcript, seconds: Number(r.body.seconds) || 0, booked: booked?.appointmentId ? booked : null, messageTaken: r.body.messageTaken === true, error: str(r.body.error, 300) || null });
   return json({ ok: true });
 }

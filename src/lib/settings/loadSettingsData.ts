@@ -661,8 +661,9 @@ async function loadDeskSettings(organizationId: string, role: string): Promise<D
   const { numbersAssignedTo } = await import("@/lib/aiDesk/numbers");
   const { readRegistration } = await import("@/lib/sms/registration");
   const { settingsOf } = await import("@/lib/bookingBook");
+  const { leadCallReadiness } = await import("@/lib/aiDesk/leadCalls");
   const canManage = ["OWNER", "ADMIN", "MANAGER"].includes(role);
-  const [settings, facts, phoneLocked, use, minutes, assignedNumbers, registration, orgRow] = await Promise.all([
+  const [settings, facts, phoneLocked, use, minutes, assignedNumbers, registration, orgRow, leadCallsReady] = await Promise.all([
     readDeskSettings(organizationId).catch(() => null),
     companyFacts(organizationId).catch(() => null),
     isPageLocked(organizationId, "phone").catch(() => true),
@@ -671,6 +672,7 @@ async function loadDeskSettings(organizationId: string, role: string): Promise<D
     numbersAssignedTo(organizationId),
     readRegistration(organizationId).catch(() => null),
     db.organization.findUnique({ where: { id: organizationId }, select: { phone: true, timezone: true, tradeTypesJson: true, bookingSettingsJson: true } }).catch(() => null),
+    leadCallReadiness(organizationId).catch(() => ({ ok: false as const, why: "The desk can't place calls right now." })),
   ]);
   const bookingSettings = orgRow ? settingsOf(orgRow) : null;
   const { callsGo, parseDeskSettings, prettyPhone } = await import("@/lib/aiDesk/shared");
@@ -709,6 +711,7 @@ async function loadDeskSettings(organizationId: string, role: string): Promise<D
     review: d.profile ? d.review : [],
     forwardCheck: forwardCheckView(await readForwardCheck(organizationId).catch(() => null), { forwarding: d.forwarding, phone: toE164(orgRow?.phone ?? ""), desk: toE164(registration?.number ?? "") ?? toE164(assignedNumbers[0] ?? "") }),
     facts: facts ?? factsFor({ name: "", phone: null, address: null, website: null, trades: [], hours: [], services: [], bookingUrl: null, timezone: null }),
+    leadCalls: { ...d.leadCalls, ready: leadCallsReady.ok, why: leadCallsReady.ok ? null : leadCallsReady.why },
   };
 }
 
