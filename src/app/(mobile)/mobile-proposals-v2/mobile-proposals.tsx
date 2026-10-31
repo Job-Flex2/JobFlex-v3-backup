@@ -655,7 +655,9 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
       if (ticking) return;
       ticking = true;
       requestAnimationFrame(() => {
-        host.style.setProperty("--gy", `${(-(host.scrollTop * 0.06)).toFixed(1)}px`);
+        // --grid-y is registered non-inheriting (globals.css), so this restyles the scroller and its
+        // grid ::before only, not every row under it.
+        host.style.setProperty("--grid-y", `${(-(host.scrollTop * 0.06)).toFixed(1)}px`);
         ticking = false;
       });
     };

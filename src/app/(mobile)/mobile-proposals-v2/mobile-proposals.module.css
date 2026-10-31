@@ -121,7 +121,8 @@
   background-image: linear-gradient(var(--grid-light) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid-light) 1px, transparent 1px);
   background-size: 40px 40px;
-  background-position: 0 var(--gy, 0px);
+  --grid-y: inherit;
+  background-position: 0 var(--grid-y);
   pointer-events: none;
   z-index: 0;
 }

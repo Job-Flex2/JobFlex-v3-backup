@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Graph-paper parallax offset, written on a scroller every scroll frame. Registered as NON-inheriting so a
+   write restyles only the scroller and the pseudo-element that asks for it with `--grid-y: inherit`; an
+   ordinary custom property inherits, and writing one restyled the whole page each frame (2026-10-30). */
+@property --grid-y {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
 :root {
   /* ─── palette (blueprint drafting-paper) ────────── */
   --paper: #f2f0eb;
