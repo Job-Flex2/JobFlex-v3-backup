@@ -1,14 +1,14 @@
-// ALL-LIST CARD VARIANTS (2026-10-30, owner review): /dashboard/proposals?card=a|b|c draws the All tab's
-// proposal cards through one of three candidate designs. Without the parameter the page is unchanged.
+// THE ALL-LIST CARD (2026-10-30): the All tab's proposal cards are drawn by a card renderer — the dossier
+// (card-c.ts), which the owner picked from six candidates.
 //
-// A variant is a function that returns the HTML for ONE proposal, as `<tr>` rows (the list is a
+// A renderer is a function that returns the HTML for ONE proposal, as `<tr>` rows (the list is a
 // `<tbody id="propTableBody">`, so everything sits in `<tr><td colspan="6">…</td></tr>` or in real cells).
 // The page's behavior finds a proposal by `[data-id]` and acts on `[data-act]` buttons, so every row a
-// variant draws carries `data-id`, and the first one carries the class `prow` (the list counts, opens and
+// renderer draws carries `data-id`, and the first one carries the class `prow` (the list counts, opens and
 // staggers `.prow`). Chained proposals (same project) get `chain` — " prow--chain" / " prow--chain-end" —
 // and `data-grp` on every row, exactly like the classic row.
 //
-// The kit hands over the page's own helpers (they close over its state), so a variant prints the same
+// The kit hands over the page's own helpers (they close over its state), so the card prints the same
 // figures, links and buttons as the classic card and every button keeps working.
 
 import type { ProposalRow, Installment } from "../proposals-data";
@@ -43,7 +43,7 @@ export type CardKit = {
   payRowHtml: (p: ProposalRow, chain: string) => string;
   /** The classic action bar (`tr.prow-bar`) + the gap row after it. */
   barRowHtml: (p: ProposalRow, chain: string) => string;
-  /** The whole classic card — a variant can fall back to it. */
+  /** The whole classic card — a renderer can fall back to it. */
   classicHtml: (p: ProposalRow, chain: string) => string;
 };
 

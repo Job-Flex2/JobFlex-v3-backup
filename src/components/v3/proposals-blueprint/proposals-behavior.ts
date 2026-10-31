@@ -63,7 +63,7 @@ import { mountIsland, type Island } from "@/components/v3/blueprint-shell/react-
 import { clientProposalUrl } from "@/lib/proposalLink";
 import { whoHtml } from "@/lib/team/who";
 import { familyCounts, kindWord, type WorkFamily } from "@/lib/proposalKind";
-import { CARD_RENDERERS, type CardKit, type CardRenderer } from "./cards";
+import { renderCardC, type CardKit } from "./cards";
 import {
   PAGE_ACC,
   PAGE_ALL,
@@ -211,10 +211,8 @@ export function initProposalsContent(
   function fmtMoney(n: number) {
     return "$" + Math.round(n).toLocaleString("en-US");
   }
-  // All-list card variants under review (2026-10-30, cards/card-kit.ts): ?card=a..f.
-  const cardParam = new URLSearchParams(window.location.search).get("card") ?? "";
-  const cardVariant: CardRenderer | null = Object.prototype.hasOwnProperty.call(CARD_RENDERERS, cardParam) ? CARD_RENDERERS[cardParam] : null;
-  if (cardVariant) root.dataset.card = cardParam;
+  // The All tab draws each proposal through the dossier card (cards/card-c.ts, owner's pick 2026-10-30); the kit
+  // hands it this page's helpers so its figures and buttons are the classic card's.
   const cardKit: CardKit = {
     esc,
     fmtMoney,
@@ -802,7 +800,7 @@ export function initProposalsContent(
     return { rows, pages, slice: rows.slice((pstate.pageAll - 1) * PAGE_ALL, pstate.pageAll * PAGE_ALL) };
   }
   function allRowHtml(p: ProposalRow, chain = "") {
-    return cardVariant ? cardVariant(p, chain, cardKit) : classicRowHtml(p, chain);
+    return renderCardC(p, chain, cardKit);
   }
   function classicRowHtml(p: ProposalRow, chain = "") {
     const st = statusPlate(p.status);

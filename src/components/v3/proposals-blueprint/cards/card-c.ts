@@ -1,4 +1,4 @@
-// All-list card, variant C (2026-10-30) — "Two-panel dossier".
+// The All-list card (2026-10-30, owner's pick of six) — "Two-panel dossier".
 //
 // One proposal = one framed card in ONE table row (a single <tr class="prow">, so the page's in-place patch and its
 // row exit move the whole card at once). Inside it, two proportioned zones side by side (golden ratio):
@@ -121,7 +121,7 @@ function barHtml(p: ProposalRow, state: PayState, k: CardKit): string {
   );
 }
 
-function stageHtml(p: ProposalRow, it: Installment, state: PayState, next: Installment | null, k: CardKit): string {
+function stageHtml(p: ProposalRow, it: Installment, i: number, state: PayState, next: Installment | null, k: CardKit): string {
   const share = it.pct ? "<em>" + Math.round(it.amount) + "%</em>" : "";
   const amount = k.fmtMoney(k.instDollars(p, it));
   let tone = "later";
@@ -135,7 +135,8 @@ function stageHtml(p: ProposalRow, it: Installment, state: PayState, next: Insta
     tone = "closed";
     tail = "Closed";
   } else if (state === "plan") {
-    tail = it.due ? "Due " + it.due : "After signing";
+    // Not signed yet: only the first stage is billed on signing; the rest follow it.
+    tail = it.due ? "Due " + it.due : i === 0 ? "After signing" : "Later";
   } else if (next && it.id === next.id) {
     // The stage being chased: framed, its facts on their own line, the office's actions under it.
     const facts = stageFacts(it).join(" · ") || "Next to collect";
@@ -191,7 +192,7 @@ function moneyHtml(p: ProposalRow, k: CardKit): string {
       '<span class="cc-line-r cc-due"><b>' + k.fmtMoney(p.owed) + "</b> due</span></div>";
   }
 
-  let stages = insts.map((it) => stageHtml(p, it, state, next, k)).join("");
+  let stages = insts.map((it, i) => stageHtml(p, it, i, state, next, k)).join("");
   // Signed with no schedule: the balance is the one thing to collect.
   if (!stages && state === "collect") {
     stages =
