@@ -13,9 +13,9 @@
 //
 // The rail is React state. All five panes stay MOUNTED and are shown/hidden
 // by `.pane` / `.pane.on`, so field text survives a trip through another tab.
-// `?tab=payments` (and `&sub=stripe`) opens a rail/subtab on arrival — the
-// OAuth callbacks land here after connecting Stripe or Square — and a pane
-// can jump elsewhere through `navigate` (Payments → "Manage" → Integrations).
+// `?tab=integrations` (and `&sub=stripe`) opens a rail/subtab on arrival — the
+// OAuth callbacks land on the old `?tab=payments`, which opens Integrations /
+// Payments — and a pane can jump elsewhere through `navigate`.
 //
 // The donor's "Help center" page action is gone: it never led anywhere.
 
@@ -28,16 +28,15 @@ import { SettingsSprite } from "./sprite";
 import {
   DEFAULT_RAIL,
   PAGE_TITLE,
-  PAYMENT_SUB_KEYS,
   RAIL_ITEMS,
   RAIL_NEW_BADGE,
+  railKeyFor,
   type PaneProps,
   type RailKey,
   type SettingsData,
   type SubTabKey,
 } from "./settings-data";
 import { AccountPane } from "./panes/account-pane";
-import { PaymentsPane } from "./panes/payments-pane";
 import { BillingPane } from "./panes/billing-pane";
 import { IntegrationsPane } from "./panes/integrations-pane";
 import { NotificationsPane } from "./panes/notifications-pane";
@@ -47,7 +46,6 @@ import { WebsitePane } from "./panes/website-pane";
 
 const PANE_BODIES: Record<RailKey, ComponentType<PaneProps>> = {
   account: AccountPane,
-  payments: PaymentsPane,
   billing: BillingPane,
   integrations: IntegrationsPane,
   notifications: NotificationsPane,
@@ -57,8 +55,7 @@ const PANE_BODIES: Record<RailKey, ComponentType<PaneProps>> = {
   website: WebsitePane,
 };
 
-const RAIL_KEYS = new Set<string>(RAIL_ITEMS.map((r) => r.key));
-const SUB_KEYS = new Set<string>(["gmail", "meta", "ramp", "stripe", "square", "stax", "financing"]);
+const SUB_KEYS = new Set<string>(["getpaid", "gmail", "meta", "ramp", "stripe", "square", "stax", "financing"]);
 
 export function SettingsContent({
   data,
@@ -79,22 +76,16 @@ export function SettingsContent({
     square: params.get("square") ?? undefined,
     financing: params.get("financing") ?? undefined,
   };
-  // A processor sub-tab (?sub=stripe|square|stax) always means Payments now —
-  // older links still say ?tab=integrations (owner, 2026-09-26).
-  const payProvider = Boolean(subParam && PAYMENT_SUB_KEYS.has(subParam as SubTabKey));
+  // A sub-tab (?sub=stripe|gmail|…) always means Integrations / Payments.
   const [active, setActive] = useState<RailKey>(
-    payProvider
-      ? "payments"
-      : tabParam && RAIL_KEYS.has(tabParam)
-        ? (tabParam as RailKey)
-        : (initialPane ?? DEFAULT_RAIL),
+    subParam && SUB_KEYS.has(subParam) ? "integrations" : (railKeyFor(tabParam) ?? initialPane ?? DEFAULT_RAIL),
   );
   const [sub, setSub] = useState<SubTabKey | undefined>(
     subParam && SUB_KEYS.has(subParam) ? (subParam as SubTabKey) : undefined,
   );
 
   const navigate = (rail: RailKey, next?: SubTabKey) => {
-    setActive(next && PAYMENT_SUB_KEYS.has(next) ? "payments" : rail);
+    setActive(rail);
     if (next) setSub(next);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   };

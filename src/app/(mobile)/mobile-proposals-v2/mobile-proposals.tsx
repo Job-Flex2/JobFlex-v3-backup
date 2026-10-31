@@ -1614,8 +1614,8 @@ export function MobileProposals({ rows }: { rows?: ProposalRow[] }) {
             </p>
             {invAsk.err ? <p className={styles.psendErr} role="alert">{invAsk.err}</p> : null}
             {([
-              ["card", "i-card", styles.pmiBpSolid, "Card", invOpts?.card ? `Hosted checkout · ${invOpts.cardVia.join(" / ")}` : "No card processor connected — Settings → Payments", !invOpts?.card],
-              ["bank", "i-out", styles.pmiBp, "Bank transfer", invOpts?.bank ? "Your transfer details go in the email" : "Add bank-transfer instructions in Settings → Payments", !invOpts?.bank],
+              ["card", "i-card", styles.pmiBpSolid, "Card", invOpts?.card ? `Hosted checkout · ${invOpts.cardVia.join(" / ")}` : "No card processor connected — Settings → Integrations / Payments", !invOpts?.card],
+              ["bank", "i-out", styles.pmiBp, "Bank transfer", invOpts?.bank ? "Your transfer details go in the email" : "Add bank-transfer instructions in Settings → Integrations / Payments", !invOpts?.bank],
               ["any", "i-send", styles.pmiOkSolid, "Client's choice", "Card or bank — they pick on the page", !(invOpts?.card || invOpts?.bank)],
             ] as const).map(([method, icon, tone, title, sub, off]) => (
               <button key={method} className={styles.pmenuItem} type="button" disabled={writing || !invOpts || off}

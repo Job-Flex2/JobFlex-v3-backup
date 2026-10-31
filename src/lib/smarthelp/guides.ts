@@ -114,8 +114,8 @@ export const GUIDES: Guide[] = [
     needs: "payments",
     steps: [
       {
-        text: "Open Settings → Payments. On a computer you’ll see tabs for Stripe, Square and Stax; on a phone, the Get paid card.",
-        open: "/dashboard/settings?pane=payments",
+        text: "Open Settings → Integrations / Payments. You’ll see tabs for Stripe, Square and Stax.",
+        open: "/dashboard/settings?pane=integrations&sub=stripe",
         show: "payments:processors",
       },
       {

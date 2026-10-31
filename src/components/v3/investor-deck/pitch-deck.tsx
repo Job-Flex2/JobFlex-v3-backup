@@ -329,7 +329,7 @@ export function PitchDeck({ data, offer }: { data: PitchData; offer: ReactNode }
             <div>
               <h2 className={s.title}>Clients pay over time. Contractors are paid in full. JobFlex earns a share.</h2>
               <ol className={s.market2}>
-                <li><i>Contractor</i><b>Approved once, inside JobFlex</b><span>Settings → Payments → Financing: the application arrives filled in with what JobFlex knows; the lender approves the business once.</span></li>
+                <li><i>Contractor</i><b>Approved once, inside JobFlex</b><span>Settings → Integrations / Payments → Financing: the application arrives filled in with what JobFlex knows; the lender approves the business once.</span></li>
                 <li><i>Client</i><b>&ldquo;Pay over time&rdquo; on the proposal</b><span>On their phone, the amount filled in; checking the rate doesn&apos;t touch their credit score. Jobs from {dollars(FINANCING.jobMinCents)} to {dollars(FINANCING.jobMaxCents)}.</span></li>
                 <li><i>JobFlex</i><b>Paid on every financed job</b><span>The contractor is paid in full 1–3 business days after the job; the lender carries the loan — JobFlex never lends. The lender pays its software partners a share: our target is {FINANCING.shareLowPct}–{FINANCING.shareHighPct}% of each financed job.</span></li>
               </ol>

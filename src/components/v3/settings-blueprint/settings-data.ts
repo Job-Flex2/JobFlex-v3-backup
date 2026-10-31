@@ -130,7 +130,6 @@ export const COPIED_LABEL = 'Copied' as const;
 
 export type RailKey =
   | 'account'
-  | 'payments'
   | 'billing'
   | 'integrations'
   | 'notifications'
@@ -151,9 +150,9 @@ export interface RailItem {
 
 export const RAIL_ITEMS: readonly RailItem[] = [
   { key: 'account', label: 'Account', icon: 'i-users' },
-  { key: 'payments', label: 'Payments', icon: 'i-card' },
   { key: 'billing', label: 'Billing', icon: 'i-receipt' },
-  { key: 'integrations', label: 'Integrations', icon: 'i-globe' },
+  // Payments joined Integrations on 2026-10-30 (owner): one section, the processors are its Stripe / Square / Stax tabs.
+  { key: 'integrations', label: 'Integrations / Payments', icon: 'i-globe' },
   { key: 'notifications', label: 'Notifications', icon: 'i-bell' },
   // Texting left Settings on 2026-10-16 for its own page, /dashboard/texting (sidebar → Automation, under AI desk);
   // ?pane=texting and ?tab=texting redirect there (app/dashboard/settings/page.tsx).
@@ -167,6 +166,13 @@ export const RAIL_ITEMS: readonly RailItem[] = [
 ];
 
 export const RAIL_NEW_BADGE = 'NEW' as const;
+
+/** A ?tab= / ?pane= value as a rail key. `payments` is the section's old name — the OAuth returns, emails and
+ *  guides still link to it — and opens Integrations / Payments. */
+export function railKeyFor(raw: string | null | undefined): RailKey | undefined {
+  if (raw === 'payments') return 'integrations';
+  return RAIL_ITEMS.some((r) => r.key === raw) ? (raw as RailKey) : undefined;
+}
 
 /** Donor default `.kicker` text (matches the initially active rail item). */
 export const DEFAULT_RAIL: RailKey = 'account';
@@ -568,7 +574,8 @@ export const BILLING_CONTACT_LABELS = { billingEmail: 'Billing email' } as const
 /* Integrations pane — subtabs                                         */
 /* ------------------------------------------------------------------ */
 
-export type SubTabKey = 'gmail' | 'meta' | 'ramp' | 'stripe' | 'square' | 'stax' | 'financing';
+/** `getpaid` is the phone's Get paid tab (processor summary, bank transfer, defaults); the desktop has no such tab. */
+export type SubTabKey = 'getpaid' | 'gmail' | 'meta' | 'ramp' | 'stripe' | 'square' | 'stax' | 'financing';
 
 export interface SubTab {
   readonly key: SubTabKey;
@@ -598,26 +605,12 @@ export const INTEGRATION_SUBTABS: readonly SubTab[] = [
   { key: 'stax', label: 'Stax' },
 ];
 
-/** Add Gmail for viewers who can use or reconnect it. */
-export function integrationSubTabs(show: { gmail: boolean }): readonly SubTab[] {
+/** Add Gmail for viewers who can use or reconnect it, and Financing (Wisetack, 2026-10-28) once JobFlex lets the account in. */
+export function integrationSubTabs(show: { gmail: boolean; financing?: boolean }): readonly SubTab[] {
   const lead: SubTab[] = [];
   if (show.gmail) lead.push({ key: 'gmail', label: 'Gmail' });
-  return [...lead, ...INTEGRATION_SUBTABS];
-}
-
-export const DEFAULT_SUBTAB: SubTabKey = 'stripe';
-
-/* DESKTOP SPLIT (owner, 2026-09-26): the three payment processors moved from
-   Integrations into the Payments pane; Integrations keeps Gmail and Meta. The
-   handheld build still reads integrationSubTabs() above, unchanged. */
-export const PAYMENT_SUB_KEYS: ReadonlySet<SubTabKey> = new Set<SubTabKey>(['stripe', 'square', 'stax', 'financing']);
-export const PAYMENT_SUBTABS: readonly SubTab[] = INTEGRATION_SUBTABS.filter((t) => PAYMENT_SUB_KEYS.has(t.key));
-/** The Payments strip: the three processors, and Financing (Wisetack, 2026-10-28) once JobFlex lets the account in. */
-export function paymentSubTabs(show: { financing: boolean }): readonly SubTab[] {
-  return show.financing ? [...PAYMENT_SUBTABS, { key: 'financing', label: 'Financing' }] : PAYMENT_SUBTABS;
-}
-export function connectionSubTabs(show: { gmail: boolean }): readonly SubTab[] {
-  return integrationSubTabs(show).filter((t) => !PAYMENT_SUB_KEYS.has(t.key));
+  const tail: SubTab[] = show.financing ? [{ key: 'financing', label: 'Financing' }] : [];
+  return [...lead, ...INTEGRATION_SUBTABS, ...tail];
 }
 
 export function isVisibleSubTab(key: SubTabKey | undefined, tabs: readonly SubTab[] = INTEGRATION_SUBTABS): boolean {

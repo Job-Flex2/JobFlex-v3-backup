@@ -2037,12 +2037,12 @@ export function initProposalsContent(
     if (card) {
       card.disabled = !invOpts.card;
       const sub = card.querySelector(".inv-sub");
-      if (sub) sub.textContent = invOpts.card ? "Hosted checkout · " + invOpts.cardVia.join(" / ") : "No card processor connected — Settings → Payments";
+      if (sub) sub.textContent = invOpts.card ? "Hosted checkout · " + invOpts.cardVia.join(" / ") : "No card processor connected — Settings → Integrations / Payments";
     }
     if (bank) {
       bank.disabled = !invOpts.bank;
       const sub = bank.querySelector(".inv-sub");
-      if (sub) sub.textContent = invOpts.bank ? "Your transfer details go in the email; the portal shows only those" : "Add bank-transfer instructions in Settings → Payments";
+      if (sub) sub.textContent = invOpts.bank ? "Your transfer details go in the email; the portal shows only those" : "Add bank-transfer instructions in Settings → Integrations / Payments";
     }
     if (any) any.disabled = !(invOpts.card || invOpts.bank);
   }
