@@ -13,17 +13,7 @@ import { LeadStatus } from "@/lib/prismaEnums";
 import { enforcePlanLimit } from "@/lib/limitsEngine";
 import { requirePage } from "@/lib/customPageAccess";
 import { callLead } from "@/lib/aiDesk/leadCalls";
-
-// Sales reps may only act on leads inside their visibility slice: assigned to
-// them, claimed by them, or still NEW in the shared pool. Managers see it all.
-function salesCanTouchLead(
-  lead: { assignedToId: string | null; claimedById: string | null; status: string },
-  userId: string,
-): boolean {
-  return (
-    lead.assignedToId === userId || lead.claimedById === userId || lead.status === LeadStatus.NEW
-  );
-}
+import { salesCanTouchLead } from "@/lib/leads/salesAccess";
 
 const statusSchema = z.enum([
   LeadStatus.NEW,
