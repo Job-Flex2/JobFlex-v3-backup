@@ -1173,6 +1173,10 @@ export function MobileLeads() {
                       </span>
                       {leadSide(l.source) === "jobflex" ? (
                         <span className={`${styles.lsrc} ${styles.lsrcJf}`}><i aria-hidden="true" />JobFlex</span>
+                      ) : leadSourceOf(l.source).key === "facebook" ? (
+                        <span className={`${styles.lsrc} ${styles.lsrcFb}`} style={{ "--t": leadSourceOf(l.source).tone } as React.CSSProperties} title="From your Facebook lead ads">
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" /></svg>Facebook
+                        </span>
                       ) : (
                         <span className={styles.lsrc}>
                           <i style={{ "--t": leadSourceOf(l.source).tone } as React.CSSProperties} aria-hidden="true" />

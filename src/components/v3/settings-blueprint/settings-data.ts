@@ -1448,6 +1448,8 @@ export interface MetaData {
   canManage: boolean;
   canResume: boolean;
   lastImportAt: string | null;
+  /** New Facebook leads come into Leads by themselves (lib/meta/autoImport, the cron every 5 minutes). */
+  autoImport: boolean;
 }
 
 /** The deep view of one payment link (Integrations → Stripe / Square). */

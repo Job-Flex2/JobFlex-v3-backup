@@ -57,6 +57,7 @@ import { financingReadiness, orgFinancingView } from "@/lib/financing/service";
 import { deskAnswerState } from "@/lib/financing/desk";
 import {
   parseGmailSettings,
+  parseMetaSettings,
   parsePaymentSettings,
 } from "@/lib/settings";
 import type { Badge, BillingData, DeskSettingsData, SettingsData, SmsRosterRow, SmsSettingsData } from "@/components/v3/settings-blueprint/settings-data";
@@ -270,6 +271,7 @@ export async function loadSettingsData(ctx: SettingsOrgContext, opts: { billingL
         orgName: org.name,
         defaultPage: meta.pageName,
         formCategory: "auto",
+        autoImport: meta.connected && parseMetaSettings(org.metaSettingsJson).autoCreate,
       },
       ramp: { ...ramp, canManage: isOwnerOrManager(role) },
       stripe: {
