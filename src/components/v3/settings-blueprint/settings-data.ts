@@ -1607,8 +1607,8 @@ export const PROCESSOR_OAUTH_NOTICE: Record<string, { title: string; sub: string
 };
 
 export const GMAIL_REVOKED_NOTE = {
-  title: 'Gmail disconnected — emails are going from the JobFlex address',
-  sub: 'Google no longer accepts the connection (the permission was removed or expired). Reconnect to send from your own address again.',
+  title: 'Reconnect Gmail to send from your own address',
+  sub: 'Google ended JobFlex’s access — usually after a Gmail password change or when access is removed in your Google account. Emails still go out from the JobFlex address meanwhile. Press Reconnect Gmail and approve; it takes a few seconds.',
 } as const;
 export const GMAIL_RECONNECT_ACTION: ActionSpec = { label: 'Reconnect Gmail', icon: 'i-google' };
 export const GMAIL_TEST_ACTION: ActionSpec = { label: 'Send test email' };
