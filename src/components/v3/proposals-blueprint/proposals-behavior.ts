@@ -63,7 +63,7 @@ import { mountIsland, type Island } from "@/components/v3/blueprint-shell/react-
 import { clientProposalUrl } from "@/lib/proposalLink";
 import { whoHtml } from "@/lib/team/who";
 import { familyCounts, kindWord, type WorkFamily } from "@/lib/proposalKind";
-import { CARD_RENDERERS, type CardKit } from "./cards";
+import { CARD_RENDERERS, type CardKit, type CardRenderer } from "./cards";
 import {
   PAGE_ACC,
   PAGE_ALL,
@@ -211,9 +211,10 @@ export function initProposalsContent(
   function fmtMoney(n: number) {
     return "$" + Math.round(n).toLocaleString("en-US");
   }
-  // All-list card variants under review (2026-10-30, cards/card-kit.ts): ?card=a|b|c.
-  const cardVariant = CARD_RENDERERS[new URLSearchParams(window.location.search).get("card") ?? ""] ?? null;
-  if (cardVariant) root.dataset.card = new URLSearchParams(window.location.search).get("card") ?? "";
+  // All-list card variants under review (2026-10-30, cards/card-kit.ts): ?card=a..f.
+  const cardParam = new URLSearchParams(window.location.search).get("card") ?? "";
+  const cardVariant: CardRenderer | null = Object.prototype.hasOwnProperty.call(CARD_RENDERERS, cardParam) ? CARD_RENDERERS[cardParam] : null;
+  if (cardVariant) root.dataset.card = cardParam;
   const cardKit: CardKit = {
     esc,
     fmtMoney,
