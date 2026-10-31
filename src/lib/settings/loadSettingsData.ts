@@ -50,6 +50,7 @@ import type { SmsRegistrationView } from "@/lib/sms/registrationShared";
 import { isSecretBoxConfigured } from "@/lib/crypto/secretBox";
 import { metaAllowed } from "@/lib/meta/graph";
 import { metaConnectionView } from "@/lib/meta/connections";
+import { rampConnectionView } from "@/lib/ramp/connection";
 import { getPaymentConnectionStatus } from "@/lib/payments/connections";
 import { parseNotificationPrefs } from "@/lib/notificationPrefsShared";
 import { financingReadiness, orgFinancingView } from "@/lib/financing/service";
@@ -184,6 +185,7 @@ export async function loadSettingsData(ctx: SettingsOrgContext, opts: { billingL
   const payment = parsePaymentSettings(org.paymentSettingsJson);
   const gmail = parseGmailSettings(org.gmailSettingsJson);
   const meta = await metaConnectionView(organizationId, user.id);
+  const ramp = await rampConnectionView(organizationId);
   const gmailConnected = Boolean(org.gmailTokensJson);
 
   const isOwner = isOwnerRole(role);
@@ -269,6 +271,7 @@ export async function loadSettingsData(ctx: SettingsOrgContext, opts: { billingL
         defaultPage: meta.pageName,
         formCategory: "auto",
       },
+      ramp: { ...ramp, canManage: isOwnerOrManager(role) },
       stripe: {
         key: "stripe",
         // Usable by OAuth (Connect configured) or by a pasted key (secret box).

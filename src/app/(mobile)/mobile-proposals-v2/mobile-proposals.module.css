@@ -284,6 +284,20 @@
   transition: transform 0.34s var(--ease-soft);
   pointer-events: none;
 }
+/* THE TABS, BIGGER AND IN COLOUR (owner, 2026-10-29: "a bit bigger, and add a bit of colour") — the desk's
+   colours: All blueprint blue, Accepted green, Done the darker paid green, on the count, the open tab's tint and
+   the sliding rule under it. At 320px the label stays 13px so "Accepted" and its count still fit a third. */
+.ptab { --tab: var(--blueprint); min-height: 54px; font-size: 14px; }
+.ptab[data-tab="accepted"] { --tab: var(--success); }
+.ptab[data-tab="completed"] { --tab: var(--success-dark, #2c5f34); }
+.ptab .ptabCount { height: 21px; border-color: color-mix(in srgb, var(--tab) 35%, #fff); background: color-mix(in srgb, var(--tab) 10%, #fff); color: var(--tab); font-weight: 700; }
+.ptab.active { background: color-mix(in srgb, var(--tab) 10%, var(--paper)); }
+.ptab.active .ptabCount { border-color: var(--tab); background: var(--tab); color: #fff; }
+.ptabs { --ind: var(--blueprint); }
+.ptabs[data-active="accepted"] { --ind: var(--success); }
+.ptabs[data-active="completed"] { --ind: var(--success-dark, #2c5f34); }
+.ptabs .ptabInd { height: 4px; background: var(--ind); transition: transform 0.34s var(--ease-soft), background 0.2s; }
+@media (max-width: 340px) { .ptab { font-size: 13px; } }
 /* ============================================================
    FILTER — one dropdown instead of a six-chip rail (owner's call,
    2026-07-29). Custom .dd, never a native select: a button with a
@@ -1318,16 +1332,27 @@
   display: flex; align-items: center; gap: 10px;
   margin-top: 10px;
 }
-.mSentStamp { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--success-dark, #2c6335); }
-.mSentStamp svg { width: 15px; height: 15px; }
-.mSentAgain {
-  margin-left: auto;
+.mSentSwap {
+  display: inline-grid; grid-template-columns: auto; align-items: center;
   min-height: 44px; padding: 0 14px;
   border: 1.5px solid var(--success); border-radius: var(--radius);
   background: var(--success-soft); color: var(--success-dark, #2c6335);
-  font-size: 12.5px; font-weight: 800;
+  font-size: 13px; font-weight: 800; cursor: pointer;
 }
-.mSentAgain:active { background: var(--success); color: #fff; }
+.mSwapSent, .mSwapResend { grid-area: 1 / 1; display: inline-flex; align-items: center; gap: 6px; transition: opacity 0.12s var(--ease); }
+.mSwapSent svg, .mSwapResend svg { width: 15px; height: 15px; }
+.mSwapResend { opacity: 0; justify-content: center; }
+.mSentSwap:hover, .mSentSwap:focus-visible { background: var(--blueprint); border-color: var(--blueprint); color: #fff; }
+.mSentSwap:hover .mSwapSent, .mSentSwap:focus-visible .mSwapSent { opacity: 0; }
+.mSentSwap:hover .mSwapResend, .mSentSwap:focus-visible .mSwapResend { opacity: 1; }
+@media (hover: none) {
+  .mSentSwap { grid-template-columns: auto auto; column-gap: 12px; }
+  .mSwapResend { grid-area: 1 / 2; opacity: 1; padding-left: 12px; border-left: 1.5px solid currentColor; color: var(--blueprint); }
+  .mSentSwap:hover, .mSentSwap:focus-visible { background: var(--success-soft); border-color: var(--success); color: var(--success-dark, #2c6335); }
+  .mSentSwap:hover .mSwapSent { opacity: 1; }
+  .mSentSwap:active { background: var(--blueprint); border-color: var(--blueprint); color: #fff; }
+  .mSentSwap:active .mSwapResend { color: #fff; }
+}
 
 .mPay {
   grid-column: 1 / -1;
@@ -1380,4 +1405,4 @@
 .mActPaid:active:not(:disabled) { background: var(--success); color: #fff; }
 .mActInv:active:not(:disabled) { background: var(--blueprint); color: #fff; }
 .mActRem:active:not(:disabled) { background: var(--warning); color: #fff; }
-.mSend:focus-visible, .mSentAgain:focus-visible, .mPayAct:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 2px; }
+.mSend:focus-visible, .mSentSwap:focus-visible, .mPayAct:focus-visible { outline: 2px solid var(--blueprint); outline-offset: 2px; }

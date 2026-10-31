@@ -19,6 +19,7 @@ import { clip, companyHelpText, helpText, isHelpWord, isStartWord, isStopWord, r
 import { sendText, textOfficeNow } from "@/lib/sms/send";
 import { planTaskReply } from "@/lib/adminTasks/textReply";
 import { deliverTaskReply } from "@/lib/adminTasks/team";
+import { deliverRampReply, planRampReply } from "@/lib/ramp/sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,6 +61,18 @@ export async function POST(req: Request) {
       if (isStartWord(body)) await db.smsOptOut.deleteMany({ where: { phone: from } }).catch(() => null);
       const base = await appBaseUrl();
       after(() => deliverTaskReply(plan, base));
+      return twiml();
+    }
+  }
+  // A tech answering "which job was that swipe for?" (lib/ramp/sync, 2026-10-29): booked, and answered.
+  if (!isHelpWord(body) && !isStartWord(body)) {
+    const ramp = await planRampReply(from, body).catch((err) => {
+      console.error("[sms] ramp reply failed:", err instanceof Error ? err.message : err);
+      return { handled: false as const };
+    });
+    if (ramp.handled) {
+      await db.smsMessage.create({ data: { organizationId: ramp.organizationId, direction: "IN", to, from, body, kind: "ramp-which-job-reply", status: "RECEIVED", sid } }).catch(() => null);
+      after(() => deliverRampReply(ramp));
       return twiml();
     }
   }
