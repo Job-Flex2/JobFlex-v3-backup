@@ -77,7 +77,7 @@ function jobHtml(p: ProposalRow, chain: string, k: CardKit): string {
   return (
     '<div class="cc-job">' +
     k.kindHtml(p) +
-    '<a class="cc-title" href="' + k.esc(k.proposalHref(p.id)) + '">' + k.esc(p.title) + "</a>" +
+    '<a class="cc-title" href="' + k.esc(k.proposalHref(p.id)) + '" title="' + k.esc(p.title) + '">' + k.esc(p.title) + "</a>" +
     (sub ? '<div class="cc-sub">' + k.esc(sub) + "</div>" : "") +
     k.clientDesignHtml(p) +
     '<dl class="cc-facts">' + facts.join("") + "</dl>" +
