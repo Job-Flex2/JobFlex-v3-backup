@@ -271,6 +271,12 @@ export function initLeadsContent(
       ? '<span class="lsrc-b lsrc-b--jobflex" title="Sent to you by JobFlex"><i></i>JobFlex</span>'
       : '<span class="lsrc-b" title="' + esc(s.label) + '"><i style="--t:' + s.tone + '"></i>' + esc(s.short) + "</span>";
   }
+  /** SmartBook's word for the lead (2026-10-31) under its stage: the same flat dot and plain text as the source tag. */
+  const SMART_TONE: Record<string, string> = { accent: "var(--accent)", amber: "var(--amber)", emerald: "var(--emerald)", muted: "var(--ink-faint)" };
+  function smartTag(s: Lead["smart"]) {
+    if (!s) return "";
+    return '<span class="lsb-b" title="SmartBook: ' + esc(s.label) + '"><i style="--t:' + (SMART_TONE[s.tone] ?? SMART_TONE.muted) + '"></i>SmartBook · ' + esc(s.label) + "</span>";
+  }
   function initials(n: string) {
     const p = n
       .replace(/[^A-Za-z. ]/g, "")
@@ -608,7 +614,9 @@ export function initLeadsContent(
             l.status.toLowerCase() +
             '">' +
             l.status +
-            "</span></td>" +
+            "</span>" +
+            smartTag(l.smart) +
+            "</td>" +
             '<td><span class="pt-mono">' +
             esc(l.assignee || "—") +
             "</span></td>" +

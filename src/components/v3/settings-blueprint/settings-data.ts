@@ -135,7 +135,8 @@ export type RailKey =
   | 'notifications'
   | 'desk'
   | 'estimating'
-  | 'website';
+  | 'website'
+  | 'smartbook';
 
 export interface RailItem {
   readonly key: RailKey;
@@ -154,6 +155,9 @@ export const RAIL_ITEMS: readonly RailItem[] = [
   // Payments joined Integrations on 2026-10-30 (owner): one section, the processors are its Stripe / Square / Stax tabs.
   { key: 'integrations', label: 'Integrations / Payments', icon: 'i-globe' },
   { key: 'notifications', label: 'Notifications', icon: 'i-bell' },
+  // SmartBook (2026-10-31): new leads — Facebook, the website estimators, Lead Center, the AI desk — get open times
+  // from the calendar by text and email and book themselves; a time they name comes to the company to confirm.
+  { key: 'smartbook', label: 'SmartBook', icon: 'i-cal', isNew: true, sub: 'New leads get open times from your calendar by text and email and book themselves. A time they name comes to you first.' },
   // Texting left Settings on 2026-10-16 for its own page, /dashboard/texting (sidebar → Automation, under AI desk);
   // ?pane=texting and ?tab=texting redirect there (app/dashboard/settings/page.tsx).
   // Estimating (2026-10-16): the company's own estimating method — labor by the crew-hour or person-hour, its markup,
@@ -773,6 +777,7 @@ export const NOTIFICATION_ICONS: Record<PrefKey, IconName> = {
   'trade-reply': 'i-board',
   'appointment-booked': 'i-cal',
   'booking-online': 'i-cal',
+  'smartbook-request': 'i-cal',
   'appointment-moved': 'i-clock',
   'service-reminder': 'i-check',
   // Text-only crew events (never in the matrix) — listed so the map is total.

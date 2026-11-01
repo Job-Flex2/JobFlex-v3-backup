@@ -1,6 +1,7 @@
 // The call is over: the transcript and outcome (lib/aiDesk/liveCall finishCall).
 import { finishCall, type CallOutcome } from "@/lib/aiDesk/liveCall";
 import { finishOutreachCall } from "@/lib/outreach/server";
+import { finishSmartBookCall, leadForToken } from "@/lib/smartbook/phone";
 import { deskRequest, json, str } from "../route-helpers";
 
 export const runtime = "nodejs";
@@ -21,6 +22,14 @@ export async function POST(req: Request) {
     return json({ ok: true });
   }
   const booked = r.body.booked && typeof r.body.booked === "object" ? { appointmentId: str((r.body.booked as Record<string, unknown>).appointmentId, 60) } : null;
-  await finishCall({ callSid: r.token.callSid, organizationId: r.token.organizationId }, { outcome, transcript, seconds: Number(r.body.seconds) || 0, booked: booked?.appointmentId ? booked : null, messageTaken: r.body.messageTaken === true, error: str(r.body.error, 300) || null });
+  const input = { outcome, transcript, seconds: Number(r.body.seconds) || 0, booked: booked?.appointmentId ? booked : null, messageTaken: r.body.messageTaken === true, error: str(r.body.error, 300) || null };
+  // SmartBook's own call to a lead: the company's minutes, and how it went on the lead (lib/smartbook/phone).
+  if (r.token.kind === "smartbook") {
+    await finishSmartBookCall(r.token, input);
+    return json({ ok: true });
+  }
+  // A lead SmartBook is scheduling called in: their lead is on file — the transcript never makes a second one.
+  const noLead = !!(await leadForToken(r.token).catch(() => null));
+  await finishCall({ callSid: r.token.callSid, organizationId: r.token.organizationId }, { ...input, noLead });
   return json({ ok: true });
 }

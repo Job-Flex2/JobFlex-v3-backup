@@ -11,8 +11,10 @@ export type CallToken = {
   organizationId: string;
   from: string;
   exp: number;
-  /** "outreach" (2026-10-23): JobFlex's own call to a contractor (lib/outreach) — `ref` is the contractor's record. Absent: a company's desk answering its own line. */
-  kind?: "outreach";
+  /** "outreach" (2026-10-23): JobFlex's own call to a contractor (lib/outreach) — `ref` is the contractor's record.
+   *  "smartbook" (2026-10-31): SmartBook's one call to a lead who hasn't answered (lib/smartbook/phone) — `ref` is the lead.
+   *  Absent: a company's desk answering its own line. */
+  kind?: "outreach" | "smartbook";
   ref?: string;
 };
 

@@ -43,6 +43,7 @@ import { NotificationsPane } from "./panes/notifications-pane";
 import { DeskPane } from "./panes/desk-pane";
 import { EstimatingPane } from "./panes/estimating-pane";
 import { WebsitePane } from "./panes/website-pane";
+import { SmartBookPane } from "./panes/smartbook-pane";
 
 const PANE_BODIES: Record<RailKey, ComponentType<PaneProps>> = {
   account: AccountPane,
@@ -53,6 +54,7 @@ const PANE_BODIES: Record<RailKey, ComponentType<PaneProps>> = {
   desk: DeskPane,
   estimating: EstimatingPane,
   website: WebsitePane,
+  smartbook: SmartBookPane,
 };
 
 const SUB_KEYS = new Set<string>(["getpaid", "gmail", "meta", "ramp", "stripe", "square", "stax", "financing"]);

@@ -159,6 +159,7 @@ import "./mobile-settings.css";
 import { isRefusal } from "@/lib/actionResult";
 import { CompanyPricingForm } from "@/components/v3/company-pricing/company-pricing-form";
 import { WebEstimatorForm } from "@/components/v3/web-estimator/web-estimator-form";
+import { SmartBookSettingsForm } from "@/components/v3/smartbook/smartbook-settings";
 
 /* ══════════════════════════ small shared bits ══════════════════════════ */
 
@@ -1262,6 +1263,7 @@ const RAIL_ICON: Record<RailKey, IconName> = {
   desk: "i-phone",
   estimating: "i-hardhat",
   website: "i-globe",
+  smartbook: "i-cal",
 };
 
 export function MobileSettings({
@@ -1502,6 +1504,10 @@ export function MobileSettings({
                 <WebsitePaneMobile />
               </div>
             ) : null}
+            {/* SmartBook (2026-10-31): the desk pane's own form, a phone's width. */}
+            <div className={active === "smartbook" ? "mst-pane is-on" : "mst-pane"} id="smartbook">
+              <SmartBookSettingsForm mobile onOpen={(where) => (where === "meta" ? navigate("integrations", "meta") : navigate("notifications"))} />
+            </div>
           </div>
 
           {/* Log out — the last thing on the page, in every section. Same

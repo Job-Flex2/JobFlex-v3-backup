@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { isSalesRole, isWorkerRole, NoOrgError, requireOrg, UnauthorizedError } from "@/lib/orgContext";
+import { isEstimatorRole, isSalesRole, isWorkerRole, NoOrgError, requireOrg, UnauthorizedError } from "@/lib/orgContext";
 import { longDate } from "@/lib/format";
 import { contactsLocked } from "@/lib/leadCenter/contacts";
 import { LeadDetailContent } from "@/components/v3/lead-detail-blueprint/lead-detail-content";
@@ -10,6 +10,7 @@ import { findClientForLead } from "@/lib/leadClient";
 import { customPageGate } from "@/components/v3/upgrade-gate/custom-page-gate";
 import { HANDOFF_WORDS, WEB_LEAD_SOURCE, WEB_TRADE, bandWords } from "@/lib/webEstimator";
 import { readWebLead } from "@/lib/webEstimatorServer";
+import { leadSmartBook } from "@/lib/smartbook/office";
 
 // ONE LEAD (2026-09-22) — under the blueprint shell, the same design as the
 // Leads list it opens from. Session-scoped, never static.
@@ -81,8 +82,11 @@ export default async function LeadDetailPage({
   const website = web
     ? { trade: web.trade, estimator: WEB_TRADE[web.trade].name.replace(" on your website", ""), summary: web.estimate.summary, choice: web.estimate.choice, price: bandWords(web.estimate.band), show: web.estimate.show, note: web.contact.note, handoff: HANDOFF_WORDS[web.trade], house: lead.source !== WEB_LEAD_SOURCE }
     : null;
+  // SmartBook's card (2026-10-31): for the roles that work leads, once the contacts are open.
+  const smartbook = !locked && !isWorkerRole(role) && !isEstimatorRole(role) ? await leadSmartBook(organizationId, lead.id).catch(() => null) : null;
   return (
     <LeadDetailContent
+      smartbook={smartbook}
       website={website}
       folder={folder}
       lead={{

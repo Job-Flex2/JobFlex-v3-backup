@@ -130,6 +130,18 @@ const STATUS_TONE: Record<string, string> = {
   ARCHIVED: styles.lstArchived,
 };
 
+/** SmartBook's word for the lead (2026-10-31): the source tag's flat dot and plain text, as on the desk table. */
+const SMART_DOT: Record<string, string> = { accent: "var(--accent)", amber: "var(--amber)", emerald: "var(--emerald)", muted: "var(--muted-light)" };
+function SmartTag({ s }: { s: Lead["smart"] }) {
+  if (!s) return null;
+  return (
+    <span className={styles.lsb}>
+      <i style={{ "--t": SMART_DOT[s.tone] ?? SMART_DOT.muted } as React.CSSProperties} aria-hidden="true" />
+      SmartBook · {s.label}
+    </span>
+  );
+}
+
 /** The trade tag's percentage doubles as a fill gauge, as on the desktop sheet. */
 type GaugeStyle = React.CSSProperties & { "--p": string };
 const gauge = (conf: number): GaugeStyle => ({ "--p": `${Math.round(conf * 100)}%` });
@@ -1183,6 +1195,7 @@ export function MobileLeads() {
                     <div className={styles.lrowFoot}>
                       <span className={styles.lrowBadges}>
                         <span className={`${styles.pstatus} ${STATUS_TONE[l.status] ?? ""}`}>{l.status}</span>
+                        <SmartTag s={l.smart} />
                         {l.spec ? (
                           <span className={styles.ltrade} style={gauge(l.conf)}>
                             {l.spec}<b className={styles.ltradePct}>{pct(l.conf)}</b>
@@ -1336,6 +1349,7 @@ export function MobileLeads() {
                           <div className={styles.icardMeta}>
                             {l.age} · {srcLabel(l.source)} · {l.city}
                           </div>
+                          <SmartTag s={l.smart} />
                         </div>
                         <span className={`${styles.pstatus} ${STATUS_TONE[l.status] ?? ""}`}>{l.status}</span>
                       </div>

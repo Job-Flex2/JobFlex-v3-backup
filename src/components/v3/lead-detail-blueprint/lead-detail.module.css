@@ -81,6 +81,9 @@
   box-shadow: 3px 3px 0 var(--shadow);
 }
 
+/* the left column: the contact card, SmartBook's under it */
+:global(.jf-blueprint .content) .col { display: grid; gap: 18px; align-content: start; min-width: 0; }
+
 /* who */
 :global(.jf-blueprint .content) .who { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
 :global(.jf-blueprint .content) .av {

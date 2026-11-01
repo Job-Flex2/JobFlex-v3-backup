@@ -10,6 +10,9 @@
 // Before that, JobFlex's own team (2026-10-15): someone on /admin/tasks' team
 // list answering a task text — OK, DONE, NO, or a note — is answered by
 // lib/adminTasks/textReply and texted back what it did.
+//
+// SmartBook (2026-10-31, lib/smartbook): on a company's own number, a lead answering the times SmartBook offered, or
+// someone on the team answering a request (YES / NO / another time), is SmartBook's — answered after the response.
 
 import { after, NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -20,9 +23,12 @@ import { sendText, textOfficeNow } from "@/lib/sms/send";
 import { planTaskReply } from "@/lib/adminTasks/textReply";
 import { deliverTaskReply } from "@/lib/adminTasks/team";
 import { deliverRampReply, planRampReply } from "@/lib/ramp/sync";
+import { isBareKeyword, smartBookClaim, smartBookReply, type Claim } from "@/lib/smartbook/inbound";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// SmartBook reads a reply and answers it after the response: a model call, the booking, the texts back.
+export const maxDuration = 60;
 
 const twiml = () => new NextResponse("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>", { headers: { "Content-Type": "text/xml" } });
 
@@ -41,6 +47,18 @@ export async function POST(req: Request) {
   const body = (params.Body ?? "").trim();
   const sid = params.MessageSid || null;
   if (!from) return twiml();
+
+  // SmartBook's, on the company's own number. Ahead of STOP for "cancel my visit" (only the bare carrier word opts
+  // out), ahead of START so a "yes" is an answer — and lifts an opt-out, as START would. HELP goes on below.
+  const smartOrg = to && !isHelpWord(body) && (!isStopWord(body) || !isBareKeyword(body)) ? await db.organization.findFirst({ where: { smsFromNumber: to }, select: { id: true } }) : null;
+  const claim: Claim | null = smartOrg ? await smartBookClaim(smartOrg.id, from).catch(() => null) : null;
+  if (smartOrg && claim) {
+    await db.smsMessage.create({ data: { organizationId: smartOrg.id, direction: "IN", to, from, body, kind: "smartbook-reply", status: "RECEIVED", sid } }).catch(() => null);
+    if (isStartWord(body)) await db.smsOptOut.deleteMany({ where: { phone: from } }).catch(() => null);
+    const orgId = smartOrg.id;
+    after(() => smartBookReply(claim, orgId, from, body));
+    return twiml();
+  }
 
   if (isStopWord(body)) {
     await db.smsOptOut.upsert({ where: { phone: from }, create: { phone: from, body: clip(body, 60) }, update: { stoppedAt: new Date(), body: clip(body, 60) } });
