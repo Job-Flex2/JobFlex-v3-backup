@@ -15,6 +15,7 @@ import { findClientForLead } from "@/lib/leadClient";
 import { customPageGate } from "@/components/v3/upgrade-gate/custom-page-gate";
 import { HANDOFF_WORDS, WEB_LEAD_SOURCE, WEB_TRADE, bandWords } from "@/lib/webEstimator";
 import { readWebLead } from "@/lib/webEstimatorServer";
+import { leadSmartBook } from "@/lib/smartbook/office";
 
 // ONE LEAD (2026-09-22) — under the blueprint shell, the same design as the
 // Leads list it opens from. Session-scoped, never static.
@@ -231,9 +232,12 @@ export default async function LeadDetailPage({
     : null;
   // VISITS & CALLS (2026-10-31): book the visit and have the AI desk call — not while the contacts are withheld.
   const visits = locked ? null : await visitsFor({ organizationId, role, userId, lead });
+  // SmartBook's card (2026-10-31): for the roles that work leads, once the contacts are open.
+  const smartbook = !locked && !isWorkerRole(role) && !isEstimatorRole(role) ? await leadSmartBook(organizationId, lead.id).catch(() => null) : null;
   return (
     <LeadDetailContent
       visits={visits}
+      smartbook={smartbook}
       website={website}
       folder={folder}
       lead={{

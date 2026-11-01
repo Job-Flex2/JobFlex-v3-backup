@@ -52,6 +52,10 @@ export const HELP_PAGES: ReadonlyArray<{ path: string; name: string }> = [
   { path: "/dashboard/phone?tab=settings&step=voice", name: "AI desk: Voice & test" },
   { path: "/dashboard/advanced-ai", name: "Smart Proposal" },
   { path: "/dashboard/settings?pane=integrations&sub=meta", name: "Settings: Meta business leads" },
+  // The "Get paid online" guide's first step (guides.ts): Integrations → Stripe.
+  { path: "/dashboard/settings?pane=integrations&sub=stripe", name: "Settings: Stripe" },
+  // SmartBook (2026-10-31): its own Settings item (settings-data RailKey "smartbook").
+  { path: "/dashboard/settings?pane=smartbook", name: "Settings: SmartBook" },
 ];
 
 /** The route part of an app link: drops ?query and #hash. */

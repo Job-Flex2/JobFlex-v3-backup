@@ -10,7 +10,8 @@ export async function POST(req: Request) {
   const r = await deskRequest(req);
   if (!r.ok) return r.res;
   // JobFlex's own outreach call to a contractor (lib/outreach): its own script and tools. The company's desk calling
-  // one of its leads (lib/aiDesk/leadCalls): the desk's own setup, the call turned around.
+  // one of its leads (lib/aiDesk/leadCalls): the desk's own setup, the call turned around —
+  // with what SmartBook has said to them when it is scheduling that lead.
   const brief =
     r.token.kind === "outreach"
       ? await outreachBrief(r.token)

@@ -17,6 +17,8 @@ import { LeadVisits, type LeadVisitsProps } from "./lead-visits";
 import styles from "./lead-detail.module.css";
 import { metaLeadPresentation } from "@/lib/meta/leadPresentation";
 import { leadSourceOf } from "@/lib/leads/sources";
+import { LeadSmartBook } from "@/components/v3/smartbook/lead-smartbook";
+import type { LeadSmartBook as SmartBookView } from "@/lib/smartbook/office";
 
 const cx = (...names: Array<string | false | null | undefined>) =>
   names.filter(Boolean).map((n) => styles[n as string] ?? n).join(" ");
@@ -105,9 +107,12 @@ export type LeadDetailProps = {
   website?: { trade: WebTrade; estimator: string; summary: string; choice: string; price: string; show: "range" | "exact"; note: string | null; handoff: string; house: boolean } | null;
   /** Visits & calls (2026-10-31): the next visit, Schedule visit, Have the AI desk call; null while contacts are locked. */
   visits?: LeadVisitsProps | null;
+  /** SmartBook with this lead (2026-10-31): where it stands, the conversation, Pause / Restart / Offer times. Null
+   *  for the roles that don't work leads (estimators, workers) and for a lead whose contacts are still locked. */
+  smartbook?: SmartBookView | null;
 };
 
-export function LeadDetailContent({ lead, canEstimate, scopeFailed, contactsLocked = false, paid = null, folder = null, website = null, visits = null }: LeadDetailProps) {
+export function LeadDetailContent({ lead, canEstimate, scopeFailed, contactsLocked = false, paid = null, folder = null, website = null, visits = null, smartbook = null }: LeadDetailProps) {
   const primary = estimatorFor(lead.aiCategory, lead.description);
   const fullAddress = [lead.address, lead.city, [lead.state, lead.zip].filter(Boolean).join(" ")]
     .filter((s) => s && s.trim())
@@ -138,6 +143,7 @@ export function LeadDetailContent({ lead, canEstimate, scopeFailed, contactsLock
       </div>
 
       <div className={cx("grid")}>
+        {/* The left column: who it is, the visits and desk calls, then SmartBook's card (2026-10-31). */}
         <div className={cx("side")}>
           <section className={cx("card")} data-lead-contact>
             <div className={cx("who")}>
@@ -190,6 +196,7 @@ export function LeadDetailContent({ lead, canEstimate, scopeFailed, contactsLock
             </dl>
           </section>
           {visits && <LeadVisits {...visits} />}
+          {smartbook && <LeadSmartBook leadId={lead.id} initial={smartbook} className={cx("card")} />}
         </div>
 
         <section className={cx("card")}>

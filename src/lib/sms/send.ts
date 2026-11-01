@@ -188,7 +188,7 @@ async function capped(m: { organizationId: string | null; to: string; body: stri
 }
 
 /** The company's texts this calendar month (UTC) — the count Settings and Subscription show — against its plan's allowance. */
-async function smsAllowanceUsed(organizationId: string): Promise<boolean> {
+export async function smsAllowanceUsed(organizationId: string): Promise<boolean> {
   const monthStart = new Date();
   monthStart.setUTCDate(1);
   monthStart.setUTCHours(0, 0, 0, 0);

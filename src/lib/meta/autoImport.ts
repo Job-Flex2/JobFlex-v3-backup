@@ -5,7 +5,7 @@ import { decryptSecret } from "@/lib/crypto/secretBox";
 import { enforcePlanLimit } from "@/lib/limitsEngine";
 import { parseMetaSettings } from "@/lib/settings";
 import { getMetaConnection } from "./connections";
-import { metaConfigured, metaGraph, metaId, metaLeadFields, metaLeadSchema, type MetaLead } from "./graph";
+import { consentKeysOf, MetaApiError, metaConfigured, metaFormLegalSchema, metaGraph, metaId, metaLeadFields, metaLeadSchema, tickedBoxes, type MetaLead } from "./graph";
 
 // AUTOMATIC META LEADS (owner, 2026-10-30: "if a new lead comes to Meta it will automatically appear in JobFlex
 // leads, and you can turn the toggle on or off in the settings").
@@ -20,6 +20,10 @@ import { metaConfigured, metaGraph, metaId, metaLeadFields, metaLeadSchema, type
 // The sweep's place is a SyncState row per workspace: { pageId, since } — the Unix time the last sweep started.
 // Turning the switch on starts it at that moment (older leads stay with the Import leads button); a new Page
 // starts it over. A failed sweep leaves the row alone, so the next one asks again for the same window.
+//
+// SmartBook (2026-10-31) rides on this sweep: each new lead goes to the office's new-lead notice and to SmartBook,
+// with the form's texts box as their yes to texts (the boxes below). Turning SmartBook on for Facebook leads turns
+// this switch on (ensureMetaAutoImport).
 
 const sinceKey = (org: string) => `meta:auto:${org}`;
 const sinceSchema = z.object({ pageId: metaId, since: z.number() });
@@ -46,6 +50,72 @@ export async function setMetaAutoImport(organizationId: string, on: boolean) {
   });
 }
 
+/** SmartBook turned on for Facebook leads (actions/smartBookOffice): the switch on, from now — unless it already is. */
+export async function ensureMetaAutoImport(organizationId: string): Promise<boolean> {
+  const org = await db.organization.findUnique({ where: { id: organizationId }, select: { metaSettingsJson: true } });
+  if (!org?.metaSettingsJson || parseMetaSettings(org.metaSettingsJson).autoCreate) return false;
+  if (!(await getMetaConnection(organizationId))) return false;
+  await setMetaAutoImport(organizationId, true);
+  return true;
+}
+
+// ── The form's consent boxes (SmartBook, 2026-10-31: "text only leads who agreed") ───────────────────────────────
+// SmartBook texts a Facebook lead only after they ticked a texts box on the lead form; everyone else gets its email.
+// The boxes are the form's own (legal_content → custom_disclaimer), read once per form and again every six hours, so a
+// box the owner adds later counts from then on; each lead's ticks come with the lead (custom_disclaimer_responses).
+// SyncState `meta:boxes:<org>`, beside the sweep's place. Settings → SmartBook counts the forms that have the box.
+const boxesKey = (org: string) => `meta:boxes:${org}`;
+const boxesSchema = z.object({
+  pageId: metaId,
+  at: z.number(),
+  consent: z.record(z.string(), z.object({ text: z.string().nullable(), call: z.string().nullable() })),
+  /** This Graph version won't name the answers (an invalid-field error): the leads are read without them. */
+  noBoxes: z.boolean().optional(),
+});
+type Boxes = z.infer<typeof boxesSchema>;
+const BOXES_FRESH_MS = 6 * 3600_000;
+/** Forms whose boxes are read; a Page with more sends the rest of its leads to SmartBook's email. */
+const BOXES_MAX_FORMS = 100;
+const LEAD_FIELDS = "id,created_time,field_data";
+
+async function readBoxes(organizationId: string): Promise<Boxes | null> {
+  const row = await db.syncState.findUnique({ where: { key: boxesKey(organizationId) }, select: { cursor: true } });
+  try { return row ? boxesSchema.parse(JSON.parse(row.cursor)) : null; } catch { return null; }
+}
+
+async function writeBoxes(organizationId: string, boxes: Boxes) {
+  const cursor = JSON.stringify(boxes);
+  await db.syncState.upsert({ where: { key: boxesKey(organizationId) }, create: { key: boxesKey(organizationId), cursor }, update: { cursor } });
+}
+
+/** Each form's texts and calls boxes — asked of Meta, ten forms at a time, for the forms not read in six hours. */
+async function formBoxes(organizationId: string, pageId: string, forms: string[], token: string): Promise<Boxes> {
+  const kept = await readBoxes(organizationId);
+  const fresh = kept && kept.pageId === pageId && Date.now() - kept.at < BOXES_FRESH_MS ? kept : null;
+  const boxes: Boxes = { pageId, at: fresh?.at ?? Date.now(), consent: {}, ...(fresh?.noBoxes ? { noBoxes: true } : {}) };
+  const todo = forms.slice(0, BOXES_MAX_FORMS).filter(formId => {
+    const known = fresh?.consent[formId];
+    if (known) boxes.consent[formId] = known;
+    return !known;
+  });
+  for (let i = 0; i < todo.length; i += 10) {
+    await Promise.all(todo.slice(i, i + 10).map(async formId => {
+      try { boxes.consent[formId] = consentKeysOf(metaFormLegalSchema.parse(await metaGraph(formId, token, { fields: "legal_content{custom_disclaimer{checkboxes{key,text}}}" }))); }
+      catch { boxes.consent[formId] = { text: null, call: null }; }
+    }));
+  }
+  await writeBoxes(organizationId, boxes);
+  return boxes;
+}
+
+/** Settings → SmartBook: how many of the Page's lead forms carry a texts box (and a calls box) — null before a sweep. */
+export async function metaConsentSummary(organizationId: string): Promise<{ forms: number; withTexts: number; withCalls: number } | null> {
+  const boxes = await readBoxes(organizationId);
+  if (!boxes) return null;
+  const all = Object.values(boxes.consent);
+  return { forms: all.length, withTexts: all.filter(b => b.text).length, withCalls: all.filter(b => b.call).length };
+}
+
 /** One workspace: the leads created since its last sweep, filed. Returns how many were new. */
 async function importNewLeads(organizationId: string): Promise<number> {
   const connection = await getMetaConnection(organizationId);
@@ -70,11 +140,26 @@ async function importNewLeads(organizationId: string): Promise<number> {
     if (!formAfter) break;
   }
   const filtering = JSON.stringify([{ field: "time_created", operator: "GREATER_THAN", value: place.since - OVERLAP_SECONDS }]);
+  const boxes = await formBoxes(organizationId, connection.pageId, forms, token);
+  // The consent answers ride along; a Graph version that won't name them must not stop the leads.
+  const readLeads = async (formId: string, params: Record<string, string>) => {
+    if (!boxes.noBoxes) {
+      try { return await metaGraph(`${formId}/leads`, token, { ...params, fields: `${LEAD_FIELDS},custom_disclaimer_responses` }); }
+      catch (error) {
+        if (!(error instanceof MetaApiError) || error.code !== 100) throw error;
+        boxes.noBoxes = true;
+        await writeBoxes(organizationId, boxes);
+      }
+    }
+    return metaGraph(`${formId}/leads`, token, { ...params, fields: LEAD_FIELDS });
+  };
   const leads: MetaLead[] = [];
+  const formOf = new Map<string, string>();
   for (const formId of forms) {
     let leadAfter: string | undefined;
     for (let i = 0; i < 10; i++) {
-      const batch = z.object({ data: z.array(metaLeadSchema), paging: pagingSchema }).parse(await metaGraph(`${formId}/leads`, token, { fields: "id,created_time,field_data", limit: "50", filtering, ...(leadAfter ? { after: leadAfter } : {}) }));
+      const batch = z.object({ data: z.array(metaLeadSchema), paging: pagingSchema }).parse(await readLeads(formId, { limit: "50", filtering, ...(leadAfter ? { after: leadAfter } : {}) }));
+      for (const lead of batch.data) formOf.set(lead.id, formId);
       leads.push(...batch.data);
       leadAfter = after(batch.paging);
       if (!leadAfter) break;
@@ -88,6 +173,7 @@ async function importNewLeads(organizationId: string): Promise<number> {
   if (fresh.length) await enforcePlanLimit(organizationId, "leads", fresh.length);
 
   let imported = 0;
+  const filed: Array<{ id: string; text: boolean; call: boolean }> = [];
   await db.$transaction(async tx => {
     // Still on, still this Page: a disconnect or a switch-off that landed mid-sweep wins.
     const org = await tx.organization.findFirst({ where: { id: organizationId, deletedAt: null }, select: { metaSettingsJson: true } });
@@ -102,10 +188,22 @@ async function importNewLeads(organizationId: string): Promise<number> {
       await tx.lead.create({ data: { id, organizationId, ...metaLeadFields(lead), source: "FACEBOOK", status: "NEW" } });
       await tx.webhookEvent.create({ data: { provider: "META_LEADS", eventId, type: `page:${connection.pageId}`, status: "PROCESSED", processedAt: new Date() } });
       imported++;
+      const form = boxes.consent[formOf.get(lead.id) ?? ""];
+      const ticked = tickedBoxes(lead);
+      filed.push({ id, text: !!form?.text && ticked.has(form.text), call: !!form?.call && ticked.has(form.call) });
     }
     if (imported) await tx.activityEvent.create({ data: { organizationId, kind: "CREATED", summary: `Facebook: ${imported} new ${imported === 1 ? "lead" : "leads"} came in from ${connection.pageName || "your Page"}.` } });
     await tx.syncState.updateMany({ where: { key: sinceKey(organizationId) }, data: { cursor: JSON.stringify({ pageId: connection.pageId, since: startedAt }) } });
   }, { timeout: 20000 });
+  // After the commit, so nothing goes out for a lead that wasn't filed: the office's new-lead notice, then SmartBook
+  // (it answers only when it is on for Facebook leads) — with a ticked texts box as their yes to texts.
+  if (filed.length) {
+    const [{ notifyLeadCreated }, { startSmartBook }] = await Promise.all([import("@/lib/notify"), import("@/lib/smartbook/engine")]);
+    for (const lead of filed) {
+      await notifyLeadCreated(lead.id).catch(error => console.warn("[meta-leads] lead notice:", error instanceof Error ? error.message : error));
+      await startSmartBook(lead.id, "facebook", { consent: { text: lead.text ? "facebook-form" : null, call: lead.call } }).catch(error => console.warn("[meta-leads] smartbook:", error instanceof Error ? error.message : error));
+    }
+  }
   return imported;
 }
 

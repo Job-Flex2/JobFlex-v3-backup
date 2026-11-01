@@ -9,6 +9,7 @@
 import type { Guide } from "./types";
 
 const DESK = "/dashboard/phone?tab=settings";
+const SMARTBOOK = "/dashboard/settings?pane=smartbook";
 
 export const GUIDES: Guide[] = [
   // ── Set it up ──────────────────────────────────────────────────────────────
@@ -319,6 +320,66 @@ export const GUIDES: Guide[] = [
       },
       {
         text: "Press Connect leads, then Import leads — duplicates are skipped. If the button says Coming soon, it isn’t open for your account yet.",
+      },
+    ],
+  },
+  // SmartBook (2026-10-31): Settings → SmartBook, and the box a Facebook lead ticks to be texted.
+  {
+    id: "smartbook",
+    title: "Turn on SmartBook",
+    group: "setup",
+    icon: "CalendarCheck",
+    steps: [
+      {
+        text: "Open Settings → SmartBook. You’ll see Times for new leads, with the switch Off. SmartBook offers the open hours you set in Online booking, so turn that on first if it’s off.",
+        open: SMARTBOOK,
+        show: "smartbook:on",
+      },
+      {
+        text: "Press the switch so it reads Answers new leads. Under Which leads, tick where the leads come from — Facebook and Instagram lead forms come in by themselves once your Page is connected — saving with them ticked turns that on.",
+        open: SMARTBOOK,
+      },
+      {
+        text: "Under How it reaches them, keep Text and Email on. Tick One AI call if there’s no answer in 2 business hours to have your AI desk call once — it uses your desk minutes.",
+      },
+      {
+        text: "Under The visit it offers, pick the Visit type and the Times in each message. Under When a customer names their own time, pick Ask me first, or Book it if my calendar is free, then tell me.",
+      },
+      {
+        text: "Press Save, then Send me a test. You get the text and the email a new lead would get — answer like a customer would. Nothing is booked.",
+        open: SMARTBOOK,
+        show: "smartbook:test",
+      },
+      {
+        text: "When a customer names their own time, you get a text and an email — answer YES, NO or another time. The same request waits on your Calendar under SmartBook requests.",
+        open: "/dashboard/calendar",
+      },
+    ],
+  },
+  {
+    id: "smartbook-facebook",
+    title: "Add the texts box to your Facebook form",
+    group: "setup",
+    icon: "ListChecks",
+    steps: [
+      {
+        text: "Connect your Page first: open Settings → Integrations → Meta business and press Connect Meta Business. Saving SmartBook turns on New leads come in by themselves there, so new leads arrive every few minutes.",
+        open: "/dashboard/settings?pane=integrations&sub=meta",
+        show: "leads:meta",
+      },
+      {
+        text: "Open Settings → SmartBook. Under The texts box on your Facebook form, press Copy next to the words.",
+        open: SMARTBOOK,
+        show: "smartbook:consent",
+      },
+      {
+        text: "In Meta Ads Manager, open your lead form. A published form can’t be changed, so duplicate it.",
+      },
+      {
+        text: "Under Privacy, add a custom disclaimer, then add a checkbox and paste the words. Leave it optional. For SmartBook’s AI call, add a second box with the words under For SmartBook’s call, a second box.",
+      },
+      {
+        text: "Publish the copy and use it in your ads. Within a few hours Settings → SmartBook shows how many of your forms have the texts box. A lead who doesn’t tick it gets the times by email.",
       },
     ],
   },

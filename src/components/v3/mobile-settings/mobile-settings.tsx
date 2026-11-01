@@ -159,6 +159,7 @@ import "./mobile-settings.css";
 import { isRefusal } from "@/lib/actionResult";
 import { CompanyPricingForm } from "@/components/v3/company-pricing/company-pricing-form";
 import { WebEstimatorForm } from "@/components/v3/web-estimator/web-estimator-form";
+import { SmartBookSettingsForm } from "@/components/v3/smartbook/smartbook-settings";
 
 /* ══════════════════════════ small shared bits ══════════════════════════ */
 
@@ -866,7 +867,7 @@ function PaymentsPane({
 
 /* ══════════════════════════════ BILLING ══════════════════════════════ */
 
-function BillingPane({ data }: { data: SettingsData }) {
+function BillingPane({ data, shown }: { data: SettingsData; shown: boolean }) {
   const b = data.billing;
   const [billingEmail, setBillingEmail] = useState(b.billingEmail);
 
@@ -892,6 +893,7 @@ function BillingPane({ data }: { data: SettingsData }) {
               offer={b.cancel}
               freeSwitch={b.freeSwitch}
               changeHref={b.subscriptionHref}
+              shown={shown}
             >
               {PLAN_PRIMARY_ACTION.icon ? <Ic name={PLAN_PRIMARY_ACTION.icon} /> : null}
               {PLAN_PRIMARY_ACTION.label}
@@ -1262,6 +1264,7 @@ const RAIL_ICON: Record<RailKey, IconName> = {
   desk: "i-phone",
   estimating: "i-hardhat",
   website: "i-globe",
+  smartbook: "i-cal",
 };
 
 export function MobileSettings({
@@ -1486,7 +1489,7 @@ export function MobileSettings({
               <AccountPane data={data} />
             </div>
             <div className={active === "billing" ? "mst-pane is-on" : "mst-pane"}>
-              <BillingPane data={data} />
+              <BillingPane data={data} shown={active === "billing"} />
             </div>
             <div className={active === "integrations" ? "mst-pane is-on" : "mst-pane"}>
               <IntegrationsPane data={data} sub={sub} notice={notice} openPicker={openPicker} />
@@ -1502,6 +1505,10 @@ export function MobileSettings({
                 <WebsitePaneMobile />
               </div>
             ) : null}
+            {/* SmartBook (2026-10-31): the desk pane's own form, a phone's width. */}
+            <div className={active === "smartbook" ? "mst-pane is-on" : "mst-pane"} id="smartbook">
+              <SmartBookSettingsForm mobile onOpen={(where) => (where === "meta" ? navigate("integrations", "meta") : navigate("notifications"))} />
+            </div>
           </div>
 
           {/* Log out — the last thing on the page, in every section. Same

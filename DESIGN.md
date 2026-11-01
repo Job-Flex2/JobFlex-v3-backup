@@ -287,6 +287,31 @@ monthly" is one 12px line (weight 600) under the price.
   shadow, nothing dimmed. Folded (Show me below the desk, Open on a phone) it
   is a 44px ink "Back to SmartHelp" bar at the top middle of the screen — the
   corners are the menu and Help, the foot is the tab bar and create button.
+- SmartBook (owner, 2026-10-31;
+  [smartbook](src/components/v3/smartbook/smartbook.module.css)). One framed
+  card treatment for Settings → SmartBook and the calendar's "SmartBook
+  requests": a white sheet (`--sheet` where a mobile scope defines it, never
+  the recessed `--paper-deep`) in a 2px ink frame, a `--paper` head with a
+  blue Lucide icon, an 18px 900 caps title (16px on a phone) and a square
+  status stamp — On emerald, Off muted, "N waiting" amber, "All answered"
+  emerald. Sections are 1px ink rules with 14px 850 caps headings. Choices are
+  ink-framed rows of 52px with a square ink checkbox; the picked row takes
+  `--accent-soft` (a picked radio also an accent frame). The on switch is a
+  square red/green toggle on a 44px row. The first text's preview is
+  a flat `--paper` bubble in a 1.5px ink frame; text to copy sits in a 2px ink
+  box with a caps Copy cell on its right (under it on a phone). Warnings are
+  amber with a 4px left bar. A request shows the customer's name in 16px 850,
+  their own words in italics behind a 3px rule, a square emerald (free) or
+  amber (busy) mark before what the calendar holds then, "Yes — book it" in
+  blue, "No — offer other times" and "Suggest another time" in white; the
+  answer is an emerald line. On the lead page the
+  card is the page's own frame: a 12px caps "SmartBook" label, the status
+  stamp, the numbered times, and the conversation as square bubbles — theirs
+  white in ink, SmartBook's `--accent-soft` in accent, notes centred and
+  muted. The leads list's "SmartBook · Needs you" line copies the source line
+  under it. Phone: one column, every button full width and 44px, the request
+  form stacked, nothing wider than the screen. The customer's own page
+  (`/b/<token>`) is the online booking page's sheet (`book-public.css`).
 - Roof estimator buildings (owner, 2026-10-26, ticket 8KETUL). Before the
   order the intake map's pin can be dragged (or the map tapped) onto the
   building to measure, with "Measure the building under the pin" in 15px 800

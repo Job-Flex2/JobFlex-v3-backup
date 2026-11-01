@@ -3,9 +3,10 @@
 //
 //   leadCallReadiness  can the desk place a call for this company now: the live desk, Twilio, the desk's number, the
 //                      assistant on the plan, the desk's business details written, minutes left
-//   callLead           one call to one lead — the "Have the AI desk call" button, or the automatic call: the lead's
-//                      checks (a US/Canadian phone, contacts open, not STOP, not "don't call"), the hours, the caps,
-//                      then Twilio's REST call from the desk's number and the Phone page's OUTBOUND row
+//   callLead           one call to one lead — the "Have the AI desk call" button, or the automatic call (this file's
+//                      sweep, or SmartBook's one call to a lead who hasn't answered its times): the lead's checks (a
+//                      US/Canadian phone, contacts open, not STOP, not "don't call"), the hours, the caps, then
+//                      Twilio's REST call from the desk's number and the Phone page's OUTBOUND row
 //   leadCallAnswered   the TwiML when the call connects: a person → the live desk on the media stream (token kind
 //                      "lead"); a machine, after its beep → a short voicemail in the company's name
 //   leadCallBrief      the desk's own instructions (the profile with its trade preset, the open times, booking) with
@@ -18,6 +19,10 @@
 //   leadCallStatus     Twilio's word on how it ended; no answer, busy or a voicemail → the one text, if allowed
 //   sweepLeadCalls     the automatic calls (the cron, every 5 minutes): new leads nobody reached within the
 //                      company's minutes, once each, inside the automatic hours
+//
+// A lead SmartBook is scheduling (lib/smartbook/phone leadCallExtras): the brief adds what SmartBook sent them and its
+// request_time / not_interested tools, the voicemail points at those times, no text follows a missed call (they have
+// the times), and "don't call" stops SmartBook too.
 //
 // The text after a missed call goes through the one texting chokepoint (lib/sms/send): a company's number texts
 // someone off the team only after they said yes on the booking page (lib/sms/consent) — the opt-in its carrier
@@ -264,11 +269,12 @@ async function placeCall(input: { to: string; from: string; url: string; statusC
   return j.sid;
 }
 
-/** One desk call to one lead. `by`: the member who pressed the button; null for the automatic call. */
+/** One desk call to one lead. `by`: the member who pressed the button; null for the automatic call. `why: "smartbook"`:
+ *  SmartBook's one call (lib/smartbook/engine) — the automatic kind, in SmartBook's words on the trail. */
 export async function callLead(
   organizationId: string,
   leadId: string,
-  opts: { by: string | null; auto: boolean; now?: Date },
+  opts: { by: string | null; auto: boolean; now?: Date; why?: "smartbook" },
 ): Promise<{ ok: true; call: LeadCall } | { ok: false; error: string }> {
   const now = opts.now ?? new Date();
   const lead = (await db.lead.findFirst({ where: { id: leadId, organizationId }, select: LEAD_SELECT })) as LeadForCall | null;
@@ -300,11 +306,15 @@ export async function callLead(
   const placed = (await patchLeadCall(leadId, null, { sid })) ?? { ...call, sid };
   // The Phone page's row (OUTBOUND, the lead's id) — finishLeadCall and the status callback fill it in.
   await db.aiPhoneCall
-    .create({ data: { organizationId, direction: "OUTBOUND", fromNumber: ready.from, toNumber: phone, status: "IN_PROGRESS", callSid: sid, leadId, summary: opts.auto ? "The AI desk called a new lead" : "The AI desk called the lead" } })
+    .create({ data: { organizationId, direction: "OUTBOUND", fromNumber: ready.from, toNumber: phone, status: "IN_PROGRESS", callSid: sid, leadId, summary: opts.why === "smartbook" ? "SmartBook's call about a time" : opts.auto ? "The AI desk called a new lead" : "The AI desk called the lead" } })
     .catch((err) => console.warn("[leadCalls] call row not written:", err instanceof Error ? err.message : err));
-  await logActivity({ organizationId, actorId: opts.by, kind: TRAIL_KINDS.CLIENT, summary: opts.auto ? `The AI desk called ${lead.name}, a new lead nobody had reached yet` : `The AI desk is calling ${lead.name}`, leadId, meta: { callSid: sid, auto: opts.auto } });
+  await logActivity({ organizationId, actorId: opts.by, kind: TRAIL_KINDS.CLIENT, summary: opts.why === "smartbook" ? `The AI desk called ${lead.name} about the times SmartBook sent` : opts.auto ? `The AI desk called ${lead.name}, a new lead nobody had reached yet` : `The AI desk is calling ${lead.name}`, leadId, meta: { callSid: sid, auto: opts.auto, ...(opts.why ? { why: opts.why } : {}) } });
   return { ok: true, call: placed };
 }
+
+/** What SmartBook has told this lead, when it is scheduling them (lib/smartbook/phone) — null otherwise. */
+const smartBookExtras = (organizationId: string, leadId: string) =>
+  import("@/lib/smartbook/phone").then((m) => m.leadCallExtras(organizationId, leadId)).catch(() => null);
 
 /* ── Twilio's webhooks ────────────────────────────────────────────────── */
 
@@ -324,8 +334,9 @@ function viaWords(source: string | null): string {
   return "";
 }
 
-function voicemailTwiml(lead: LeadForCall, company: string, callBack: string | null): string {
-  const say = `Hi ${firstName(lead.name)}, this is the virtual assistant for ${company}, returning the ${aboutWords(lead)} you sent us. Sorry we missed you.${callBack ? ` Please call us back at ${spokenPhone(callBack)}.` : " We'll try you again soon."} Thank you, and have a good day.`;
+/** `said`: SmartBook's words for a lead it sent times to (where the times are). */
+function voicemailTwiml(lead: LeadForCall, company: string, callBack: string | null, said: string | null = null): string {
+  const say = said ?? `Hi ${firstName(lead.name)}, this is the virtual assistant for ${company}, returning the ${aboutWords(lead)} you sent us. Sorry we missed you.${callBack ? ` Please call us back at ${spokenPhone(callBack)}.` : " We'll try you again soon."} Thank you, and have a good day.`;
   return `<?xml version="1.0" encoding="UTF-8"?><Response><Pause length="1"/><Say voice="Polly.Joanna">${xmlEsc(say)}</Say><Hangup/></Response>`;
 }
 
@@ -337,9 +348,9 @@ export async function leadCallAnswered(organizationId: string, leadId: string, p
   if (!lead) return HANGUP;
   const answeredBy = (params.AnsweredBy ?? "").slice(0, 40);
   if (/^machine_end/.test(answeredBy)) {
-    const [facts, from] = await Promise.all([companyFacts(organizationId).catch(() => null), deskNumberFor(organizationId).catch(() => null)]);
+    const [facts, from, smart] = await Promise.all([companyFacts(organizationId).catch(() => null), deskNumberFor(organizationId).catch(() => null), smartBookExtras(organizationId, leadId)]);
     await patchLeadCall(leadId, params.CallSid, { status: "voicemail" });
-    return voicemailTwiml(lead, facts?.name || "our company", from ?? toE164(facts?.phone ?? ""));
+    return voicemailTwiml(lead, facts?.name || "our company", from ?? toE164(facts?.phone ?? ""), smart?.voicemail ?? null);
   }
   if (/^machine/.test(answeredBy) || answeredBy === "fax") {
     await patchLeadCall(leadId, params.CallSid, { status: "no-answer" });
@@ -379,6 +390,8 @@ async function textAfterMissedCall(organizationId: string, leadId: string, callS
   const lead = (await db.lead.findFirst({ where: { id: leadId, organizationId }, select: LEAD_SELECT })) as LeadForCall | null;
   const phone = toE164(lead?.phone ?? "");
   if (!lead || !phone) return;
+  // SmartBook already sent them its times by text or email: no second message about the same visit.
+  if (await smartBookExtras(organizationId, leadId)) return;
   const [facts, from] = await Promise.all([companyFacts(organizationId).catch(() => null), deskNumberFor(organizationId).catch(() => null)]);
   const back = from ?? toE164(facts?.phone ?? "");
   const company = facts?.name || "our company";
@@ -433,7 +446,7 @@ function requestWords(lead: LeadForCall): string {
 export async function leadCallBrief(t: CallToken): Promise<{ ok: true; instructions: string; voice: string; maxSeconds: number; callSid: string; tools: unknown[] } | { ok: false; error: string }> {
   const lead = t.ref ? ((await db.lead.findFirst({ where: { id: t.ref, organizationId: t.organizationId }, select: LEAD_SELECT })) as LeadForCall | null) : null;
   if (!lead) return { ok: false, error: "no such lead" };
-  const [facts, settings, balance, call] = await Promise.all([companyFacts(t.organizationId), readDeskSettings(t.organizationId), deskBalanceFor(t.organizationId).catch(() => null), readLeadCall(lead.id)]);
+  const [facts, settings, balance, call, smart] = await Promise.all([companyFacts(t.organizationId), readDeskSettings(t.organizationId), deskBalanceFor(t.organizationId).catch(() => null), readLeadCall(lead.id), smartBookExtras(t.organizationId, lead.id)]);
   if (!facts) return { ok: false, error: "no such company" };
   if (balance?.out) return { ok: false, error: "out of minutes" };
   if (call?.dnc) return { ok: false, error: "asked not to be called" };
@@ -448,12 +461,13 @@ export async function leadCallBrief(t: CallToken): Promise<{ ok: true; instructi
     `THIS CALL IS DIFFERENT: you are not answering the company's line. You placed this call to ${lead.name}, who sent the company a ${aboutWords(lead)}${via}. It is ${nowWords} (${facts.timezone}). Their number is ${t.from}${lead.email ? `, their email ${lead.email}` : ""}${where ? `, the job address ${where}` : ""}.`,
     request ? `WHAT THEY TOLD THE COMPANY:\n${request}` : "",
     `HOW THIS CALL GOES: first make sure you are speaking with ${first}. If someone else answers, ask whether ${first} is there; if not, say the company will try again, say goodbye and call end_call. With ${first}: thank them for reaching out, say in one sentence what you understood they need, ask only the intake questions they have not already answered, then offer a visit — call open_times, offer what it returns, and book with book_visit once they pick a time, using the name, number and address above unless they give others. If now is a bad time, offer to have the office call back and take a message with take_message. If they ask not to be called, or say they never sent a request, call do_not_call. Never argue or push; one offer of a visit is enough.`,
+    smart?.lines ?? "",
   ]
     .filter(Boolean)
     .join("\n\n");
   const maxSeconds = balance ? Math.max(60, Math.min(600, balance.remainingSeconds)) : 600;
   // "ANSWER", whatever the desk's mode: FORWARD's words ("the company phone rang first…") describe a call coming in.
-  return { ok: true, instructions: `${deskInstructions(profile, facts, "ANSWER", settings.forwarding)}\n\n${extras}`, voice: settings.voice, maxSeconds, callSid: t.callSid, tools: [...DESK_TOOLS, DO_NOT_CALL_TOOL] };
+  return { ok: true, instructions: `${deskInstructions(profile, facts, "ANSWER", settings.forwarding)}\n\n${extras}`, voice: settings.voice, maxSeconds, callSid: t.callSid, tools: [...DESK_TOOLS, DO_NOT_CALL_TOOL, ...(smart?.tools ?? [])] };
 }
 
 /** A tool the lead call's brief brought (voice/call.mjs posts it to /api/desk/tool). */
@@ -466,6 +480,8 @@ export async function leadCallTool(t: CallToken, name: string, args: Record<stri
   await patchLeadCall(lead.id, t.callSid, { dnc: true });
   const reason = typeof args.reason === "string" ? args.reason.trim().slice(0, 200) : "";
   await logActivity({ organizationId: t.organizationId, actorId: null, kind: "CALL", summary: `${lead.name} asked the AI desk not to call again${reason ? `: "${reason}"` : ""}`, leadId: lead.id });
+  // SmartBook stops too: no more times by text or email to someone who asked not to be called, or never asked.
+  await import("@/lib/smartbook/phone").then((m) => m.smartBookStop(t.organizationId, lead.id, reason)).catch(() => null);
   return { ok: true, output: { noted: true, say: "Apologise briefly, say the company won't call again, say goodbye, then call end_call." }, outcome: "done" };
 }
 
