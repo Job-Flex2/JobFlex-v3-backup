@@ -28,6 +28,7 @@ export function LegalPage({ title, number, summary, updated, children }: {
         <nav className={styles.tabs} aria-label="Legal documents">
           <Link href="/privacy" aria-current={number === "01" ? "page" : undefined}>01 / Privacy policy</Link>
           <Link href="/terms" aria-current={number === "02" ? "page" : undefined}>02 / Terms of service</Link>
+          <Link href="/security" aria-current={number === "03" ? "page" : undefined}>03 / Security</Link>
         </nav>
         <article className={styles.article}>{children}</article>
         <footer className={styles.footer}>
