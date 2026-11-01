@@ -34,6 +34,27 @@ export const RAMP_SCOPES = [
   "entities:read", "vendors:read", "vendors:write", "bills:read", "bills:write", "cards:read", "cards:write", "funds:write",
 ] as const;
 
+/** What each scope is for, in the contractor's words — the Ramp guide's table (/integrations/ramp). One per scope. */
+export const RAMP_SCOPE_USES: Record<(typeof RAMP_SCOPES)[number], string> = {
+  "business:read": "Read your Ramp business's name to show which one is connected.",
+  "users:read": "Match Ramp cardholders to your crew, so the right person is texted.",
+  "users:write": "Invite a crew member to Ramp when you give them a card.",
+  "transactions:read": "Read card swipes (the moment they happen, and every hour) to book them on jobs.",
+  "transactions:write": "Write the job and line-item splits back onto the swipe in Ramp.",
+  "receipts:read": "Copy the receipt into the job's expense in JobFlex.",
+  "accounting:read": "Read the \"JobFlex job\" field and its options.",
+  "accounting:write": "Create the \"JobFlex job\" field and keep its options equal to your open jobs. Nothing else in your accounting setup is touched.",
+  "memos:write": "Write the job and the tech's answer into the swipe's memo.",
+  "entities:read": "Find the business entity and bank account that pays your bills.",
+  "vendors:read": "List your vendors when you pay a bill.",
+  "vendors:write": "Add a new vendor when you pay someone who is not in Ramp yet.",
+  "bills:read": "Follow a bill until it is paid, then book it on the job.",
+  "bills:write": "Create the bill in Ramp, coded to the job, with the invoice attached.",
+  "cards:read": "List your Ramp cards in JobFlex.",
+  "cards:write": "Order a physical card for a crew member; freeze and unfreeze cards.",
+  "funds:write": "Create the crew member's spend limit (\"JobFlex · name\") with the monthly and per-purchase limits you set.",
+};
+
 export function rampAuthorizeUrl(env: RampEnv, state: string): string {
   const q = new URLSearchParams({ response_type: "code", client_id: env.clientId, redirect_uri: env.redirectUri, scope: RAMP_SCOPES.join(" "), state });
   return `${env.authBase}/v1/authorize?${q.toString()}`;

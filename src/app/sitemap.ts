@@ -20,6 +20,7 @@ const UPDATED: Array<[string, Date, number]> = [
   ["/privacy", new Date("2026-09-22"), 0.3],
   ["/terms", new Date("2026-09-22"), 0.3],
   ["/security", new Date("2026-11-01"), 0.3],
+  ["/integrations/ramp", new Date("2026-11-01"), 0.4],
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {
