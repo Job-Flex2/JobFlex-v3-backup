@@ -1,5 +1,7 @@
 # SmartBook — design
 
+> **Joined with main (2026-10-31):** Facebook leads now come through main's Meta auto-import (`lib/meta/autoImport`, every 5 minutes, its own switch), and SmartBook's one call is the AI desk's own call to a lead (`lib/aiDesk/leadCalls`). See the plan's last section.
+
 **Date:** 2026-10-31
 **Status:** draft for the owner's approval
 **Surfaces:** Settings → SmartBook · the calendar's Requests · the lead page (desk and handheld) · the customer's pick-a-time page `/b/[token]` (short, for the text) · texts and emails both ways · the AI desk on a call

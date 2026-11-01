@@ -336,7 +336,7 @@ export const GUIDES: Guide[] = [
         show: "smartbook:on",
       },
       {
-        text: "Press the switch so it reads Answers new leads. Under Which leads, tick where the leads come from — Facebook and Instagram lead forms come in by themselves once your Page is connected.",
+        text: "Press the switch so it reads Answers new leads. Under Which leads, tick where the leads come from — Facebook and Instagram lead forms come in by themselves once your Page is connected — saving with them ticked turns that on.",
         open: SMARTBOOK,
       },
       {
@@ -363,7 +363,7 @@ export const GUIDES: Guide[] = [
     icon: "ListChecks",
     steps: [
       {
-        text: "Connect your Page first: open Settings → Integrations → Meta business and press Connect Meta Business. New leads then come in by themselves every 2 minutes.",
+        text: "Connect your Page first: open Settings → Integrations → Meta business and press Connect Meta Business. Saving SmartBook turns on New leads come in by themselves there, so new leads arrive every few minutes.",
         open: "/dashboard/settings?pane=integrations&sub=meta",
         show: "leads:meta",
       },

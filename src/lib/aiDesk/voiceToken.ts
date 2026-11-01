@@ -12,9 +12,9 @@ export type CallToken = {
   from: string;
   exp: number;
   /** "outreach" (2026-10-23): JobFlex's own call to a contractor (lib/outreach) — `ref` is the contractor's record.
-   *  "smartbook" (2026-10-31): SmartBook's one call to a lead who hasn't answered (lib/smartbook/phone) — `ref` is the lead.
-   *  Absent: a company's desk answering its own line. */
-  kind?: "outreach" | "smartbook";
+   *  "lead" (2026-10-31): the company's desk calling one of its own leads (lib/aiDesk/leadCalls) — `ref` is the lead,
+   *  `from` the lead's phone. Absent: a company's desk answering its own line. */
+  kind?: "outreach" | "lead";
   ref?: string;
 };
 

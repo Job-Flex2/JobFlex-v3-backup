@@ -126,3 +126,23 @@ The plan as written:
 - `qa/walks/smartbook.walk.ts` on the stand, on desk and at 390×844, with a fake model and fake Meta.
 - The SmartHelp guides "Turn on SmartBook" and "Add the text consent box to your Facebook form".
 - The handbook section, DESIGN.md entries for the new surfaces, and a `next build` check.
+
+## Joined with main (2026-10-31, owner's OK)
+
+The same day, main gained the Meta auto-import (a40e7dd9) and the AI desk calling leads (2238636d), both by PHILLyaHI. One of each is kept — theirs — and SmartBook rides on them:
+
+- **Facebook leads:** `lib/meta/autoImport.ts` is the one sweep (`/api/cron/meta-leads`, every 5 minutes, switch "New leads come in by themselves", `meta:auto:<org>` in its `{ pageId, since }` shape). SmartBook's own sync (`syncMetaLeads`, read from the 2-minute job) is gone.
+  - The sweep now also reads each form's consent boxes (`meta:boxes:<org>`, six hours fresh, at most 100 forms) and each lead's ticks, with the code-100 fallback.
+  - After it files the leads, it sends the office's new-lead notice and starts SmartBook with the texts box as consent.
+  - Saving SmartBook on with Facebook ticked turns the switch on (`ensureMetaAutoImport`). The form warns when the switch is off.
+- **The one call:** it is the desk's own call to a lead (`lib/aiDesk/leadCalls` `callLead`, automatic, `why: "smartbook"`), so the desk's checks, caps and hours apply, and there's never a second automatic call. `/api/twilio/voice/smartbook/*` and token kind `smartbook` are gone.
+  - If the call falls outside the automatic hours (9 AM–7 PM, Monday to Saturday), it waits for them, up to 16 hours, or is skipped.
+  - Settings' "can't call yet" line uses `leadCallReadiness`.
+- **The desk's call to a SmartBook lead** — any of them: SmartBook's, "Have the AI desk call", Call new leads — learns from `lib/smartbook/phone` `leadCallExtras`:
+  - the times sent, plus `request_time` and `not_interested`;
+  - a voicemail that points at the times;
+  - no "we tried calling" text, since they already have the times;
+  - `do_not_call` stops SmartBook too.
+  - `leadForToken` gives the lead on kind `lead` while SmartBook is scheduling it, so open_times and book_visit act on the conversation.
+- **Reached:** a reply to SmartBook marks the lead contacted (`lib/leads/contacted`, the time only), so Call new leads leaves it alone. A visit booked through SmartBook moves the lead to CONTACTED, as one booked on the calendar does.
+- **The lead page:** his Visits & calls card, then SmartBook's card, in his `side` column.

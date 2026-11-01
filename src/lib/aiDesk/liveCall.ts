@@ -167,7 +167,9 @@ export async function takeMessage(organizationId: string, callSid: string, input
 /** The desk's "Texts: yes/no" line is for SmartBook, not the lead's description. */
 const stripTextsLine = (about: string) => about.replace(/^\s*texts?\s*:\s*(yes|no)\b.*$/gim, "").replace(/\n{2,}/g, "\n").trim();
 
-export async function finishCall(t: { callSid: string; organizationId: string }, input: { outcome: CallOutcome["outcome"]; transcript: Array<{ role: string; text: string }>; seconds: number; booked: { appointmentId: string } | null; messageTaken: boolean; error?: string | null; noLead?: boolean }): Promise<void> {
+/** `newLead: false` — the desk's own call to a lead (lib/aiDesk/leadCalls): its transcript never makes a second lead; SmartBook's callers
+ *  pass it too (the lead is on file). */
+export async function finishCall(t: { callSid: string; organizationId: string }, input: { outcome: CallOutcome["outcome"]; transcript: Array<{ role: string; text: string }>; seconds: number; booked: { appointmentId: string } | null; messageTaken: boolean; error?: string | null }, opts: { newLead?: boolean } = {}): Promise<void> {
   const text = input.transcript.map((l) => `${l.role === "desk" ? "Desk" : "Caller"}: ${l.text}`).join("\n").slice(0, 20_000);
   const outcome: CallOutcome = { outcome: input.outcome, appointmentId: input.booked?.appointmentId ?? null, seconds: Math.max(0, Math.round(input.seconds)), messageTaken: input.messageTaken, at: new Date().toISOString(), error: typeof input.error === "string" && input.error ? input.error.slice(0, 300) : null };
   const key = outcomeKey(t.callSid);
@@ -179,6 +181,5 @@ export async function finishCall(t: { callSid: string; organizationId: string },
   await settleDeskUse(t.organizationId);
   void import("@/lib/trialMeter").then((m) => m.notePaidCall("openai", "realtime-minute", { units: Math.max(1, Math.ceil(outcome.seconds / 60)), orgId: t.organizationId })).catch(() => null);
   // The transcript on the Phone page, summarized as before; a lead only when the desk booked nothing and took no message.
-  // `noLead`: the call was about a lead already on file (SmartBook's), never a second one.
-  if (text) await attachTranscript(t.callSid, text, { lead: !input.noLead && !input.booked && !input.messageTaken }).catch(() => null);
+  if (text) await attachTranscript(t.callSid, text, { lead: opts.newLead !== false && !input.booked && !input.messageTaken }).catch(() => null);
 }

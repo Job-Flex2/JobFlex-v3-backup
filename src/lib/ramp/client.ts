@@ -26,10 +26,12 @@ export function rampEnv(): RampEnv | null {
 }
 export const rampEnabled = (): boolean => rampEnv() !== null;
 
-/** What the contractor grants JobFlex: read the business, its users, transactions and receipts; keep the job field and its options; write memos; run webhooks. */
+/** What the contractor grants JobFlex: read the business, its users, transactions and receipts; keep the job field and its options; write memos;
+ *  bills, vendors, cards and crew funds. Exactly the app's allowed scopes in Ramp's Developer Console — a scope the app doesn't allow
+ *  fails the authorize. Webhooks take no scope of their own (each event needs its read scope), and funds are only created, never read. */
 export const RAMP_SCOPES = [
   "business:read", "users:read", "users:write", "transactions:read", "transactions:write", "receipts:read", "accounting:read", "accounting:write", "memos:write",
-  "webhooks:read", "webhooks:write", "entities:read", "vendors:read", "vendors:write", "bills:read", "bills:write", "cards:read", "cards:write", "funds:read", "funds:write",
+  "entities:read", "vendors:read", "vendors:write", "bills:read", "bills:write", "cards:read", "cards:write", "funds:write",
 ] as const;
 
 export function rampAuthorizeUrl(env: RampEnv, state: string): string {

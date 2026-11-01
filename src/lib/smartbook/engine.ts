@@ -8,8 +8,8 @@
 //                    fit what they said, answer from the desk's facts or pass it on, stop when they say no
 //   onContractorText the company's YES / NO / another time to a waiting request, by text
 //   decideRequest    the same answer from the app or the request email (Batch 2–3)
-//   runSmartBook     the cron: Facebook's new leads (lib/meta/connections syncMetaLeads), the steps that are due —
-//                    the morning text, the nudges, the reminders, the "still checking"
+//   runSmartBook     the cron: the steps that are due — the morning text, the nudges, the call, the reminders, the
+//                    "still checking". Facebook's new leads reach startSmartBook from the Meta sweep (lib/meta/autoImport).
 //
 // One step at a time per conversation (store withConvLock). The state is saved before anything is sent, so a step
 // that fails half-way never sends twice; every message is on the lead's timeline (activityLog SMARTBOOK).
@@ -21,6 +21,7 @@ import { sendText, textOffice, textOfficeNow } from "@/lib/sms/send";
 import { clip, replyForwardLine } from "@/lib/sms/format";
 import { hasTextConsent, isTeamPhone, recordTextConsent, type ConsentSource } from "@/lib/sms/consent";
 import { leadSourceOf } from "@/lib/leads/sources";
+import { markLeadContacted } from "@/lib/leads/contacted";
 import { cancelBooking, createBooking, deskAvailabilityFor, emailCustomer, rescheduleBooking, settingsOf } from "@/lib/bookingBook";
 import { zonedParts, type BookingService, type BookingSettings, type Slot } from "@/lib/booking";
 import { readDeskSettings } from "@/lib/aiDesk/numbers";
@@ -169,6 +170,9 @@ export async function pickLink(token: string): Promise<string> {
 async function trail(ctx: Ctx, summary: string, meta: Record<string, unknown>, actorId: string | null = null): Promise<void> {
   if (ctx.test) return;
   await logActivity({ organizationId: ctx.org.id, actorId, kind: TRAIL_KINDS.SMARTBOOK, summary: clip(summary, 480), leadId: ctx.lead.id, meta: { smartbook: true, ...meta } });
+  // They answered SmartBook: the lead was reached (lib/leads/contacted, the time only). The AI desk's automatic call
+  // to new leads (lib/aiDesk/leadCalls sweepLeadCalls) leaves a reached lead alone.
+  if (meta.dir === "in") await markLeadContacted(ctx.org.id, ctx.lead.id).catch(() => null);
 }
 
 /**
@@ -254,6 +258,13 @@ function scheduleNudge(ctx: Ctx, conv: Conversation, from: Date): void {
   }
   // With calls on (Batch 4) the first follow-up is the call, after 2 business hours; else a text after 4.
   conv.next = conv.call && !conv.called ? { at: businessAfter(from, 2, ctx.tz).toISOString(), what: "call" } : { at: businessAfter(from, 4, ctx.tz).toISOString(), what: "nudge" };
+}
+
+/** The next quarter hour, within two days, that `ok` allows (the AI desk's automatic calling hours). */
+function nextCallHour(now: Date, ok: (at: Date) => boolean): Date | null {
+  const end = now.getTime() + 2 * 86_400_000;
+  for (let at = Math.ceil(now.getTime() / 900_000) * 900_000; at <= end; at += 900_000) if (ok(new Date(at))) return new Date(at);
+  return null;
 }
 
 // ── start ───────────────────────────────────────────────────────────────────
@@ -596,6 +607,8 @@ async function booked(ctx: Ctx, conv: Conversation, iso: string, confirmed: bool
   conv.request = null;
   conv.next = null;
   await release(ctx.org.id, ctx.lead.id);
+  // A visit booked for the lead moves it on to CONTACTED, as one booked on the calendar does (actions/appointments).
+  if (!ctx.test) await markLeadContacted(ctx.org.id, ctx.lead.id, { status: true }).catch(() => null);
   const when = whenOf(ctx, iso);
   // The booking machinery mailed the confirmation with the manage link (or the move); the text says it in one line.
   const line = confirmed ? say.confirmed(w, when, streetOfLead(ctx.lead)) : say.booked(w, when, streetOfLead(ctx.lead));
@@ -1126,15 +1139,8 @@ export async function noteOnCall(organizationId: string, leadId: string, summary
 
 // ── the cron ────────────────────────────────────────────────────────────────
 
-/** Every 2 minutes (vercel.json): Facebook's new leads, then whatever is due. Never throws. */
-export async function runSmartBook(now = new Date()): Promise<{ meta: number; steps: number; swept: number }> {
-  let meta = 0;
-  try {
-    const { syncAllMetaLeads } = await import("@/lib/meta/connections");
-    meta = await syncAllMetaLeads(now);
-  } catch (err) {
-    console.error(`[smartbook] meta sync: ${err instanceof Error ? err.message : String(err)}`);
-  }
+/** Every 2 minutes (vercel.json): whatever is due. Never throws. */
+export async function runSmartBook(now = new Date()): Promise<{ steps: number; swept: number }> {
   const swept = await sweepHolds(now).catch(() => 0);
   let steps = 0;
   const due = (await listConvs(null, 30)).filter((c) => c.next && Date.parse(c.next.at) <= now.getTime());
@@ -1153,7 +1159,7 @@ export async function runSmartBook(now = new Date()): Promise<{ meta: number; st
       console.error(`[smartbook] step ${c.leadId}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
-  return { meta, steps, swept };
+  return { steps, swept };
 }
 
 async function step(ctx: Ctx, conv: Conversation, now: Date): Promise<void> {
@@ -1187,14 +1193,34 @@ async function step(ctx: Ctx, conv: Conversation, now: Date): Promise<void> {
       return;
     }
     case "call": {
-      // The one AI call (owner, 2026-10-31): in business hours, only to a lead who agreed to calls, when the desk is
-      // live and has minutes. Whatever happens, never a second one; the text nudge follows 2 business hours later.
+      // The one AI call (owner, 2026-10-31): only to a lead who agreed to calls. It is the AI desk's own call to a lead
+      // (lib/aiDesk/leadCalls callLead, the automatic kind): the desk live with minutes, its checks and caps, its
+      // calling hours — and never when the desk already called them (its "Call new leads", or a person's press). The
+      // brief knows what SmartBook sent (lib/smartbook/phone leadCallExtras). The text nudge follows 2 business hours on.
+      const nudge = { at: businessAfter(now, 2, ctx.tz).toISOString(), what: "nudge" as const };
+      if (conv.status !== "offered" || !conv.phone || !ctx.smart.call) {
+        conv.called = true;
+        conv.next = nudge;
+        return;
+      }
+      const { callLead, inCallingHours } = await import("@/lib/aiDesk/leadCalls");
+      if (!inCallingHours(now, ctx.tz, true)) {
+        // Outside the desk's automatic hours (9 AM–7 PM, Monday to Saturday): the call waits for them, unless that is
+        // more than 16 hours away (a Sunday) — then the text and email carry on alone.
+        const at = nextCallHour(now, (d) => inCallingHours(d, ctx.tz, true));
+        if (at && at.getTime() - now.getTime() <= 16 * 3600_000) {
+          conv.next = { at: at.toISOString(), what: "call" };
+          return;
+        }
+        conv.called = true;
+        conv.next = nudge;
+        await trail(ctx, `SmartBook didn't call ${conv.name} — outside the AI desk's calling hours`, { dir: "none", channel: "call" });
+        return;
+      }
       conv.called = true;
-      conv.next = { at: businessAfter(now, 2, ctx.tz).toISOString(), what: "nudge" };
-      if (conv.status !== "offered" || !conv.phone || !ctx.smart.call) return;
-      const { placeSmartBookCall } = await import("./phone");
-      const r = await placeSmartBookCall(ctx.org.id, conv.leadId, conv.phone);
-      await trail(ctx, r.ok ? `SmartBook is calling ${conv.name}` : `SmartBook didn't call ${conv.name}: ${r.error}`, { dir: "none", channel: "call", ...(r.ok ? { callSid: r.sid } : {}) });
+      conv.next = nudge;
+      const r = await callLead(ctx.org.id, conv.leadId, { by: null, auto: true, now, why: "smartbook" });
+      if (!r.ok) await trail(ctx, `SmartBook didn't call ${conv.name} — ${r.error.charAt(0).toLowerCase()}${r.error.slice(1)}`, { dir: "none", channel: "call" });
       return;
     }
     case "nudge": {

@@ -1453,6 +1453,8 @@ export interface MetaData {
   canManage: boolean;
   canResume: boolean;
   lastImportAt: string | null;
+  /** New Facebook leads come into Leads by themselves (lib/meta/autoImport, the cron every 5 minutes). */
+  autoImport: boolean;
 }
 
 /** The deep view of one payment link (Integrations → Stripe / Square). */
@@ -1533,6 +1535,9 @@ export interface DeskSettingsData {
   /** Whether the business phone really forwards to the desk, for the forwarding chosen (lib/aiDesk/forwardCheck). */
   forwardCheck: ForwardCheck | null;
   facts: CompanyFacts;
+  /** Call new leads (2026-10-31, lib/aiDesk/leadCalls): the switch, the wait, and whether the desk could dial now —
+   *  `why` says what is missing when it could not. */
+  leadCalls: { on: boolean; afterMinutes: number; ready: boolean; why: string | null };
 }
 
 export interface DeskMinutesData {

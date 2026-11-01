@@ -2,7 +2,8 @@
 // database, OPENAI_BASE_URL on the fake model (qa/fixtures/smartbook-fake-openai.ts), a fake Facebook this walk runs
 // itself, never production env files — signed in only as the QA Co owner qa@acme.test (CLAUDE.md "Test accounts").
 // Desk 1440×900, then a phone 390×844. The owner's request from start to end: SmartBook switched on in Settings;
-// Facebook leads come in by themselves (the 2-minute job, called the way Vercel calls it) and get times — by text when
+// Facebook leads come in by themselves (the Meta sweep, which saving SmartBook switched on, then SmartBook's job —
+// called the way Vercel calls them) and get times — by text when
 // the form's texts box is ticked, by email when it isn't; one books by texting "2", one asks for her own time by text,
 // one suggests a time on the email's page; the office answers on the calendar (Yes on the desk, No on the phone);
 // Pause, Restart and Offer times on the lead page; the tags on the leads list; SmartHelp's two SmartBook guides. Each
@@ -12,7 +13,8 @@
 //
 // Wants on the stand — the app and this walk read the same env: QA_BASE_URL, DATABASE_URL (file:, checked by
 // qa/lib/db), QA_PASS_OWNER, QA_TEST_MODE=1 with QA_SECRET, OPENAI_BASE_URL on the fake model, META_GRAPH_BASE on
-// this walk's Facebook (http://127.0.0.1:4596, FAKE_META_PORT) with any META_APP_SECRET, TOKEN_ENCRYPTION_KEY,
+// this walk's Facebook (http://127.0.0.1:4596, FAKE_META_PORT) with any META_APP_ID, META_APP_SECRET,
+// META_LOGIN_CONFIG_ID and META_REDIRECT_URI (the sweep runs only where Meta is set up), TOKEN_ENCRYPTION_KEY,
 // CRON_SECRET, and TWILIO_AUTH_TOKEN alone: Twilio stays off (every text is a SKIPPED row showing what would go), the
 // token only signs the customers' replies the way Twilio signs them.
 // It writes to the stand only: QA Co's clock, texting number and Facebook Page, the walk's leads, their texts and visits.
@@ -141,10 +143,16 @@ function submitForm(who: { name: string; phone: string; email: string | null }, 
   });
 }
 
-/** The 2-minute job, as Vercel's cron calls it. */
+/** The jobs as Vercel's cron calls them: the Meta sweep (lib/meta/autoImport, which hands new leads to SmartBook), then
+ *  SmartBook's own (the steps that are due). */
 async function cron(): Promise<{ status: number; body: string }> {
-  const res = await fetch(`${BASE}/api/cron/smartbook`, { headers: { "x-cron-key": need("CRON_SECRET") } });
-  return { status: res.status, body: (await res.text()).slice(0, 300) };
+  let last = { status: 0, body: "" };
+  for (const job of ["meta-leads", "smartbook"]) {
+    const res = await fetch(`${BASE}/api/cron/${job}`, { headers: { "x-cron-key": need("CRON_SECRET") } });
+    last = { status: res.status, body: `${job}: ${(await res.text()).slice(0, 300)}` };
+    if (res.status !== 200) return last;
+  }
+  return last;
 }
 
 /** A customer's text to QA Co's number, signed the way Twilio signs it. */
@@ -272,10 +280,13 @@ async function main() {
       // The one AI call too: the stand has no live desk, so the form says why it can't call yet.
       await page.check("[data-smartbook-call]");
       const blocked = await textOf(page, "[data-smartbook-call-blocked]");
-      check("settings: the AI call says why it can't call yet", /^SmartBook can’t call yet — .+ Until then it follows up by text and email\./.test(blocked), blocked);
+      check("settings: the AI call says why it can't call yet", /^SmartBook can’t call yet: .+ Until then it follows up by text and email\./.test(blocked), blocked);
       await page.click("[data-smartbook-save]");
       const saved = await page.getByText("Saved — SmartBook is answering new leads.").waitFor({ timeout: 60_000 }).then(() => true, () => false);
       check("settings: switched on and saved", saved);
+      // Facebook leads reach SmartBook through the Meta sweep: saving it on turned the sweep's switch on.
+      const meta = await db.organization.findUnique({ where: { id: org.id }, select: { metaSettingsJson: true } });
+      check("settings: saving turned on “New leads come in by themselves”", (JSON.parse(meta?.metaSettingsJson ?? "{}") as { autoCreate?: boolean }).autoCreate === true, meta?.metaSettingsJson);
       await ctx.close();
     }
 
@@ -285,7 +296,7 @@ async function main() {
     submitForm(PEOPLE.tom, { texts: false, calls: false });
     submitForm(PEOPLE.ana, { texts: true, calls: false });
     const run = await cron();
-    check("the 2-minute job runs", run.status === 200, run);
+    check("the jobs run", run.status === 200, run);
     check("…it read the Page with its own token and proof", fb.refused === 0 && fb.asked.includes(`${PAGE_ID}/leadgen_forms`) && fb.asked.includes(`${FORM_ID}/leads`), { refused: fb.refused, asked: fb.asked });
     const leads = await db.lead.findMany({ where: { organizationId: org.id, phone: { in: [PEOPLE.maria.phone, PEOPLE.tom.phone, PEOPLE.ana.phone] } }, select: { id: true, name: true, phone: true, source: true, status: true } });
     const idOf = (phone: string) => leads.find((l) => l.phone === phone)?.id ?? "";

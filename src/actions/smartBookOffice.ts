@@ -14,12 +14,14 @@ import { db } from "@/lib/db";
 import { isSalesRole, NoOrgError, requireManager, requireSalesOrManager, UnauthorizedError } from "@/lib/orgContext";
 import { prettyPhone } from "@/lib/aiDesk/shared";
 import { smsAllowanceUsed } from "@/lib/sms/send";
-import { getMetaConnection, metaConsentSummary } from "@/lib/meta/connections";
+import { getMetaConnection } from "@/lib/meta/connections";
+import { ensureMetaAutoImport, metaConsentSummary } from "@/lib/meta/autoImport";
+import { parseMetaSettings } from "@/lib/settings";
 import { decideRequest, offerTimesByHand, pauseSmartBook, readSmartBookSettings, restartSmartBook, saveSmartBookSettings, smartBookPreview, startSmartBookTest, type Decision, type SmartBookPreview } from "@/lib/smartbook/engine";
 import { leadSmartBook, smartBookRequests, type LeadSmartBook, type RequestCard } from "@/lib/smartbook/office";
 import { FIRST_MESSAGE_MAX, type SmartBookSettings } from "@/lib/smartbook/settings";
 import { isTestLead, testLeadId } from "@/lib/smartbook/store";
-import { callBlocker } from "@/lib/smartbook/phone";
+import { leadCallReadiness } from "@/lib/aiDesk/leadCalls";
 import { deskBalanceFor } from "@/lib/aiDesk/minutes";
 
 const DENIED = "You don't have access to SmartBook here.";
@@ -65,8 +67,9 @@ export interface SmartBookSettingsView {
   preview: SmartBookPreview;
   /** The month's texts are used: SmartBook goes on by email until the next month. */
   textsUsed: boolean;
-  /** The connected Page's lead forms, and how many carry the texts box (null before the first check). */
-  facebook: { connected: boolean; forms: number | null; withTexts: number | null; withCalls: number | null };
+  /** The connected Page's lead forms, and how many carry the texts box (null before the first check); `auto`: the Meta
+   *  sweep's "New leads come in by themselves" is on (lib/meta/autoImport) — the way Facebook leads reach SmartBook. */
+  facebook: { connected: boolean; auto: boolean; forms: number | null; withTexts: number | null; withCalls: number | null };
   /** Where the test goes: the person's verified mobile and their email. */
   me: { phone: string | null; email: string | null };
   /** The one AI call: why it can't go yet (null: it can), and the desk minutes left this month. */
@@ -76,15 +79,17 @@ export interface SmartBookSettingsView {
 export async function loadSmartBookSettings(): Promise<{ ok: true; view: SmartBookSettingsView } | { ok: false; error: string }> {
   const ctx = await guard(requireManager);
   if (!ctx) return { ok: false, error: DENIED };
-  const [settings, preview, textsUsed, meta, consent, me, blocked, balance] = await Promise.all([
+  const [settings, preview, textsUsed, meta, consent, me, blocked, balance, org] = await Promise.all([
     readSmartBookSettings(ctx.organizationId),
     smartBookPreview(ctx.organizationId),
     smsAllowanceUsed(ctx.organizationId).catch(() => false),
     getMetaConnection(ctx.organizationId).catch(() => null),
     metaConsentSummary(ctx.organizationId).catch(() => null),
     db.user.findUnique({ where: { id: ctx.user.id }, select: { email: true, smsPhone: true, smsVerifiedAt: true } }),
-    callBlocker(ctx.organizationId).catch(() => "the AI desk can't be checked right now"),
+    // SmartBook's call is the desk's own call to a lead (lib/aiDesk/leadCalls): its readiness, in its words.
+    leadCallReadiness(ctx.organizationId).then((r) => (r.ok ? null : r.why)).catch(() => "The AI desk can't be checked right now."),
     deskBalanceFor(ctx.organizationId).catch(() => null),
+    db.organization.findUnique({ where: { id: ctx.organizationId }, select: { metaSettingsJson: true } }),
   ]);
   if (!preview) return { ok: false, error: DENIED };
   return {
@@ -93,7 +98,7 @@ export async function loadSmartBookSettings(): Promise<{ ok: true; view: SmartBo
       settings,
       preview,
       textsUsed,
-      facebook: { connected: !!meta, forms: consent?.forms ?? null, withTexts: consent?.withTexts ?? null, withCalls: consent?.withCalls ?? null },
+      facebook: { connected: !!meta, auto: parseMetaSettings(org?.metaSettingsJson).autoCreate === true, forms: consent?.forms ?? null, withTexts: consent?.withTexts ?? null, withCalls: consent?.withCalls ?? null },
       me: { phone: me?.smsPhone && me.smsVerifiedAt ? prettyPhone(me.smsPhone) : null, email: me?.email ?? null },
       call: { blocked, minutesLeft: balance ? Math.floor(balance.remainingSeconds / 60) : null },
     },
@@ -112,7 +117,7 @@ const settingsInput = z.object({
   firstMessage: z.string().max(FIRST_MESSAGE_MAX).nullable(),
 });
 
-export async function saveSmartBook(raw: unknown): Promise<{ ok: true; settings: SmartBookSettings } | { ok: false; error: string }> {
+export async function saveSmartBook(raw: unknown): Promise<{ ok: true; settings: SmartBookSettings; facebookAuto: boolean } | { ok: false; error: string }> {
   const ctx = await guard(requireManager);
   if (!ctx) return { ok: false, error: DENIED };
   const parsed = settingsInput.safeParse(raw);
@@ -121,8 +126,11 @@ export async function saveSmartBook(raw: unknown): Promise<{ ok: true; settings:
   if (!v.text && !v.email) return { ok: false, error: "Keep Text or Email on — SmartBook needs a way to reach people." };
   const next: SmartBookSettings = { ...v, onSince: null, firstMessage: v.firstMessage?.trim() || null };
   const settings = await saveSmartBookSettings(ctx.organizationId, next);
+  // Facebook leads reach SmartBook through the Meta sweep: SmartBook on for them turns its switch on (from now).
+  if (settings.on && settings.sources.facebook) await ensureMetaAutoImport(ctx.organizationId).catch(() => false);
+  const org = await db.organization.findUnique({ where: { id: ctx.organizationId }, select: { metaSettingsJson: true } });
   revalidatePath("/dashboard/settings");
-  return { ok: true, settings };
+  return { ok: true, settings, facebookAuto: parseMetaSettings(org?.metaSettingsJson).autoCreate === true };
 }
 
 /** "Send me a test": the whole conversation, with the person pressing it as the customer. */

@@ -6,6 +6,7 @@ import {
   BILL_STATE_WORDS, RAMP_FIELD_ID, RAMP_FIELD_NAME, RAMP_STOCK_OPTION_ID, askText, billInputError, cardLimitError, confirmText, jobOptionValue, parseAddressLine, parseJobReply, rampAmount, rampBillState, rampCategory, rampEventTransactionId, rampExpenseNote, rampJobTag, rampLineParts, rampMerchant, rampMoneyObject, rampSignatureMatches, rampSpentAt, rampTxState, splitPlanError, toCents,
   type JobOption, type RampTransaction,
 } from "../../../src/lib/ramp/shared";
+import { RAMP_SCOPES } from "../../../src/lib/ramp/client";
 
 let bad = 0;
 const check = (name: string, ok: boolean, detail = "") => {
@@ -83,6 +84,8 @@ check("every state has its words", (Object.keys(BILL_STATE_WORDS).length === 9) 
 check("Ramp's amount objects in dollars", rampMoneyObject({ amount: 125000, minor_unit_conversion_rate: 100 }) === 1250 && rampMoneyObject({ amount: 125000, minor_unit_conversion_rate: null }) === 1250 && rampMoneyObject(null) === 0);
 check("what the office types for a bill, checked", billInputError({ vendorId: "v1", invoiceNumber: "INV-1", amount: 1250, issuedAt: "2026-10-29", dueAt: "2026-11-28" }) === null && billInputError({ vendorId: null, vendorName: "ABC Lumber", vendorEmail: "ar@abc.com", invoiceNumber: "1", amount: 10, issuedAt: "2026-10-29", dueAt: "2026-10-29" }) === null && billInputError({ vendorId: null, vendorName: "", invoiceNumber: "1", amount: 10, issuedAt: "2026-10-29", dueAt: "2026-11-01" }) === "Name the vendor." && billInputError({ vendorId: null, vendorName: "ABC", vendorEmail: "nope", invoiceNumber: "1", amount: 10, issuedAt: "2026-10-29", dueAt: "2026-11-01" })?.includes("email") === true && billInputError({ vendorId: "v1", invoiceNumber: " ", amount: 10, issuedAt: "2026-10-29", dueAt: "2026-11-01" }) === "Type the invoice number." && billInputError({ vendorId: "v1", invoiceNumber: "1", amount: 0, issuedAt: "2026-10-29", dueAt: "2026-11-01" }) === "Type the amount." && billInputError({ vendorId: "v1", invoiceNumber: "1", amount: 10, issuedAt: "2026-11-02", dueAt: "2026-11-01" }) === "The due date is before the invoice date." && billInputError({ vendorId: "v1", invoiceNumber: "1", amount: 10, issuedAt: "soon", dueAt: "2026-11-01" })?.startsWith("Pick") === true);
 check("card limits: $50 to $100,000 a month; a per-purchase limit under the monthly one", cardLimitError(2000, null) === null && cardLimitError(2000, 500) === null && cardLimitError(20, null) !== null && cardLimitError(200_000, null) !== null && cardLimitError(2000, 2500) === "The per-purchase limit is over the monthly limit." && cardLimitError(2000, 0) !== null);
+const APP_SCOPES = "accounting:read accounting:write bills:read bills:write business:read cards:read cards:write entities:read funds:write memos:write receipts:read transactions:read transactions:write users:read users:write vendors:read vendors:write";
+check("the authorize asks for exactly the app's 17 allowed scopes (none for webhooks)", [...RAMP_SCOPES].sort().join(" ") === APP_SCOPES && RAMP_SCOPES.every((s) => !s.startsWith("webhooks:")));
 
 console.log(bad ? `\n${bad} FAILED` : "\nall passed");
 process.exit(bad ? 1 : 0);

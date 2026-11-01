@@ -15,7 +15,7 @@ import { firstText } from "@/lib/smartbook/words";
 import styles from "./smartbook.module.css";
 
 const SOURCES: Array<{ key: keyof SmartBookSources; name: string; sub: string }> = [
-  { key: "facebook", name: "Facebook and Instagram lead forms", sub: "They come in by themselves every 2 minutes once your Page is connected." },
+  { key: "facebook", name: "Facebook and Instagram lead forms", sub: "They come in by themselves every few minutes — saving with this on turns on “New leads come in by themselves” for your Page." },
   { key: "website", name: "Your website estimators", sub: "Every one already asks the homeowner's yes to calls, texts and email." },
   { key: "jobflex", name: "JobFlex Lead Center", sub: "Leads JobFlex sends you, once you accept them." },
   { key: "desk", name: "Messages left with the AI desk", sub: "A caller who left a message and a number." },
@@ -27,11 +27,10 @@ const TOKENS = ["{first name}", "{company}", "{service}", "{times}"] as const;
 /** A sample for the preview when the calendar has nothing open right now. */
 const SAMPLE_TIMES = "1) Tue Nov 4, 10am–12pm; 2) Wed Nov 5, 1–3pm; 3) Thu Nov 6, 8–10am";
 
-/** What the owner can do about a call that can't go yet — or that JobFlex is on it (lib/smartbook/phone callBlocker). */
+/** What the owner can do about a call that can't go yet — or that JobFlex is on it (lib/aiDesk/leadCalls leadCallReadiness). */
 function CallFix({ why }: { why: string }) {
-  if (/number/.test(why)) return <>Get your number on the <a href="/dashboard/phone">AI desk</a> page.</>;
-  if (/minutes/.test(why)) return <>Add minutes on the <a href="/dashboard/phone">AI desk</a> page.</>;
-  if (/plan/.test(why)) return <>See <a href="/dashboard/upgrade">Plans &amp; upgrade</a>.</>;
+  if (/number|business|minutes/.test(why)) return <>Open the <a href="/dashboard/phone">AI desk</a> page.</>;
+  if (/plan|month's calls/.test(why)) return <>See <a href="/dashboard/upgrade">Plans &amp; upgrade</a>.</>;
   return <>That&rsquo;s on JobFlex&rsquo;s side — nothing to do on yours.</>;
 }
 
@@ -88,7 +87,7 @@ export function SmartBookSettingsForm({ mobile = false, onOpen }: { mobile?: boo
         setError(r.error);
         return;
       }
-      setView({ ...view, settings: r.settings });
+      setView({ ...view, settings: r.settings, facebook: { ...view.facebook, auto: r.facebookAuto } });
       setS(r.settings);
       setSaved(r.settings.on ? "Saved — SmartBook is answering new leads." : "Saved. SmartBook is off — turn it on at the top when you're ready.");
     });
@@ -193,7 +192,7 @@ export function SmartBookSettingsForm({ mobile = false, onOpen }: { mobile?: boo
               <span className={styles.checkT}>
                 <span className={styles.checkN}>One AI call if there&rsquo;s no answer in 2 business hours</span>
                 <span className={styles.checkS}>
-                  Your AI desk calls once from your number, in business hours, only people who agreed to calls — it offers the times and books one. A voicemail gets a short message, nothing booked. Uses your desk minutes
+                  Your AI desk calls once from your number, 9 AM–7 PM Monday to Saturday, only people who agreed to calls — and never someone the desk already called. It offers the times and books one. A voicemail gets a short message, nothing booked. Uses your desk minutes
                   {view.call.minutesLeft !== null ? ` (${view.call.minutesLeft} left this month)` : ""}.
                 </span>
               </span>
@@ -201,7 +200,7 @@ export function SmartBookSettingsForm({ mobile = false, onOpen }: { mobile?: boo
           </div>
           {s.call && view.call.blocked ? (
             <p className={styles.warn} data-smartbook-call-blocked>
-              SmartBook can&rsquo;t call yet — {view.call.blocked}. Until then it follows up by text and email. <CallFix why={view.call.blocked} />
+              SmartBook can&rsquo;t call yet: {view.call.blocked} Until then it follows up by text and email. <CallFix why={view.call.blocked} />
             </p>
           ) : null}
           {s.text && !p.textingNumber ? <p className={styles.warn}>No texting number yet — SmartBook emails until you get one in <a href="/dashboard/texting">Texting</a>.</p> : null}
@@ -333,6 +332,16 @@ export function SmartBookSettingsForm({ mobile = false, onOpen }: { mobile?: boo
             </div>
           </details>
           <p className={styles.help}>The call goes only to Facebook leads who tick the calls box; website and Lead Center leads already agreed to calls.</p>
+          {view.facebook.connected && !view.facebook.auto && s.on && s.sources.facebook ? (
+            <p className={styles.warn} data-smartbook-fb-auto>
+              New Facebook leads come in by themselves only while &ldquo;New leads come in by themselves&rdquo; is on — Save turns it on.{" "}
+              {onOpen ? (
+                <button className={styles.linkBtn} type="button" onClick={() => onOpen("meta")}>
+                  See it in Integrations → Meta business
+                </button>
+              ) : null}
+            </p>
+          ) : null}
           {view.facebook.connected ? (
             view.facebook.forms !== null ? (
               <p className={view.facebook.withTexts ? styles.note : styles.warn} data-smartbook-forms>
