@@ -12,4 +12,6 @@ export const LEGAL_UPDATED = {
   privacy: { iso: "2026-10-09", label: "October 9, 2026" },
   terms: { iso: "2026-10-19", label: "October 19, 2026" },
   security: { iso: "2026-11-01", label: "November 1, 2026" },
+  rampGuide: { iso: "2026-11-01", label: "November 1, 2026" },
+  rampSupport: { iso: "2026-11-01", label: "November 1, 2026" },
 } as const;
