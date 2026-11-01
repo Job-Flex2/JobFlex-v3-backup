@@ -1567,6 +1567,8 @@ export interface PaneProps {
   /** What an OAuth round trip came back with (?gmail= / ?stripe= / ?square=),
    *  shown once as a note on the tab it concerns. */
   notice?: OAuthNotice;
+  /** This pane is the one on screen — every pane stays mounted, the others hidden. */
+  shown: boolean;
 }
 
 /** The status words the OAuth routes redirect back with. */

@@ -867,7 +867,7 @@ function PaymentsPane({
 
 /* ══════════════════════════════ BILLING ══════════════════════════════ */
 
-function BillingPane({ data }: { data: SettingsData }) {
+function BillingPane({ data, shown }: { data: SettingsData; shown: boolean }) {
   const b = data.billing;
   const [billingEmail, setBillingEmail] = useState(b.billingEmail);
 
@@ -893,6 +893,7 @@ function BillingPane({ data }: { data: SettingsData }) {
               offer={b.cancel}
               freeSwitch={b.freeSwitch}
               changeHref={b.subscriptionHref}
+              shown={shown}
             >
               {PLAN_PRIMARY_ACTION.icon ? <Ic name={PLAN_PRIMARY_ACTION.icon} /> : null}
               {PLAN_PRIMARY_ACTION.label}
@@ -1488,7 +1489,7 @@ export function MobileSettings({
               <AccountPane data={data} />
             </div>
             <div className={active === "billing" ? "mst-pane is-on" : "mst-pane"}>
-              <BillingPane data={data} />
+              <BillingPane data={data} shown={active === "billing"} />
             </div>
             <div className={active === "integrations" ? "mst-pane is-on" : "mst-pane"}>
               <IntegrationsPane data={data} sub={sub} notice={notice} openPicker={openPicker} />

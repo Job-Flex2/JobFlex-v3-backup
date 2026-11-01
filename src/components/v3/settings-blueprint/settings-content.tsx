@@ -142,7 +142,7 @@ export function SettingsContent({
                   <div className="pane-t">{item.label}</div>
                   {item.sub ? <div className="pane-s">{item.sub}</div> : null}
                 </div>
-                <PaneBody data={data} navigate={navigate} sub={sub} notice={notice} />
+                <PaneBody data={data} navigate={navigate} sub={sub} notice={notice} shown={item.key === active} />
               </div>
             );
           })}
